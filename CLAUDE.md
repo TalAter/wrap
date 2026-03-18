@@ -9,6 +9,11 @@ Wrap is a CLI tool that translates natural language into shell commands and runs
 - **Test:** `bun test` (files in `tests/`)
 - **Build:** `bun build src/index.ts --compile --outfile wrap`
 
+## Hard Rule: stdout is sacred
+
+Wrap's own UI/messages must **never** write to stdout. Stdout is reserved exclusively for the executed command's output (so piping works: `w list files | grep foo`). All Wrap output goes to stderr or `/dev/tty`.
+
 ## Testing — TDD
 
-Write a failing test first, then make it pass. No exceptions. Tests cover the full pipeline via a subprocess helper (`tests/helpers.ts`) that spawns the real binary and captures stdout/stderr/exitCode. LLM and memory layers will be behind interfaces for mocking.
+All implementation follows TDD. Always write a failing test before writing code. No exceptions. See `.claude/skills/tdd.md` for the full workflow.
+Aim for maximum test coverage.
