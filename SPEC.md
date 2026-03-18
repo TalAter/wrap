@@ -2,9 +2,29 @@
 
 ## Specification v1.0
 
-> **Status:** Pre-implementation spec
+> **Status:** In progress
 > **Date:** 2026-03-18
 > **Name:** Wrap (working name — needs conflict check against existing packages/tools)
+
+---
+
+## Implementation Status
+
+- [x] 2.1 Core Binary — Bun/TypeScript project scaffold, Biome lint/format
+- [x] 2.2 Testing — Bun test runner, integration test helper
+- [ ] 2.3 Dev-Only Tooling (eval/DSPy)
+- [ ] 3. Invocation Modes
+- [ ] 4. Piping Into Wrap
+- [ ] 5. Execution & Safety
+- [ ] 6. Error Handling & Auto-Fix
+- [ ] 7. Agent Loop (Probes)
+- [ ] 8. LLM Integration
+- [ ] 9. Thread System
+- [ ] 10. Memory / Learning System
+- [ ] 11. Output & UI
+- [ ] 12. Configuration
+- [ ] 13. Eval System
+- [ ] 14. First-Run Experience
 
 ---
 
