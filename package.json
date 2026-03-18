@@ -1,0 +1,17 @@
+{
+  "name": "wrap",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile wrap",
+    "test": "bun test",
+    "lint": "bunx biome check . --error-on-warnings",
+    "format": "bunx biome format . --write",
+    "check": "bunx biome check . --error-on-warnings && bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.8",
+    "@types/bun": "latest"
+  }
+}
