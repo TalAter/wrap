@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Wrap configuration file",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "provider": {
+      "description": "LLM provider configuration",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Claude Code CLI provider",
+          "properties": {
+            "type": { "const": "claude-code" },
+            "model": {
+              "type": "string",
+              "description": "Model to use (e.g. sonnet, haiku, opus)"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Test provider — echoes input back (for development/testing)",
+          "properties": {
+            "type": { "const": "test" }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

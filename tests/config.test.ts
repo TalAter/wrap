@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import configSchema from "../src/config.schema.json";
 import { loadConfig } from "../src/config.ts";
 
 function tempDir() {
@@ -159,6 +160,27 @@ describe("loadConfig", () => {
       // If it does exist, we get whatever's in it
       // Either way, it should not throw
       expect(config).toBeDefined();
+    });
+  });
+
+  describe("JSON Schema", () => {
+    test("config.jsonc with $schema property parses correctly", () => {
+      const dir = tempDir();
+      writeFileSync(
+        join(dir, "config.jsonc"),
+        `{
+  "$schema": "./config.schema.json",
+  "provider": { "type": "test" }
+}`,
+      );
+      const config = loadConfig({ WRAP_HOME: dir });
+      expect(config.provider).toEqual({ type: "test" });
+    });
+
+    test("exported configSchema is valid JSON Schema with oneOf provider", () => {
+      expect(configSchema.$schema).toBe("http://json-schema.org/draft-07/schema#");
+      expect(configSchema.type).toBe("object");
+      expect(configSchema.properties.provider.oneOf.length).toBeGreaterThan(0);
     });
   });
 });

@@ -439,15 +439,17 @@ Each layer merges on top of the previous — individual keys can be overridden w
 - All config (from any source) is validated against the schema after loading. Invalid config produces a clear `Config error:` message.
 - The Zod schema generates the JSON Schema used by editors (12.3).
 
-### 12.3 Format: JSONC with JSON Schema (Future)
+### 12.3 Format: JSONC with JSON Schema
 
-- Config file at `config.jsonc` (or similar)
+- Config file at `~/.wrap/config.jsonc`
 - JSONC (JSON with comments) for human editability
-- Ship a JSON Schema so editors (VS Code, etc.) provide:
+- JSON Schema (`configSchema` in `src/config.ts`) is the single source of truth, written to `~/.wrap/config.schema.json` during first-run setup
+- Config file references it via `"$schema": "./config.schema.json"` for editor support (VS Code, etc.):
   - Auto-completion of keys
   - Validation of values
   - Descriptions/documentation for each setting
   - Type checking
+- Schema uses `oneOf` for discriminated unions (e.g., different provider types have different required fields)
 
 ### 12.4 Configurable Settings (non-exhaustive)
 
