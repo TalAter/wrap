@@ -10,6 +10,10 @@ export type ClaudeCodeProviderConfig = ProviderConfig & {
   model?: string;
 };
 
+export type TestProviderConfig = ProviderConfig & {
+  type: "test";
+};
+
 export type Config = {
   provider?: ProviderConfig;
 };
