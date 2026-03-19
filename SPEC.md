@@ -13,16 +13,16 @@
 - [x] 2.1 Core Binary — Bun/TypeScript project scaffold, Biome lint/format
 - [x] 2.2 Testing — Bun test runner, integration test helper
 - [ ] 2.3 Dev-Only Tooling (eval/DSPy)
-- [ ] 3. Invocation Modes
+- [ ] 3. Invocation Modes — scaffold only: `wrap <text>` accepts args, no mode detection/variants
 - [ ] 4. Piping Into Wrap
 - [ ] 5. Execution & Safety
 - [ ] 6. Error Handling & Auto-Fix
 - [ ] 7. Agent Loop (Probes)
-- [ ] 8. LLM Integration
+- [ ] 8. LLM Integration — scaffold only: provider dispatch works, but returns plain text (no structured JSON, no execution)
 - [ ] 9. Thread System
 - [ ] 10. Memory / Learning System
 - [ ] 11. Output & UI
-- [ ] 12. Configuration
+- [ ] 12. Configuration — scaffold only: env-based config (`WRAP_CONFIG`), no JSONC file, no schema validation
 - [ ] 13. Eval System
 - [ ] 14. First-Run Experience
 
@@ -423,7 +423,23 @@ Built for the confirmation flow and future interactive needs:
 
 ## 12. Configuration
 
-### 12.1 Format: JSONC with JSON Schema
+### 12.1 Config Loading (Layered)
+
+Config is loaded in priority order (highest wins):
+
+1. **`WRAP_CONFIG` env var** — JSON string, overrides all other sources. Useful for testing, scripting, and one-off overrides.
+2. **JSONC config file** — `config.jsonc` (or similar), the primary user-facing config. *(Not yet implemented — env var is the only source in v1.)*
+3. **Defaults** — no default provider. If unconfigured, Wrap errors and prompts setup (future: first-run UI).
+
+Each layer merges on top of the previous — individual keys can be overridden without specifying the full config.
+
+### 12.2 Config Validation (Zod)
+
+- Config schema is defined as a **Zod schema** — single source of truth for TypeScript types, runtime validation, and JSON Schema generation.
+- All config (from any source) is validated against the schema after loading. Invalid config produces a clear `Config error:` message.
+- The Zod schema generates the JSON Schema used by editors (12.3).
+
+### 12.3 Format: JSONC with JSON Schema (Future)
 
 - Config file at `config.jsonc` (or similar)
 - JSONC (JSON with comments) for human editability
@@ -433,7 +449,7 @@ Built for the confirmation flow and future interactive needs:
   - Descriptions/documentation for each setting
   - Type checking
 
-### 12.2 Configurable Settings (non-exhaustive)
+### 12.4 Configurable Settings (non-exhaustive)
 
 ```jsonc
 {
