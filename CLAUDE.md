@@ -13,6 +13,10 @@ Wrap is a CLI tool that translates natural language into shell commands and runs
 
 Wrap's own UI/messages must **never** write to stdout. Stdout is reserved exclusively for the executed command's output (so piping works: `w list files | grep foo`). All Wrap output goes to stderr or `/dev/tty`.
 
+## Error messages
+
+All user-facing error messages must be clear, helpful, and non-technical. No stack traces, no internal variable names, no jargon. Errors in the same category share a prefix (e.g., all config errors start with `Config error:`), followed by a plain-language description of what went wrong.
+
 ## Testing — TDD
 
 All implementation follows TDD. Always write a failing test before writing code. No exceptions. See `.claude/skills/tdd.md` for the full workflow.
