@@ -22,7 +22,7 @@
 - [ ] 9. Thread System
 - [ ] 10. Memory / Learning System
 - [ ] 11. Output & UI
-- [ ] 12. Configuration — scaffold only: env-based config (`WRAP_CONFIG`), no JSONC file, no schema validation
+- [ ] 12. Configuration — config file loading (`~/.wrap/config.jsonc`), `WRAP_CONFIG` env var override with shallow merge, JSON Schema for editor support. No runtime validation, no first-run UI.
 - [ ] 13. Eval System
 - [ ] 14. First-Run Experience
 
@@ -427,23 +427,22 @@ Built for the confirmation flow and future interactive needs:
 
 Config is loaded in priority order (highest wins):
 
-1. **`WRAP_CONFIG` env var** — JSON string, overrides all other sources. Useful for testing, scripting, and one-off overrides.
-2. **JSONC config file** — `config.jsonc` (or similar), the primary user-facing config. *(Not yet implemented — env var is the only source in v1.)*
+1. **`WRAP_CONFIG` env var** — JSON string, useful for testing, scripting, and one-off overrides.
+2. **JSONC config file** — `~/.wrap/config.jsonc` (directory overridable via `WRAP_HOME` env var).
 3. **Defaults** — no default provider. If unconfigured, Wrap errors and prompts setup (future: first-run UI).
 
-Each layer merges on top of the previous — individual keys can be overridden without specifying the full config.
+Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys from the file config. Nested objects (e.g., `provider`) are replaced entirely, not deep-merged.
 
-### 12.2 Config Validation (Zod)
+### 12.2 Config Validation
 
-- Config schema is defined as a **Zod schema** — single source of truth for TypeScript types, runtime validation, and JSON Schema generation.
-- All config (from any source) is validated against the schema after loading. Invalid config produces a clear `Config error:` message.
-- The Zod schema generates the JSON Schema used by editors (12.3).
+- No runtime schema validation in v1 — invalid config produces clear `Config error:` messages via manual checks.
+- Future: may add Zod or similar for runtime validation, TypeScript type derivation, and JSON Schema generation from a single source of truth.
 
 ### 12.3 Format: JSONC with JSON Schema
 
 - Config file at `~/.wrap/config.jsonc`
 - JSONC (JSON with comments) for human editability
-- JSON Schema (`configSchema` in `src/config.ts`) is the single source of truth, written to `~/.wrap/config.schema.json` during first-run setup
+- JSON Schema (`src/config.schema.json`) is the single source of truth, written to `~/.wrap/config.schema.json` during first-run setup
 - Config file references it via `"$schema": "./config.schema.json"` for editor support (VS Code, etc.):
   - Auto-completion of keys
   - Validation of values
