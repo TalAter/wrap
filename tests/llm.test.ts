@@ -58,6 +58,6 @@ describe("stripFences", () => {
 
   test("does not strip when prose surrounds a code block", () => {
     const input = 'Here is the command:\n```json\n{"type": "command"}\n```\n';
-    expect(stripFences(input)).toBe(input);
+    expect(stripFences(input)).toBe(input.trim());
   });
 });

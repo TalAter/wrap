@@ -110,8 +110,10 @@ def score(response_text: str, assertions: dict) -> float:
 
     # memory_updates keys must match pattern
     if "memory_updates_pattern" in assertions:
-        updates = response.get("memory_updates", [])
-        keys = " ".join(u.get("key", "") for u in (updates or []))
+        updates = response.get("memory_updates") or []
+        if not isinstance(updates, list):
+            updates = []
+        keys = " ".join(u.get("key", "") for u in updates if isinstance(u, dict))
         checks.append((
             "memory_updates_pattern",
             bool(re.search(assertions["memory_updates_pattern"], keys, re.IGNORECASE)),
