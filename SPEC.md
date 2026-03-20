@@ -18,12 +18,12 @@
 - [ ] 5. Execution & Safety
 - [ ] 6. Error Handling & Auto-Fix
 - [ ] 7. Agent Loop (Probes)
-- [ ] 8. LLM Integration — scaffold only: provider dispatch works, but returns plain text (no structured JSON, no execution)
+- [ ] 8. LLM Integration — provider dispatch, structured JSON response via Zod schema + `--json-schema` enforcement. No execution, no retry loop, no piped context.
 - [ ] 9. Thread System
 - [ ] 10. Memory / Learning System
 - [ ] 11. Output & UI
 - [ ] 12. Configuration — config file loading (`~/.wrap/config.jsonc`), `WRAP_CONFIG` env var override with shallow merge, JSON Schema for editor support. No runtime validation, no first-run UI.
-- [ ] 13. Eval System
+- [ ] 13. Eval System — DSPy MIPRO optimizer in Docker, seed examples, heuristic metric. No structured logging yet.
 - [ ] 14. First-Run Experience
 
 ---
