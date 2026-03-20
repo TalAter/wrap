@@ -9,13 +9,15 @@
     "test": "bun test",
     "lint": "bunx biome check . --error-on-warnings",
     "format": "bunx biome format . --write",
-    "check": "bunx biome check . --error-on-warnings && bun test"
+    "check": "bunx biome check . --error-on-warnings && bun test",
+    "optimize": "docker build -t wrap-dspy eval/dspy && docker run --rm -v \"$(pwd)/eval\":/app/eval -v \"$(pwd)/src\":/app/src --env-file eval/dspy/.env wrap-dspy && bunx biome format src/prompt.optimized.ts --write"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
     "@types/bun": "latest"
   },
   "dependencies": {
-    "jsonc-parser": "^3.3.1"
+    "jsonc-parser": "^3.3.1",
+    "zod": "^4.3.6"
   }
 }

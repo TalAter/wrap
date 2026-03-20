@@ -12,7 +12,7 @@
 
 - [x] 2.1 Core Binary — Bun/TypeScript project scaffold, Biome lint/format
 - [x] 2.2 Testing — Bun test runner, integration test helper
-- [ ] 2.3 Dev-Only Tooling (eval/DSPy)
+- [x] 2.3 Dev-Only Tooling (eval/DSPy)
 - [ ] 3. Invocation Modes — scaffold only: `wrap <text>` accepts args, no mode detection/variants
 - [ ] 4. Piping Into Wrap
 - [ ] 5. Execution & Safety
@@ -523,6 +523,7 @@ When evals are enabled (manual opt in only), log to JSONL:
 - Lives in the repo but not distributed
 - DSPy or similar
 - Ideally runs in a container so as not to polute the dev machine.
+- Currently evaluates on all examples every trial (`minibatch=False`). Re-enable minibatch sampling once structured logging (13.2) grows the eval dataset past ~100 examples.
 
 ---
 
