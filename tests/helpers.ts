@@ -22,7 +22,10 @@ export async function wrap(input?: string, env?: Record<string, string>) {
   };
 }
 
-export async function wrapMock(input: string) {
+export async function wrapMock(prompt: string, response: object) {
   const config = JSON.stringify({ provider: { type: "test" } });
-  return wrap(input, { WRAP_CONFIG: config });
+  return wrap(prompt, {
+    WRAP_CONFIG: config,
+    WRAP_TEST_RESPONSE: JSON.stringify(response),
+  });
 }

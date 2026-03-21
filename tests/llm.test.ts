@@ -7,10 +7,11 @@ describe("initLLM", () => {
     expect(typeof llm).toBe("function");
   });
 
-  test("test provider echoes prompt back", async () => {
+  test("test provider returns valid JSON response with prompt as command", async () => {
     const llm = initLLM({ type: "test" });
     const result = await llm("hello world");
-    expect(result).toBe("hello world");
+    const parsed = JSON.parse(result);
+    expect(parsed).toEqual({ type: "command", command: "hello world", risk_level: "low" });
   });
 
   test("returns a function for claude-code provider", () => {
