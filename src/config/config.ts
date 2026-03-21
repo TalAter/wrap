@@ -2,17 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type ParseError, parse } from "jsonc-parser";
-
-export type ProviderConfig = { type: string };
-
-export type ClaudeCodeProviderConfig = ProviderConfig & {
-  type: "claude-code";
-  model?: string;
-};
-
-export type TestProviderConfig = ProviderConfig & {
-  type: "test";
-};
+import type { ProviderConfig } from "../llm/types.ts";
 
 export type Config = {
   provider?: ProviderConfig;

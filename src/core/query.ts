@@ -1,5 +1,5 @@
-import type { ProviderConfig } from "../config/config.ts";
-import { initLLM } from "../providers/llm.ts";
+import { initLLM } from "../llm/index.ts";
+import type { ProviderConfig } from "../llm/types.ts";
 import { parseResponse } from "./parse-response.ts";
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
