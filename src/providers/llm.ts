@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
-import type { ClaudeCodeProviderConfig, ProviderConfig } from "./config.ts";
-import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "./prompt.optimized.ts";
-import { ResponseJsonSchema } from "./response.schema.ts";
+import type { ClaudeCodeProviderConfig, ProviderConfig } from "../config/config.ts";
+import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "../prompt.optimized.ts";
+import { ResponseJsonSchema } from "../response.schema.ts";
 
 export type LLM = (prompt: string) => Promise<string>;
 

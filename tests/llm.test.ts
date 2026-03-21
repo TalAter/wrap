@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { initLLM, stripFences } from "../src/llm.ts";
+import { initLLM, stripFences } from "../src/providers/llm.ts";
 
 describe("initLLM", () => {
   test("returns a function for test provider", () => {

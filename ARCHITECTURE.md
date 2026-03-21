@@ -121,6 +121,8 @@ async function runQuery(params) {
 ```
 src/
   index.ts              Entry point. Imports main().
+  response.schema.ts    Zod schema for LLM responses (shared between core and providers)
+  prompt.optimized.ts   Auto-generated system prompt (DSPy)
 
   core/
     main.ts             Top-level flow (the lines above)
@@ -138,8 +140,6 @@ src/
     llm.ts              Provider dispatch (factory: config → LLM client)
     claude-code.ts      Claude CLI provider
     test.ts             Deterministic test provider
-    response.schema.ts  Zod schema for LLM responses
-    prompt.optimized.ts Auto-generated system prompt (DSPy)
 
   ui/
     ...                 TUI components (confirmation panel, risk display, etc.)

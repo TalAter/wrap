@@ -443,7 +443,7 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
 
 - Config file at `~/.wrap/config.jsonc`
 - JSONC (JSON with comments) for human editability
-- JSON Schema (`src/config.schema.json`) is the single source of truth, written to `~/.wrap/config.schema.json` during first-run setup
+- JSON Schema (`src/config/config.schema.json`) is the single source of truth, written to `~/.wrap/config.schema.json` during first-run setup
 - Config file references it via `"$schema": "./config.schema.json"` for editor support (VS Code, etc.):
   - Auto-completion of keys
   - Validation of values

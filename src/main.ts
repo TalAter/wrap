@@ -1,25 +1,13 @@
-import { loadConfig } from "./config.ts";
-import { initLLM } from "./llm.ts";
-import { type Response, ResponseSchema } from "./response.schema.ts";
-
-function parseResponse(raw: string): Response {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    throw new Error("LLM returned invalid JSON.");
-  }
-  const result = ResponseSchema.safeParse(json);
-  if (!result.success) {
-    throw new Error("LLM returned an invalid response.");
-  }
-  return result.data;
-}
+import { loadConfig } from "./config/config.ts";
+import { parseInput } from "./core/input.ts";
+import { parseResponse } from "./core/parse-response.ts";
+import { initLLM } from "./providers/llm.ts";
 
 export async function main() {
   try {
-    const args = process.argv.slice(2);
-    if (args.length === 0) {
+    const input = parseInput(process.argv);
+
+    if (!input.prompt) {
       console.error("Usage: wrap <prompt>");
       process.exit(1);
     }
@@ -32,8 +20,7 @@ export async function main() {
     }
 
     const llm = initLLM(config.provider);
-    const prompt = args.join(" ");
-    const raw = await llm(prompt);
+    const raw = await llm(input.prompt);
     const response = parseResponse(raw);
 
     if (response.type === "answer") {
