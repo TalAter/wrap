@@ -29,3 +29,9 @@
 {"input": "show all environment variables", "assertions": {"type": "command", "risk_range": ["low"], "command_pattern": "(env|printenv|export|set)"}}
 {"input": "restart nginx", "assertions": {"type": "command", "risk_range": ["medium", "high"], "command_pattern": "(nginx|systemctl|service|brew)"}}
 {"input": "when I cmd+click a filename with a path in Claude Code it opens it in the app Cursor. How can I change it so it opens in vs code", "assertions": {"type": "answer", "has_answer": true, "risk_range": ["low"], "answer_pattern": "default"}}
+{"input": "what's a good default HTTP timeout and why", "assertions": {"type": "answer", "has_answer": true, "answer_pattern": "(http|timeout|seconds|port)"}}
+{"input": "good default HTTP timeout in seconds, just the number", "assertions": {"type": "answer", "has_answer": true, "answer_pattern": "^\\d+$"}}
+{"input": "country code for South Africa, just the code", "assertions": {"type": "answer", "has_answer": true, "answer_pattern": "^[A-Z]{2}$"}}
+{"input": "default postgres port, answer with just the number", "assertions": {"type": "answer", "has_answer": true, "answer_pattern": "^\\d+$"}}
+{"input": "RGB hex for pure red, just the value", "assertions": {"type": "answer", "has_answer": true, "answer_pattern": "^#?[0-9A-Fa-f]{6}$"}}
+{"input": "SPDX identifier for the MIT license, just the identifier", "assertions": {"type": "answer", "has_answer": true, "answer_pattern": "^MIT$"}}
