@@ -209,9 +209,9 @@ When a generated command fails (non-zero exit code or stderr):
 
 ### 6.1 Retry Loop
 
-- **Default:** max 2 auto-fix retries, show each attempt (command + error)
-- **Configurable:** users can change max retries and verbosity in config
-- After max retries exhausted, show final error and stop
+- Error retries and probe rounds share a **unified counter** (see ARCHITECTURE.md — Loop Rules). One budget for all LLM round-trips, configurable via `maxRounds`.
+- **Default:** 5 rounds total (probes + retries), show each attempt (command + error)
+- After max rounds exhausted, show final error and stop
 
 ---
 
@@ -231,7 +231,7 @@ LLM: {type: "command", command: "echo 'alias ll=ls -la' >> ~/.zshrc"}
 - Probes execute silently (not shown in stdout)
 - Subtle indicator on /dev/tty or stderr during probes: e.g., `🔍 Checking shell type...`
 - Probe results are fed back to the LLM as context
-- **Default max probes:** 3 (configurable)
+- Probes count toward the unified round budget (`maxRounds`, see 6.1)
 - Probe results that reveal reusable facts trigger the memory system
 
 ---
@@ -362,6 +362,7 @@ By default it will not continue a thread, only if we use the command for continu
 ### 10.2 Learning Behavior
 
 - The LLM can return `memory_updates` in its structured response
+- **Memory updates are written immediately** — even mid-loop during probes. A flow that discovers `shell=zsh` but fails on the final command still persists that knowledge.
 - **Always notify the user** when something new is learned
 - Notifications appear on the non-stdout channel (stderr or /dev/tty)
 - Combine multiple learnings to one message. e.g.: `🧠 Noted: you use zsh, config at ~/.zshrc`
@@ -374,7 +375,7 @@ Not in v1 — all memories persist until manually cleared or overwritten.
 
 ### 10.4 Probing for Knowledge
 
-- **First run:** minimal silent probe (detect OS, shell type — basics only)
+- **First run:** eager initialization — detect OS, shell type, basic environment immediately after config setup (same invocation, no LLM needed)
 - **Lazy probing:** everything else is discovered on-demand when the LLM determines it needs the information (via the agent loop / probe commands)
 - This means Wrap gets smarter over time as you use it
 
@@ -464,12 +465,9 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
   "alwaysConfirm": ["docker", "kubectl", "aws", "rm"],
   "neverConfirm": ["ls", "cat", "echo", "pwd"],
 
-  // Retry behavior
-  "maxRetries": 2,
+  // LLM round budget (probes + retries share one counter)
+  "maxRounds": 5,
   "showRetryAttempts": true,
-
-  // Agent loop
-  "maxProbeSteps": 3,
 
   // Threads
   "threadTTL": "24h",
@@ -530,7 +528,7 @@ When evals are enabled (manual opt in only), log to JSONL:
 ## 14. First-Run Experience
 
 1. User runs `wrap` (or `wrap <query>`) for the first time
-2. **Minimal silent probe:** detect OS, shell type, basic environment. Also detect which CLI LLM tools are installed (`claude`, `codex`, `amp`, etc.).
+2. `ensureConfig()` detects no config → runs config wizard (see ARCHITECTURE.md)
 3. **Provider selection:** TUI presents available options:
    - **CLI tool providers:** Any detected installed tools (Claude Code, Codex, AMP). If selected, show the terms-of-service disclaimer (see 8.4) and require acknowledgment.
    - **API providers:** OpenAI, Anthropic, Ollama (local), OpenRouter, etc. — user enters API key and selects a model.
@@ -540,7 +538,8 @@ When evals are enabled (manual opt in only), log to JSONL:
    - Priority list: `w` > `c` > others (tbd)
    - Show available options, let user choose
    - Create symlinks (or aliases) for chosen shortcuts including mode variants (`wy`, `w!`, `w?`)
-5. **Done** — user can immediately start using the tool
+5. `ensureMemory()` runs eager initialization — detects OS, shell type, basic environment (no LLM needed)
+6. **Done** — if user provided a query, it continues to execute. Otherwise, ready for next invocation.
 
 ---
 
