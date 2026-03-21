@@ -50,18 +50,18 @@ describe("wrap", () => {
     expect(stderr.trim().length).toBeGreaterThan(0);
   });
 
-  test("answer: prints to stderr and exits 0", async () => {
+  test("answer: prints to stdout and exits 0", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("what is 6*7", {
       type: "answer",
       answer: "42",
       risk_level: "low",
     });
     expect(exitCode).toBe(0);
-    expect(stdout).toBe("");
-    expect(stderr).toBe("42\n");
+    expect(stdout).toBe("42\n");
+    expect(stderr).toBe("");
   });
 
-  test("answer: exits 0 with empty stderr when answer field missing", async () => {
+  test("answer: exits 0 with empty output when answer field missing", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("hello", {
       type: "answer",
       risk_level: "low",

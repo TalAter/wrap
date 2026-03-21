@@ -9,9 +9,9 @@ Wrap is a CLI tool that translates natural language into shell commands and runs
 - **Test:** `bun test` (files in `tests/`)
 - **Build:** `bun build src/index.ts --compile --outfile wrap`
 
-## Hard Rule: stdout is sacred
+## Hard Rule: stdout is for useful output only
 
-Wrap's own UI/messages must **never** write to stdout. Stdout is reserved exclusively for the executed command's output (so piping works: `w list files | grep foo`). All Wrap output goes to stderr or `/dev/tty`.
+Stdout carries **useful output** — the executed command's stdout (command mode) or the answer text (answer mode). Wrap's own chrome (UI, notifications, confirmations, errors) must **never** write to stdout. All Wrap chrome goes to stderr or `/dev/tty`.
 
 ## Error messages
 

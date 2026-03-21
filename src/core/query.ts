@@ -9,7 +9,7 @@ export async function runQuery(prompt: string, provider: ProviderConfig): Promis
   const response = parseResponse(raw);
 
   if (response.type === "answer") {
-    if (response.answer) console.error(response.answer);
+    if (response.answer) console.log(response.answer);
     return 0;
   }
 

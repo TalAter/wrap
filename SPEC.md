@@ -385,21 +385,30 @@ Not in v1 — all memories persist until manually cleared or overwritten.
 
 ### 11.1 Output Channels
 
-**Hard rule: Wrap UI must never pollute stdout.**
+**Hard rule: Wrap's chrome (UI, notifications, confirmations) must never pollute stdout.**
 
-Stdout is reserved exclusively for the executed command's output, enabling clean piping:
+Stdout is reserved for **useful output** — the thing the user or a downstream pipe actually wants:
+
+- **Command mode:** stdout belongs to the executed command.
+- **Answer mode:** the answer text goes to stdout.
+
+This means answers compose naturally with Unix pipelines:
 
 ```bash
-w list docker containers | grep running  # works correctly
+# Populate a config value without leaving the terminal
+echo "timeout: $(w? what is a good HTTP timeout in seconds, just the number)" >> config.yml
+
+# Pipe an answer into a clipboard
+w? summarize the MIT license in one sentence | pbcopy
 ```
 
-Wrap's own output (TUI panels, notifications, confirmations) goes to a non-stdout channel. Implementation decides between:
+Wrap's own output (TUI panels, notifications, confirmations) goes to a non-stdout channel:
 
-- `/dev/tty` for TUI elements (recommended — invisible to all redirections)
-- `stderr` for brief notifications
-- Or a combination
-
-Choose for ease of implementation and idiomatic linux/language behavior.
+| Channel    | What goes there                                                                 |
+|------------|---------------------------------------------------------------------------------|
+| **stdout** | Useful output: command's stdout (command mode) or answer text (answer mode)     |
+| **stderr** | Wrap chrome: confirmations, risk warnings, memory notifications, probe status, errors |
+| **/dev/tty** | Interactive TUI (confirmation panel, edit field)                              |
 
 ### 11.2 Visual Identity & Character
 
