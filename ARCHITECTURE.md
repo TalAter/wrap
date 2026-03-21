@@ -121,13 +121,14 @@ async function runQuery(params) {
 ```
 src/
   index.ts              Entry point. Imports main().
+  main.ts               Top-level orchestration flow
   response.schema.ts    Zod schema for LLM responses (shared between core and providers)
   prompt.optimized.ts   Auto-generated system prompt (DSPy)
 
   core/
-    main.ts             Top-level flow (the lines above)
     query.ts            The query loop (runQuery)
     input.ts            CLI arg parsing, mode resolution
+    parse-response.ts   LLM response JSON parsing + validation
 
   config/
     config.ts           Config loading, merging, validation
