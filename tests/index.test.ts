@@ -187,4 +187,16 @@ describe("wrap", () => {
     expect(stdout).toBe("");
     expect(stderr).toContain("not yet supported");
   });
+
+  test("memory_updates: shown on stderr", async () => {
+    const { exitCode, stderr } = await wrapMock("list files", {
+      type: "command",
+      command: "echo hi",
+      risk_level: "low",
+      memory_updates: [{ fact: "Uses zsh" }],
+      memory_updates_message: "Noted: you use zsh",
+    });
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("Noted: you use zsh");
+  });
 });

@@ -1,4 +1,6 @@
 import type { MemoryFact, Provider } from "../llm/types.ts";
+import { appendMemory } from "../memory/memory.ts";
+import { getWrapHome } from "./home.ts";
 import { parseResponse } from "./parse-response.ts";
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
@@ -9,6 +11,13 @@ export async function runQuery(
 ): Promise<number> {
   const raw = await provider.runCommandPrompt(prompt, memory);
   const response = parseResponse(raw);
+
+  if (response.memory_updates?.length) {
+    appendMemory(getWrapHome(), response.memory_updates);
+    if (response.memory_updates_message) {
+      process.stderr.write(`🧠 ${response.memory_updates_message}\n`);
+    }
+  }
 
   if (response.type === "answer") {
     if (response.answer) console.log(response.answer);
