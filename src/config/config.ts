@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { type ParseError, parse } from "jsonc-parser";
+import { getWrapHome } from "../core/home.ts";
 import type { ProviderConfig } from "../llm/types.ts";
 
 export type Config = {
@@ -10,12 +10,8 @@ export type Config = {
 
 const CONFIG_FILENAME = "config.jsonc";
 
-function resolveConfigDir(env: Record<string, string | undefined>): string {
-  return env.WRAP_HOME ?? join(homedir(), ".wrap");
-}
-
-function loadFileConfig(configDir: string): Config {
-  const path = join(configDir, CONFIG_FILENAME);
+function loadFileConfig(wrapHome: string): Config {
+  const path = join(wrapHome, CONFIG_FILENAME);
   if (!existsSync(path)) return {};
 
   const raw = readFileSync(path, "utf-8");
@@ -42,8 +38,8 @@ function loadEnvConfig(env: Record<string, string | undefined>): Config | undefi
 
 export function loadConfig(envOverrides: Record<string, string | undefined> = {}): Config {
   const env = { ...process.env, ...envOverrides };
-  const configDir = resolveConfigDir(env);
-  const fileConfig = loadFileConfig(configDir);
+  const wrapHome = getWrapHome(env);
+  const fileConfig = loadFileConfig(wrapHome);
   const envConfig = loadEnvConfig(env);
 
   if (envConfig === undefined) return fileConfig;
