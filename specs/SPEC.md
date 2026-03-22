@@ -173,8 +173,17 @@ When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr �
 - Syntax-highlighted command
 - Risk level indicator
 - Brief explanation of what the command does
-- Keybindings: `Enter` = run, `e` = edit command, `q` = cancel
+- Keybindings vary by risk level (see below)
 - The edit option drops into an editable text field for tweaking the command
+
+**Tiered confirmation by risk level:**
+
+| Risk | Keybindings | Rationale |
+|------|-------------|-----------|
+| **Medium** | `Enter` = run, `e` = edit, `q` = cancel | Low friction — a single keypress to confirm |
+| **High** | `y` + `Enter` = run, `e` = edit, `q`/`Enter` = cancel | Requires deliberate opt-in. Default action is cancel. |
+
+**Input buffer flush:** Before rendering the confirmation prompt, flush/discard any buffered terminal input. This prevents a stray `Enter` (pressed while waiting for the LLM response) from accidentally confirming a dangerous command. The prompt only accepts input after it is fully displayed.
 
 ### 5.3 Interactive Commands
 
@@ -610,8 +619,8 @@ $ w find all typescript files modified today
 ```
 $ w delete everything here
 🔮 rm -rf *
-  High risk · This will delete everything in the current directory and any of its subdirectories
-  [Enter] Run  [e] Edit  [q] Cancel
+  ⚠ High risk · This will delete everything in the current directory and any of its subdirectories
+  [y+Enter] Run  [e] Edit  [Enter/q] Cancel
 ```
 
 ### A.3 Yolo Mode
