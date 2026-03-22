@@ -1,9 +1,17 @@
-import type { LLM } from "../types.ts";
+import type { Provider } from "../types.ts";
 
-export function testProvider(): LLM {
-  return async (prompt) => {
-    const fixed = process.env.WRAP_TEST_RESPONSE;
-    if (fixed) return fixed;
-    return JSON.stringify({ type: "command", command: prompt, risk_level: "low" });
+export function testProvider(): Provider {
+  const runPrompt: Provider["runPrompt"] = async (_systemPrompt, userPrompt, _jsonSchema) => {
+    return process.env.WRAP_TEST_RESPONSE ?? userPrompt;
+  };
+
+  return {
+    runPrompt,
+    runCommandPrompt: async (prompt) => {
+      return (
+        process.env.WRAP_TEST_RESPONSE ??
+        JSON.stringify({ type: "command", command: prompt, risk_level: "low" })
+      );
+    },
   };
 }

@@ -1,11 +1,11 @@
-import { initLLM } from "../llm/index.ts";
-import type { ProviderConfig } from "../llm/types.ts";
+import type { ProviderConfig } from "../llm/index.ts";
+import { initProvider } from "../llm/index.ts";
 import { parseResponse } from "./parse-response.ts";
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
-export async function runQuery(prompt: string, provider: ProviderConfig): Promise<number> {
-  const llm = initLLM(provider);
-  const raw = await llm(prompt);
+export async function runQuery(prompt: string, providerConfig: ProviderConfig): Promise<number> {
+  const provider = initProvider(providerConfig);
+  const raw = await provider.runCommandPrompt(prompt);
   const response = parseResponse(raw);
 
   if (response.type === "answer") {

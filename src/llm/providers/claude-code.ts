@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { assemblePromptParts } from "../../prompt.ts";
 import { ResponseJsonSchema } from "../../response.schema.ts";
-import type { ClaudeCodeProviderConfig, LLM } from "../types.ts";
+import type { ClaudeCodeProviderConfig, Provider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
 function buildSystemPrompt(): string {
@@ -19,28 +19,29 @@ function buildSystemPrompt(): string {
   return sections.join("\n\n");
 }
 
-export function claudeCodeProvider(config: ClaudeCodeProviderConfig): LLM {
+export function claudeCodeProvider(config: ClaudeCodeProviderConfig): Provider {
   const model = config.model ?? "haiku";
-  const jsonSchema = JSON.stringify(ResponseJsonSchema);
 
-  return async (prompt) =>
-    spawnAndRead(
-      [
-        "claude",
-        "--tools",
-        "",
-        "--system-prompt",
-        buildSystemPrompt(),
-        "--json-schema",
-        jsonSchema,
-        "--model",
-        model,
-        "--no-session-persistence",
-        "-p",
-      ],
-      prompt,
-      // Avoid running from Wrap's own project dir, which would load CLAUDE.md.
-      // Temp dir is imperfect (has files) but tools are disabled so claude can't read them.
-      { cwd: tmpdir() },
-    );
+  const runPrompt: Provider["runPrompt"] = async (systemPrompt, userPrompt, jsonSchema) => {
+    const args = [
+      "claude",
+      "--tools",
+      "",
+      "--system-prompt",
+      systemPrompt,
+      "--model",
+      model,
+      "--no-session-persistence",
+    ];
+    if (jsonSchema) {
+      args.push("--json-schema", JSON.stringify(jsonSchema));
+    }
+    args.push("-p");
+    return spawnAndRead(args, userPrompt, { cwd: tmpdir() });
+  };
+
+  const runCommandPrompt: Provider["runCommandPrompt"] = (prompt) =>
+    runPrompt(buildSystemPrompt(), prompt, ResponseJsonSchema);
+
+  return { runPrompt, runCommandPrompt };
 }

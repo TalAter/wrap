@@ -1,19 +1,19 @@
 import { claudeCodeProvider } from "./providers/claude-code.ts";
 import { testProvider } from "./providers/test.ts";
-import type { LLM, ProviderConfig } from "./types.ts";
+import type { Provider, ProviderConfig } from "./types.ts";
 
-export type { LLM } from "./types.ts";
-export { initLLM };
+export type { Provider, ProviderConfig } from "./types.ts";
+export { initProvider };
 
-function initLLM(provider: ProviderConfig): LLM {
-  switch (provider.type) {
+function initProvider(config: ProviderConfig): Provider {
+  switch (config.type) {
     case "test":
       return testProvider();
     case "claude-code":
-      return claudeCodeProvider(provider);
+      return claudeCodeProvider(config);
     default:
       throw new Error(
-        `Config error: unrecognized provider "${(provider as { type: string }).type}".`,
+        `Config error: unrecognized provider "${(config as { type: string }).type}".`,
       );
   }
 }
