@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "../src/prompt.optimized.ts";
+import { createHash } from "node:crypto";
+import {
+  FEW_SHOT_DEMOS,
+  PROMPT_HASH,
+  SCHEMA_TEXT,
+  SYSTEM_PROMPT,
+} from "../src/prompt.optimized.ts";
 import { assemblePromptParts } from "../src/prompt.ts";
 
 describe("assemblePromptParts", () => {
@@ -25,5 +31,21 @@ describe("assemblePromptParts", () => {
     const parts = assemblePromptParts();
     expect(typeof parts.system).toBe("string");
     expect(parts.system.length).toBeGreaterThan(0);
+  });
+});
+
+describe("PROMPT_HASH", () => {
+  test("is a 64-char hex string", () => {
+    expect(PROMPT_HASH).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("matches SHA-256 of prompt components", () => {
+    const input = [
+      SYSTEM_PROMPT || "",
+      SCHEMA_TEXT || "",
+      JSON.stringify(FEW_SHOT_DEMOS.length > 0 ? [...FEW_SHOT_DEMOS] : []),
+    ].join("\n");
+    const expected = createHash("sha256").update(input).digest("hex");
+    expect(PROMPT_HASH).toBe(expected);
   });
 });

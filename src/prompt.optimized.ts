@@ -47,6 +47,8 @@ export const SCHEMA_TEXT = `export const ResponseSchema = z.object({
   memory_updates_message: z.string().optional(),
 });`;
 
+export const PROMPT_HASH = "5b856f215395524a042b168c8c2b3a17af99b8c9843d59a95557737bf9edfaeb";
+
 export const FEW_SHOT_DEMOS: ReadonlyArray<{
   readonly input: string;
   readonly output: string;

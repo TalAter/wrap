@@ -157,19 +157,15 @@ Logging wraps the query loop. The `runQuery` function builds up a log entry as i
 
 ### Prompt hash computation
 
-SHA-256 hex digest of the concatenation of all prompt components. Missing components use a stable fallback so the hash is always deterministic:
+The prompt hash is precomputed at DSPy optimization time and exported as `PROMPT_HASH` from `src/prompt.optimized.ts`. It is **not** recomputed at runtime — the optimizer writes it once when generating the file.
 
-```ts
-const input = [
-  systemPrompt || "",
-  schemaText || "",
-  JSON.stringify(fewShotDemos || []),
-].join("\n");
+The hash is the SHA-256 hex digest of the concatenation of all prompt components:
 
-const hash = sha256hex(input);
+```
+sha256(systemPrompt + "\n" + schemaText + "\n" + JSON.stringify(fewShotDemos))
 ```
 
-If a component is absent (e.g., no `fewShotDemos`), it contributes an empty array `[]`. If `schemaText` or `systemPrompt` is absent, it contributes an empty string. This ensures the hash is always computable and deterministic.
+Missing components use stable fallbacks (empty string for text, `[]` for demos) so the hash is always deterministic. The Python optimizer (`eval/dspy/optimize.py`) uses `json.dumps(demos, separators=(',', ':'))` to match JS `JSON.stringify()`'s compact output.
 
 ### stdout is sacred
 
