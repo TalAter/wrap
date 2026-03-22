@@ -161,6 +161,12 @@ describe("loadConfig", () => {
       // Either way, it should not throw
       expect(config).toBeDefined();
     });
+
+    test("returns empty config when WRAP_HOME directory does not exist", () => {
+      const nonexistent = join(tempDir(), "does-not-exist");
+      const config = loadConfig({ WRAP_HOME: nonexistent });
+      expect(config).toEqual({});
+    });
   });
 
   describe("JSON Schema", () => {
