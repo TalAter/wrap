@@ -1,6 +1,7 @@
 import { loadConfig } from "./config/config.ts";
 import { parseInput } from "./core/input.ts";
 import { runQuery } from "./core/query.ts";
+import { initProvider } from "./llm/index.ts";
 
 export async function main() {
   try {
@@ -18,7 +19,8 @@ export async function main() {
       process.exit(1);
     }
 
-    process.exit(await runQuery(input.prompt, config.provider));
+    const provider = initProvider(config.provider);
+    process.exit(await runQuery(input.prompt, provider));
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
     process.exit(1);
