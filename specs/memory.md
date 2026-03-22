@@ -206,7 +206,9 @@ src/
 
 ---
 
-## Notes:
+## To Do
 
-- We should update eval examples so that we have examples where we pass memory to DSPy and see how it affects the results. We should also have examples there that show contradictions between earlier facts and later (eg ['doesn\'t have brew', 'has brew'] => uses brew)
-- Probe commands: This is just a temporary list of probes. Will finalize later. Ideally run them all with only one or as few shell commands as possible
+- [ ] Eval examples: add examples that pass memory context and assert memory-informed commands
+- [ ] Eval examples: add contradiction examples (e.g., early fact says "no brew", later fact says "has brew" → LLM uses latest)
+- [ ] Finalize probe commands — current list is provisional. Ideally run all with one or few shell commands
+- [ ] End-to-end test: clean install → first query gets memory-informed response
