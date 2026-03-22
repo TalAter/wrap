@@ -40,7 +40,11 @@ type MemoryEntry = { fact: string }
 
 ### Corrupt file
 
-If `memory.json` exists but is not valid JSON: **error and exit** (same pattern as config). User must fix or delete the file.
+If `memory.json` exists but is not valid JSON: **error and exit** (same pattern as config). User must fix or delete the file. Error prefix: `Memory error:`.
+
+### Directory creation
+
+Create `~/.wrap/` lazily — only when first writing `memory.json`, not eagerly in the main loop.
 
 ---
 
@@ -132,13 +136,15 @@ memory_updates: z.array(z.object({ fact: z.string() })).optional()
 
 `memory_updates_message` stays unchanged — it's the human-readable summary shown to the user.
 
+Also update the embedded schema text in `src/prompt.optimized.ts` to match.
+
 ---
 
 ## LLM Integration
 
 ### Memory in regular queries
 
-`runCommandPrompt(prompt, memory?)` — memory passed as optional parameter. The provider incorporates memory facts into the system prompt. Each provider decides formatting, but the intent is a section like:
+`runCommandPrompt(prompt, memory?)` — memory passed as optional parameter. This changes the `Provider` type in `src/llm/types.ts` and all provider implementations. The provider incorporates memory facts into the system prompt. Each provider decides formatting, but the intent is a section like:
 
 ```
 ## Known facts about the user's environment
