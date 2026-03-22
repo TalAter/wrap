@@ -26,8 +26,7 @@ export const ResponseSchema = z.object({
   memory_updates: z
     .array(
       z.object({
-        key: z.string(),
-        value: z.string(),
+        fact: z.string(),
       }),
     )
     .optional(),

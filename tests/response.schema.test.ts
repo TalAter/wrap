@@ -45,14 +45,14 @@ describe("ResponseSchema", () => {
       command: "echo 'alias ll=ls -la' >> ~/.zshrc",
       risk_level: "medium",
       memory_updates: [
-        { key: "shell", value: "zsh" },
-        { key: "shell config", value: "~/.zshrc" },
+        { fact: "Default shell is zsh" },
+        { fact: "Shell config at ~/.zshrc" },
       ],
       memory_updates_message: "Noted: you use zsh, config at ~/.zshrc",
     };
     const result = ResponseSchema.parse(input);
     expect(result.memory_updates).toHaveLength(2);
-    expect(result.memory_updates?.[0]).toEqual({ key: "shell", value: "zsh" });
+    expect(result.memory_updates?.[0]).toEqual({ fact: "Default shell is zsh" });
     expect(result.memory_updates_message).toBe("Noted: you use zsh, config at ~/.zshrc");
   });
 
@@ -94,20 +94,11 @@ describe("ResponseSchema", () => {
     expect(result.memory_updates).toEqual([]);
   });
 
-  test("rejects memory_updates entry with missing key", () => {
+  test("rejects memory_updates entry with missing fact", () => {
     const input = {
       type: "command",
       risk_level: "low",
-      memory_updates: [{ value: "zsh" }],
-    };
-    expect(() => ResponseSchema.parse(input)).toThrow();
-  });
-
-  test("rejects memory_updates entry with missing value", () => {
-    const input = {
-      type: "command",
-      risk_level: "low",
-      memory_updates: [{ key: "shell" }],
+      memory_updates: [{ key: "shell", value: "zsh" }],
     };
     expect(() => ResponseSchema.parse(input)).toThrow();
   });

@@ -97,7 +97,7 @@ describe("parseResponse", () => {
       type: "command",
       command: "echo test",
       risk_level: "low",
-      memory_updates: [{ key: "shell", value: "zsh" }],
+      memory_updates: [{ fact: "Default shell is zsh" }],
       memory_updates_message: "Noted: you use zsh",
     });
     const result = parseResponse(raw);
