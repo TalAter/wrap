@@ -47,6 +47,10 @@ def make_signature(schema_text: str):
         natural_language_query: str = dspy.InputField(
             desc="The user's natural language request"
         )
+        memory_context: str = dspy.InputField(
+            desc="Known facts about the user's environment (may be empty)",
+            default="",
+        )
         response_json: str = dspy.OutputField(
             desc=f"JSON object conforming to this Zod schema:\n{schema_text}"
         )
@@ -59,14 +63,21 @@ class WrapPredictor(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(signature)
 
-    def forward(self, natural_language_query: str) -> dspy.Prediction:
-        return self.predict(natural_language_query=natural_language_query)
+    def forward(self, natural_language_query: str, memory_context: str = "") -> dspy.Prediction:
+        return self.predict(natural_language_query=natural_language_query, memory_context=memory_context)
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
     """DSPy-compatible metric function."""
     assertions = example.assertions
     return score(prediction.response_json, assertions)
+
+
+def memory_to_context(memory: list[dict] | None) -> str:
+    """Convert memory entries to a text block for the LLM."""
+    if not memory:
+        return ""
+    return "\n".join(f"- {m['fact']}" for m in memory)
 
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
@@ -76,8 +87,9 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
         dspy_examples.append(
             dspy.Example(
                 natural_language_query=ex["input"],
+                memory_context=memory_to_context(ex.get("memory")),
                 assertions=ex["assertions"],
-            ).with_inputs("natural_language_query")
+            ).with_inputs("natural_language_query", "memory_context")
         )
     return dspy_examples
 
