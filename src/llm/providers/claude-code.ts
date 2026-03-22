@@ -1,12 +1,16 @@
 import { tmpdir } from "node:os";
 import { assemblePromptParts } from "../../prompt.ts";
 import { ResponseJsonSchema } from "../../response.schema.ts";
-import type { ClaudeCodeProviderConfig, Provider } from "../types.ts";
+import type { ClaudeCodeProviderConfig, MemoryFact, Provider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(memory?: MemoryFact[]): string {
   const parts = assemblePromptParts();
   const sections: string[] = [parts.system];
+  if (memory && memory.length > 0) {
+    const facts = memory.map((m) => `- ${m.fact}`).join("\n");
+    sections.push(`## Known facts about the user's environment\n${facts}`);
+  }
   if (parts.schema) {
     sections.push(`Respond with a JSON object conforming to this schema:\n${parts.schema}`);
   }
@@ -40,8 +44,8 @@ export function claudeCodeProvider(config: ClaudeCodeProviderConfig): Provider {
     return spawnAndRead(args, userPrompt, { cwd: tmpdir() });
   };
 
-  const runCommandPrompt: Provider["runCommandPrompt"] = (prompt) =>
-    runPrompt(buildSystemPrompt(), prompt, ResponseJsonSchema);
+  const runCommandPrompt: Provider["runCommandPrompt"] = (prompt, memory) =>
+    runPrompt(buildSystemPrompt(memory), prompt, ResponseJsonSchema);
 
   return { runPrompt, runCommandPrompt };
 }

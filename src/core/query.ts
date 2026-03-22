@@ -1,9 +1,13 @@
-import type { Provider } from "../llm/types.ts";
+import type { MemoryFact, Provider } from "../llm/types.ts";
 import { parseResponse } from "./parse-response.ts";
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
-export async function runQuery(prompt: string, provider: Provider): Promise<number> {
-  const raw = await provider.runCommandPrompt(prompt);
+export async function runQuery(
+  prompt: string,
+  provider: Provider,
+  memory?: MemoryFact[],
+): Promise<number> {
+  const raw = await provider.runCommandPrompt(prompt, memory);
   const response = parseResponse(raw);
 
   if (response.type === "answer") {
