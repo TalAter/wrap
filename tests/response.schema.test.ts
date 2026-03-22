@@ -44,10 +44,7 @@ describe("ResponseSchema", () => {
       type: "command",
       command: "echo 'alias ll=ls -la' >> ~/.zshrc",
       risk_level: "medium",
-      memory_updates: [
-        { fact: "Default shell is zsh" },
-        { fact: "Shell config at ~/.zshrc" },
-      ],
+      memory_updates: [{ fact: "Default shell is zsh" }, { fact: "Shell config at ~/.zshrc" }],
       memory_updates_message: "Noted: you use zsh, config at ~/.zshrc",
     };
     const result = ResponseSchema.parse(input);

@@ -9,8 +9,7 @@ export const PROBE_COMMANDS: readonly ProbeCommand[] = [
   { label: "Distro", command: "cat /etc/os-release 2>/dev/null || echo 'Not Linux'" },
   {
     label: "Shell config files",
-    command:
-      "ls -la ~/.*shrc ~/.*sh_profile ~/.*profile ~/.config/fish/config.fish 2>/dev/null",
+    command: "ls -la ~/.*shrc ~/.*sh_profile ~/.*profile ~/.config/fish/config.fish 2>/dev/null",
   },
   { label: "Package manager", command: "which brew apt dnf pacman yum 2>/dev/null" },
   {
