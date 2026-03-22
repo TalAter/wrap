@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runProbes, PROBE_COMMANDS, parseDetectedTools } from "../src/memory/init-probes.ts";
+import { PROBE_COMMANDS, parseDetectedTools, runProbes } from "../src/memory/init-probes.ts";
 
 describe("PROBE_COMMANDS", () => {
   test("is a non-empty array of {label, command} entries", () => {

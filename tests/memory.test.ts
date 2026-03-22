@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadMemory, saveMemory, appendMemory } from "../src/memory/memory.ts";
+import { appendMemory, loadMemory, saveMemory } from "../src/memory/memory.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-memory-test-"));
@@ -16,10 +16,7 @@ describe("loadMemory", () => {
 
   test("returns parsed entries from valid file", () => {
     const dir = tempDir();
-    const entries = [
-      { fact: "Runs macOS on arm64" },
-      { fact: "Default shell is zsh" },
-    ];
+    const entries = [{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }];
     writeFileSync(join(dir, "memory.json"), JSON.stringify(entries));
     const result = loadMemory(dir);
     expect(result).toEqual(entries);
