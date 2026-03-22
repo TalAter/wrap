@@ -1,6 +1,6 @@
 # Wrap
 
-Wrap is a CLI tool that translates natural language into shell commands and runs them. Input: `w find all typescript files modified today` → runs `find . -name '*.ts' -mtime 0` and prints the result. See SPEC.md for full details.
+Wrap is a CLI tool that translates natural language into shell commands and runs them. Input: `w find all typescript files modified today` → runs `find . -name '*.ts' -mtime 0` and prints the result. Product spec and architecture docs live in `specs/`.
 
 ## Stack
 
