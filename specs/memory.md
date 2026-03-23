@@ -209,4 +209,3 @@ src/
 ## To Do
 
 - [ ] Finalize probe commands — current list is provisional. Ideally run all with one or few shell commands
-- [ ] End-to-end test: clean install → first query gets memory-informed response
