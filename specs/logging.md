@@ -57,7 +57,7 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`) |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
 | `rounds` | array | Array of LLM round-trips (see below) |
-| `outcome` | string | `"success"` \| `"error"` \| `"cancelled"` (future) \| `"max_rounds"` (future) |
+| `outcome` | string | `"success"` \| `"error"` \| `"refused"` \| `"cancelled"` (future) \| `"max_rounds"` (future) |
 
 ### Round fields
 
@@ -65,7 +65,7 @@ Each element in `rounds`:
 
 | Field | Type | Description |
 |---|---|---|
-| `raw_response` | string? | Verbatim string returned by the LLM. Omitted if provider failed before returning. |
+| `raw_response` | string? | Verbatim string returned by the LLM. Omitted on successful parse (redundant with `parsed`) and when provider failed before returning. |
 | `parse_error` | string? | Error message if JSON parsing or schema validation failed. Omitted on success. |
 | `provider_error` | string? | Provider-level error (subprocess crash, network failure). Omitted on success. |
 | `parsed` | object? | Parsed response object (matches `ResponseSchema`). Omitted if parsing failed. |
@@ -87,7 +87,7 @@ Note: stdout/stderr are not captured in v1. The executed command's output stream
 ### Successful command
 
 ```json
-{"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","prompt":"find all typescript files","cwd":"/Users/tal/projects","provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"raw_response":"{\"type\":\"command\",\"command\":\"find . -name '*.ts'\",\"risk_level\":\"low\"}","parsed":{"type":"command","command":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0}}],"outcome":"success"}
+{"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","prompt":"find all typescript files","cwd":"/Users/tal/projects","provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"command","command":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0}}],"outcome":"success"}
 ```
 
 ### Parse failure (the primary debugging use case)
@@ -114,18 +114,21 @@ Note: retry attempts after JSON parse failure (SPEC.md section 8.2) are logged a
 
 ## What Gets Logged
 
-| Scenario | Logged? |
-|---|---|
-| Successful command execution | Yes |
-| LLM returns answer | Yes |
-| LLM returns malformed JSON | Yes — `raw_response` captures the garbage, `parse_error` explains why |
-| LLM response fails schema validation | Yes — `raw_response` has the valid JSON that didn't match the schema |
-| Provider subprocess crashes | Yes — `provider_error` captures the failure |
-| Provider initialization fails (e.g., unknown type) | No |
-| No args / help screen | No |
-| Config errors | No |
-| Probe round (future) | Yes — as a round in the same entry |
-| Error retry (future) | Yes — as additional rounds |
+| Scenario | Logged? | Outcome |
+|---|---|---|
+| Successful command execution (exit 0) | Yes | `"success"` |
+| Command execution with non-zero exit | Yes | `"error"` |
+| LLM returns answer | Yes | `"success"` |
+| LLM returns malformed JSON | Yes — `raw_response` captures the garbage, `parse_error` explains why | `"error"` |
+| LLM response fails schema validation | Yes — `raw_response` has the valid JSON that didn't match the schema | `"error"` |
+| Provider subprocess crashes | Yes — `provider_error` captures the failure | `"error"` |
+| Non-low risk command (confirmation needed) | Yes | `"refused"` |
+| Probe (not yet supported) | Yes | `"refused"` |
+| Provider initialization fails (e.g., unknown type) | No | — |
+| No args / help screen | No | — |
+| Config errors | No | — |
+| Probe round (future) | Yes — as a round in the same entry | |
+| Error retry (future) | Yes — as additional rounds | |
 
 ---
 

@@ -148,7 +148,7 @@ def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -
     Uses compact JSON (no spaces) to match JS JSON.stringify() default.
     """
     demos_compact = json.dumps(demos, separators=(",", ":"))
-    hash_input = "\n".join([instruction or "", schema_text or "", demos_compact])
+    hash_input = "\n".join([(instruction or "").strip(), (schema_text or "").strip(), demos_compact])
     return hashlib.sha256(hash_input.encode()).hexdigest()
 
 

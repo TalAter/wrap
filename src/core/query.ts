@@ -32,12 +32,12 @@ export async function runQuery(
       round.provider_error = e instanceof Error ? e.message : String(e);
       throw e;
     }
-    round.raw_response = raw;
 
     let response: ReturnType<typeof parseResponse>;
     try {
       response = parseResponse(raw);
     } catch (e) {
+      round.raw_response = raw;
       round.parse_error = e instanceof Error ? e.message : String(e);
       throw e;
     }
@@ -58,6 +58,7 @@ export async function runQuery(
 
     if (response.type === "probe") {
       console.error("Probe commands are not yet supported.");
+      entry.outcome = "refused";
       return 1;
     }
 
@@ -68,6 +69,7 @@ export async function runQuery(
     }
     if (response.risk_level !== "low") {
       console.error(`Command requires confirmation (not yet supported): ${response.command}`);
+      entry.outcome = "refused";
       return 1;
     }
     const shell = process.env.SHELL || "sh";
@@ -78,10 +80,14 @@ export async function runQuery(
     });
     const exitCode = await proc.exited;
     round.execution = { command: response.command, exit_code: exitCode };
-    entry.outcome = "success";
+    entry.outcome = exitCode === 0 ? "success" : "error";
     return exitCode;
   } finally {
     addRound(entry, round);
-    appendLogEntry(wrapHome, entry);
+    try {
+      appendLogEntry(wrapHome, entry);
+    } catch {
+      // Logging must never break the tool
+    }
   }
 }

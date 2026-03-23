@@ -109,7 +109,6 @@ describe("serializeEntry", () => {
     });
     entry.outcome = "success";
     addRound(entry, {
-      raw_response: '{"type":"command","command":"ls"}',
       parsed: {
         type: "command",
         command: "ls",
@@ -122,6 +121,7 @@ describe("serializeEntry", () => {
     expect(parsed.outcome).toBe("success");
     expect(parsed.rounds[0].parsed.command).toBe("ls");
     expect(parsed.rounds[0].execution.exit_code).toBe(0);
+    expect("raw_response" in parsed.rounds[0]).toBe(false);
   });
 
   test("omits null-valued round fields", () => {
@@ -209,8 +209,16 @@ describe("appendLogEntry", () => {
   });
 });
 
+function readLogEntries(wrapHome: string) {
+  return readFileSync(join(wrapHome, "logs", "wrap.jsonl"), "utf-8")
+    .trimEnd()
+    .split("\n")
+    .map((l) => JSON.parse(l));
+}
+
 function readLog(wrapHome: string) {
-  return JSON.parse(readFileSync(join(wrapHome, "logs", "wrap.jsonl"), "utf-8").trim());
+  const entries = readLogEntries(wrapHome);
+  return entries[entries.length - 1];
 }
 
 function seedMemoryIn(home: string) {
@@ -276,15 +284,37 @@ describe("logging integration", () => {
     expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  test("non-low risk command logs with outcome 'error'", async () => {
+  test("non-low risk command logs with outcome 'refused'", async () => {
     const result = await wrapMock("delete everything", {
       type: "command",
       command: "rm -rf /",
       risk_level: "high",
     });
     const entry = readLog(result.wrapHome);
-    expect(entry.outcome).toBe("error");
+    expect(entry.outcome).toBe("refused");
     expect(entry.rounds[0].parsed.command).toBe("rm -rf /");
     expect(entry.rounds[0].execution).toBeUndefined();
+  });
+
+  test("command with non-zero exit code logs outcome 'error'", async () => {
+    const result = await wrapMock("fail", {
+      type: "command",
+      command: "exit 1",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.outcome).toBe("error");
+    expect(entry.rounds[0].execution.exit_code).toBe(1);
+  });
+
+  test("successful parse omits raw_response from round", async () => {
+    const result = await wrapMock("test", {
+      type: "answer",
+      answer: "ok",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.rounds[0].parsed).toBeDefined();
+    expect("raw_response" in entry.rounds[0]).toBe(false);
   });
 });

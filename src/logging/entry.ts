@@ -23,7 +23,7 @@ export type LogEntry = {
   provider: ProviderConfig;
   prompt_hash: string;
   rounds: Round[];
-  outcome: "success" | "error";
+  outcome: "success" | "error" | "refused";
 };
 
 export function createLogEntry(params: {

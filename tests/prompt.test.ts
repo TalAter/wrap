@@ -41,8 +41,8 @@ describe("PROMPT_HASH", () => {
 
   test("matches SHA-256 of prompt components", () => {
     const input = [
-      SYSTEM_PROMPT || "",
-      SCHEMA_TEXT || "",
+      (SYSTEM_PROMPT || "").trim(),
+      (SCHEMA_TEXT || "").trim(),
       JSON.stringify(FEW_SHOT_DEMOS.length > 0 ? [...FEW_SHOT_DEMOS] : []),
     ].join("\n");
     const expected = createHash("sha256").update(input).digest("hex");
