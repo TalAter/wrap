@@ -160,8 +160,12 @@ When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr �
 
 | Risk | Keybindings | Rationale |
 |------|-------------|-----------|
-| **Medium** | `Enter` = run, `e` = edit, `q` = cancel | Low friction — a single keypress to confirm |
-| **High** | `y` + `Enter` = run, `e` = edit, `q`/`Enter` = cancel | Requires deliberate opt-in. Default action is cancel. |
+| **Medium** | `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `q` = cancel | Low friction — a single keypress to confirm |
+| **High** | `y` + `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `q`/`Enter` = cancel | Requires deliberate opt-in. Default action is cancel. |
+
+**`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the TUI panel. The user can then proceed with the other keybindings.
+
+**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the TUI updates with the new generated command. The user can follow up multiple times before executing or cancelling. This is only available in the confirmation TUI (medium/high risk commands) — for low-risk commands that auto-execute, the user can follow up via `wyada` in a new invocation.
 
 **Input buffer flush:** Before rendering the confirmation prompt, flush/discard any buffered terminal input. This prevents a stray `Enter` (pressed while waiting for the LLM response) from accidentally confirming a dangerous command. The prompt only accepts input after it is fully displayed.
 
@@ -185,18 +189,64 @@ When the task requires multiple piped commands:
 - Generate a single composed pipeline (e.g., `find . -name '*.log' | xargs grep ERROR | sort | uniq -c`)
 - Do NOT step through commands sequentially with confirmation between steps
 
+### 5.6 Shell History Injection
+
+After Wrap executes a command, it appends the generated command to the shell's history with the original Wrap invocation as an inline comment:
+
+```
+w list all files in here        ← recorded by the shell naturally
+ls -la # w list all files in here   ← injected by Wrap
+```
+
+This gives the user two things when pressing arrow-up:
+1. **The generated command** — immediately re-runnable without hitting the LLM. The comment preserves the original intent for readability.
+2. **The Wrap invocation** — editable and re-runnable to tweak the natural language request.
+
+Implementation: append to `$HISTFILE` (or use `fc` / `history -s` depending on shell). The inline comment is inert — the shell ignores everything after `#`.
+
 ---
 
 ## 6. Error Handling & Auto-Fix
 
-When a generated command fails (non-zero exit code or stderr):
+### 6.0 When Auto-Fix Applies
 
-1. Automatically send the error back to the LLM
-2. The LLM determines if the error is **fixable** (wrong flags, typo, missing path) or **informational** (port already in use, permission denied that's inherent)
+Not every non-zero exit code means Wrap should retry. A command can run correctly and still return an error — `curl` hitting a 404, `ls` on a nonexistent path, `grep` finding no matches. These are the command working as intended; the error is the answer.
+
+Auto-fix triggers only on **infrastructure-level failures** — problems with the command itself, not with what the command found:
+
+| Error type | Example | Auto-fix? |
+|---|---|---|
+| Command not found | `zsh: command not found: pngquant` | **Yes** — try alternative tool (see §6.2) |
+| Syntax error | `bash: syntax error near unexpected token` | **Yes** — LLM generated bad syntax |
+| Wrong flags | `grep: invalid option -- 'Z'` | **Yes** — LLM used flags that don't exist on this platform |
+| Permission denied on binary | `permission denied: /usr/local/bin/foo` | **Maybe** — LLM can suggest `sudo` or alternative |
+| Application-level error | `curl: (22) 404 Not Found` | **No** — command worked, server returned 404 |
+| No results | `grep` returns exit code 1 (no matches) | **No** — command worked, nothing matched |
+| Runtime failure | `node: Cannot find module './foo'` | **No** — the command ran, the program has a bug |
+
+When auto-fix does NOT apply, Wrap simply shows the command's output (stdout + stderr) and exits. The user can follow up via `wyada` if they want to try a different approach.
+
+### 6.1 Auto-Fix Flow
+
+When auto-fix applies:
+
+1. Send the error back to the LLM
+2. The LLM determines if the error is **fixable** (wrong flags, typo, unavailable tool) or **informational** (permission denied that's inherent)
 3. If fixable: LLM generates a corrected command → show for approval (or auto-execute per mode)
 4. If informational: output a short LLM-generated explanation alongside the native error
 
-### 6.1 Retry Loop
+### 6.2 Command Not Found — Memory & Retry
+
+When a command fails with "command not found," the error is sent back to the LLM for both retry and potential memory update. The LLM — not client-side rules — decides what to remember:
+
+- **Well-known tool not installed** (e.g., `command not found: pngquant`, `command not found: brew`): The LLM recognizes this as a system-level fact. It returns a `memory_update` ("pngquant is not installed") and tries an alternative command (e.g., `sips` instead of `pngquant`).
+- **Likely a local/project script** (e.g., `command not found: run-tests`): The LLM recognizes this isn't a system tool. No memory update. It may suggest `./run-tests` (CWD-relative) or ask the user to check the path.
+
+Why the LLM decides: a client-side heuristic can't reliably distinguish `brew` (system tool, worth remembering) from `run-tests` (project script, not worth remembering). The LLM has the world knowledge to make this call.
+
+Note: `command not found: foo` (without `./`) means `foo` is not in `$PATH` anywhere. `./foo` failing means the file doesn't exist in the current directory — a different situation entirely, and not a system-level fact.
+
+### 6.3 Retry Loop
 
 - Error retries and probe rounds share a **unified counter** (see ARCHITECTURE.md — Loop Rules). One budget for all LLM round-trips, configurable via `maxRounds`.
 - **Default:** 5 rounds total (probes + retries), show each attempt (command + error)
@@ -600,7 +650,7 @@ $ w find all typescript files modified today
 $ w delete everything here
 🔮 rm -rf *
   ⚠ High risk · This will delete everything in the current directory and any of its subdirectories
-  [y+Enter] Run  [e] Edit  [Enter/q] Cancel
+  [y+Enter] Run  [e] Edit  [d] Describe  [f] Follow-up  [Enter/q] Cancel
 ```
 
 ### A.3 Yolo Mode
@@ -643,17 +693,28 @@ $ w add an alias for ll to my shell config
 🧠 Noted: you use zsh, config at ~/.zshrc
 🔮 echo "alias ll='ls -la'" >> ~/.zshrc
   Medium risk · Appends to your shell config file
-  [Enter] Run  [e] Edit  [q] Cancel
+  [Enter] Run  [e] Edit  [d] Describe  [f] Follow-up  [q] Cancel
 ```
 
-### A.7 Auto-Fix on Error
+### A.7 Auto-Fix on Error (Command Not Found)
 
 ```
 $ w compress all pngs in this folder
 # tries running pngquant --quality=65-80 *.png
 zsh: command not found: pngquant
-🔧 Command failed. Trying alternative...
+🧠 Noted: pngquant is not installed
+🔧 Trying alternative...
 # runs `for f in *.png; do sips -s format png -s formatOptions 80 "$f"; done`
+```
+
+### A.8 Non-Retryable Error (Application-Level)
+
+```
+$ w curl the api endpoint at example.com/users
+# runs curl https://example.com/users
+< HTTP/1.1 404 Not Found
+# Wrap exits. The command worked; the server returned 404. No auto-fix.
+# User can follow up: wyada try the /api/users path instead
 ```
 
 ---
@@ -673,13 +734,18 @@ zsh: command not found: pngquant
 - [ ] Local safety rule engine — hard-coded patterns (rm -rf, sudo, dd, chmod, mkfs, etc.)
 - [ ] Confirmation TUI — bordered panel with syntax-highlighted command, risk indicator, explanation
 - [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, Enter=cancel)
+- [ ] `[D]escribe` option in confirmation TUI — detailed LLM explanation of the command
+- [ ] `[F]ollow-up` option in confirmation TUI — text input for natural language refinement
 - [ ] Input buffer flush before rendering confirmation prompt
 - [ ] Edit mode in confirmation TUI (editable command field)
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Long-running command passthrough (streaming stdout/stderr)
+- [ ] Shell history injection — append generated command with inline comment to shell history
 
 ### Error Handling & Auto-Fix (§6)
-- [ ] Feed command errors back to LLM for auto-fix
+- [ ] Auto-fix scoped to infrastructure-level failures only (command not found, syntax errors, wrong flags)
+- [ ] Command not found → LLM decides: memory update (system tool) vs path suggestion (local script)
+- [ ] Feed infrastructure errors back to LLM for auto-fix
 - [ ] LLM classifies errors as fixable vs informational
 - [ ] Unified round budget (maxRounds) shared between probes and retries
 
@@ -689,6 +755,7 @@ zsh: command not found: pngquant
 - [ ] Probe results fed back to LLM as context
 
 ### LLM Integration (§8)
+- [ ] Explain `memory_updates` usage in system prompt — when to write memories, what's worth remembering
 - [ ] OpenAI SDK provider (API-based providers with response_format)
 - [ ] Generalized CLI tool provider abstraction (currently only claude-code)
 - [ ] CLI provider terms-of-service disclaimer on first use
