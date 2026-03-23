@@ -44,3 +44,5 @@
 {"input": "update all packages", "memory": [{"fact": "Runs macOS on arm64"}, {"fact": "Homebrew is the package manager"}], "assertions": {"type": "command", "risk_range": ["low", "medium"], "command_pattern": "brew.*(update|upgrade)"}}
 {"input": "update all packages", "memory": [{"fact": "Runs Ubuntu 22.04"}, {"fact": "apt is the package manager"}], "assertions": {"type": "command", "risk_range": ["low", "medium"], "command_pattern": "apt.*(update|upgrade)"}}
 {"input": "compress all pngs in this folder", "memory": [{"fact": "Runs macOS on arm64"}, {"fact": "pngquant is not installed"}, {"fact": "pngquant is installed"}], "assertions": {"type": "command", "risk_range": ["low", "medium"], "command_pattern": "pngquant"}}
+{"input": "find all log files larger than 10mb and delete them", "assertions": {"type": "command", "risk_range": ["medium", "high"], "command_pattern": "find.*\\|.*rm|find.*-delete|find.*-exec.*rm"}}
+{"input": "list all js files, count them, and show the total size", "assertions": {"type": "command", "risk_range": ["low"], "command_pattern": "(find|ls).*\\|.*(wc|du|xargs)"}}
