@@ -177,6 +177,18 @@ Integration tests already set `WRAP_HOME` to a temp directory, so log files land
 
 ---
 
+## To-do
+
+- [ ] `piped_input` — detect piped stdin in `parseInput` and pass through to log entry
+- [ ] `wrap log` subcommand — pretty-print recent log entries (see spec above)
+- [ ] `expires` field + retention pruning — write expiry timestamp, prune old entries
+- [ ] `cancelled` outcome — when user cancels mid-invocation (requires signal handling)
+- [ ] `max_rounds` outcome — when multi-round loop hits its limit (requires probe/retry loop)
+- [ ] Multi-round logging — probe + retry rounds accumulate in the same entry
+- [ ] Document in help/README that logs contain full LLM exchanges
+
+---
+
 ## Relationship to Other Systems
 
 - **Threads (future):** Logging and threads are independent. Threads may reference log entries by ID in the future, or maintain their own storage. Decided when threads are built.
