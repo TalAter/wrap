@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { addRound, createLogEntry, type Round, serializeEntry } from "../src/logging/entry.ts";
+import { appendLogEntry } from "../src/logging/writer.ts";
 
 describe("createLogEntry", () => {
   const defaults = {
@@ -144,5 +148,62 @@ describe("serializeEntry", () => {
       promptHash: "abc",
     });
     expect(serializeEntry(entry)).not.toContain("\n");
+  });
+});
+
+describe("appendLogEntry", () => {
+  function makeTmpHome() {
+    return mkdtempSync(join(tmpdir(), "wrap-log-test-"));
+  }
+
+  function makeEntry() {
+    return createLogEntry({
+      prompt: "test",
+      cwd: "/tmp",
+      provider: { type: "test" },
+      promptHash: "abc",
+    });
+  }
+
+  test("creates logs directory and file on first write", () => {
+    const home = makeTmpHome();
+    const entry = makeEntry();
+    appendLogEntry(home, entry);
+    const logPath = join(home, "logs", "wrap.jsonl");
+    expect(existsSync(logPath)).toBe(true);
+  });
+
+  test("writes valid JSON on a single line", () => {
+    const home = makeTmpHome();
+    appendLogEntry(home, makeEntry());
+    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
+    const lines = content.trimEnd().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(() => JSON.parse(lines[0])).not.toThrow();
+  });
+
+  test("appends multiple entries as separate lines", () => {
+    const home = makeTmpHome();
+    appendLogEntry(home, makeEntry());
+    appendLogEntry(home, makeEntry());
+    appendLogEntry(home, makeEntry());
+    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
+    const lines = content.trimEnd().split("\n");
+    expect(lines).toHaveLength(3);
+    for (const line of lines) {
+      expect(() => JSON.parse(line)).not.toThrow();
+    }
+  });
+
+  test("each line has a unique id", () => {
+    const home = makeTmpHome();
+    appendLogEntry(home, makeEntry());
+    appendLogEntry(home, makeEntry());
+    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
+    const ids = content
+      .trimEnd()
+      .split("\n")
+      .map((l) => JSON.parse(l).id);
+    expect(new Set(ids).size).toBe(2);
   });
 });
