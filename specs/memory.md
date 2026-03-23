@@ -208,7 +208,5 @@ src/
 
 ## To Do
 
-- [ ] Eval examples: add examples that pass memory context and assert memory-informed commands
-- [ ] Eval examples: add contradiction examples (e.g., early fact says "no brew", later fact says "has brew" → LLM uses latest)
 - [ ] Finalize probe commands — current list is provisional. Ideally run all with one or few shell commands
 - [ ] End-to-end test: clean install → first query gets memory-informed response
