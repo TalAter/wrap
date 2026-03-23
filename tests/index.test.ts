@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { wrap, wrapMock } from "./helpers.ts";
 
 describe("wrap", () => {
@@ -186,6 +188,25 @@ describe("wrap", () => {
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
     expect(stderr).toContain("not yet supported");
+  });
+
+  test("e2e: first run inits memory, then query succeeds", async () => {
+    const config = JSON.stringify({ provider: { type: "test" } });
+    const response = JSON.stringify({ type: "command", command: "echo hi", risk_level: "low" });
+    const { exitCode, stdout, stderr, wrapHome } = await wrap("say hi", {
+      WRAP_CONFIG: config,
+      WRAP_TEST_RESPONSE: response,
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("hi\n");
+    expect(stderr).toContain("Learning about your system");
+    expect(stderr).toContain("Detected");
+    const memoryPath = join(wrapHome, "memory.json");
+    expect(existsSync(memoryPath)).toBe(true);
+    const memory = JSON.parse(readFileSync(memoryPath, "utf-8"));
+    expect(Array.isArray(memory)).toBe(true);
+    expect(memory.length).toBeGreaterThan(0);
+    expect(memory[0]).toHaveProperty("fact");
   });
 
   test("memory_updates: shown on stderr", async () => {

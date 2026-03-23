@@ -19,6 +19,7 @@ export async function wrap(input?: string, env?: Record<string, string>) {
     exitCode,
     stdout: await new Response(proc.stdout).text(),
     stderr: await new Response(proc.stderr).text(),
+    wrapHome: isolatedEnv.WRAP_HOME,
   };
 }
 
