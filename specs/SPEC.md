@@ -753,6 +753,7 @@ $ w curl the api endpoint at example.com/users
 - [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, Enter=cancel)
 - [ ] `[D]escribe` option in confirmation TUI — detailed LLM explanation of the command
 - [ ] `[F]ollow-up` option in confirmation TUI — text input for natural language refinement
+- [ ] `[C]opy` option in confirmation TUI — copy command to clipboard
 - [ ] Input buffer flush before rendering confirmation prompt
 - [ ] Edit mode in confirmation TUI (editable command field)
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
@@ -811,5 +812,7 @@ $ w curl the api endpoint at example.com/users
 - [ ] `wrap config` (manual reconfigure)
 - [ ] Other subcommands as needs emerge
 
-### Open
+### Future Ideas
 - [ ] Consider running Claude Code in the user's cwd as a CLI tool provider. Consider always passing `cwd` to the LLM in every request so it has additional filesystem context.
+- [ ] Model-switching shorthand — e.g., `W` (uppercase) uses a premium model, `w` uses default. Alias-based model tiers.
+- [ ] Shell keybinding integration — keybinding that sends current command line text to Wrap and replaces it with the generated command.
