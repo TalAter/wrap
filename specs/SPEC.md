@@ -111,7 +111,23 @@ ls -la | w which is the largest file
 git diff | w summarize these changes
 ```
 
-When stdin is a pipe, Wrap includes the piped data as LLM context. The LLM can respond with either a command or a text answer depending on the query.
+When stdin is a pipe, Wrap reads the full piped content into memory and includes it as LLM context. The LLM can respond with either a command or a text answer depending on the query.
+
+### 4.1 Large Input Warning
+
+When piped input exceeds a configurable threshold, Wrap shows a confirmation before sending it to the LLM:
+
+```
+$ cat huge.log | w show me just the last 5 lines
+💰 Large input (~48,000 lines, ~12k tokens). Send to LLM?
+  [Enter] Send  [q] Cancel
+```
+
+Token count is estimated using a rough heuristic (~4 chars per token). The input is already fully buffered at this point — confirming sends it immediately.
+
+If input exceeds a hard ceiling (e.g., 50MB), Wrap skips the prompt and exits with an error: input too large.
+
+**Future optimization:** Before showing the confirmation, speculatively ask the LLM (prompt-only, no piped content) whether it can generate a command that consumes stdin directly (e.g., `tail -5` instead of reading 48k lines). If the LLM responds in time, add a third option to the TUI: `[r] Run: tail -5`. Deferred for future version.
 
 **Piping from Wrap** works naturally via shell plumbing:
 
@@ -727,8 +743,9 @@ $ w curl the api endpoint at example.com/users
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
 
 ### Piping (§4)
-- [ ] Detect piped stdin, read content, pass to LLM as context
-- [ ] Token count warning for very large piped inputs
+- [ ] Detect piped stdin, read full content into buffer, pass to LLM as context
+- [ ] Large input warning TUI — token estimate, confirmation before sending
+- [ ] Hard ceiling — reject input over max size (e.g., 50MB)
 
 ### Execution & Safety (§5)
 - [ ] Local safety rule engine — hard-coded patterns (rm -rf, sudo, dd, chmod, mkfs, etc.)
