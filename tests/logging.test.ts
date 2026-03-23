@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addRound, createLogEntry, type Round, serializeEntry } from "../src/logging/entry.ts";
 import { appendLogEntry } from "../src/logging/writer.ts";
+import { wrap, wrapMock } from "./helpers.ts";
 
 describe("createLogEntry", () => {
   const defaults = {
@@ -205,5 +206,85 @@ describe("appendLogEntry", () => {
       .split("\n")
       .map((l) => JSON.parse(l).id);
     expect(new Set(ids).size).toBe(2);
+  });
+});
+
+function readLog(wrapHome: string) {
+  return JSON.parse(readFileSync(join(wrapHome, "logs", "wrap.jsonl"), "utf-8").trim());
+}
+
+function seedMemoryIn(home: string) {
+  writeFileSync(join(home, "memory.json"), '[{"fact":"test"}]');
+}
+
+describe("logging integration", () => {
+  test("successful command logs with outcome 'success' and execution", async () => {
+    const result = await wrapMock("list files", {
+      type: "command",
+      command: "echo hello",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.outcome).toBe("success");
+    expect(entry.prompt).toBe("list files");
+    expect(entry.rounds).toHaveLength(1);
+    expect(entry.rounds[0].parsed.type).toBe("command");
+    expect(entry.rounds[0].execution.command).toBe("echo hello");
+    expect(entry.rounds[0].execution.exit_code).toBe(0);
+  });
+
+  test("answer logs with outcome 'success' and no execution", async () => {
+    const result = await wrapMock("what is 2+2", {
+      type: "answer",
+      answer: "4",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.outcome).toBe("success");
+    expect(entry.rounds[0].parsed.type).toBe("answer");
+    expect(entry.rounds[0].execution).toBeUndefined();
+  });
+
+  test("parse error logs raw_response and parse_error", async () => {
+    const home = mkdtempSync(join(tmpdir(), "wrap-log-test-"));
+    seedMemoryIn(home);
+    const result = await wrap("test prompt", {
+      WRAP_HOME: home,
+      WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      WRAP_TEST_RESPONSE: "not json at all",
+    });
+    expect(result.exitCode).not.toBe(0);
+    const entry = readLog(home);
+    expect(entry.outcome).toBe("error");
+    expect(entry.rounds).toHaveLength(1);
+    expect(entry.rounds[0].raw_response).toBe("not json at all");
+    expect(entry.rounds[0].parse_error).toBeDefined();
+  });
+
+  test("log entry has invocation-level fields", async () => {
+    const result = await wrapMock("test prompt", {
+      type: "answer",
+      answer: "ok",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.id).toMatch(/^[0-9a-f]{8}-/);
+    expect(entry.timestamp).toBeDefined();
+    expect(entry.prompt).toBe("test prompt");
+    expect(entry.cwd).toBeDefined();
+    expect(entry.provider).toEqual({ type: "test" });
+    expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("non-low risk command logs with outcome 'error'", async () => {
+    const result = await wrapMock("delete everything", {
+      type: "command",
+      command: "rm -rf /",
+      risk_level: "high",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.outcome).toBe("error");
+    expect(entry.rounds[0].parsed.command).toBe("rm -rf /");
+    expect(entry.rounds[0].execution).toBeUndefined();
   });
 });

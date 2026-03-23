@@ -23,7 +23,12 @@ export async function main() {
 
     const provider = initProvider(config.provider);
     const memory = await ensureMemory(provider, getWrapHome());
-    process.exit(await runQuery(input.prompt, provider, memory));
+    process.exit(
+      await runQuery(input.prompt, provider, {
+        memory,
+        providerConfig: config.provider,
+      }),
+    );
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
     process.exit(1);
