@@ -8,26 +8,6 @@
 
 ---
 
-## Implementation Status
-
-- [x] 2.1 Core Binary — Bun/TypeScript project scaffold, Biome lint/format
-- [x] 2.2 Testing — Bun test runner, integration test helper
-- [x] 2.3 Dev-Only Tooling (eval/DSPy)
-- [ ] 3. Invocation Modes — scaffold only: `wrap <text>` accepts args, no mode detection/variants
-- [ ] 4. Piping Into Wrap
-- [ ] 5. Execution & Safety
-- [ ] 6. Error Handling & Auto-Fix
-- [ ] 7. Agent Loop (Probes)
-- [ ] 8. LLM Integration — provider dispatch, structured JSON response via Zod schema + `--json-schema` enforcement. No execution, no retry loop, no piped context.
-- [ ] 9. Thread System
-- [ ] 10. Memory / Learning System
-- [ ] 11. Output & UI
-- [ ] 12. Configuration — config file loading (`~/.wrap/config.jsonc`), `WRAP_CONFIG` env var override with shallow merge, JSON Schema for editor support. No runtime validation, no first-run UI.
-- [ ] 13. Eval System — DSPy MIPRO optimizer in Docker, seed examples, heuristic metric. No structured logging yet.
-- [ ] 14. First-Run Experience
-
----
-
 ## 1. Overview
 
 ### What is Wrap?
@@ -721,6 +701,13 @@ zsh: command not found: pngquant
 - [ ] Thread TTL expiry
 - [ ] Thread identification (link follow-up to parent)
 
+### Memory / Learning System (§10)
+- [ ] Memory storage — text file(s) in `./memory/`, contents appended to system prompt
+- [ ] Write memory from LLM `memory_updates` field (immediately, even mid-loop)
+- [ ] Notify user on stderr/tty when new fact learned
+- [ ] Eager init on first run — detect OS, shell, basic env (no LLM needed)
+- [ ] Lazy probing — on-demand discovery via agent loop probe commands
+
 ### Output & UI (§11)
 - [ ] Visual identity — distinctive color scheme, emoji prefix, characterful messages
 - [ ] TUI components — radio buttons, checkboxes, free text input
@@ -728,9 +715,17 @@ zsh: command not found: pngquant
 ### Configuration (§12)
 - [ ] First-run config wizard TUI (provider selection, API key entry)
 
+### Eval System (§13)
+- [ ] Structured JSONL logging (opt-in)
+- [ ] Implicit feedback signal (exit code, retry, thread correction)
+- [ ] DSPy eval infrastructure in container
+
 ### First-Run Experience (§14)
 - [ ] Full first-run flow: config wizard → alias setup → memory init → ready
 
 ### Subcommands (§15)
 - [ ] `wrap config` (manual reconfigure)
 - [ ] Other subcommands as needs emerge
+
+### Open
+- [ ] Consider running Claude Code in the user's cwd as a CLI tool provider. Consider always passing `cwd` to the LLM in every request so it has additional filesystem context.
