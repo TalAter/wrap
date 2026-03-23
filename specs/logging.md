@@ -186,3 +186,17 @@ Integration tests already set `WRAP_HOME` to a temp directory, so log files land
 - **Threads (future):** Logging and threads are independent. Threads may reference log entries by ID in the future, or maintain their own storage. Decided when threads are built.
 - **Eval / DSPy (future):** Logs serve as raw material for training data. A future `wrap log export` command or manual cherry-pick workflow transforms log entries into `eval/examples/seed.jsonl` format. No automated pipeline.
 - **Memory (future):** Memory updates from `parsed.memory_updates` are visible in log entries but memory persistence is a separate system.
+
+---
+
+## To Do
+
+- [ ] Log module (`src/logging/`) — create log entry, append rounds, write JSONL
+- [ ] Log entry creation at start of `runQuery` with invocation-level fields
+- [ ] Round appending after each LLM call (raw_response, parse_error/provider_error, parsed, execution)
+- [ ] JSONL writing to `~/.wrap/logs/wrap.jsonl` at end of `runQuery`
+- [ ] Prompt hash computation (SHA-256 of system prompt + schema + demos)
+- [ ] Lazy `logs/` directory creation on first write
+- [ ] Omit null fields from JSON output
+- [ ] Tests — assert on log file contents in integration tests (WRAP_HOME already isolated)
+- [ ] `wrap log` subcommand — pretty-print last N entries (deferred, spec'd in §"wrap log Subcommand")

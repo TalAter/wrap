@@ -675,3 +675,62 @@ zsh: command not found: pngquant
 🔧 Command failed. Trying alternative...
 # runs `for f in *.png; do sips -s format png -s formatOptions 80 "$f"; done`
 ```
+
+---
+
+## To Do
+
+### Invocation & Modes (§3)
+- [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
+- [ ] Alias/symlink setup — scan for available single-letter commands on first run
+- [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
+
+### Piping (§4)
+- [ ] Detect piped stdin, read content, pass to LLM as context
+- [ ] Token count warning for very large piped inputs
+
+### Execution & Safety (§5)
+- [ ] Local safety rule engine — hard-coded patterns (rm -rf, sudo, dd, chmod, mkfs, etc.)
+- [ ] Confirmation TUI — bordered panel with syntax-highlighted command, risk indicator, explanation
+- [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, Enter=cancel)
+- [ ] Input buffer flush before rendering confirmation prompt
+- [ ] Edit mode in confirmation TUI (editable command field)
+- [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
+- [ ] Long-running command passthrough (streaming stdout/stderr)
+
+### Error Handling & Auto-Fix (§6)
+- [ ] Feed command errors back to LLM for auto-fix
+- [ ] LLM classifies errors as fixable vs informational
+- [ ] Unified round budget (maxRounds) shared between probes and retries
+
+### Agent Loop (§7)
+- [ ] Probe command execution (silent, not shown in stdout)
+- [ ] Subtle stderr/tty indicator during probes
+- [ ] Probe results fed back to LLM as context
+
+### LLM Integration (§8)
+- [ ] OpenAI SDK provider (API-based providers with response_format)
+- [ ] Generalized CLI tool provider abstraction (currently only claude-code)
+- [ ] CLI provider terms-of-service disclaimer on first use
+- [ ] JSON parse retry (one retry with stricter prompt on malformed JSON)
+- [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history, piped stdin
+
+### Threads (§9)
+- [ ] Thread storage (user inputs, commands, stdout/stderr, LLM responses)
+- [ ] Thread continuation via follow-up invocation
+- [ ] Thread TTL expiry
+- [ ] Thread identification (link follow-up to parent)
+
+### Output & UI (§11)
+- [ ] Visual identity — distinctive color scheme, emoji prefix, characterful messages
+- [ ] TUI components — radio buttons, checkboxes, free text input
+
+### Configuration (§12)
+- [ ] First-run config wizard TUI (provider selection, API key entry)
+
+### First-Run Experience (§14)
+- [ ] Full first-run flow: config wizard → alias setup → memory init → ready
+
+### Subcommands (§15)
+- [ ] `wrap config` (manual reconfigure)
+- [ ] Other subcommands as needs emerge
