@@ -85,6 +85,22 @@ describe("CommandResponseSchema", () => {
     expect(result.memory_updates_message).toBeUndefined();
   });
 
+  test("allows nullable fields to be null", () => {
+    const input = {
+      type: "command",
+      command: null,
+      answer: null,
+      risk_level: "low",
+      explanation: null,
+      memory_updates: null,
+      memory_updates_message: null,
+    };
+    const result = CommandResponseSchema.parse(input);
+    expect(result.command).toBeNull();
+    expect(result.answer).toBeNull();
+    expect(result.memory_updates).toBeNull();
+  });
+
   test("allows empty memory_updates array", () => {
     const input = { type: "command", risk_level: "low", memory_updates: [] };
     const result = CommandResponseSchema.parse(input);

@@ -28,13 +28,13 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
     "answer",
   ]),
   // The shell command to execute (for command and probe types)
-  command: z.string().optional(),
+  command: z.string().nullable().optional(),
   // Text response to the user (for answer type)
-  answer: z.string().optional(),
+  answer: z.string().nullable().optional(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),
   // Brief description of what the command does or why this answer was given
-  explanation: z.string().optional(),
+  explanation: z.string().nullable().optional(),
   // Reusable facts learned about the user's environment (e.g. shell type, OS, installed tools). These will be saved and given to you in all future requests
   memory_updates: z
     .array(
@@ -42,12 +42,12 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
         fact: z.string(),
       }),
     )
-    .optional(),
+    .nullable().optional(),
   // Human-readable summary of what learning was saved to memory. Will be shown to the user
-  memory_updates_message: z.string().optional(),
+  memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "bd53c40ce20ea711be2d835f464ec54f2b69abfdf5385aa680a7d7e80333bcd4";
+export const PROMPT_HASH = "28a3a1e7a6ca3ffcde7909f1b5fbafc6abb942422826050803c4d5ed569806f5";
 
 export const FEW_SHOT_DEMOS: ReadonlyArray<{
   readonly input: string;

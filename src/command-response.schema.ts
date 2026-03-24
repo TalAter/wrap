@@ -15,13 +15,13 @@ export const CommandResponseSchema = z.object({
     "answer",
   ]),
   // The shell command to execute (for command and probe types)
-  command: z.string().optional(),
+  command: z.string().nullable().optional(),
   // Text response to the user (for answer type)
-  answer: z.string().optional(),
+  answer: z.string().nullable().optional(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),
   // Brief description of what the command does or why this answer was given
-  explanation: z.string().optional(),
+  explanation: z.string().nullable().optional(),
   // Reusable facts learned about the user's environment (e.g. shell type, OS, installed tools). These will be saved and given to you in all future requests
   memory_updates: z
     .array(
@@ -29,9 +29,10 @@ export const CommandResponseSchema = z.object({
         fact: z.string(),
       }),
     )
+    .nullable()
     .optional(),
   // Human-readable summary of what learning was saved to memory. Will be shown to the user
-  memory_updates_message: z.string().optional(),
+  memory_updates_message: z.string().nullable().optional(),
 });
 // SCHEMA_END
 
