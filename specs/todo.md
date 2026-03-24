@@ -51,10 +51,11 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 
 ## LLM Integration
 
-- [ ] OpenAI SDK provider (API-based providers with `response_format`)
+- [x] AI SDK provider (Anthropic + OpenAI via Vercel AI SDK, native structured output)
 - [ ] Generalized CLI tool provider abstraction (currently only claude-code)
 - [ ] CLI provider terms-of-service disclaimer on first use
-- [ ] JSON parse retry (one retry with stricter prompt on malformed JSON)
+- [x] Structured output retry (one retry with failed output appended + stricter instruction)
+- [x] Context assembly — `assembleCommandPrompt` in `src/llm/context.ts` (system prompt, few-shot, memory, cwd)
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history, piped stdin
 - [ ] Explain `memory_updates` usage in system prompt — when to write memories, what's worth remembering
 
