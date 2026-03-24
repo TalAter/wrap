@@ -18,7 +18,7 @@ Analyze the request and choose exactly one response strategy:
 
 Return only valid, parseable JSON. No backticks. No markdown. No prose outside the JSON object.`;
 
-export const SCHEMA_TEXT = `export const ResponseSchema = z.object({
+export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   type: z.enum([
     // command = shell command to execute. Use when you know what command to run to achieve the user's request.
     "command",
@@ -47,7 +47,7 @@ export const SCHEMA_TEXT = `export const ResponseSchema = z.object({
   memory_updates_message: z.string().optional(),
 });`;
 
-export const PROMPT_HASH = "5b856f215395524a042b168c8c2b3a17af99b8c9843d59a95557737bf9edfaeb";
+export const PROMPT_HASH = "bd53c40ce20ea711be2d835f464ec54f2b69abfdf5385aa680a7d7e80333bcd4";
 
 export const FEW_SHOT_DEMOS: ReadonlyArray<{
   readonly input: string;

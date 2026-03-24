@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ResponseSchema } from "../src/response.schema.ts";
+import { CommandResponseSchema } from "../src/command-response.schema.ts";
 
-describe("ResponseSchema", () => {
+describe("CommandResponseSchema", () => {
   test("parses valid command response", () => {
     const input = {
       type: "command",
@@ -9,7 +9,7 @@ describe("ResponseSchema", () => {
       risk_level: "low",
       explanation: "Find TypeScript files modified today",
     };
-    const result = ResponseSchema.parse(input);
+    const result = CommandResponseSchema.parse(input);
     expect(result.type).toBe("command");
     expect(result.command).toBe("find . -name '*.ts' -mtime 0");
     expect(result.risk_level).toBe("low");
@@ -22,7 +22,7 @@ describe("ResponseSchema", () => {
       answer: "The speed of light is approximately 299,792,458 m/s",
       risk_level: "low",
     };
-    const result = ResponseSchema.parse(input);
+    const result = CommandResponseSchema.parse(input);
     expect(result.type).toBe("answer");
     expect(result.answer).toBe("The speed of light is approximately 299,792,458 m/s");
   });
@@ -34,7 +34,7 @@ describe("ResponseSchema", () => {
       risk_level: "low",
       explanation: "Checking which shell you use",
     };
-    const result = ResponseSchema.parse(input);
+    const result = CommandResponseSchema.parse(input);
     expect(result.type).toBe("probe");
     expect(result.command).toBe("echo $SHELL");
   });
@@ -47,7 +47,7 @@ describe("ResponseSchema", () => {
       memory_updates: [{ fact: "Default shell is zsh" }, { fact: "Shell config at ~/.zshrc" }],
       memory_updates_message: "Noted: you use zsh, config at ~/.zshrc",
     };
-    const result = ResponseSchema.parse(input);
+    const result = CommandResponseSchema.parse(input);
     expect(result.memory_updates).toHaveLength(2);
     expect(result.memory_updates?.[0]).toEqual({ fact: "Default shell is zsh" });
     expect(result.memory_updates_message).toBe("Noted: you use zsh, config at ~/.zshrc");
@@ -55,29 +55,29 @@ describe("ResponseSchema", () => {
 
   test("rejects invalid type", () => {
     const input = { type: "invalid", risk_level: "low" };
-    expect(() => ResponseSchema.parse(input)).toThrow();
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("rejects invalid risk_level", () => {
     const input = { type: "command", command: "ls", risk_level: "extreme" };
-    expect(() => ResponseSchema.parse(input)).toThrow();
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("requires type field", () => {
     const input = { command: "ls", risk_level: "low" };
-    expect(() => ResponseSchema.parse(input)).toThrow();
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("requires risk_level", () => {
     let input: Record<string, unknown> = { type: "command", command: "ls" };
-    expect(() => ResponseSchema.parse(input)).toThrow();
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
     input = { ...input, risk_level: "low" };
-    expect(() => ResponseSchema.parse(input)).not.toThrow();
+    expect(() => CommandResponseSchema.parse(input)).not.toThrow();
   });
 
   test("allows optional fields to be omitted", () => {
     const input = { type: "command", risk_level: "low" };
-    const result = ResponseSchema.parse(input);
+    const result = CommandResponseSchema.parse(input);
     expect(result.command).toBeUndefined();
     expect(result.answer).toBeUndefined();
     expect(result.explanation).toBeUndefined();
@@ -87,7 +87,7 @@ describe("ResponseSchema", () => {
 
   test("allows empty memory_updates array", () => {
     const input = { type: "command", risk_level: "low", memory_updates: [] };
-    const result = ResponseSchema.parse(input);
+    const result = CommandResponseSchema.parse(input);
     expect(result.memory_updates).toEqual([]);
   });
 
@@ -97,6 +97,6 @@ describe("ResponseSchema", () => {
       risk_level: "low",
       memory_updates: [{ key: "shell", value: "zsh" }],
     };
-    expect(() => ResponseSchema.parse(input)).toThrow();
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 });

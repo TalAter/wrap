@@ -5,7 +5,7 @@ import { z } from "zod";
 // definitions must live within these markers. Inline comments are intentional —
 // they guide the LLM on how to use each field and are read on every request.
 // SCHEMA_START
-export const ResponseSchema = z.object({
+export const CommandResponseSchema = z.object({
   type: z.enum([
     // command = shell command to execute. Use when you know what command to run to achieve the user's request.
     "command",
@@ -35,6 +35,6 @@ export const ResponseSchema = z.object({
 });
 // SCHEMA_END
 
-export type Response = z.infer<typeof ResponseSchema>;
+export type CommandResponse = z.infer<typeof CommandResponseSchema>;
 
-export const ResponseJsonSchema = z.toJSONSchema(ResponseSchema);
+export const CommandResponseJsonSchema = z.toJSONSchema(CommandResponseSchema);

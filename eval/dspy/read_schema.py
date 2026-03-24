@@ -1,9 +1,9 @@
-"""Extract Zod schema text from src/response.schema.ts between marker comments."""
+"""Extract Zod schema text from src/command-response.schema.ts between marker comments."""
 
 import re
 from pathlib import Path
 
-SCHEMA_PATH = Path("/app/src/response.schema.ts")
+SCHEMA_PATH = Path("/app/src/command-response.schema.ts")
 START_MARKER = "// SCHEMA_START"
 END_MARKER = "// SCHEMA_END"
 

@@ -1,5 +1,5 @@
+import type { CommandResponse } from "../command-response.schema.ts";
 import type { ProviderConfig } from "../llm/types.ts";
-import type { Response } from "../response.schema.ts";
 
 export type Execution = {
   command: string;
@@ -10,7 +10,7 @@ export type Round = {
   raw_response?: string;
   parse_error?: string;
   provider_error?: string;
-  parsed?: Response;
+  parsed?: CommandResponse;
   execution?: Execution;
 };
 

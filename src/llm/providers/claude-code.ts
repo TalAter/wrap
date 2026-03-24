@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
+import { CommandResponseJsonSchema } from "../../command-response.schema.ts";
 import { assemblePromptParts } from "../../prompt.ts";
-import { ResponseJsonSchema } from "../../response.schema.ts";
 import type { ClaudeCodeProviderConfig, MemoryFact, Provider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
@@ -45,7 +45,7 @@ export function claudeCodeProvider(config: ClaudeCodeProviderConfig): Provider {
   };
 
   const runCommandPrompt: Provider["runCommandPrompt"] = (prompt, memory) =>
-    runPrompt(buildSystemPrompt(memory), prompt, ResponseJsonSchema);
+    runPrompt(buildSystemPrompt(memory), prompt, CommandResponseJsonSchema);
 
   return { runPrompt, runCommandPrompt };
 }

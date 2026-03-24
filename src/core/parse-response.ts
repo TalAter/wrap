@@ -1,4 +1,4 @@
-import { type Response, ResponseSchema } from "../response.schema.ts";
+import { type CommandResponse, CommandResponseSchema } from "../command-response.schema.ts";
 
 const FENCE_RE = /^```\w*\s*\n([\s\S]*)\n```\s*$/;
 
@@ -13,7 +13,7 @@ export function stripFences(text: string): string {
   return inner.trim();
 }
 
-export function parseResponse(raw: string): Response {
+export function parseResponse(raw: string): CommandResponse {
   const cleaned = stripFences(raw);
   let json: unknown;
   try {
@@ -21,7 +21,7 @@ export function parseResponse(raw: string): Response {
   } catch {
     throw new Error("LLM returned invalid JSON.");
   }
-  const result = ResponseSchema.safeParse(json);
+  const result = CommandResponseSchema.safeParse(json);
   if (!result.success) {
     throw new Error("LLM returned an invalid response.");
   }
