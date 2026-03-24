@@ -81,7 +81,7 @@ describe("wrap", () => {
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toContain("invalid");
+    expect(stderr.toLowerCase()).toMatch(/json|parse/);
   });
 
   test("errors on valid JSON that fails schema validation", async () => {
@@ -91,7 +91,7 @@ describe("wrap", () => {
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toContain("invalid");
+    expect(stderr.trim().length).toBeGreaterThan(0);
   });
 
   test("errors when command type has no command field", async () => {

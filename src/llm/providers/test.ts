@@ -1,17 +1,12 @@
 import type { Provider } from "../types.ts";
 
 export function testProvider(): Provider {
-  const runPrompt: Provider["runPrompt"] = async (_systemPrompt, userPrompt, _jsonSchema) => {
-    return process.env.WRAP_TEST_RESPONSE ?? userPrompt;
-  };
-
   return {
-    runPrompt,
-    runCommandPrompt: async (prompt) => {
-      return (
-        process.env.WRAP_TEST_RESPONSE ??
-        JSON.stringify({ type: "command", command: prompt, risk_level: "low" })
-      );
+    runPrompt: async (input, schema?) => {
+      const lastMessage = input.messages[input.messages.length - 1];
+      const raw = process.env.WRAP_TEST_RESPONSE ?? lastMessage?.content ?? "";
+      if (!schema) return raw;
+      return schema.parse(JSON.parse(raw));
     },
   };
 }

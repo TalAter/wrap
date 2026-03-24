@@ -1,10 +1,11 @@
+import { assembleCommandPrompt } from "../llm/context.ts";
+import { runCommandPrompt } from "../llm/index.ts";
 import type { MemoryFact, Provider, ProviderConfig } from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendMemory } from "../memory/memory.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
-import { parseResponse } from "./parse-response.ts";
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
 export async function runQuery(
@@ -25,20 +26,17 @@ export async function runQuery(
   const round: Round = {};
 
   try {
-    let raw: string;
+    const input = assembleCommandPrompt({
+      prompt,
+      cwd: process.cwd(),
+      memory: options.memory ?? [],
+    });
+
+    let response: Awaited<ReturnType<typeof runCommandPrompt>>;
     try {
-      raw = await provider.runCommandPrompt(prompt, options.memory);
+      response = await runCommandPrompt(provider, input);
     } catch (e) {
       round.provider_error = e instanceof Error ? e.message : String(e);
-      throw e;
-    }
-
-    let response: ReturnType<typeof parseResponse>;
-    try {
-      response = parseResponse(raw);
-    } catch (e) {
-      round.raw_response = raw;
-      round.parse_error = e instanceof Error ? e.message : String(e);
       throw e;
     }
     round.parsed = response;

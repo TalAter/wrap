@@ -12,7 +12,6 @@ function tempDir() {
 function mockProvider(response: string): Provider {
   return {
     runPrompt: async () => response,
-    runCommandPrompt: async () => response,
   };
 }
 
@@ -52,12 +51,11 @@ describe("ensureMemory", () => {
     writeFileSync(join(dir, "memory.json"), JSON.stringify(entries));
 
     let llmCalled = false;
-    const provider = {
+    const provider: Provider = {
       runPrompt: async () => {
         llmCalled = true;
         return "";
       },
-      runCommandPrompt: async () => "",
     };
 
     const result = await ensureMemory(provider, dir);
@@ -81,12 +79,11 @@ describe("ensureMemory", () => {
 
     // Second call should load from disk, not call LLM
     let llmCalled = false;
-    const provider2 = {
+    const provider2: Provider = {
       runPrompt: async () => {
         llmCalled = true;
         return "";
       },
-      runCommandPrompt: async () => "",
     };
     const result = await ensureMemory(provider2, dir);
     expect(result).toEqual([{ fact: "Runs macOS on arm64" }]);
@@ -99,26 +96,24 @@ describe("ensureMemory", () => {
       runPrompt: async () => {
         throw new Error("network error");
       },
-      runCommandPrompt: async () => "",
     };
 
     expect(ensureMemory(provider, dir)).rejects.toThrow("network error");
   });
 
-  test("passes probe output as user prompt to LLM", async () => {
+  test("passes probe output as user message to LLM", async () => {
     const dir = tempDir();
-    let capturedUserPrompt = "";
+    let capturedInput: unknown;
     const provider: Provider = {
-      runPrompt: async (_sys, user) => {
-        capturedUserPrompt = user;
+      runPrompt: async (input) => {
+        capturedInput = input;
         return "some fact";
       },
-      runCommandPrompt: async () => "",
     };
 
     await ensureMemory(provider, dir);
-    // Should contain probe section headers
-    expect(capturedUserPrompt).toContain("## OS");
-    expect(capturedUserPrompt).toContain("## Shell");
+    const { messages } = capturedInput as { messages: { content: string }[] };
+    expect(messages[0].content).toContain("## OS");
+    expect(messages[0].content).toContain("## Shell");
   });
 });

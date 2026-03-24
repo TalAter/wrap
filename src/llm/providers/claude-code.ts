@@ -1,51 +1,39 @@
 import { tmpdir } from "node:os";
-import { CommandResponseJsonSchema } from "../../command-response.schema.ts";
-import { assemblePromptParts } from "../../prompt.ts";
-import type { ClaudeCodeProviderConfig, MemoryFact, Provider } from "../types.ts";
+import { z } from "zod";
+import { stripFences } from "../../core/parse-response.ts";
+import type { ClaudeCodeProviderConfig, ConversationMessage, Provider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
-function buildSystemPrompt(memory?: MemoryFact[]): string {
-  const parts = assemblePromptParts();
-  const sections: string[] = [parts.system];
-  if (memory && memory.length > 0) {
-    const facts = memory.map((m) => `- ${m.fact}`).join("\n");
-    sections.push(`## Known facts about the user's environment\n${facts}`);
-  }
-  if (parts.schema) {
-    sections.push(`Respond with a JSON object conforming to this schema:\n${parts.schema}`);
-  }
-  if (parts.fewShotDemos && parts.fewShotDemos.length > 0) {
-    const demosText = parts.fewShotDemos
-      .map((d) => `User: ${d.input}\nAssistant: ${d.output}`)
-      .join("\n\n");
-    sections.push(`Examples:\n${demosText}`);
-  }
-  return sections.join("\n\n");
+/** Flatten conversation messages into a single string for the -p flag. */
+function flattenMessages(messages: ConversationMessage[]): string {
+  return messages
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n\n");
 }
 
 export function claudeCodeProvider(config: ClaudeCodeProviderConfig): Provider {
   const model = config.model ?? "haiku";
 
-  const runPrompt: Provider["runPrompt"] = async (systemPrompt, userPrompt, jsonSchema) => {
-    const args = [
-      "claude",
-      "--tools",
-      "",
-      "--system-prompt",
-      systemPrompt,
-      "--model",
-      model,
-      "--no-session-persistence",
-    ];
-    if (jsonSchema) {
-      args.push("--json-schema", JSON.stringify(jsonSchema));
-    }
-    args.push("-p");
-    return spawnAndRead(args, userPrompt, { cwd: tmpdir() });
+  return {
+    runPrompt: async (input, schema?) => {
+      const args = [
+        "claude",
+        "--tools",
+        "",
+        "--system-prompt",
+        input.system,
+        "--model",
+        model,
+        "--no-session-persistence",
+      ];
+      if (schema) {
+        args.push("--json-schema", JSON.stringify(z.toJSONSchema(schema)));
+      }
+      args.push("-p");
+      const raw = spawnAndRead(args, flattenMessages(input.messages), { cwd: tmpdir() });
+      if (!schema) return raw;
+      const cleaned = stripFences(raw);
+      return schema.parse(JSON.parse(cleaned));
+    },
   };
-
-  const runCommandPrompt: Provider["runCommandPrompt"] = (prompt, memory) =>
-    runPrompt(buildSystemPrompt(memory), prompt, CommandResponseJsonSchema);
-
-  return { runPrompt, runCommandPrompt };
 }

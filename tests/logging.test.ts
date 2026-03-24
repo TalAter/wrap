@@ -253,7 +253,7 @@ describe("logging integration", () => {
     expect(entry.rounds[0].execution).toBeUndefined();
   });
 
-  test("parse error logs raw_response and parse_error", async () => {
+  test("parse error logs provider_error", async () => {
     const home = mkdtempSync(join(tmpdir(), "wrap-log-test-"));
     seedMemoryIn(home);
     const result = await wrap("test prompt", {
@@ -265,8 +265,7 @@ describe("logging integration", () => {
     const entry = readLog(home);
     expect(entry.outcome).toBe("error");
     expect(entry.rounds).toHaveLength(1);
-    expect(entry.rounds[0].raw_response).toBe("not json at all");
-    expect(entry.rounds[0].parse_error).toBeDefined();
+    expect(entry.rounds[0].provider_error).toBeDefined();
   });
 
   test("log entry has invocation-level fields", async () => {

@@ -73,8 +73,11 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
   process.stderr.write("✨ Learning about your system...\n");
 
   const probeOutput = runProbes();
-  const response = await provider.runPrompt(INIT_SYSTEM_PROMPT, probeOutput);
-  const entries = parseInitResponse(response);
+  const response = await provider.runPrompt({
+    system: INIT_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: probeOutput }],
+  });
+  const entries = parseInitResponse(response as string);
 
   saveMemory(wrapHome, entries);
 
