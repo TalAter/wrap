@@ -116,7 +116,9 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 
 ## Subcommands (see specs/subcommands.md)
 
-### Registry & dispatch infrastructure
+Implementation order: registry infra → --version → --help → --log.
+
+### 1. Registry & dispatch infrastructure
 
 - [ ] `Subcommand` type definition (`src/subcommands/types.ts`)
 - [ ] Subcommand registry (`src/subcommands/registry.ts`) — single source of truth
@@ -124,20 +126,23 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Flag detection in `parseInput()` — first arg `--` prefix check
 - [ ] Input type update — discriminated union: prompt | flag | none
 - [ ] Short-circuit in `main()` — dispatch before ensure steps
-- [ ] Shared `isTTY()` utility in `src/core/tty.ts`
 
-### `--log` / `--log-pretty`
+### 2. `--version`
+
+- [ ] Reads from package.json, prints to stdout
+
+### 3. `--help`
+
+- [ ] Auto-generated from registry (preamble + dynamic flags table)
+
+### 4. `--log` / `--log-pretty`
 
 - [ ] `--log` — raw JSONL output to stdout (all entries or last N)
 - [ ] `--log-pretty` — indented JSON, jq piping when TTY + jq available
+- [ ] Shared `isTTY()` utility in `src/core/tty.ts`
 - [ ] Empty state — stderr "No log entries yet.", exit 0
 - [ ] Corrupt JSONL line handling — skip with stderr warning
 - [ ] jq detection via `Bun.which("jq")`
-
-### `--help` / `--version`
-
-- [ ] `--help` — auto-generated from registry (preamble + dynamic flags table)
-- [ ] `--version` — reads from package.json
 
 ### Deferred subcommands
 

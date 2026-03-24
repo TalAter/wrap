@@ -238,7 +238,7 @@ parseInput(argv)
   └─ runQuery()
 ```
 
-Subcommands short-circuit and handle their own prerequisites. `--log` only needs `WRAP_HOME` (via `getWrapHome()`), not config or memory.
+Subcommands short-circuit `main()` — they skip `ensureConfig()`, `ensureMemory()`, and `runQuery()`, and handle their own prerequisites instead. `--log` only needs `WRAP_HOME` (via `getWrapHome()`), not config or memory.
 
 ### Module structure
 
@@ -310,4 +310,3 @@ Note: `parseInput()` no longer needs to know about specific flags. It just detec
 
 - `--config`, `--memory` subcommands
 - "Did you mean?" fuzzy matching for typos
-- LLM self-discovery of Wrap's own flags
