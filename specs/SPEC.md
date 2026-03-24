@@ -756,6 +756,7 @@ $ w curl the api endpoint at example.com/users
 - [ ] `[C]opy` option in confirmation TUI — copy command to clipboard
 - [ ] Input buffer flush before rendering confirmation prompt
 - [ ] Edit mode in confirmation TUI (editable command field)
+- [ ] No-TTY detection — if `/dev/tty` unavailable, fail early with clear stderr message: "No terminal available for confirmation. Use wy for unattended execution."
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Long-running command passthrough (streaming stdout/stderr)
 - [ ] Shell history injection — append generated command with inline comment to shell history
