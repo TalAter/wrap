@@ -180,18 +180,6 @@ Integration tests already set `WRAP_HOME` to a temp directory, so log files land
 
 ---
 
-## To-do
-
-- [ ] `piped_input` — detect piped stdin in `parseInput` and pass through to log entry
-- [ ] `wrap log` subcommand — pretty-print recent log entries (see spec above)
-- [ ] `expires` field + retention pruning — write expiry timestamp, prune old entries
-- [ ] `cancelled` outcome — when user cancels mid-invocation (requires signal handling)
-- [ ] `max_rounds` outcome — when multi-round loop hits its limit (requires probe/retry loop)
-- [ ] Multi-round logging — probe + retry rounds accumulate in the same entry
-- [ ] Document in help/README that logs contain full LLM exchanges
-
----
-
 ## Relationship to Other Systems
 
 - **Threads (future):** Logging and threads are independent. Threads may reference log entries by ID in the future, or maintain their own storage. Decided when threads are built.
@@ -200,14 +188,3 @@ Integration tests already set `WRAP_HOME` to a temp directory, so log files land
 
 ---
 
-## To Do
-
-- [ ] Log module (`src/logging/`) — create log entry, append rounds, write JSONL
-- [ ] Log entry creation at start of `runQuery` with invocation-level fields
-- [ ] Round appending after each LLM call (raw_response, parse_error/provider_error, parsed, execution)
-- [ ] JSONL writing to `~/.wrap/logs/wrap.jsonl` at end of `runQuery`
-- [ ] Prompt hash computation (SHA-256 of system prompt + schema + demos)
-- [ ] Lazy `logs/` directory creation on first write
-- [ ] Omit null fields from JSON output
-- [ ] Tests — assert on log file contents in integration tests (WRAP_HOME already isolated)
-- [ ] `wrap log` subcommand — pretty-print last N entries (deferred, spec'd in §"wrap log Subcommand")

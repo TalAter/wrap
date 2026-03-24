@@ -204,8 +204,3 @@ src/
 - `wrap memory` subcommand
 - Memory size limits / token budget warnings
 
----
-
-## To Do
-
-- [ ] Finalize probe commands — current list is provisional. Ideally run all with one or few shell commands

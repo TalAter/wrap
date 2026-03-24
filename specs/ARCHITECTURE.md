@@ -200,23 +200,3 @@ A pure `resolve()` → `execute()` separation breaks down when flows continue af
 
 * Treat all code in this document as pseudo code. Actual code and even function signatures can change.
 
----
-
-## To Do
-
-### Query Loop
-- [ ] Multi-round loop — probes, retries, and auto-fix within unified round counter
-- [ ] Multi-turn conversation context — probe results and errors as conversation turns passed to LLM
-- [ ] Define MAX_ROUNDS exhaustion behavior (show accumulated errors? last error? summary?)
-- [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
-
-### Top-Level Flow
-- [ ] Subcommand detection and dispatch (`runSubcommand()`)
-- [ ] Mode resolution from invocation name (w, wy, etc.)
-- [ ] Thread loading for continuation (`loadThread()`)
-- [ ] Piped stdin detection and injection into `runQuery` params
-
-### Modules
-- [ ] Config wizard (`config-wizard.ts`) — first-run setup TUI
-- [ ] Thread module (`threads/threads.ts`) — load, save, TTL, thread linking
-- [ ] UI module (`ui/`) — confirmation panel, risk display, TUI components
