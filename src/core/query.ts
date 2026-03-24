@@ -1,3 +1,4 @@
+import { NoObjectGeneratedError } from "ai";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import type { MemoryFact, Provider, ProviderConfig } from "../llm/types.ts";
@@ -6,6 +7,19 @@ import { appendLogEntry } from "../logging/writer.ts";
 import { appendMemory } from "../memory/memory.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
+
+export function isStructuredOutputError(e: unknown): boolean {
+  return (
+    NoObjectGeneratedError.isInstance(e) ||
+    (e instanceof Error &&
+      (e.message.includes("invalid JSON") || e.message.includes("invalid response")))
+  );
+}
+
+export function extractFailedText(e: unknown): string {
+  if (NoObjectGeneratedError.isInstance(e)) return e.text ?? "";
+  return "";
+}
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
 export async function runQuery(
@@ -36,8 +50,29 @@ export async function runQuery(
     try {
       response = await runCommandPrompt(provider, input);
     } catch (e) {
-      round.provider_error = e instanceof Error ? e.message : String(e);
-      throw e;
+      if (!isStructuredOutputError(e)) {
+        round.provider_error = e instanceof Error ? e.message : String(e);
+        throw e;
+      }
+      // Retry once with failed output appended
+      const retryInput = {
+        system: input.system,
+        messages: [
+          ...input.messages,
+          { role: "assistant" as const, content: extractFailedText(e) },
+          {
+            role: "user" as const,
+            content:
+              "Your response was not valid JSON. Respond ONLY with valid JSON matching the schema.",
+          },
+        ],
+      };
+      try {
+        response = await runCommandPrompt(provider, retryInput);
+      } catch (retryErr) {
+        round.provider_error = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        throw retryErr;
+      }
     }
     round.parsed = response;
 
