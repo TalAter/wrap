@@ -49,6 +49,50 @@ describe("createLogEntry", () => {
   });
 });
 
+describe("createLogEntry redacts apiKey", () => {
+  test("redacts apiKey to last 4 chars", () => {
+    const entry = createLogEntry({
+      prompt: "test",
+      cwd: "/tmp",
+      provider: { type: "anthropic", apiKey: "sk-ant-api03-xxxxxxxxxxxxxxxxxxxx-abcd" },
+      promptHash: "abc",
+    });
+    const p = entry.provider as { type: string; apiKey?: string };
+    expect(p.apiKey).toBe("...abcd");
+  });
+
+  test("fully masks keys shorter than 4 chars", () => {
+    const entry = createLogEntry({
+      prompt: "test",
+      cwd: "/tmp",
+      provider: { type: "openai", apiKey: "ab" },
+      promptHash: "abc",
+    });
+    const p = entry.provider as { type: string; apiKey?: string };
+    expect(p.apiKey).toBe("...");
+  });
+
+  test("no apiKey field left unchanged", () => {
+    const entry = createLogEntry({
+      prompt: "test",
+      cwd: "/tmp",
+      provider: { type: "anthropic", model: "haiku" },
+      promptHash: "abc",
+    });
+    expect(entry.provider).toEqual({ type: "anthropic", model: "haiku" });
+  });
+
+  test("non-AISDK providers unchanged", () => {
+    const entry = createLogEntry({
+      prompt: "test",
+      cwd: "/tmp",
+      provider: { type: "test" },
+      promptHash: "abc",
+    });
+    expect(entry.provider).toEqual({ type: "test" });
+  });
+});
+
 describe("addRound", () => {
   test("appends a round to the entry", () => {
     const entry = createLogEntry({

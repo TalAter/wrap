@@ -1,5 +1,13 @@
 import type { CommandResponse } from "../command-response.schema.ts";
-import type { ProviderConfig } from "../llm/types.ts";
+import type { AISDKProviderConfig, ProviderConfig } from "../llm/types.ts";
+
+function redactProvider(provider: ProviderConfig): ProviderConfig {
+  if (provider.type !== "anthropic" && provider.type !== "openai") return provider;
+  const p = provider as AISDKProviderConfig;
+  if (!p.apiKey) return provider;
+  const suffix = p.apiKey.length >= 4 ? `...${p.apiKey.slice(-4)}` : "...";
+  return { ...p, apiKey: suffix };
+}
 
 export type Execution = {
   command: string;
@@ -38,7 +46,7 @@ export function createLogEntry(params: {
     timestamp: new Date().toISOString(),
     prompt: params.prompt,
     cwd: params.cwd,
-    provider: params.provider,
+    provider: redactProvider(params.provider),
     prompt_hash: params.promptHash,
     rounds: [],
     outcome: "error",
