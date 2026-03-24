@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { wrap, wrapMock } from "./helpers.ts";
 
 describe("wrap", () => {
-  test("shows usage and exits 1 with no args", async () => {
+  test("shows help and exits 0 with no args", async () => {
     const { exitCode, stdout, stderr } = await wrap();
-    expect(exitCode).toBe(1);
-    expect(stdout).toBe("");
-    expect(stderr).toBe("Usage: wrap <prompt>\n");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stderr).toBe("");
   });
 
   test("errors when no provider configured", async () => {

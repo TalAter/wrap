@@ -149,6 +149,10 @@ Implementation order: registry infra → --version → --help → --log.
 - [ ] `--config` — manual reconfigure (reuses config wizard)
 - [ ] `--memory` — view/manage memory
 
+## Build & Distribution
+
+- [ ] Embed version at build time — `version.ts` reads `package.json` via `import.meta.url` which breaks in compiled binary (`bun build --compile`)
+
 ## Future Ideas
 
 - [ ] Consider running Claude Code in user's cwd as CLI tool provider for filesystem context

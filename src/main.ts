@@ -4,14 +4,17 @@ import { parseInput } from "./core/input.ts";
 import { runQuery } from "./core/query.ts";
 import { initProvider } from "./llm/index.ts";
 import { ensureMemory } from "./memory/memory.ts";
+import { dispatch } from "./subcommands/dispatch.ts";
 
 export async function main() {
   try {
     const input = parseInput(process.argv);
 
-    if (!input.prompt) {
-      console.error("Usage: wrap <prompt>");
-      process.exit(1);
+    if (input.type === "none" || input.type === "flag") {
+      const flag = input.type === "flag" ? input.flag : "--help";
+      const arg = input.type === "flag" ? input.arg : null;
+      await dispatch(flag, arg);
+      return;
     }
 
     const config = loadConfig();
