@@ -19,4 +19,11 @@ export type TestProviderConfig = { type: "test" };
 
 export type ClaudeCodeProviderConfig = { type: "claude-code"; model?: string };
 
-export type ProviderConfig = TestProviderConfig | ClaudeCodeProviderConfig;
+export type AISDKProviderConfig = {
+  type: "anthropic" | "openai";
+  model?: string;
+  apiKey?: string;
+  baseURL?: string;
+};
+
+export type ProviderConfig = TestProviderConfig | ClaudeCodeProviderConfig | AISDKProviderConfig;

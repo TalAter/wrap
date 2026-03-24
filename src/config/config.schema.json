@@ -11,6 +11,48 @@
       "oneOf": [
         {
           "type": "object",
+          "description": "Anthropic API provider via AI SDK",
+          "properties": {
+            "type": { "const": "anthropic" },
+            "model": {
+              "type": "string",
+              "description": "Model to use (default: claude-sonnet-4-latest)"
+            },
+            "apiKey": {
+              "type": "string",
+              "description": "API key. Use \"$ENV_VAR\" to read from environment. Omit to use ANTHROPIC_API_KEY."
+            },
+            "baseURL": {
+              "type": "string",
+              "description": "Custom API endpoint (for proxies, etc.)"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "OpenAI API provider via AI SDK",
+          "properties": {
+            "type": { "const": "openai" },
+            "model": {
+              "type": "string",
+              "description": "Model to use (default: gpt-4o-mini)"
+            },
+            "apiKey": {
+              "type": "string",
+              "description": "API key. Use \"$ENV_VAR\" to read from environment. Omit to use OPENAI_API_KEY."
+            },
+            "baseURL": {
+              "type": "string",
+              "description": "Custom API endpoint (for Ollama, proxies, etc.)"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "description": "Claude Code CLI provider",
           "properties": {
             "type": { "const": "claude-code" },

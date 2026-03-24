@@ -21,6 +21,16 @@ describe("initProvider factory", () => {
     expect(typeof provider.runPrompt).toBe("function");
   });
 
+  test("returns a provider for anthropic", () => {
+    const provider = initProvider({ type: "anthropic" });
+    expect(typeof provider.runPrompt).toBe("function");
+  });
+
+  test("returns a provider for openai", () => {
+    const provider = initProvider({ type: "openai" });
+    expect(typeof provider.runPrompt).toBe("function");
+  });
+
   test("throws on unrecognized provider type", () => {
     // @ts-expect-error testing invalid provider type
     expect(() => initProvider({ type: "nonexistent" })).toThrow(
