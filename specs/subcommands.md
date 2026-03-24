@@ -246,7 +246,7 @@ Subcommands short-circuit `main()` — they skip `ensureConfig()`, `ensureMemory
 src/
   core/
     input.ts              Updated: flag detection
-    tty.ts                New: shared isTTY() utility
+    output.ts             New: shared isTTY() / hasJq() utilities
   subcommands/
     types.ts              Subcommand type definition
     registry.ts           All subcommands registered here

@@ -16,7 +16,7 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias/symlink setup — scan for available single-letter commands on first run
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
-- [ ] Subcommand detection and dispatch (`runSubcommand()`)
+- [x] Subcommand detection and dispatch (`parseInput()` flag detection → `dispatch()`)
 - [ ] Detect piped stdin, read full content into buffer, pass to LLM as context
 - [ ] Large input warning TUI — token estimate, confirmation before sending
 - [ ] Hard ceiling — reject input over max size (e.g., 50MB)
@@ -120,29 +120,29 @@ Implementation order: registry infra → --version → --help → --log.
 
 ### 1. Registry & dispatch infrastructure
 
-- [ ] `Subcommand` type definition (`src/subcommands/types.ts`)
-- [ ] Subcommand registry (`src/subcommands/registry.ts`) — single source of truth
-- [ ] Dispatcher with generic arg validation (`src/subcommands/dispatch.ts`)
-- [ ] Flag detection in `parseInput()` — first arg `--` prefix check
-- [ ] Input type update — discriminated union: prompt | flag | none
-- [ ] Short-circuit in `main()` — dispatch before ensure steps
+- [x] `Subcommand` type definition (`src/subcommands/types.ts`)
+- [x] Subcommand registry (`src/subcommands/registry.ts`) — single source of truth
+- [x] Dispatcher with generic arg validation (`src/subcommands/dispatch.ts`)
+- [x] Flag detection in `parseInput()` — first arg `--` prefix check
+- [x] Input type update — discriminated union: prompt | flag | none
+- [x] Short-circuit in `main()` — dispatch before ensure steps
 
 ### 2. `--version`
 
-- [ ] Reads from package.json, prints to stdout
+- [x] Reads from package.json, prints to stdout
 
 ### 3. `--help`
 
-- [ ] Auto-generated from registry (preamble + dynamic flags table)
+- [x] Auto-generated from registry (preamble + dynamic flags table)
 
 ### 4. `--log` / `--log-pretty`
 
-- [ ] `--log` — raw JSONL output to stdout (all entries or last N)
-- [ ] `--log-pretty` — indented JSON, jq piping when TTY + jq available
-- [ ] Shared `isTTY()` utility in `src/core/tty.ts`
-- [ ] Empty state — stderr "No log entries yet.", exit 0
-- [ ] Corrupt JSONL line handling — skip with stderr warning
-- [ ] jq detection via `Bun.which("jq")`
+- [x] `--log` — raw JSONL output to stdout (all entries or last N)
+- [x] `--log-pretty` — indented JSON, jq piping when TTY + jq available
+- [x] Shared `isTTY()` / `hasJq()` utilities in `src/core/output.ts`
+- [x] Empty state — stderr "No log entries yet.", exit 0
+- [x] Corrupt JSONL line handling — skip with stderr warning
+- [x] jq detection via `Bun.which("jq")`
 
 ### Deferred subcommands
 
