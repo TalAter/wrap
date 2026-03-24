@@ -85,7 +85,7 @@ w --log 1         # last entry
 
 Log files can have partial lines from crashes mid-write. Handling:
 
-- **Skip corrupt lines** with a stderr warning
+- **Skip corrupt lines** with a stderr warning — even in raw mode. A corrupt line would break downstream `jq` parsing, so omitting it is the safer default.
 - Show all parseable entries
 - Warning format: `Warning: skipped N corrupt log entries`
 - When counting "last N", count raw lines (including corrupt ones). If a corrupt line falls within the last N, the user gets fewer valid entries + the warning.
