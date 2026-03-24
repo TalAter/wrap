@@ -116,9 +116,29 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 
 ## Subcommands
 
-- [ ] `wrap config` — manual reconfigure (reuses config wizard)
-- [ ] `wrap log` — pretty-print last N log entries to stdout
-- [ ] Other subcommands as needs emerge (`wrap memory`, `wrap thread`, etc.)
+### Flag detection (see specs/subcommands.md)
+
+- [ ] Flag detection in `parseInput()` — first arg `--` prefix check against known flags
+- [ ] Unknown `--` flag error handling (stderr + exit 1)
+- [ ] Input type update — discriminated union: prompt | subcommand | none
+- [ ] Short-circuit in `main()` — subcommand dispatch before ensure steps
+- [ ] Shared `isTTY()` utility in `src/core/tty.ts`
+
+### `--log` / `--log-pretty`
+
+- [ ] `--log` — raw JSONL output to stdout (all entries or last N)
+- [ ] `--log-pretty` — indented JSON, jq piping when TTY + jq available
+- [ ] N argument parsing (positive integer validation)
+- [ ] Empty state — stderr "No log entries yet.", exit 0
+- [ ] Corrupt JSONL line handling — skip with stderr warning
+- [ ] jq detection via `Bun.which("jq")`
+
+### Deferred subcommands
+
+- [ ] `--help` — usage text
+- [ ] `--version` — version from package.json
+- [ ] `--config` — manual reconfigure (reuses config wizard)
+- [ ] `--memory` — view/manage memory
 
 ## Future Ideas
 
