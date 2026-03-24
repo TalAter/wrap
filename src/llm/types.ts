@@ -18,3 +18,12 @@ export type TestProviderConfig = { type: "test" };
 export type ClaudeCodeProviderConfig = { type: "claude-code"; model?: string };
 
 export type ProviderConfig = TestProviderConfig | ClaudeCodeProviderConfig;
+
+export type ConversationMessage =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string };
+
+export type PromptInput = {
+  system: string;
+  messages: ConversationMessage[];
+};
