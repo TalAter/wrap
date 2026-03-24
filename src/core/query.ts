@@ -7,6 +7,7 @@ import { appendLogEntry } from "../logging/writer.ts";
 import { appendMemory } from "../memory/memory.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
+import { chrome } from "./output.ts";
 
 export function isStructuredOutputError(e: unknown): boolean {
   return (
@@ -79,7 +80,7 @@ export async function runQuery(
     if (response.memory_updates?.length) {
       appendMemory(wrapHome, response.memory_updates);
       if (response.memory_updates_message) {
-        process.stderr.write(`🧠 ${response.memory_updates_message}\n`);
+        chrome(`🧠 ${response.memory_updates_message}`);
       }
     }
 
@@ -90,18 +91,18 @@ export async function runQuery(
     }
 
     if (response.type === "probe") {
-      console.error("Probe commands are not yet supported.");
+      chrome("Probe commands are not yet supported.");
       entry.outcome = "refused";
       return 1;
     }
 
     // type === "command"
     if (!response.command) {
-      console.error("LLM returned a command response with no command.");
+      chrome("LLM returned a command response with no command.");
       return 1;
     }
     if (response.risk_level !== "low") {
-      console.error(`Command requires confirmation (not yet supported): ${response.command}`);
+      chrome(`Command requires confirmation (not yet supported): ${response.command}`);
       entry.outcome = "refused";
       return 1;
     }

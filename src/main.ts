@@ -1,6 +1,7 @@
 import { loadConfig } from "./config/config.ts";
 import { getWrapHome } from "./core/home.ts";
 import { parseInput } from "./core/input.ts";
+import { chrome } from "./core/output.ts";
 import { runQuery } from "./core/query.ts";
 import { initProvider } from "./llm/index.ts";
 import { ensureMemory } from "./memory/memory.ts";
@@ -20,7 +21,7 @@ export async function main() {
     const config = loadConfig();
 
     if (!config.provider) {
-      console.error("Config error: no provider configured.");
+      chrome("Config error: no provider configured.");
       process.exit(1);
     }
 
@@ -33,7 +34,7 @@ export async function main() {
       }),
     );
   } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
+    chrome(e instanceof Error ? e.message : String(e));
     process.exit(1);
   }
 }

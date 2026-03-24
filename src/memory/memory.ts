@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { chrome } from "../core/output.ts";
 import type { Provider } from "../llm/types.ts";
 import { parseDetectedTools, runProbes } from "./init-probes.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
@@ -70,7 +71,7 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
   const existing = loadMemory(wrapHome);
   if (existing.length > 0) return existing;
 
-  process.stderr.write("✨ Learning about your system...\n");
+  chrome("✨ Learning about your system...");
 
   const probeOutput = runProbes();
   const response = await provider.runPrompt({
@@ -81,7 +82,7 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
 
   saveMemory(wrapHome, entries);
 
-  process.stderr.write(`${buildSummary(probeOutput)}\n`);
+  chrome(buildSummary(probeOutput));
 
   return entries;
 }

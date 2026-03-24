@@ -1,5 +1,5 @@
 import { bold, dim, fg, gradient } from "../core/ansi.ts";
-import { isTTY } from "../core/output.ts";
+import { chromeRaw, isTTY } from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
 // ZX Spectrum rainbow
@@ -86,7 +86,7 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   // Write full output first so all content is visible immediately
   process.stdout.write(styled);
 
-  const showCursor = () => process.stderr.write("\x1b[?25h");
+  const showCursor = () => chromeRaw("\x1b[?25h");
   const onSigint = () => {
     showCursor();
     // During sleep, cursor is at artEnd — move to bottom before exiting
@@ -95,7 +95,7 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   };
   process.on("SIGINT", onSigint);
 
-  process.stderr.write("\x1b[?25l");
+  chromeRaw("\x1b[?25l");
   try {
     // Move cursor from end of output up to art section
     process.stdout.write(`\x1b[${cursorRow - artStart}A`);

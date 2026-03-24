@@ -1,21 +1,18 @@
+import { chrome } from "../core/output.ts";
 import { subcommands } from "./registry.ts";
-
-function stderr(msg: string) {
-  process.stderr.write(`${msg}\n`);
-}
 
 export async function dispatch(flag: string, rawArg: string | null): Promise<void> {
   const cmd = subcommands.find((c) => c.flag === flag);
 
   if (!cmd) {
-    stderr(`Unknown flag: ${flag}`);
+    chrome(`Unknown flag: ${flag}`);
     process.exit(1);
     return;
   }
 
   if (cmd.arg?.required && rawArg === null) {
-    stderr(`Missing argument: ${cmd.flag} requires <${cmd.arg.name}>.`);
-    stderr(`Usage: ${cmd.usage}`);
+    chrome(`Missing argument: ${cmd.flag} requires <${cmd.arg.name}>.`);
+    chrome(`Usage: ${cmd.usage}`);
     process.exit(1);
     return;
   }
@@ -24,8 +21,8 @@ export async function dispatch(flag: string, rawArg: string | null): Promise<voi
     if (cmd.arg.type === "number") {
       const n = Number.parseInt(rawArg, 10);
       if (Number.isNaN(n) || n < 0) {
-        stderr(`Invalid argument: ${cmd.flag} expects a number.`);
-        stderr(`Usage: ${cmd.usage}`);
+        chrome(`Invalid argument: ${cmd.flag} expects a number.`);
+        chrome(`Usage: ${cmd.usage}`);
         process.exit(1);
         return;
       }
@@ -35,7 +32,7 @@ export async function dispatch(flag: string, rawArg: string | null): Promise<voi
   }
 
   if (rawArg !== null && !cmd.arg) {
-    stderr(`${cmd.flag} does not take an argument.`);
+    chrome(`${cmd.flag} does not take an argument.`);
     process.exit(1);
     return;
   }

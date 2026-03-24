@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getWrapHome } from "../core/home.ts";
-import { hasJq, isTTY } from "../core/output.ts";
+import { chrome, hasJq, isTTY } from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
 type Writer = (parsed: object[]) => Promise<void>;
@@ -44,7 +44,7 @@ function runLogCmd(writer: Writer): (arg: string | number | null) => Promise<voi
     const { valid, corrupt } = readLog(n);
 
     if (valid.length === 0 && corrupt === 0) {
-      process.stderr.write("No log entries yet.\n");
+      chrome("No log entries yet.");
       return;
     }
 
@@ -53,9 +53,7 @@ function runLogCmd(writer: Writer): (arg: string | number | null) => Promise<voi
     }
 
     if (corrupt > 0) {
-      process.stderr.write(
-        `Warning: skipped ${corrupt} corrupt log ${corrupt === 1 ? "entry" : "entries"}\n`,
-      );
+      chrome(`Warning: skipped ${corrupt} corrupt log ${corrupt === 1 ? "entry" : "entries"}`);
     }
   };
 }
