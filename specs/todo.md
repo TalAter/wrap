@@ -114,29 +114,33 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Implicit feedback signal (exit code, retry, thread correction)
 - [ ] DSPy eval infrastructure in container
 
-## Subcommands
+## Subcommands (see specs/subcommands.md)
 
-### Flag detection (see specs/subcommands.md)
+### Registry & dispatch infrastructure
 
-- [ ] Flag detection in `parseInput()` — first arg `--` prefix check against known flags
-- [ ] Unknown `--` flag error handling (stderr + exit 1)
-- [ ] Input type update — discriminated union: prompt | subcommand | none
-- [ ] Short-circuit in `main()` — subcommand dispatch before ensure steps
+- [ ] `Subcommand` type definition (`src/subcommands/types.ts`)
+- [ ] Subcommand registry (`src/subcommands/registry.ts`) — single source of truth
+- [ ] Dispatcher with generic arg validation (`src/subcommands/dispatch.ts`)
+- [ ] Flag detection in `parseInput()` — first arg `--` prefix check
+- [ ] Input type update — discriminated union: prompt | flag | none
+- [ ] Short-circuit in `main()` — dispatch before ensure steps
 - [ ] Shared `isTTY()` utility in `src/core/tty.ts`
 
 ### `--log` / `--log-pretty`
 
 - [ ] `--log` — raw JSONL output to stdout (all entries or last N)
 - [ ] `--log-pretty` — indented JSON, jq piping when TTY + jq available
-- [ ] N argument parsing (positive integer validation)
 - [ ] Empty state — stderr "No log entries yet.", exit 0
 - [ ] Corrupt JSONL line handling — skip with stderr warning
 - [ ] jq detection via `Bun.which("jq")`
 
+### `--help` / `--version`
+
+- [ ] `--help` — auto-generated from registry (preamble + dynamic flags table)
+- [ ] `--version` — reads from package.json
+
 ### Deferred subcommands
 
-- [ ] `--help` — usage text
-- [ ] `--version` — version from package.json
 - [ ] `--config` — manual reconfigure (reuses config wizard)
 - [ ] `--memory` — view/manage memory
 

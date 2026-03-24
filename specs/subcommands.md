@@ -129,31 +129,131 @@ Corrupt lines, empty state, N counting — all behave identically to `--log`.
 
 ## Architecture
 
+### Subcommand Registry
+
+Each subcommand is a self-describing object. All subcommands are registered in one place. `--help` is auto-generated from the registry — no hardcoded help text.
+
+```ts
+// src/subcommands/types.ts
+type SubcommandArg = {
+  name: string                    // display name: "N", "fact", etc.
+  type: "number" | "string"
+  required: boolean
+}
+
+type Subcommand = {
+  flag: string                    // "--log"
+  description: string             // "Show raw JSONL log entries"
+  usage: string                   // "w --log [N]"
+  arg?: SubcommandArg             // optional single arg spec
+  run: (arg: string | number | null) => Promise<void>
+}
+```
+
+```ts
+// src/subcommands/registry.ts — single source of truth
+import { logCmd, logPrettyCmd } from "./log"
+// import { helpCmd } from "./help"      (future)
+// import { versionCmd } from "./version" (future)
+
+export const subcommands: Subcommand[] = [
+  logCmd,
+  logPrettyCmd,
+]
+```
+
+Each subcommand lives in its own file under `src/subcommands/`. The registry imports them all.
+
+### Dispatcher
+
+The dispatcher handles arg validation generically before calling `run()`. Subcommands receive pre-validated args.
+
+```ts
+// src/subcommands/dispatch.ts (pseudo-code)
+function dispatch(flag: string, rawArg: string | null): void {
+  const cmd = subcommands.find(c => c.flag === flag)
+
+  if (!cmd) {
+    stderr(`Unknown flag: ${flag}`)
+    process.exit(1)
+  }
+
+  // Arg validation
+  if (cmd.arg?.required && rawArg === null) {
+    stderr(`Missing argument: ${cmd.flag} requires <${cmd.arg.name}>.`)
+    stderr(`Usage: ${cmd.usage}`)
+    process.exit(1)
+  }
+
+  if (rawArg !== null && cmd.arg) {
+    if (cmd.arg.type === "number") {
+      const n = parseInt(rawArg, 10)
+      if (isNaN(n) || n < 0) {
+        stderr(`Invalid argument: ${cmd.flag} expects a number.`)
+        stderr(`Usage: ${cmd.usage}`)
+        process.exit(1)
+      }
+      return cmd.run(n)
+    }
+    return cmd.run(rawArg)
+  }
+
+  if (rawArg !== null && !cmd.arg) {
+    stderr(`${cmd.flag} does not take an argument.`)
+    process.exit(1)
+  }
+
+  return cmd.run(null)
+}
+```
+
+### `--help` (auto-generated)
+
+`--help` is a registered subcommand like any other. Its `run()` iterates the registry to build usage text. No hardcoded flag list.
+
+```
+$ w --help
+wrap - natural language shell commands
+
+Usage: w <prompt>         Run a natural language query
+
+Flags:
+  --log [N]               Show raw JSONL log entries
+  --log-pretty [N]        Show formatted log entries
+  --help                  Show this help
+  --version               Show version
+```
+
+The preamble ("wrap - natural language...", "Usage: w <prompt>") is static text in the help subcommand. The flags table is built dynamically from `subcommands.map(c => ...)`.
+
 ### Flow position
 
 ```
 parseInput(argv)
   │
-  ├─ --flag detected? ──→ runSubcommand()  (exit)
-  │     └─ --log: resolves WRAP_HOME, reads log file, outputs
-  │     └─ --log-pretty: same + formatting
+  ├─ first arg starts with --? ──→ dispatch(flag, arg)  (exit)
   │
   ├─ ensureConfig()      // only for NL queries
   ├─ ensureMemory()
   └─ runQuery()
 ```
 
-Subcommands resolve their own prerequisites. `--log` only needs `WRAP_HOME` (via `getWrapHome()`), not config or memory.
+Subcommands short-circuit and handle their own prerequisites. `--log` only needs `WRAP_HOME` (via `getWrapHome()`), not config or memory.
 
 ### Module structure
 
 ```
 src/
   core/
-    input.ts            Updated: flag detection + subcommand parsing
-    tty.ts              New: shared isTTY() utility
+    input.ts              Updated: flag detection
+    tty.ts                New: shared isTTY() utility
   subcommands/
-    log.ts              --log and --log-pretty implementation
+    types.ts              Subcommand type definition
+    registry.ts           All subcommands registered here
+    dispatch.ts           Arg validation + dispatch
+    log.ts                --log and --log-pretty
+    help.ts               --help (auto-generated from registry)
+    version.ts            --version (reads from package.json)
 ```
 
 ### Input type update
@@ -161,32 +261,53 @@ src/
 ```ts
 type Input =
   | { type: "prompt"; prompt: string }
-  | { type: "subcommand"; name: string; arg: string | null }
+  | { type: "flag"; flag: string; arg: string | null }
   | { type: "none" }  // no args → help
 ```
+
+Note: `parseInput()` no longer needs to know about specific flags. It just detects the `--` prefix and passes the raw flag + arg to the dispatcher, which checks the registry.
 
 ---
 
 ## Testing
 
-- `parseInput` returns subcommand for `--log`, `--log 3`, `--log-pretty`
-- `parseInput` returns prompt for `log me in`, `find --verbose files`
-- `parseInput` errors on unknown flags (`--foo`)
-- `--log` outputs all entries as raw JSONL
+### parseInput
+
+- Returns `{ type: "flag" }` for `--log`, `--log 3`, `--log-pretty`
+- Returns `{ type: "prompt" }` for `log me in`, `find --verbose files`
+- Returns `{ type: "none" }` for no args
+
+### Dispatcher
+
+- Dispatches known flags to their `run()` function
+- Errors on unknown `--` flags
+- Validates arg type before calling `run()` (number validation for `--log`)
+- Errors when required arg is missing
+- Errors when unexpected arg is passed to no-arg flag
+
+### --log
+
+- Outputs all entries as raw JSONL
 - `--log N` outputs last N entries
-- `--log` with no log file → stderr message, exit 0, empty stdout
-- `--log` with corrupt lines → skips with stderr warning, shows valid entries
-- `--log-pretty` outputs indented JSON
-- `--log-pretty` uses jq when TTY + jq available (mock `Bun.which`)
-- `--log-pretty` falls back to JSON.stringify when piped or no jq
-- Invalid arg (`--log foo`) → stderr error + usage, exit 1
+- No log file → stderr message, exit 0, empty stdout
+- Corrupt lines → skips with stderr warning, shows valid entries
 - N counts raw lines, not parsed entries
+
+### --log-pretty
+
+- Outputs indented JSON
+- Uses jq when TTY + jq available (mock `Bun.which`)
+- Falls back to JSON.stringify when piped or no jq
+
+### --help
+
+- Output includes all registered subcommands
+- Adding a subcommand to registry automatically appears in --help
 
 ---
 
 ## Out of Scope
 
-- `--help`, `--version` (deferred — unknown flag error catches them for now)
-- `--config`, `--memory`, other subcommands
+- `--config`, `--memory` subcommands
 - "Did you mean?" fuzzy matching for typos
-- LLM self-discovery of Wrap's own flags (see `specs/prompts/llm-tool-discovery.md`)
+- LLM self-discovery of Wrap's own flags
