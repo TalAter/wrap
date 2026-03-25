@@ -6,7 +6,7 @@ import type { Subcommand } from "./types.ts";
 
 type Writer = (parsed: object[]) => Promise<void>;
 
-function readLog(n: number | null): { valid: object[]; corrupt: number } {
+export function readLog(n: number | null): { valid: object[]; corrupt: number } {
   const logPath = join(getWrapHome(), "logs", "wrap.jsonl");
 
   if (!existsSync(logPath)) {
@@ -35,27 +35,40 @@ function readLog(n: number | null): { valid: object[]; corrupt: number } {
   return { valid, corrupt };
 }
 
-function runLogCmd(writer: Writer): (arg: string | number | null) => Promise<void> {
-  return async (arg) => {
-    const n = typeof arg === "number" ? arg : null;
+export function searchEntries(entries: object[], term: string): object[] {
+  const lower = term.toLowerCase();
+  return entries.filter((e) => JSON.stringify(e).toLowerCase().includes(lower));
+}
 
-    if (n === 0) return;
+function parseArgs(args: string[]): { n: number | null; search: string | null; raw: boolean } {
+  let n: number | null = null;
+  let search: string | null = null;
+  let raw = false;
 
-    const { valid, corrupt } = readLog(n);
-
-    if (valid.length === 0 && corrupt === 0) {
-      chrome("No log entries yet.");
-      return;
+  for (const arg of args) {
+    if (arg === "--raw") {
+      raw = true;
+    } else if (/^-\d+$/.test(arg)) {
+      chrome("Invalid argument: N must be a non-negative integer.");
+      chrome("Usage: w --log [search] [N] [--raw]");
+      process.exit(1);
+    } else {
+      const parsed = Number.parseInt(arg, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0 && String(parsed) === arg) {
+        n = parsed;
+      } else if (arg === "") {
+        // Empty string search treated as no search
+      } else if (search === null) {
+        search = arg;
+      } else {
+        chrome("Only one search term allowed.");
+        chrome("Usage: w --log [search] [N] [--raw]");
+        process.exit(1);
+      }
     }
+  }
 
-    if (valid.length > 0) {
-      await writer(valid);
-    }
-
-    if (corrupt > 0) {
-      chrome(`Warning: skipped ${corrupt} corrupt log ${corrupt === 1 ? "entry" : "entries"}`);
-    }
-  };
+  return { n, search, raw };
 }
 
 const writeRaw: Writer = async (entries) => {
@@ -81,16 +94,34 @@ const writePretty: Writer = async (entries) => {
 
 export const logCmd: Subcommand = {
   flag: "--log",
-  description: "Show raw JSONL log entries",
-  usage: "w --log [N]",
-  arg: { name: "N", type: "number", required: false },
-  run: runLogCmd(writeRaw),
-};
+  description: "Show log entries",
+  usage: "w --log [search] [N] [--raw]",
+  run: async (args) => {
+    const { n, search, raw } = parseArgs(args);
+    const writer = raw || !isTTY() ? writeRaw : writePretty;
 
-export const logPrettyCmd: Subcommand = {
-  flag: "--log-pretty",
-  description: "Show formatted log entries",
-  usage: "w --log-pretty [N]",
-  arg: { name: "N", type: "number", required: false },
-  run: runLogCmd(writePretty),
+    if (n === 0) return;
+
+    // Search reads all lines; no-search preserves raw-line N semantics
+    const { valid, corrupt } = readLog(search ? null : n);
+
+    if (valid.length === 0 && corrupt === 0) {
+      chrome("No log entries yet.");
+      return;
+    }
+
+    let results = search ? searchEntries(valid, search) : valid;
+    if (search && n !== null) results = results.slice(-n);
+
+    if (results.length === 0) {
+      chrome(search ? "No matching log entries." : "No log entries yet.");
+      return;
+    }
+
+    await writer(results);
+
+    if (corrupt > 0) {
+      chrome(`Warning: skipped ${corrupt} corrupt log ${corrupt === 1 ? "entry" : "entries"}`);
+    }
+  },
 };

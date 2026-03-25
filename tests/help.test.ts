@@ -6,13 +6,7 @@ import { wrap } from "./helpers.ts";
 
 const testCmds: Subcommand[] = [
   { flag: "--foo", description: "Do foo", usage: "w --foo", run: async () => {} },
-  {
-    flag: "--bar",
-    description: "Do bar",
-    usage: "w --bar [n]",
-    arg: { name: "n", type: "number", required: false },
-    run: async () => {},
-  },
+  { flag: "--bar", description: "Do bar", usage: "w --bar [n]", run: async () => {} },
 ];
 
 describe("renderPlain", () => {
@@ -94,8 +88,8 @@ describe("--help", () => {
 
   test("includes all registered flags", async () => {
     const { stdout } = await wrap("--help");
-    expect(stdout).toContain("--log [N]");
-    expect(stdout).toContain("--log-pretty [N]");
+    expect(stdout).toContain("--log");
+    expect(stdout).not.toContain("--log-pretty");
     expect(stdout).toContain("--help");
     expect(stdout).toContain("--version");
   });

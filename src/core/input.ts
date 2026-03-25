@@ -1,6 +1,6 @@
 export type Input =
   | { type: "prompt"; prompt: string }
-  | { type: "flag"; flag: string; arg: string | null }
+  | { type: "flag"; flag: string; args: string[] }
   | { type: "none" };
 
 export function parseInput(argv: string[]): Input {
@@ -9,7 +9,7 @@ export function parseInput(argv: string[]): Input {
 
   const first = args[0];
   if (first?.startsWith("--")) {
-    return { type: "flag", flag: first, arg: args[1] ?? null };
+    return { type: "flag", flag: first, args: args.slice(1) };
   }
 
   return { type: "prompt", prompt: args.join(" ") };

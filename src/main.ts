@@ -13,8 +13,8 @@ export async function main() {
 
     if (input.type === "none" || input.type === "flag") {
       const flag = input.type === "flag" ? input.flag : "--help";
-      const arg = input.type === "flag" ? input.arg : null;
-      await dispatch(flag, arg);
+      const args = input.type === "flag" ? input.args : [];
+      await dispatch(flag, args);
       return;
     }
 

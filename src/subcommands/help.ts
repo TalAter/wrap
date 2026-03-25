@@ -1,5 +1,5 @@
 import { bold, dim, fg, gradient } from "../core/ansi.ts";
-import { chromeRaw, isTTY } from "../core/output.ts";
+import { chrome, chromeRaw, isTTY } from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
 // ZX Spectrum rainbow
@@ -28,8 +28,9 @@ const ART_LINE_COUNT = 1 + LOGO.length + 1; // bar + logo + bar
 
 function formatFlags(cmds: Subcommand[], colorize?: (text: string) => string): string[] {
   return cmds.map((c) => {
-    const argHint = c.arg ? (c.arg.required ? ` <${c.arg.name}>` : ` [${c.arg.name}]`) : "";
-    const flag = `  ${c.flag}${argHint}`;
+    // Derive display hint from usage string: "w --flag [args]" → "--flag [args]"
+    const hint = c.usage.replace(/^w\s+/, "");
+    const flag = `  ${hint}`;
     const padding = " ".repeat(Math.max(1, 24 - flag.length));
     return `${colorize ? colorize(flag) : flag}${padding}${c.description}`;
   });
@@ -123,7 +124,12 @@ export const helpCmd: Subcommand = {
   flag: "--help",
   description: "Show this help",
   usage: "w --help",
-  run: async () => {
+  run: async (args) => {
+    if (args.length > 0) {
+      chrome("--help does not take an argument.");
+      process.exit(1);
+      return;
+    }
     const { subcommands } = await import("./registry.ts");
     if (isTTY()) {
       await renderAnimated(subcommands);

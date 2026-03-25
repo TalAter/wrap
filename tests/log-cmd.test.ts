@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { searchEntries } from "../src/subcommands/log.ts";
 import { wrap } from "./helpers.ts";
 
 function seedLog(wrapHome: string, lines: string[]): string {
@@ -11,12 +12,12 @@ function seedLog(wrapHome: string, lines: string[]): string {
   return logPath;
 }
 
-function entry(id: string) {
-  return JSON.stringify({ id, timestamp: "2026-03-23T00:00:00Z", prompt: "test" });
+function entry(id: string, prompt = "test") {
+  return JSON.stringify({ id, timestamp: "2026-03-23T00:00:00Z", prompt });
 }
 
 describe("--log", () => {
-  test("outputs all entries as raw JSONL", async () => {
+  test("outputs all entries as raw JSONL (piped = raw default)", async () => {
     const { wrapHome } = await wrap("--log");
     const lines = [entry("a"), entry("b"), entry("c")];
     seedLog(wrapHome, lines);
@@ -59,12 +60,6 @@ describe("--log", () => {
     expect(result.stderr).toContain("No log entries yet.");
   });
 
-  test("invalid arg shows error", async () => {
-    const result = await wrap("--log foo");
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("expects a number");
-  });
-
   test("skips corrupt lines with warning", async () => {
     const result1 = await wrap("--log");
     const lines = [entry("a"), "not-json", entry("c")];
@@ -86,63 +81,109 @@ describe("--log", () => {
     expect(result.stdout).toBe(`${[entry("c"), entry("e")].join("\n")}\n`);
     expect(result.stderr).toContain("skipped 1 corrupt");
   });
+
+  test("--raw flag outputs raw JSONL", async () => {
+    const { wrapHome } = await wrap("--log");
+    const lines = [entry("a"), entry("b")];
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log --raw", { WRAP_HOME: wrapHome });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe(`${lines.join("\n")}\n`);
+  });
 });
 
-describe("--log-pretty", () => {
-  test("outputs indented JSON", async () => {
-    const result1 = await wrap("--log-pretty");
-    const obj = { id: "a", timestamp: "2026-03-23T00:00:00Z", prompt: "test" };
-    seedLog(result1.wrapHome, [JSON.stringify(obj)]);
-    const result = await wrap("--log-pretty", { WRAP_HOME: result1.wrapHome });
+describe("--log search", () => {
+  test("search filters entries by substring", async () => {
+    const { wrapHome } = await wrap("--log");
+    const lines = [entry("a", "find files"), entry("b", "list docker"), entry("c", "find ports")];
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log find", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(JSON.stringify(obj, null, 2));
+    expect(result.stdout).toContain('"find files"');
+    expect(result.stdout).toContain('"find ports"');
+    expect(result.stdout).not.toContain('"list docker"');
   });
 
-  test("separates entries with blank line", async () => {
-    const result1 = await wrap("--log-pretty");
-    const objs = [
-      { id: "a", timestamp: "2026-03-23T00:00:00Z", prompt: "test1" },
-      { id: "b", timestamp: "2026-03-23T00:00:00Z", prompt: "test2" },
-    ];
-    seedLog(
-      result1.wrapHome,
-      objs.map((o) => JSON.stringify(o)),
-    );
-    const result = await wrap("--log-pretty", { WRAP_HOME: result1.wrapHome });
+  test("search is case-insensitive", async () => {
+    const { wrapHome } = await wrap("--log");
+    seedLog(wrapHome, [entry("a", "Find Files"), entry("b", "other")]);
+    const result = await wrap("--log find", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
-    const expected = `${objs.map((o) => JSON.stringify(o, null, 2)).join("\n\n")}\n`;
-    expect(result.stdout).toBe(expected);
+    expect(result.stdout).toContain('"Find Files"');
+    expect(result.stdout).not.toContain('"other"');
   });
 
-  test("--log-pretty N outputs last N entries formatted", async () => {
-    const result1 = await wrap("--log-pretty");
-    const objs = [
-      { id: "a", timestamp: "2026-03-23T00:00:00Z", prompt: "test1" },
-      { id: "b", timestamp: "2026-03-23T00:00:00Z", prompt: "test2" },
-    ];
-    seedLog(
-      result1.wrapHome,
-      objs.map((o) => JSON.stringify(o)),
-    );
-    const result = await wrap("--log-pretty 1", { WRAP_HOME: result1.wrapHome });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe(`${JSON.stringify(objs[1], null, 2)}\n`);
-  });
-
-  test("no log file shows message on stderr, exits 0", async () => {
-    const result = await wrap("--log-pretty");
+  test("search with no matches shows message", async () => {
+    const { wrapHome } = await wrap("--log");
+    seedLog(wrapHome, [entry("a", "hello")]);
+    const result = await wrap("--log zzzzz", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("No log entries yet.");
+    expect(result.stderr).toContain("No matching log entries.");
   });
 
-  test("skips corrupt lines with warning", async () => {
-    const result1 = await wrap("--log-pretty");
-    const obj = { id: "a", timestamp: "2026-03-23T00:00:00Z", prompt: "test" };
-    seedLog(result1.wrapHome, [JSON.stringify(obj), "corrupt"]);
-    const result = await wrap("--log-pretty", { WRAP_HOME: result1.wrapHome });
+  test("search combined with N takes last N matches", async () => {
+    const { wrapHome } = await wrap("--log");
+    const lines = [entry("a", "find one"), entry("b", "find two"), entry("c", "find three")];
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log find 2", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(JSON.stringify(obj, null, 2));
-    expect(result.stderr).toContain("skipped 1 corrupt");
+    expect(result.stdout).not.toContain('"find one"');
+    expect(result.stdout).toContain('"find two"');
+    expect(result.stdout).toContain('"find three"');
+  });
+
+  test("search with --raw outputs raw JSONL", async () => {
+    const { wrapHome } = await wrap("--log");
+    seedLog(wrapHome, [entry("a", "hello world"), entry("b", "other")]);
+    const result = await wrap("--log hello --raw", { WRAP_HOME: wrapHome });
+    expect(result.exitCode).toBe(0);
+    // Raw = one JSON object per line, no indentation
+    const lines = result.stdout.trim().split("\n");
+    expect(lines.length).toBe(1);
+    expect(JSON.parse(lines[0]).prompt).toBe("hello world");
+  });
+
+  test("errors on two search terms", async () => {
+    const result = await wrap("--log foo bar");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Only one search term allowed");
+  });
+
+  test("errors on negative number", async () => {
+    const result = await wrap("--log -3");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("non-negative integer");
+  });
+});
+
+describe("searchEntries", () => {
+  test("matches substring in any value", () => {
+    const entries = [
+      { id: "a", prompt: "find files" },
+      { id: "b", prompt: "list stuff" },
+    ];
+    expect(searchEntries(entries, "find")).toEqual([{ id: "a", prompt: "find files" }]);
+  });
+
+  test("is case-insensitive", () => {
+    const entries = [{ id: "a", prompt: "Find Files" }];
+    expect(searchEntries(entries, "find files")).toEqual(entries);
+  });
+
+  test("matches nested values", () => {
+    const entries = [{ id: "a", nested: { command: "docker ps" } }];
+    expect(searchEntries(entries, "docker")).toEqual(entries);
+  });
+
+  test("returns empty array for no matches", () => {
+    const entries = [{ id: "a", prompt: "hello" }];
+    expect(searchEntries(entries, "zzz")).toEqual([]);
+  });
+
+  test("returns all entries when no filtering needed", () => {
+    const entries = [{ id: "a" }, { id: "b" }];
+    // Both contain "id" in their JSON serialization
+    expect(searchEntries(entries, "id")).toEqual(entries);
   });
 });

@@ -40,33 +40,25 @@ function mockSubcommand(overrides: Partial<Subcommand> = {}): Subcommand {
 }
 
 describe("dispatch", () => {
-  test("calls run() for known flag with no arg", async () => {
+  test("calls run([]) for known flag with no args", async () => {
     const cmd = mockSubcommand();
     subcommands.push(cmd);
-    await dispatch("--test", null);
-    expect(cmd.run).toHaveBeenCalledWith(null);
+    await dispatch("--test", []);
+    expect(cmd.run).toHaveBeenCalledWith([]);
   });
 
-  test("passes string arg to run()", async () => {
-    const cmd = mockSubcommand({
-      flag: "--greet",
-      usage: "w --greet <name>",
-      arg: { name: "name", type: "string", required: true },
-    });
+  test("passes args array to run()", async () => {
+    const cmd = mockSubcommand();
     subcommands.push(cmd);
-    await dispatch("--greet", "world");
-    expect(cmd.run).toHaveBeenCalledWith("world");
+    await dispatch("--test", ["5"]);
+    expect(cmd.run).toHaveBeenCalledWith(["5"]);
   });
 
-  test("coerces and passes number arg to run()", async () => {
-    const cmd = mockSubcommand({
-      flag: "--log",
-      usage: "w --log [N]",
-      arg: { name: "N", type: "number", required: false },
-    });
+  test("passes multiple args to run()", async () => {
+    const cmd = mockSubcommand();
     subcommands.push(cmd);
-    await dispatch("--log", "5");
-    expect(cmd.run).toHaveBeenCalledWith(5);
+    await dispatch("--test", ["term", "--raw"]);
+    expect(cmd.run).toHaveBeenCalledWith(["term", "--raw"]);
   });
 
   test("errors on unknown flag", async () => {
@@ -75,85 +67,8 @@ describe("dispatch", () => {
     process.exit = ((code: number) => {
       exitCode = code;
     }) as never;
-    await dispatch("--nope", null);
+    await dispatch("--nope", []);
     expect(exitCode).toBe(1);
     expect(stderrOutput).toContain("Unknown flag: --nope");
-  });
-
-  test("errors when required arg is missing", async () => {
-    const cmd = mockSubcommand({
-      flag: "--greet",
-      usage: "w --greet <name>",
-      arg: { name: "name", type: "string", required: true },
-    });
-    subcommands.push(cmd);
-    captureStderr();
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-    }) as never;
-    await dispatch("--greet", null);
-    expect(exitCode).toBe(1);
-    expect(stderrOutput).toContain("Missing argument");
-    expect(stderrOutput).toContain("w --greet <name>");
-  });
-
-  test("errors when arg passed to no-arg flag", async () => {
-    const cmd = mockSubcommand();
-    subcommands.push(cmd);
-    captureStderr();
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-    }) as never;
-    await dispatch("--test", "extra");
-    expect(exitCode).toBe(1);
-    expect(stderrOutput).toContain("does not take an argument");
-  });
-
-  test("errors when number arg is not a valid number", async () => {
-    const cmd = mockSubcommand({
-      flag: "--log",
-      usage: "w --log [N]",
-      arg: { name: "N", type: "number", required: false },
-    });
-    subcommands.push(cmd);
-    captureStderr();
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-    }) as never;
-    await dispatch("--log", "foo");
-    expect(exitCode).toBe(1);
-    expect(stderrOutput).toContain("expects a number");
-    expect(stderrOutput).toContain("w --log [N]");
-  });
-
-  test("errors when number arg is negative", async () => {
-    const cmd = mockSubcommand({
-      flag: "--log",
-      usage: "w --log [N]",
-      arg: { name: "N", type: "number", required: false },
-    });
-    subcommands.push(cmd);
-    captureStderr();
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-    }) as never;
-    await dispatch("--log", "-3");
-    expect(exitCode).toBe(1);
-    expect(stderrOutput).toContain("expects a number");
-  });
-
-  test("optional arg: calls run(null) when no arg given", async () => {
-    const cmd = mockSubcommand({
-      flag: "--log",
-      usage: "w --log [N]",
-      arg: { name: "N", type: "number", required: false },
-    });
-    subcommands.push(cmd);
-    await dispatch("--log", null);
-    expect(cmd.run).toHaveBeenCalledWith(null);
   });
 });

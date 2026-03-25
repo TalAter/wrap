@@ -19,12 +19,27 @@ describe("parseInput", () => {
 
   test("first arg with -- prefix returns flag type", () => {
     const input = parseInput(["bun", "src/index.ts", "--log"]);
-    expect(input).toEqual({ type: "flag", flag: "--log", arg: null });
+    expect(input).toEqual({ type: "flag", flag: "--log", args: [] });
   });
 
-  test("flag with argument captures next token", () => {
+  test("flag with one argument", () => {
     const input = parseInput(["bun", "src/index.ts", "--log", "3"]);
-    expect(input).toEqual({ type: "flag", flag: "--log", arg: "3" });
+    expect(input).toEqual({ type: "flag", flag: "--log", args: ["3"] });
+  });
+
+  test("flag with multiple arguments", () => {
+    const input = parseInput(["bun", "src/index.ts", "--log", "symlink to", "10"]);
+    expect(input).toEqual({ type: "flag", flag: "--log", args: ["symlink to", "10"] });
+  });
+
+  test("secondary --flags are collected as args", () => {
+    const input = parseInput(["bun", "src/index.ts", "--log", "--raw"]);
+    expect(input).toEqual({ type: "flag", flag: "--log", args: ["--raw"] });
+  });
+
+  test("mixed args and secondary flags", () => {
+    const input = parseInput(["bun", "src/index.ts", "--log", "term", "--raw"]);
+    expect(input).toEqual({ type: "flag", flag: "--log", args: ["term", "--raw"] });
   });
 
   test("-- in non-first position is natural language", () => {
@@ -37,6 +52,6 @@ describe("parseInput", () => {
 
   test("flag with hyphenated name", () => {
     const input = parseInput(["bun", "src/index.ts", "--log-pretty"]);
-    expect(input).toEqual({ type: "flag", flag: "--log-pretty", arg: null });
+    expect(input).toEqual({ type: "flag", flag: "--log-pretty", args: [] });
   });
 });
