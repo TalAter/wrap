@@ -107,6 +107,7 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 ## Output & UI
 
 - [ ] Visual identity — distinctive color scheme, emoji prefix, characterful messages
+- [ ] Answer rendering — colorful terminal markdown (syntax-highlighted code, bold/italic, lists). Blocked on TUI library.
 - [ ] TUI components — radio buttons, checkboxes, free text input, editable fields
 
 ## Eval System

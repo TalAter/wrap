@@ -465,7 +465,24 @@ Wrap's own output (TUI panels, notifications, confirmations) goes to a non-stdou
 | **stderr** | Wrap chrome: confirmations, risk warnings, memory notifications, probe status, errors |
 | **/dev/tty** | Interactive TUI (confirmation panel, edit field)                              |
 
-### 11.2 Visual Identity & Character
+### 11.2 Answer Rendering — TTY-Aware
+
+Answer output adapts based on whether stdout is a TTY:
+
+| Condition | LLM prompt | Output |
+|-----------|-----------|--------|
+| **stdout is TTY** | Ask LLM to format answer as markdown | Render as colorful terminal markdown — syntax-highlighted code blocks, bold/italic, lists, etc. |
+| **stdout is piped** | Ask LLM for plain text, no markdown syntax | Raw text to stdout, clean for piping into files, `pbcopy`, etc. |
+
+The prompt itself changes — Wrap tells the LLM whether to use markdown or plain text. This is cleaner than stripping markdown client-side, and gives the LLM freedom to structure plain-text answers well without leaking `**` and `` ``` `` into piped output.
+
+**Edge case — user wants markdown in piped output** (e.g., `w? explain X | tee notes.md`): deferred. Users can add "in markdown" to their prompt for now. A future `--md` flag could override the default.
+
+**Blocked on:** TUI library selection (see Open Questions §17.3). The terminal markdown rendering approach depends on which TUI library we adopt. Design this after the TUI library is in place.
+
+**Hard rule still applies:** the rendered answer text goes to stdout. Wrap chrome (if any surrounds the answer) stays on stderr/tty.
+
+### 11.3 Visual Identity & Character
 
 Wrap is opinionated and has personality:
 
@@ -474,7 +491,7 @@ Wrap is opinionated and has personality:
 - Visual styling makes Wrap output instantly distinguishable from command output
 - The tool should feel fun and characterful, not sterile
 
-### 11.3 TUI Components
+### 11.4 TUI Components
 
 Built for the confirmation flow and future interactive needs:
 
