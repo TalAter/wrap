@@ -63,14 +63,47 @@ describe("wrap", () => {
     expect(stderr).toBe("");
   });
 
-  test("answer: exits 0 with empty output when answer field missing", async () => {
+  test("answer: errors when answer field is missing", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("hello", {
       type: "answer",
       risk_level: "low",
     });
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toBe("");
+    expect(stderr).toContain("no content");
+  });
+
+  test("answer: errors when answer field is null", async () => {
+    const { exitCode, stdout, stderr } = await wrapMock("hello", {
+      type: "answer",
+      answer: null,
+      risk_level: "low",
+    });
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("no content");
+  });
+
+  test("answer: errors when answer field is empty string", async () => {
+    const { exitCode, stdout, stderr } = await wrapMock("hello", {
+      type: "answer",
+      answer: "",
+      risk_level: "low",
+    });
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("no content");
+  });
+
+  test("answer: errors when answer is whitespace-only", async () => {
+    const { exitCode, stdout, stderr } = await wrapMock("hello", {
+      type: "answer",
+      answer: "   ",
+      risk_level: "low",
+    });
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("no content");
   });
 
   test("errors on invalid JSON from LLM", async () => {

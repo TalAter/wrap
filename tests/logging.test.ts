@@ -297,6 +297,16 @@ describe("logging integration", () => {
     expect(entry.rounds[0].execution).toBeUndefined();
   });
 
+  test("empty answer logs with outcome 'error'", async () => {
+    const result = await wrapMock("what is 2+2", {
+      type: "answer",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.outcome).toBe("error");
+    expect(entry.rounds[0].parsed.type).toBe("answer");
+  });
+
   test("parse error logs provider_error", async () => {
     const home = mkdtempSync(join(tmpdir(), "wrap-log-test-"));
     seedMemoryIn(home);

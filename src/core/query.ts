@@ -85,7 +85,12 @@ export async function runQuery(
     }
 
     if (response.type === "answer") {
-      if (response.answer) console.log(response.answer);
+      if (!response.answer?.trim()) {
+        chrome("LLM returned an answer with no content.");
+        entry.outcome = "error";
+        return 1;
+      }
+      console.log(response.answer);
       entry.outcome = "success";
       return 0;
     }
