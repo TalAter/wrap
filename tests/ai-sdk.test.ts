@@ -50,28 +50,28 @@ describe("OpenAI strict schema round-trip", () => {
     const raw = structuredClone(z.toJSONSchema(CommandResponseSchema)) as Record<string, unknown>;
     const props = raw.properties as Record<string, unknown>;
     const allKeys = Object.keys(props);
-    // Before: only type and risk_level in required
-    expect(raw.required).toEqual(["type", "risk_level"]);
-    // After addAllToRequired: all keys
+    // Before: type, content, and risk_level are required
+    expect(raw.required).toContain("type");
+    expect(raw.required).toContain("content");
+    expect(raw.required).toContain("risk_level");
+    // After addAllToRequired: all keys including nullable optional fields
     raw.required = allKeys;
-    expect(raw.required).toContain("command");
-    expect(raw.required).toContain("answer");
     expect(raw.required).toContain("memory_updates");
   });
 
   test("nullable fields produce anyOf with null in JSON schema", () => {
     const raw = z.toJSONSchema(CommandResponseSchema) as Record<string, unknown>;
     const props = raw.properties as Record<string, Record<string, unknown>>;
-    // command is nullable().optional() → anyOf: [string, null]
-    expect(props.command.anyOf).toEqual([{ type: "string" }, { type: "null" }]);
-    expect(props.answer.anyOf).toEqual([{ type: "string" }, { type: "null" }]);
+    // explanation is nullable().optional() → anyOf: [string, null]
+    expect(props.explanation.anyOf).toEqual([{ type: "string" }, { type: "null" }]);
+    // content is required string → just {type: "string"}
+    expect(props.content).toEqual({ type: "string" });
   });
 
   test("Zod validates OpenAI-style response with nulls", () => {
     const openaiResponse = {
       type: "command",
-      command: "ls -la",
-      answer: null,
+      content: "ls -la",
       risk_level: "low",
       explanation: null,
       memory_updates: null,
@@ -80,15 +80,14 @@ describe("OpenAI strict schema round-trip", () => {
     const result = CommandResponseSchema.safeParse(openaiResponse);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.command).toBe("ls -la");
-      expect(result.data.answer).toBeNull();
+      expect(result.data.content).toBe("ls -la");
     }
   });
 
-  test("Zod validates response with omitted fields (non-OpenAI providers)", () => {
+  test("Zod validates response with omitted optional fields", () => {
     const response = {
       type: "command",
-      command: "ls -la",
+      content: "ls -la",
       risk_level: "low",
     };
     const result = CommandResponseSchema.safeParse(response);

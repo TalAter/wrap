@@ -155,7 +155,7 @@ describe("serializeEntry", () => {
     addRound(entry, {
       parsed: {
         type: "command",
-        command: "ls",
+        content: "ls",
         risk_level: "low",
       },
       execution: { command: "ls", exit_code: 0 },
@@ -163,7 +163,7 @@ describe("serializeEntry", () => {
     const parsed = JSON.parse(serializeEntry(entry));
     expect(parsed.piped_input).toBe("stdin data");
     expect(parsed.outcome).toBe("success");
-    expect(parsed.rounds[0].parsed.command).toBe("ls");
+    expect(parsed.rounds[0].parsed.content).toBe("ls");
     expect(parsed.rounds[0].execution.exit_code).toBe(0);
     expect("raw_response" in parsed.rounds[0]).toBe(false);
   });
@@ -273,7 +273,7 @@ describe("logging integration", () => {
   test("successful command logs with outcome 'success' and execution", async () => {
     const result = await wrapMock("list files", {
       type: "command",
-      command: "echo hello",
+      content: "echo hello",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
@@ -288,7 +288,7 @@ describe("logging integration", () => {
   test("answer logs with outcome 'success' and no execution", async () => {
     const result = await wrapMock("what is 2+2", {
       type: "answer",
-      answer: "4",
+      content: "4",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
@@ -297,9 +297,10 @@ describe("logging integration", () => {
     expect(entry.rounds[0].execution).toBeUndefined();
   });
 
-  test("empty answer logs with outcome 'error'", async () => {
+  test("empty content logs with outcome 'error'", async () => {
     const result = await wrapMock("what is 2+2", {
       type: "answer",
+      content: "",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
@@ -325,7 +326,7 @@ describe("logging integration", () => {
   test("log entry has invocation-level fields", async () => {
     const result = await wrapMock("test prompt", {
       type: "answer",
-      answer: "ok",
+      content: "ok",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
@@ -340,19 +341,19 @@ describe("logging integration", () => {
   test("non-low risk command logs with outcome 'refused'", async () => {
     const result = await wrapMock("delete everything", {
       type: "command",
-      command: "rm -rf /",
+      content: "rm -rf /",
       risk_level: "high",
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("refused");
-    expect(entry.rounds[0].parsed.command).toBe("rm -rf /");
+    expect(entry.rounds[0].parsed.content).toBe("rm -rf /");
     expect(entry.rounds[0].execution).toBeUndefined();
   });
 
   test("command with non-zero exit code logs outcome 'error'", async () => {
     const result = await wrapMock("fail", {
       type: "command",
-      command: "exit 1",
+      content: "exit 1",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
@@ -363,7 +364,7 @@ describe("logging integration", () => {
   test("successful parse omits raw_response from round", async () => {
     const result = await wrapMock("test", {
       type: "answer",
-      answer: "ok",
+      content: "ok",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);

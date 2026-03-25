@@ -5,13 +5,13 @@ describe("CommandResponseSchema", () => {
   test("parses valid command response", () => {
     const input = {
       type: "command",
-      command: "find . -name '*.ts' -mtime 0",
+      content: "find . -name '*.ts' -mtime 0",
       risk_level: "low",
       explanation: "Find TypeScript files modified today",
     };
     const result = CommandResponseSchema.parse(input);
     expect(result.type).toBe("command");
-    expect(result.command).toBe("find . -name '*.ts' -mtime 0");
+    expect(result.content).toBe("find . -name '*.ts' -mtime 0");
     expect(result.risk_level).toBe("low");
     expect(result.explanation).toBe("Find TypeScript files modified today");
   });
@@ -19,30 +19,30 @@ describe("CommandResponseSchema", () => {
   test("parses valid answer response", () => {
     const input = {
       type: "answer",
-      answer: "The speed of light is approximately 299,792,458 m/s",
+      content: "The speed of light is approximately 299,792,458 m/s",
       risk_level: "low",
     };
     const result = CommandResponseSchema.parse(input);
     expect(result.type).toBe("answer");
-    expect(result.answer).toBe("The speed of light is approximately 299,792,458 m/s");
+    expect(result.content).toBe("The speed of light is approximately 299,792,458 m/s");
   });
 
   test("parses valid probe response", () => {
     const input = {
       type: "probe",
-      command: "echo $SHELL",
+      content: "echo $SHELL",
       risk_level: "low",
       explanation: "Checking which shell you use",
     };
     const result = CommandResponseSchema.parse(input);
     expect(result.type).toBe("probe");
-    expect(result.command).toBe("echo $SHELL");
+    expect(result.content).toBe("echo $SHELL");
   });
 
   test("parses response with memory_updates", () => {
     const input = {
       type: "command",
-      command: "echo 'alias ll=ls -la' >> ~/.zshrc",
+      content: "echo 'alias ll=ls -la' >> ~/.zshrc",
       risk_level: "medium",
       memory_updates: [{ fact: "Default shell is zsh" }, { fact: "Shell config at ~/.zshrc" }],
       memory_updates_message: "Noted: you use zsh, config at ~/.zshrc",
@@ -59,27 +59,30 @@ describe("CommandResponseSchema", () => {
   });
 
   test("rejects invalid risk_level", () => {
-    const input = { type: "command", command: "ls", risk_level: "extreme" };
+    const input = { type: "command", content: "ls", risk_level: "extreme" };
     expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("requires type field", () => {
-    const input = { command: "ls", risk_level: "low" };
+    const input = { content: "ls", risk_level: "low" };
     expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("requires risk_level", () => {
-    let input: Record<string, unknown> = { type: "command", command: "ls" };
+    let input: Record<string, unknown> = { type: "command", content: "ls" };
     expect(() => CommandResponseSchema.parse(input)).toThrow();
     input = { ...input, risk_level: "low" };
     expect(() => CommandResponseSchema.parse(input)).not.toThrow();
   });
 
-  test("allows optional fields to be omitted", () => {
+  test("requires content field", () => {
     const input = { type: "command", risk_level: "low" };
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
+  });
+
+  test("allows optional fields to be omitted", () => {
+    const input = { type: "command", content: "ls", risk_level: "low" };
     const result = CommandResponseSchema.parse(input);
-    expect(result.command).toBeUndefined();
-    expect(result.answer).toBeUndefined();
     expect(result.explanation).toBeUndefined();
     expect(result.memory_updates).toBeUndefined();
     expect(result.memory_updates_message).toBeUndefined();
@@ -88,21 +91,19 @@ describe("CommandResponseSchema", () => {
   test("allows nullable fields to be null", () => {
     const input = {
       type: "command",
-      command: null,
-      answer: null,
+      content: "ls",
       risk_level: "low",
       explanation: null,
       memory_updates: null,
       memory_updates_message: null,
     };
     const result = CommandResponseSchema.parse(input);
-    expect(result.command).toBeNull();
-    expect(result.answer).toBeNull();
+    expect(result.explanation).toBeNull();
     expect(result.memory_updates).toBeNull();
   });
 
   test("allows empty memory_updates array", () => {
-    const input = { type: "command", risk_level: "low", memory_updates: [] };
+    const input = { type: "command", content: "ls", risk_level: "low", memory_updates: [] };
     const result = CommandResponseSchema.parse(input);
     expect(result.memory_updates).toEqual([]);
   });
@@ -110,6 +111,7 @@ describe("CommandResponseSchema", () => {
   test("rejects memory_updates entry with missing fact", () => {
     const input = {
       type: "command",
+      content: "ls",
       risk_level: "low",
       memory_updates: [{ key: "shell", value: "zsh" }],
     };

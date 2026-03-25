@@ -67,14 +67,14 @@ describe("testProvider", () => {
       try {
         process.env.WRAP_TEST_RESPONSE = JSON.stringify({
           type: "command",
-          command: "echo hi",
+          content: "echo hi",
           risk_level: "low",
         });
         const provider = testProvider();
         const result = await provider.runPrompt(input, CommandResponseSchema);
         expect(result).toEqual({
           type: "command",
-          command: "echo hi",
+          content: "echo hi",
           risk_level: "low",
         });
       } finally {
@@ -103,13 +103,13 @@ describe("runCommandPrompt", () => {
     try {
       process.env.WRAP_TEST_RESPONSE = JSON.stringify({
         type: "command",
-        command: "ls",
+        content: "ls",
         risk_level: "low",
       });
       const provider = testProvider();
       const result = await runCommandPrompt(provider, input);
       expect(result.type).toBe("command");
-      expect(result.command).toBe("ls");
+      expect(result.content).toBe("ls");
     } finally {
       if (prev === undefined) delete process.env.WRAP_TEST_RESPONSE;
       else process.env.WRAP_TEST_RESPONSE = prev;

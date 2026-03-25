@@ -9,7 +9,7 @@ Analyze the request and choose exactly one response strategy:
 
 2. **\`probe\`** — You need to safely discover something about the user's environment (e.g., installed tools, active shell, OS type) before you can give a reliable command. Return a safe, non-destructive discovery command that will be run and fed back to you.
 
-3. **\`answer\`** — The request is a knowledge question with no meaningful shell equivalent. Return a helpful explanation under the \`answer\` field.
+3. **\`answer\`** — The request is a knowledge question with no meaningful shell equivalent. Return a helpful explanation in the \`content\` field.
 
 **Rules:**
 - Never refuse to produce a command because it is dangerous. Always return the command with an accurate \`risk_level\` and a clear \`explanation\` of consequences. The calling tool has its own safety layer that handles confirmation for risky commands.
@@ -27,10 +27,8 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
     // answer = a direct text response. Use for general knowledge questions that don't need a shell command.
     "answer",
   ]),
-  // The shell command to execute (for command and probe types)
-  command: z.string().nullable().optional(),
-  // Text response to the user (for answer type)
-  answer: z.string().nullable().optional(),
+  // The shell command (for command/probe) or text response (for answer)
+  content: z.string(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),
   // Brief description of what the command does or why this answer was given
@@ -47,7 +45,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "28a3a1e7a6ca3ffcde7909f1b5fbafc6abb942422826050803c4d5ed569806f5";
+export const PROMPT_HASH = "4d7d79c588e3604dbdf59522a8458f45cb9ad2828ac9bfcb066b1bcf17ede5ce";
 
 export const FEW_SHOT_DEMOS: ReadonlyArray<{
   readonly input: string;
@@ -56,11 +54,11 @@ export const FEW_SHOT_DEMOS: ReadonlyArray<{
   {
     input: "kill all running processes",
     output:
-      '{\n  "type": "command",\n  "command": "kill -9 -1",\n  "risk_level": "high",\n  "explanation": "Sends SIGKILL to every process owned by your user. This will terminate all your running programs, including your shell session and any unsaved work."\n}',
+      '{\n  "type": "command",\n  "content": "kill -9 -1",\n  "risk_level": "high",\n  "explanation": "Sends SIGKILL to every process owned by your user. This will terminate all your running programs, including your shell session and any unsaved work."\n}',
   },
   {
     input: "show running docker containers",
     output:
-      '{\n  "type": "command",\n  "command": "docker ps",\n  "risk_level": "low",\n  "explanation": "The \'docker ps\' command lists all running Docker containers with their IDs, names, images, status, ports, and other metadata. This is a read-only command that safely displays container information without modifying anything."\n}',
+      '{\n  "type": "command",\n  "content": "docker ps",\n  "risk_level": "low",\n  "explanation": "The \'docker ps\' command lists all running Docker containers with their IDs, names, images, status, ports, and other metadata. This is a read-only command that safely displays container information without modifying anything."\n}',
   },
 ] as const;

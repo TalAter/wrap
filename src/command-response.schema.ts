@@ -14,10 +14,8 @@ export const CommandResponseSchema = z.object({
     // answer = a direct text response. Use for general knowledge questions that don't need a shell command.
     "answer",
   ]),
-  // The shell command to execute (for command and probe types)
-  command: z.string().nullable().optional(),
-  // Text response to the user (for answer type)
-  answer: z.string().nullable().optional(),
+  // The shell command (for command/probe) or text response (for answer)
+  content: z.string(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),
   // Brief description of what the command does or why this answer was given

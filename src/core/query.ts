@@ -84,13 +84,14 @@ export async function runQuery(
       }
     }
 
+    if (!response.content.trim()) {
+      chrome("LLM returned an empty response.");
+      entry.outcome = "error";
+      return 1;
+    }
+
     if (response.type === "answer") {
-      if (!response.answer?.trim()) {
-        chrome("LLM returned an answer with no content.");
-        entry.outcome = "error";
-        return 1;
-      }
-      console.log(response.answer);
+      console.log(response.content);
       entry.outcome = "success";
       return 0;
     }
@@ -102,23 +103,19 @@ export async function runQuery(
     }
 
     // type === "command"
-    if (!response.command) {
-      chrome("LLM returned a command response with no command.");
-      return 1;
-    }
     if (response.risk_level !== "low") {
-      chrome(`Command requires confirmation (not yet supported): ${response.command}`);
+      chrome(`Command requires confirmation (not yet supported): ${response.content}`);
       entry.outcome = "refused";
       return 1;
     }
     const shell = process.env.SHELL || "sh";
-    const proc = Bun.spawn([shell, "-c", response.command], {
+    const proc = Bun.spawn([shell, "-c", response.content], {
       stdout: "inherit",
       stderr: "inherit",
       stdin: "inherit",
     });
     const exitCode = await proc.exited;
-    round.execution = { command: response.command, exit_code: exitCode };
+    round.execution = { command: response.content, exit_code: exitCode };
     entry.outcome = exitCode === 0 ? "success" : "error";
     return exitCode;
   } finally {

@@ -23,8 +23,8 @@ describe("stripFences", () => {
   });
 
   test("handles multiline JSON inside fences", () => {
-    const input = '```json\n{\n  "type": "command",\n  "command": "ls"\n}\n```';
-    expect(stripFences(input)).toBe('{\n  "type": "command",\n  "command": "ls"\n}');
+    const input = '```json\n{\n  "type": "command",\n  "content": "ls"\n}\n```';
+    expect(stripFences(input)).toBe('{\n  "type": "command",\n  "content": "ls"\n}');
   });
 
   test("does not strip when multiple code blocks present", () => {
@@ -40,17 +40,17 @@ describe("stripFences", () => {
 
 describe("parseResponse with fenced input", () => {
   test("parses valid JSON wrapped in ```json fences", () => {
-    const raw = '```json\n{"type":"command","command":"ls","risk_level":"low"}\n```';
+    const raw = '```json\n{"type":"command","content":"ls","risk_level":"low"}\n```';
     const result = parseResponse(raw);
     expect(result.type).toBe("command");
-    expect(result.command).toBe("ls");
+    expect(result.content).toBe("ls");
   });
 
   test("parses valid JSON wrapped in bare ``` fences", () => {
-    const raw = '```\n{"type":"answer","answer":"42","risk_level":"low"}\n```';
+    const raw = '```\n{"type":"answer","content":"42","risk_level":"low"}\n```';
     const result = parseResponse(raw);
     expect(result.type).toBe("answer");
-    expect(result.answer).toBe("42");
+    expect(result.content).toBe("42");
   });
 
   test("throws on multiple fenced blocks (not stripped)", () => {
@@ -63,24 +63,24 @@ describe("parseResponse", () => {
   test("parses valid command response", () => {
     const raw = JSON.stringify({
       type: "command",
-      command: "ls -la",
+      content: "ls -la",
       risk_level: "low",
     });
     const result = parseResponse(raw);
     expect(result.type).toBe("command");
-    expect(result.command).toBe("ls -la");
+    expect(result.content).toBe("ls -la");
     expect(result.risk_level).toBe("low");
   });
 
   test("parses valid answer response", () => {
     const raw = JSON.stringify({
       type: "answer",
-      answer: "42",
+      content: "42",
       risk_level: "low",
     });
     const result = parseResponse(raw);
     expect(result.type).toBe("answer");
-    expect(result.answer).toBe("42");
+    expect(result.content).toBe("42");
   });
 
   test("throws on invalid JSON", () => {
@@ -95,7 +95,7 @@ describe("parseResponse", () => {
   test("parses response with memory_updates", () => {
     const raw = JSON.stringify({
       type: "command",
-      command: "echo test",
+      content: "echo test",
       risk_level: "low",
       memory_updates: [{ fact: "Default shell is zsh" }],
       memory_updates_message: "Noted: you use zsh",

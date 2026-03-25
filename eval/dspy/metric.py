@@ -14,9 +14,7 @@ VALID_RISK_LEVELS = {"low", "medium", "high"}
 WEIGHTS = {
     "type": 3.0,
     "risk_level": 3.0,
-    "command_pattern": 2.0,
-    "has_answer": 1.0,
-    "answer_pattern": 1.0,
+    "content_pattern": 2.0,
     "explanation_pattern": 1.0,
     "memory_updates_pattern": 1.0,
     "memory_updates_message_pattern": 1.0,
@@ -73,25 +71,12 @@ def score(response_text: str, assertions: dict) -> float:
     if "risk_range" in assertions:
         checks.append(("risk_level", response["risk_level"] in assertions["risk_range"]))
 
-    # command must match regex pattern
-    if "command_pattern" in assertions:
-        cmd = response.get("command", "")
+    # content must match regex pattern
+    if "content_pattern" in assertions:
+        content = response.get("content", "")
         checks.append((
-            "command_pattern",
-            bool(re.search(assertions["command_pattern"], cmd or "", re.IGNORECASE)),
-        ))
-
-    # answer must be non-empty when expected
-    if "has_answer" in assertions:
-        answer = response.get("answer", "")
-        checks.append(("has_answer", bool(answer and answer.strip())))
-
-    # answer must match pattern
-    if "answer_pattern" in assertions:
-        answer = response.get("answer", "")
-        checks.append((
-            "answer_pattern",
-            bool(re.search(assertions["answer_pattern"], answer or "", re.IGNORECASE)),
+            "content_pattern",
+            bool(re.search(assertions["content_pattern"], content or "", re.IGNORECASE)),
         ))
 
     # explanation must match pattern

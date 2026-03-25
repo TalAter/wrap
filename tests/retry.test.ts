@@ -60,7 +60,7 @@ describe("structured output retry in runQuery", () => {
           throw new NoObjectGeneratedError({ text: "not valid json" });
         }
         // Second call succeeds
-        return { type: "answer", answer: "retried ok", risk_level: "low" };
+        return { type: "answer", content: "retried ok", risk_level: "low" };
       },
     };
 
