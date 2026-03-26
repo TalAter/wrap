@@ -35,14 +35,15 @@ export async function runQuery(
   },
 ): Promise<number> {
   const wrapHome = getWrapHome();
+  let memory = options.memory ?? {};
   const entry = createLogEntry({
     prompt,
     cwd: options.cwd,
+    memory,
     provider: options.providerConfig,
     promptHash: PROMPT_HASH,
   });
   const round: Round = {};
-  let memory = options.memory ?? {};
 
   try {
     const input = assembleCommandPrompt({

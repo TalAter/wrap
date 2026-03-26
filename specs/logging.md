@@ -51,6 +51,7 @@ Each line in `wrap.jsonl` is a single JSON object.
 | `prompt` | string | User's natural language input |
 | `cwd` | string | Working directory at invocation time |
 | `piped_input` | string? | Piped stdin content (field defined, not yet wired) |
+| `memory` | object? | Memory state at invocation time — full `Memory` object (all scopes). Omitted if empty. CWD-filtered subset can be reconstructed from `cwd` field. |
 | `provider` | object | Provider config snapshot (API keys redacted) |
 | `prompt_hash` | string | SHA-256 hex digest of system prompt components (precomputed by DSPy, exported from `prompt.optimized.ts`) |
 | `rounds` | array | Array of LLM round-trips (see below) |

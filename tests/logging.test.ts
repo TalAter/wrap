@@ -47,6 +47,22 @@ describe("createLogEntry", () => {
     const entry = createLogEntry(defaults);
     expect("piped_input" in entry).toBe(false);
   });
+
+  test("includes memory when provided", () => {
+    const memory = { "/": [{ fact: "macOS" }], "/Users/tal": [{ fact: "uses bun" }] };
+    const entry = createLogEntry({ ...defaults, memory });
+    expect(entry.memory).toEqual(memory);
+  });
+
+  test("omits memory when empty", () => {
+    const entry = createLogEntry({ ...defaults, memory: {} });
+    expect("memory" in entry).toBe(false);
+  });
+
+  test("omits memory when not provided", () => {
+    const entry = createLogEntry(defaults);
+    expect("memory" in entry).toBe(false);
+  });
 });
 
 describe("createLogEntry redacts apiKey", () => {
@@ -359,6 +375,16 @@ describe("logging integration", () => {
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("error");
     expect(entry.rounds[0].execution.exit_code).toBe(1);
+  });
+
+  test("logs memory state from invocation", async () => {
+    const result = await wrapMock("test", {
+      type: "answer",
+      content: "ok",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.memory).toEqual({ "/": [{ fact: "test" }] });
   });
 
   test("successful parse omits raw_response from round", async () => {
