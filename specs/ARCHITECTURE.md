@@ -15,11 +15,13 @@ parseInput(argv)
        │
        ├─ ensureMemory()  ──→ loads memory or initializes with basic probes
        │
+       ├─ resolvePath(cwd)  ──→ canonical CWD
+       │
        ├─ no prompt? ──→ showHelp()  (exit)
        │
        ├─ continuation? ──→ loadThread()
        │
-       └─ runQuery({ prompt, mode, config, memory, thread?, pipedInput? })
+       └─ runQuery({ prompt, mode, config, memory, cwd, thread?, pipedInput? })
 ```
 
 ```ts
@@ -31,13 +33,14 @@ async function main() {
 
   const config = await ensureConfig()
   const memory = await ensureMemory()
+  const cwd = resolvePath(process.cwd())  // resolved once, passed through
 
   if (!input.prompt) return showHelp()
 
   const mode = resolveMode(input)  // TBD: how modes are detected/resolved
   const thread = input.isContinuation ? await loadThread() : null
 
-  await runQuery({ prompt: input.prompt, mode, config, memory, thread })
+  await runQuery({ prompt: input.prompt, mode, config, memory, cwd, thread })
 }
 ```
 
@@ -48,7 +51,7 @@ async function main() {
 Prerequisites use the "ensure" pattern: load existing state or create it, then return. Either a value comes back or the function throws/exits. The caller never checks.
 
 - **`ensureConfig()`** — Reads config or runs the setup wizard. Throws on abort. Returns `Config`.
-- **`ensureMemory()`** — Reads memory or initializes (detects OS, shell, basic env). Returns `Memory`.
+- **`ensureMemory()`** — Reads memory or initializes (detects OS, shell, basic env). Returns `Memory` (`Record<string, Fact[]>`).
 
 ---
 
@@ -154,7 +157,7 @@ src/
 
 Runtime data lives in `~/.wrap/` (overridable via `WRAP_HOME`):
 - `~/.wrap/config.jsonc` — user config
-- `~/.wrap/memory/` — learned facts
+- `~/.wrap/memory.json` — memory facts (see specs/memory.md)
 - `~/.wrap/threads/` — conversation history
 
 ---

@@ -59,17 +59,39 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history, piped stdin
 - [ ] Explain `memory_updates` usage in system prompt — when to write memories, what's worth remembering
 
-## Memory System
+## Memory System (see specs/memory.md)
 
-- [ ] `loadMemory` / `saveMemory` / `ensureMemory` / `appendMemory` module
-- [ ] Write memory from LLM `memory_updates` field (immediately, even mid-loop)
-- [ ] Notify user on stderr/tty when new fact learned
-- [ ] Eager init on first run — run probes, send to LLM, parse into facts
-- [ ] Finalize probe commands — current list is provisional, ideally run all with one or few shell commands
+### Storage & types
+- [ ] `Fact` type (`{fact: string}`) and `Memory` type (`Record<string, Fact[]>`) with Zod validation
+- [ ] Remove `MemoryEntry` and `MemoryFact`
+- [ ] `resolvePath()` / `prettyPath()` utilities in `src/core/paths.ts`
+- [ ] `loadMemory` / `saveMemory` with new format (sorted keys on write)
+- [ ] `appendFacts()` — resolve paths, append to correct scope, discard invalid paths
+- [ ] Single error message for corrupt/invalid memory.json
+
+### Init
+- [ ] `ensureMemory` returns `Memory`, wraps init facts under `"/"` scope
 - [ ] Init UX — spinner + summary line on stderr
-- [ ] Update `memory_updates` in Zod response schema (key/value → fact)
-- [ ] Update embedded schema text in `src/prompt.optimized.ts` to match
-- [ ] Pass memory to `runCommandPrompt` — provider incorporates facts into system prompt
+
+### LLM integration
+- [ ] Update `memory_updates` in Zod response schema — add `scope` field (required)
+- [ ] Update embedded `SCHEMA_TEXT` in `src/prompt.optimized.ts` with scope field + inline comments
+- [ ] Add recency instruction to system prompt
+- [ ] Prompt assembly in `context.ts` — filter memory by CWD prefix, sectioned format
+- [ ] CWD resolved via `resolvePath` once at startup, passed through context
+- [ ] Notify user on stderr — scope prefix for non-global facts
+
+### Eval
+- [ ] Eval example: contradicting facts in same scope — LLM uses later fact
+- [ ] Eval example: contradicting facts across scopes — LLM uses more specific scope
+- [ ] Eval example: memory says "uses bun" — LLM generates bun commands
+- [ ] Eval example: memory says tool not installed — LLM avoids it
+- [ ] Eval example: no memory for CWD — LLM probes or uses global facts only
+- [ ] Eval example: LLM returns memory_updates with correct scope
+- [ ] Future: probe response → LLM returns memory update scoped to directory
+
+### Existing (not yet done)
+- [ ] Write memory from LLM `memory_updates` field (immediately, even mid-loop)
 - [ ] Lazy probing — on-demand discovery via agent loop probe commands (gets smarter over time)
 
 ## Thread System

@@ -108,12 +108,15 @@ Config examples:
 Refactor `buildSystemPrompt()` out of `src/llm/providers/claude-code.ts` and generalize. Returns a `PromptInput` — system prompt string + conversation turn array.
 
 ```ts
+type Fact = { fact: string };
+type Memory = Record<string, Fact[]>;
+
 type QueryContext = {
   prompt: string;
-  cwd: string;
-  memory: MemoryFact[];
-  threadHistory?: ConversationMessage[];  // out of scope — defined but not implemented
-  pipedInput?: string;                     // out of scope — defined but not implemented
+  cwd: string;                              // resolved via resolvePath() once at startup
+  memory: Memory;                           // full map; assembleCommandPrompt filters by CWD prefix
+  threadHistory?: ConversationMessage[];    // out of scope — defined but not implemented
+  pipedInput?: string;                      // out of scope — defined but not implemented
 };
 
 /** Assemble a PromptInput for a command prompt call. */
@@ -135,10 +138,16 @@ Ordering is designed for cache efficiency (static prefix first) and contaminatio
 3. Thread history turns (if continuing)
 4. Final user message — context block + user prompt in a single message:
    ```
-   ## Known facts
+   ## System facts
+   Facts are listed oldest-first. If two facts contradict, the later one is more current.
    - fact1
    - fact2
-   - Working directory (cwd): /path/the/user/is/in
+
+   ## Facts about /Users/tal/monorepo
+   - uses bun
+   - run tests with `bun run test`
+
+   - Working directory (cwd): /Users/tal/monorepo
 
    ## User's request
    <user's actual prompt>

@@ -58,7 +58,7 @@ Faster than switching to a browser or separate LLM to look up a command. Stays i
 
 - **Test-driven development as a guiding philosophy.** Write failing tests first, then code. Full coverage is the goal.
 - **LLM mock:** The LLM integration layer is behind an interface so tests can swap in a mock that returns deterministic structured JSON responses. This allows testing the entire pipeline — input parsing, context assembly, JSON response handling, safety classification, command execution, memory updates, thread storage — without hitting a real LLM.
-- **Memory mock:** The memory/learning system is behind an interface so tests can use an in-memory store instead of the filesystem. This allows testing memory read/write, deduplication, and (future) TTL expiry without touching disk or worrying about test isolation.
+- **Memory testing:** Memory tests use real filesystem I/O against isolated temp directories (each test gets its own `WRAP_HOME`). No in-memory mock — test the real thing.
 - Tests should cover: invocation mode detection, safety rule engine, JSON parsing/retry logic, probe loop behavior, memory read/write, thread TTL expiry, TUI rendering (snapshot tests), config validation, piped stdin detection, and error-handling/auto-fix flow.
 
 ### 2.3 Dev-Only Tooling: Python Sidecar
@@ -305,10 +305,10 @@ The LLM must return structured JSON:
   "risk_level": "low" | "medium" | "high",
   "explanation": "brief description of what this does",
   "memory_updates": [
-    {"key": "shell", "value": "zsh"},
-    {"key": "shell config location", "value": "/Users/tal/.zshrc"}
+    {"fact": "Default shell is zsh, config at ~/.zshrc", "scope": "/"},
+    {"fact": "Uses pnpm", "scope": "/Users/tal/myproject"}
   ],
-  "memory_updates_message": "Noted: you use zsh, config at ~/.zshrc"
+  "memory_updates_message": "Noted: you use zsh; this project uses pnpm"
 }
 ```
 
@@ -371,7 +371,7 @@ Each request includes:
 - User's natural language input
 - Current working directory
 - Curated environment variables: `PATH`, `EDITOR`, `SHELL` (never secrets like API keys)
-- All memory entries (in the future we might only send relevant subset via vector search)
+- Memory facts filtered to the current directory (global facts always included; directory-specific facts only when CWD matches)
 - Thread history (if continuing a thread)
 - Piped stdin content (if present — with token count warning presented to user for very large inputs)
 
@@ -410,8 +410,10 @@ By default it will not continue a thread, only if we use the command for continu
 
 ### 10.1 Storage
 
-- v1: simple text file(s) in `./memory/` folder (or similar)
-- Contents appended to the LLM system prompt on every request
+- **File:** `~/.wrap/memory.json` — map of directory scope → fact objects (`Record<string, {fact: string}[]>`)
+- `/` scope = global facts (system-wide). Directory scopes = project-specific facts.
+- Global facts sent on every request. Directory-specific facts only sent when CWD matches (prefix match).
+- See `specs/memory.md` for full implementation spec.
 - Future: vector database for selective retrieval of relevant memories
 
 ### 10.2 Learning Behavior
@@ -619,7 +621,7 @@ When evals are enabled (manual opt in only), log to JSONL:
    - Priority list: `w` > `c` > others (tbd)
    - Show available options, let user choose
    - Create symlinks (or aliases) for chosen shortcuts including mode variants (`wy`, `w!`, `w?`)
-5. `ensureMemory()` runs eager initialization — detects OS, shell type, basic environment (no LLM needed)
+5. `ensureMemory()` finds no existing memory → probes the system, sends output to LLM to parse into facts, saves to disk
 6. **Done** — if user provided a query, it continues to execute. Otherwise, ready for next invocation.
 
 ---
