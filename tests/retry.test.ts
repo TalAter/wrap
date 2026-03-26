@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { NoObjectGeneratedError } from "ai";
 import { extractFailedText, isStructuredOutputError } from "../src/core/query.ts";
 
@@ -43,6 +43,28 @@ describe("extractFailedText", () => {
 });
 
 describe("structured output retry in runQuery", () => {
+  const originalConsoleLog = console.log;
+  const originalStderrWrite = process.stderr.write;
+  let stdoutOutput: string[];
+  let stderrOutput: string[];
+
+  beforeEach(() => {
+    stdoutOutput = [];
+    stderrOutput = [];
+    console.log = (...args: unknown[]) => {
+      stdoutOutput.push(args.map(String).join(" "));
+    };
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrOutput.push(String(chunk));
+      return true;
+    };
+  });
+
+  afterEach(() => {
+    console.log = originalConsoleLog;
+    process.stderr.write = originalStderrWrite;
+  });
+
   test("retries on structured output error and succeeds", async () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -69,6 +91,7 @@ describe("structured output retry in runQuery", () => {
     });
     expect(callCount).toBe(2);
     expect(exitCode).toBe(0);
+    expect(stdoutOutput.join("")).toContain("retried ok");
   });
 
   test("does not retry on non-structured-output errors", async () => {

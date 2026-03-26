@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,6 +45,21 @@ describe("parseInitResponse", () => {
 });
 
 describe("ensureMemory", () => {
+  const originalStderrWrite = process.stderr.write;
+  let chromeOutput: string[];
+
+  beforeEach(() => {
+    chromeOutput = [];
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      chromeOutput.push(String(chunk));
+      return true;
+    };
+  });
+
+  afterEach(() => {
+    process.stderr.write = originalStderrWrite;
+  });
+
   test("loads existing memory without calling LLM", async () => {
     const dir = tempDir();
     const entries = [{ fact: "Runs macOS" }];
@@ -61,6 +76,7 @@ describe("ensureMemory", () => {
     const result = await ensureMemory(provider, dir);
     expect(result).toEqual(entries);
     expect(llmCalled).toBe(false);
+    expect(chromeOutput).toEqual([]);
   });
 
   test("runs init when no memory exists", async () => {
@@ -69,6 +85,9 @@ describe("ensureMemory", () => {
 
     const result = await ensureMemory(provider, dir);
     expect(result).toEqual([{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }]);
+    const output = chromeOutput.join("");
+    expect(output).toContain("Learning about your system");
+    expect(output).toContain("Detected");
   });
 
   test("persists memory after init", async () => {
@@ -99,6 +118,8 @@ describe("ensureMemory", () => {
     };
 
     expect(ensureMemory(provider, dir)).rejects.toThrow("network error");
+    expect(chromeOutput.join("")).toContain("Learning about your system");
+    expect(chromeOutput.join("")).not.toContain("Detected");
   });
 
   test("passes probe output as user message to LLM", async () => {
