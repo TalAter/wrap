@@ -29,13 +29,14 @@ export async function runQuery(
   provider: Provider,
   options: {
     memory?: Memory;
+    cwd: string;
     providerConfig: ProviderConfig;
   },
 ): Promise<number> {
   const wrapHome = getWrapHome();
   const entry = createLogEntry({
     prompt,
-    cwd: process.cwd(),
+    cwd: options.cwd,
     provider: options.providerConfig,
     promptHash: PROMPT_HASH,
   });
@@ -44,7 +45,7 @@ export async function runQuery(
   try {
     const input = assembleCommandPrompt({
       prompt,
-      cwd: process.cwd(),
+      cwd: options.cwd,
       memory: options.memory ?? {},
     });
 
