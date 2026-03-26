@@ -31,7 +31,7 @@ export async function wrap(input?: string, env?: Record<string, string>) {
 
 /** Pre-seed memory.json so ensureMemory doesn't trigger init during tests. */
 function seedMemory(wrapHome: string) {
-  writeFileSync(join(wrapHome, "memory.json"), '[{"fact":"test"}]');
+  writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
 }
 
 export async function wrapMock(prompt: string, response: object) {

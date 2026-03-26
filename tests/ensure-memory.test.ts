@@ -62,8 +62,8 @@ describe("ensureMemory", () => {
 
   test("loads existing memory without calling LLM", async () => {
     const dir = tempDir();
-    const entries = [{ fact: "Runs macOS" }];
-    writeFileSync(join(dir, "memory.json"), JSON.stringify(entries));
+    const memory = { "/": [{ fact: "Runs macOS" }] };
+    writeFileSync(join(dir, "memory.json"), JSON.stringify(memory));
 
     let llmCalled = false;
     const provider: Provider = {
@@ -74,7 +74,7 @@ describe("ensureMemory", () => {
     };
 
     const result = await ensureMemory(provider, dir);
-    expect(result).toEqual(entries);
+    expect(result).toEqual(memory);
     expect(llmCalled).toBe(false);
     expect(chromeOutput).toEqual([]);
   });
@@ -84,7 +84,9 @@ describe("ensureMemory", () => {
     const provider = mockProvider("Runs macOS on arm64\nDefault shell is zsh");
 
     const result = await ensureMemory(provider, dir);
-    expect(result).toEqual([{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }]);
+    expect(result).toEqual({
+      "/": [{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }],
+    });
     const output = chromeOutput.join("");
     expect(output).toContain("Learning about your system");
     expect(output).toContain("Detected");
@@ -105,7 +107,7 @@ describe("ensureMemory", () => {
       },
     };
     const result = await ensureMemory(provider2, dir);
-    expect(result).toEqual([{ fact: "Runs macOS on arm64" }]);
+    expect(result).toEqual({ "/": [{ fact: "Runs macOS on arm64" }] });
     expect(llmCalled).toBe(false);
   });
 
@@ -136,5 +138,14 @@ describe("ensureMemory", () => {
     const { messages } = capturedInput as { messages: { content: string }[] };
     expect(messages[0].content).toContain("## OS");
     expect(messages[0].content).toContain("## Shell");
+  });
+
+  test("facts saved under / scope in new map format", async () => {
+    const dir = tempDir();
+    const provider = mockProvider("fact one\nfact two");
+
+    const result = await ensureMemory(provider, dir);
+    expect(result).toEqual({ "/": [{ fact: "fact one" }, { fact: "fact two" }] });
+    expect(result["/"]).toHaveLength(2);
   });
 });

@@ -204,9 +204,10 @@ describe("wrap", () => {
     const memoryPath = join(wrapHome, "memory.json");
     expect(existsSync(memoryPath)).toBe(true);
     const memory = JSON.parse(readFileSync(memoryPath, "utf-8"));
-    expect(Array.isArray(memory)).toBe(true);
-    expect(memory.length).toBeGreaterThan(0);
-    expect(memory[0]).toHaveProperty("fact");
+    expect(typeof memory).toBe("object");
+    expect(memory["/"]).toBeDefined();
+    expect(memory["/"].length).toBeGreaterThan(0);
+    expect(memory["/"][0]).toHaveProperty("fact");
   });
 
   test("memory_updates: shown on stderr", async () => {

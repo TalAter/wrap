@@ -5,7 +5,7 @@ import type { Provider, ProviderConfig } from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendMemory } from "../memory/memory.ts";
-import type { Fact } from "../memory/types.ts";
+import type { Memory } from "../memory/types.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
@@ -28,7 +28,7 @@ export async function runQuery(
   prompt: string,
   provider: Provider,
   options: {
-    memory?: Fact[];
+    memory?: Memory;
     providerConfig: ProviderConfig;
   },
 ): Promise<number> {
@@ -45,7 +45,7 @@ export async function runQuery(
     const input = assembleCommandPrompt({
       prompt,
       cwd: process.cwd(),
-      memory: options.memory ?? [],
+      memory: options.memory ?? {},
     });
 
     let response: Awaited<ReturnType<typeof runCommandPrompt>>;

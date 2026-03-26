@@ -266,7 +266,7 @@ function readLog(wrapHome: string) {
 }
 
 function seedMemoryIn(home: string) {
-  writeFileSync(join(home, "memory.json"), '[{"fact":"test"}]');
+  writeFileSync(join(home, "memory.json"), '{"/":[{"fact":"test"}]}');
 }
 
 describe("logging integration", () => {

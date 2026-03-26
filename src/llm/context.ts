@@ -1,11 +1,11 @@
-import type { Fact } from "../memory/types.ts";
+import type { Memory } from "../memory/types.ts";
 import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "../prompt.optimized.ts";
 import type { ConversationMessage, PromptInput } from "./types.ts";
 
 export type QueryContext = {
   prompt: string;
   cwd: string;
-  memory: Fact[];
+  memory: Memory;
   threadHistory?: ConversationMessage[];
   pipedInput?: string;
 };
@@ -31,8 +31,10 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   // Final user message: context + prompt
   const sections: string[] = [];
 
-  if (ctx.memory.length > 0) {
-    const facts = ctx.memory.map((m) => `- ${m.fact}`).join("\n");
+  // Temporarily flatten all scopes into a single list (scoped assembly comes in Step 7)
+  const allFacts = Object.values(ctx.memory).flat();
+  if (allFacts.length > 0) {
+    const facts = allFacts.map((m) => `- ${m.fact}`).join("\n");
     sections.push(`## Known facts\n${facts}`);
   }
 

@@ -6,7 +6,7 @@ function makeContext(overrides?: Partial<QueryContext>): QueryContext {
   return {
     prompt: "list files",
     cwd: "/home/user",
-    memory: [],
+    memory: {},
     ...overrides,
   };
 }
@@ -57,7 +57,7 @@ describe("assembleCommandPrompt", () => {
 
   test("final user message includes memory facts", () => {
     const ctx = makeContext({
-      memory: [{ fact: "OS is macOS" }, { fact: "shell is zsh" }],
+      memory: { "/": [{ fact: "OS is macOS" }, { fact: "shell is zsh" }] },
     });
     const result = assembleCommandPrompt(ctx);
     const last = result.messages[result.messages.length - 1];
@@ -66,7 +66,7 @@ describe("assembleCommandPrompt", () => {
   });
 
   test("final user message omits known facts section when memory is empty", () => {
-    const result = assembleCommandPrompt(makeContext({ memory: [] }));
+    const result = assembleCommandPrompt(makeContext({ memory: {} }));
     const last = result.messages[result.messages.length - 1];
     expect(last.content).not.toContain("Known facts");
   });
