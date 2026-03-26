@@ -229,7 +229,9 @@ if (response.memory_updates?.length) {
 
 ### Types cleanup
 
-`MemoryEntry` (in `memory.ts`) and `MemoryFact` (in `types.ts`) are currently duplicate `{fact: string}` types. Both are replaced by `Fact`. Remove `MemoryFact` from `types.ts` and `MemoryEntry` from `memory.ts`.
+~~`MemoryEntry` (in `memory.ts`) and `MemoryFact` (in `types.ts`) are currently duplicate `{fact: string}` types. Both are replaced by `Fact`. Remove `MemoryFact` from `types.ts` and `MemoryEntry` from `memory.ts`.~~
+
+Done. `Fact` lives in `src/memory/types.ts` (same pattern as `src/llm/types.ts` — cross-cutting types get a dedicated types file).
 
 ---
 
@@ -478,6 +480,7 @@ src/
   core/
     paths.ts             NEW — resolvePath(), prettyPath()
   memory/
+    types.ts             NEW — Fact type (cross-cutting, same pattern as llm/types.ts)
     memory.ts            MODIFIED — new storage format, Zod validation,
                          Memory type, appendFacts()
     init-prompt.ts       UNCHANGED
@@ -485,7 +488,7 @@ src/
   llm/
     context.ts           MODIFIED — prompt assembly with scope filtering, recency note,
                          QueryContext.memory becomes Memory
-    types.ts             MODIFIED — remove MemoryFact (replaced by Memory)
+    types.ts             MODIFIED — MemoryFact removed (moved to memory/types.ts as Fact)
   command-response.schema.ts  MODIFIED — scope field in memory_updates, inline comments for LLM guidance
   prompt.optimized.ts    MODIFIED — auto-regenerated from schema, recency in SYSTEM_PROMPT
 ```
@@ -517,7 +520,7 @@ New file `src/core/paths.ts`. Pure addition, no callers.
 
 ### Step 2: Rename types
 
-`MemoryEntry` (memory.ts) and `MemoryFact` (types.ts) → `Fact` (memory.ts). Mechanical rename across all files: memory.ts, types.ts, context.ts, query.ts, tests. No behavior change.
+`MemoryEntry` (memory.ts) and `MemoryFact` (llm/types.ts) → `Fact` (memory/types.ts). Mechanical rename across all files: memory.ts, llm/types.ts, context.ts, query.ts, tests. No behavior change.
 
 ### Step 3a: New storage format — load/save layer
 

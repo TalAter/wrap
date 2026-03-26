@@ -1,10 +1,11 @@
 import { NoObjectGeneratedError } from "ai";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
-import type { MemoryFact, Provider, ProviderConfig } from "../llm/types.ts";
+import type { Provider, ProviderConfig } from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendMemory } from "../memory/memory.ts";
+import type { Fact } from "../memory/types.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
@@ -27,7 +28,7 @@ export async function runQuery(
   prompt: string,
   provider: Provider,
   options: {
-    memory?: MemoryFact[];
+    memory?: Fact[];
     providerConfig: ProviderConfig;
   },
 ): Promise<number> {

@@ -63,8 +63,8 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 
 ### Storage & types
 - [ ] `Fact` type (`{fact: string}`) and `Memory` type (`Record<string, Fact[]>`) with Zod validation
-- [ ] Remove `MemoryEntry` and `MemoryFact`
-- [ ] `resolvePath()` / `prettyPath()` utilities in `src/core/paths.ts`
+- [x] Remove `MemoryEntry` and `MemoryFact` — consolidated to `Fact` in `src/memory/types.ts`
+- [x] `resolvePath()` / `prettyPath()` utilities in `src/core/paths.ts`
 - [ ] `loadMemory` / `saveMemory` with new format (sorted keys on write)
 - [ ] `appendFacts()` — resolve paths, append to correct scope, discard invalid paths
 - [ ] Single error message for corrupt/invalid memory.json

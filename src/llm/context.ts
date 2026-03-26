@@ -1,10 +1,11 @@
+import type { Fact } from "../memory/types.ts";
 import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "../prompt.optimized.ts";
-import type { ConversationMessage, MemoryFact, PromptInput } from "./types.ts";
+import type { ConversationMessage, PromptInput } from "./types.ts";
 
 export type QueryContext = {
   prompt: string;
   cwd: string;
-  memory: MemoryFact[];
+  memory: Fact[];
   threadHistory?: ConversationMessage[];
   pipedInput?: string;
 };

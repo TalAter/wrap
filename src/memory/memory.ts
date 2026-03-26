@@ -5,12 +5,12 @@ import type { Provider } from "../llm/types.ts";
 import { parseDetectedTools, runProbes } from "./init-probes.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
 
-export type MemoryEntry = { fact: string };
+import type { Fact } from "./types.ts";
 
 const MEMORY_FILE = "memory.json";
 
 /** Load memory entries from disk. Returns [] if file doesn't exist. Throws on corrupt JSON. */
-export function loadMemory(wrapHome: string): MemoryEntry[] {
+export function loadMemory(wrapHome: string): Fact[] {
   const path = join(wrapHome, MEMORY_FILE);
   if (!existsSync(path)) return [];
 
@@ -32,24 +32,24 @@ export function loadMemory(wrapHome: string): MemoryEntry[] {
     throw new Error("Memory error: memory.json must contain a JSON array");
   }
 
-  return parsed as MemoryEntry[];
+  return parsed as Fact[];
 }
 
 /** Write memory entries to disk. Creates directory lazily. */
-export function saveMemory(wrapHome: string, entries: MemoryEntry[]): void {
+export function saveMemory(wrapHome: string, entries: Fact[]): void {
   mkdirSync(wrapHome, { recursive: true });
   const path = join(wrapHome, MEMORY_FILE);
   writeFileSync(path, JSON.stringify(entries, null, 2));
 }
 
 /** Append new entries to existing memory on disk. */
-export function appendMemory(wrapHome: string, newEntries: MemoryEntry[]): void {
+export function appendMemory(wrapHome: string, newEntries: Fact[]): void {
   const existing = loadMemory(wrapHome);
   saveMemory(wrapHome, [...existing, ...newEntries]);
 }
 
-/** Parse LLM init response (one fact per line) into MemoryEntry[]. */
-export function parseInitResponse(response: string): MemoryEntry[] {
+/** Parse LLM init response (one fact per line) into Fact[]. */
+export function parseInitResponse(response: string): Fact[] {
   return response
     .split("\n")
     .map((line) => line.trim().replace(/^[-•]\s*/, ""))
@@ -67,7 +67,7 @@ function buildSummary(probeOutput: string): string {
 }
 
 /** Load existing memory or initialize by probing the system and asking the LLM. */
-export async function ensureMemory(provider: Provider, wrapHome: string): Promise<MemoryEntry[]> {
+export async function ensureMemory(provider: Provider, wrapHome: string): Promise<Fact[]> {
   const existing = loadMemory(wrapHome);
   if (existing.length > 0) return existing;
 

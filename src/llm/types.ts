@@ -1,7 +1,5 @@
 import type { ZodType } from "zod";
 
-export type MemoryFact = { fact: string };
-
 export type ConversationMessage =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string };

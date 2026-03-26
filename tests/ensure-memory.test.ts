@@ -16,7 +16,7 @@ function mockProvider(response: string): Provider {
 }
 
 describe("parseInitResponse", () => {
-  test("splits lines into MemoryEntry facts", () => {
+  test("splits lines into Fact objects", () => {
     const response = "Runs macOS on arm64\nDefault shell is zsh\nHas git installed";
     const entries = parseInitResponse(response);
     expect(entries).toEqual([
