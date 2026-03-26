@@ -96,6 +96,8 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] `--config` — manual reconfigure (reuses config wizard)
 - [ ] `--memory` — view/manage memory
+- [ ] `wrap help <subcommand>` — per-subcommand help
+- [ ] `-h` alias for `--help`
 
 ## Eval System
 
@@ -104,6 +106,9 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Build & Distribution
 
 - [ ] Embed version at build time — `version.ts` reads `package.json` via `import.meta.url` which breaks in compiled binary (`bun build --compile`)
+- [ ] Man page (`man wrap`)
+- [ ] tldr page
+- [ ] Shell completions (bash/zsh/fish)
 
 ## Future Ideas
 
