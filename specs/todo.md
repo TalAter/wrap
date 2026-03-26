@@ -183,3 +183,4 @@ Implementation order: registry infra → --version → --help → --log.
 - [ ] Model-switching shorthand — e.g., `W` (uppercase) uses premium model, `w` uses default
 - [ ] Shell keybinding integration — keybinding sends current command line text to Wrap
 - [ ] Speculative LLM call for large piped input — check if command can consume stdin directly
+- [ ] Interactive mode — `w` with no args opens a free-text prompt area (see `specs/interactive-mode.md`). Blocked on TUI lib.
