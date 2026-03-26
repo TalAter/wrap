@@ -21,6 +21,8 @@ export type Round = {
   provider_error?: string;
   parsed?: CommandResponse;
   execution?: Execution;
+  llm_ms?: number;
+  exec_ms?: number;
 };
 
 export type LogEntry = {

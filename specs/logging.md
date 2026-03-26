@@ -68,6 +68,8 @@ Each element in `rounds`:
 | `provider_error` | string? | Provider-level error (subprocess crash, network failure) |
 | `parsed` | object? | Parsed `CommandResponse` object |
 | `execution` | object? | `{ command, exit_code }` — present when a command was executed |
+| `llm_ms` | number? | Wall-clock milliseconds for the LLM call (includes retry if applicable). |
+| `exec_ms` | number? | Wall-clock milliseconds for command execution. Omitted if no command was executed. |
 
 ### Current limitations
 

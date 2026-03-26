@@ -387,6 +387,38 @@ describe("logging integration", () => {
     expect(entry.memory).toEqual({ "/": [{ fact: "test" }] });
   });
 
+  test("round includes llm_ms timing", async () => {
+    const result = await wrapMock("test", {
+      type: "answer",
+      content: "ok",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
+    expect(typeof entry.rounds[0].llm_ms).toBe("number");
+  });
+
+  test("command round includes exec_ms timing", async () => {
+    const result = await wrapMock("test", {
+      type: "command",
+      content: "echo hi",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
+    expect(entry.rounds[0].exec_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  test("answer round omits exec_ms", async () => {
+    const result = await wrapMock("test", {
+      type: "answer",
+      content: "ok",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    expect("exec_ms" in entry.rounds[0]).toBe(false);
+  });
+
   test("successful parse omits raw_response from round", async () => {
     const result = await wrapMock("test", {
       type: "answer",

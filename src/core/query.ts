@@ -53,11 +53,13 @@ export async function runQuery(
     });
 
     let response: Awaited<ReturnType<typeof runCommandPrompt>>;
+    const llmStart = performance.now();
     try {
       response = await runCommandPrompt(provider, input);
     } catch (e) {
       if (!isStructuredOutputError(e)) {
         round.provider_error = e instanceof Error ? e.message : String(e);
+        round.llm_ms = Math.round(performance.now() - llmStart);
         throw e;
       }
       // Retry once with failed output appended
@@ -77,9 +79,11 @@ export async function runQuery(
         response = await runCommandPrompt(provider, retryInput);
       } catch (retryErr) {
         round.provider_error = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        round.llm_ms = Math.round(performance.now() - llmStart);
         throw retryErr;
       }
     }
+    round.llm_ms = Math.round(performance.now() - llmStart);
     round.parsed = response;
 
     if (response.memory_updates?.length) {
@@ -119,12 +123,14 @@ export async function runQuery(
       return 1;
     }
     const shell = process.env.SHELL || "sh";
+    const execStart = performance.now();
     const proc = Bun.spawn([shell, "-c", response.content], {
       stdout: "inherit",
       stderr: "inherit",
       stdin: "inherit",
     });
     const exitCode = await proc.exited;
+    round.exec_ms = Math.round(performance.now() - execStart);
     round.execution = { command: response.content, exit_code: exitCode };
     entry.outcome = exitCode === 0 ? "success" : "error";
     return exitCode;
