@@ -14,7 +14,7 @@ export const PROBE_COMMANDS: readonly ProbeCommand[] = [
   { label: "Package manager", command: "which brew apt dnf pacman yum 2>/dev/null" },
   {
     label: "Core tools",
-    command: "which git docker kubectl python3 node bun curl jq 2>/dev/null",
+    command: "which git docker kubectl python3 node bun curl jq tldr rg fd bat eza 2>/dev/null",
   },
 ];
 
