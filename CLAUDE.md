@@ -21,3 +21,7 @@ All user-facing error messages must be clear, helpful, and non-technical. No sta
 
 All implementation follows TDD. Always write a failing test before writing code. No exceptions. See `.claude/skills/tdd.md` for the full workflow.
 Aim for maximum test coverage.
+
+## Stop hook
+
+A stop hook runs `format`, `lint`, and `bun test` automatically when you finish. Don't run these as a final check before stopping — they'll just run twice. Mid-work test runs are fine.
