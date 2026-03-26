@@ -1,3 +1,4 @@
+import pkg from "../../package.json";
 import { chrome } from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
@@ -11,7 +12,6 @@ export const versionCmd: Subcommand = {
       process.exit(1);
       return;
     }
-    const pkg = await Bun.file(new URL("../../package.json", import.meta.url)).json();
     process.stdout.write(`${pkg.version}\n`);
   },
 };
