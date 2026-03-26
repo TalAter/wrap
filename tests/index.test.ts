@@ -210,7 +210,7 @@ describe("wrap", () => {
     expect(memory["/"][0]).toHaveProperty("fact");
   });
 
-  test("memory_updates: shown on stderr", async () => {
+  test("memory_updates: global facts show plain prefix", async () => {
     const { exitCode, stderr } = await wrapMock("list files", {
       type: "command",
       content: "echo hi",
@@ -219,6 +219,37 @@ describe("wrap", () => {
       memory_updates_message: "Noted: you use zsh",
     });
     expect(exitCode).toBe(0);
-    expect(stderr).toContain("Noted: you use zsh");
+    expect(stderr).toContain("🧠 Noted: you use zsh");
+    // Should NOT have a directory prefix for global-only facts
+    expect(stderr).not.toMatch(/🧠 \(/);
+  });
+
+  test("memory_updates: non-global facts show directory prefix", async () => {
+    const { exitCode, stderr } = await wrapMock("list files", {
+      type: "command",
+      content: "echo hi",
+      risk_level: "low",
+      memory_updates: [{ fact: "Uses bun", scope: "/tmp" }],
+      memory_updates_message: "Noted: uses bun",
+    });
+    expect(exitCode).toBe(0);
+    // Should have a directory prefix for non-global facts
+    expect(stderr).toMatch(/🧠 \(.*\) Noted: uses bun/);
+  });
+
+  test("memory_updates: mixed scopes show deepest directory prefix", async () => {
+    const { exitCode, stderr } = await wrapMock("list files", {
+      type: "command",
+      content: "echo hi",
+      risk_level: "low",
+      memory_updates: [
+        { fact: "Uses zsh", scope: "/" },
+        { fact: "Uses bun", scope: "/tmp" },
+      ],
+      memory_updates_message: "Noted: zsh and bun",
+    });
+    expect(exitCode).toBe(0);
+    // Should show the deepest non-global scope
+    expect(stderr).toMatch(/🧠 \(.*\) Noted: zsh and bun/);
   });
 });

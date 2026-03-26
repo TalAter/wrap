@@ -9,6 +9,7 @@ import type { Memory } from "../memory/types.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
+import { prettyPath, resolvePath } from "./paths.ts";
 
 export function isStructuredOutputError(e: unknown): boolean {
   return (
@@ -83,7 +84,12 @@ export async function runQuery(
     if (response.memory_updates?.length) {
       memory = appendFacts(wrapHome, response.memory_updates, options.cwd);
       if (response.memory_updates_message) {
-        chrome(`🧠 ${response.memory_updates_message}`);
+        const scopes = response.memory_updates
+          .map((u) => resolvePath(u.scope, options.cwd))
+          .filter((s): s is string => s !== null && s !== "/");
+        const deepest = scopes.sort((a, b) => b.length - a.length)[0];
+        const prefix = deepest ? `🧠 (${prettyPath(deepest)}) ` : "🧠 ";
+        chrome(`${prefix}${response.memory_updates_message}`);
       }
     }
 
