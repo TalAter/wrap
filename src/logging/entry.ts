@@ -1,3 +1,4 @@
+import pkg from "../../package.json";
 import type { CommandResponse } from "../command-response.schema.ts";
 import type { AISDKProviderConfig, ProviderConfig } from "../llm/types.ts";
 import type { Memory } from "../memory/types.ts";
@@ -28,6 +29,7 @@ export type Round = {
 export type LogEntry = {
   id: string;
   timestamp: string;
+  version: string;
   prompt: string;
   cwd: string;
   piped_input?: string;
@@ -49,6 +51,7 @@ export function createLogEntry(params: {
   const entry: LogEntry = {
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
+    version: pkg.version,
     prompt: params.prompt,
     cwd: params.cwd,
     provider: redactProvider(params.provider),

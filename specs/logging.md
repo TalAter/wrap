@@ -48,6 +48,7 @@ Each line in `wrap.jsonl` is a single JSON object.
 |---|---|---|
 | `id` | string | Unique invocation ID (`crypto.randomUUID()`) |
 | `timestamp` | string | ISO 8601 timestamp of invocation start |
+| `version` | string | Wrap version from package.json (e.g., `"0.1.0"`) |
 | `prompt` | string | User's natural language input |
 | `cwd` | string | Working directory at invocation time |
 | `piped_input` | string? | Piped stdin content (field defined, not yet wired) |

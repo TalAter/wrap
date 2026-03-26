@@ -38,6 +38,12 @@ describe("createLogEntry", () => {
     expect(entry.outcome).toBe("error");
   });
 
+  test("includes version string", () => {
+    const entry = createLogEntry(defaults);
+    expect(typeof entry.version).toBe("string");
+    expect(entry.version.length).toBeGreaterThan(0);
+  });
+
   test("includes piped_input when provided", () => {
     const entry = createLogEntry({ ...defaults, pipedInput: "hello world" });
     expect(entry.piped_input).toBe("hello world");
@@ -352,6 +358,8 @@ describe("logging integration", () => {
     expect(entry.cwd).toBeDefined();
     expect(entry.provider).toEqual({ type: "test" });
     expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(typeof entry.version).toBe("string");
+    expect(entry.version.length).toBeGreaterThan(0);
   });
 
   test("non-low risk command logs with outcome 'refused'", async () => {
