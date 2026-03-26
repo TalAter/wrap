@@ -131,7 +131,7 @@ export async function runQuery(
     });
     const exitCode = await proc.exited;
     round.exec_ms = Math.round(performance.now() - execStart);
-    round.execution = { command: response.content, exit_code: exitCode };
+    round.execution = { command: response.content, exit_code: exitCode, shell };
     entry.outcome = exitCode === 0 ? "success" : "error";
     return exitCode;
   } finally {

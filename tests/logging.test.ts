@@ -180,7 +180,7 @@ describe("serializeEntry", () => {
         content: "ls",
         risk_level: "low",
       },
-      execution: { command: "ls", exit_code: 0 },
+      execution: { command: "ls", exit_code: 0, shell: "/bin/zsh" },
     });
     const parsed = JSON.parse(serializeEntry(entry));
     expect(parsed.piped_input).toBe("stdin data");
@@ -305,6 +305,7 @@ describe("logging integration", () => {
     expect(entry.rounds[0].parsed.type).toBe("command");
     expect(entry.rounds[0].execution.command).toBe("echo hello");
     expect(entry.rounds[0].execution.exit_code).toBe(0);
+    expect(entry.rounds[0].execution.shell).toBe(process.env.SHELL || "sh");
   });
 
   test("answer logs with outcome 'success' and no execution", async () => {

@@ -72,6 +72,14 @@ Each element in `rounds`:
 | `llm_ms` | number? | Wall-clock milliseconds for the LLM call (includes retry if applicable). |
 | `exec_ms` | number? | Wall-clock milliseconds for command execution. Omitted if no command was executed. |
 
+### Execution fields
+
+| Field | Type | Description |
+|---|---|---|
+| `command` | string | The shell command that was executed |
+| `exit_code` | number | Process exit code |
+| `shell` | string | Shell used to execute the command (e.g., `/bin/zsh`, `/bin/bash`) |
+
 ### Current limitations
 
 - **Single round per query**: Currently one LLM call + optional retry per invocation. When probes and the multi-round loop are implemented, each probe/retry will be a separate round.

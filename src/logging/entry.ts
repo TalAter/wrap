@@ -14,6 +14,7 @@ function redactProvider(provider: ProviderConfig): ProviderConfig {
 export type Execution = {
   command: string;
   exit_code: number;
+  shell: string;
 };
 
 export type Round = {
