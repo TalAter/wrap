@@ -39,6 +39,20 @@ describe("initProvider factory", () => {
   });
 });
 
+describe("testProvider error simulation", () => {
+  test("throws when WRAP_TEST_RESPONSE starts with ERROR:", async () => {
+    const prev = process.env.WRAP_TEST_RESPONSE;
+    try {
+      process.env.WRAP_TEST_RESPONSE = "ERROR:simulated LLM failure";
+      const provider = testProvider();
+      await expect(provider.runPrompt(input)).rejects.toThrow("simulated LLM failure");
+    } finally {
+      if (prev === undefined) delete process.env.WRAP_TEST_RESPONSE;
+      else process.env.WRAP_TEST_RESPONSE = prev;
+    }
+  });
+});
+
 describe("testProvider", () => {
   describe("runPrompt (no schema)", () => {
     test("returns last user message content", async () => {

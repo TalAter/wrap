@@ -38,12 +38,10 @@ describe("wrap", () => {
     expect(stderr).toBe("Config error: WRAP_CONFIG contains invalid JSON.\n");
   });
 
-  test("shows clean error when LLM subprocess fails", async () => {
-    // claude-code provider with a model that doesn't exist triggers a subprocess error
+  test("shows clean error when LLM provider fails", async () => {
     const { exitCode, stdout, stderr } = await wrap("hello", {
-      WRAP_CONFIG: JSON.stringify({
-        provider: { type: "claude-code", model: "nonexistent-model-xyz" },
-      }),
+      WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      WRAP_TEST_RESPONSE: "ERROR:something went wrong",
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
