@@ -8,16 +8,17 @@
 
 ## Design
 
-The `--` prefix is a definitive signal: once you type it, you're in flag-land, not NL-land. Only the **first arg** is checked — `w find files with --verbose` is NL because `--verbose` isn't first.
+Any `-` prefixed first arg is a flag — `w find files with --verbose` is NL because `--verbose` isn't first.
 
 ```
 w --log           # subcommand
 w --log 3         # subcommand with arg
+w -h              # short alias for --help
 w log me in       # natural language
 ```
 
 **Rules:**
-- Unknown `--` flags error immediately with the specific flag name.
+- Unknown flags error immediately with the specific flag name.
 - Subcommands **short-circuit** the main flow — they run before `loadConfig()` / `ensureMemory()` and handle their own prerequisites.
 - No args (`w` with nothing) → dispatches to `--help`.
 - Errors go to stderr, exit 1.
@@ -28,16 +29,16 @@ w log me in       # natural language
 
 ### Registry Pattern
 
-Each subcommand is a self-describing object with `flag`, `description`, `usage`, and a `run(args)` function. All subcommands are registered in `src/subcommands/registry.ts`. `--help` is auto-generated from the registry — no hardcoded flag list.
+Each subcommand is a self-describing object with `flag`, `aliases`, `description`, `usage`, optional `help` (detailed text), and a `run(args)` function. All subcommands are registered in `src/subcommands/registry.ts`. `--help` is auto-generated from the registry — no hardcoded flag list.
 
-Each subcommand handles its own argument parsing from the `args` string array. The dispatcher (`src/subcommands/dispatch.ts`) only matches the flag against the registry and passes remaining args through — no generic type checking per-subcommand.
+Each subcommand handles its own argument parsing from the `args` string array. The dispatcher (`src/subcommands/dispatch.ts`) matches the flag or any alias against the registry and passes remaining args through — no generic type checking per-subcommand.
 
 ### Flow Position
 
 ```
 parseInput(argv)
   │
-  ├─ first arg starts with --? ──→ dispatch(flag, args)  (exit)
+  ├─ first arg starts with -? ──→ dispatch(flag, args)  (exit)
   ├─ no args? ──→ dispatch("--help", [])  (exit)
   │
   ├─ loadConfig()       // only for NL queries
@@ -58,7 +59,7 @@ Per-subcommand help: `w --help --log` (or `w --help log`) prints detailed help f
 
 ### `--version`
 
-Reads from `package.json`, prints to stdout.
+Reads from `package.json`, prints to stdout. `-v` is an alias.
 
 ### `--log`
 
