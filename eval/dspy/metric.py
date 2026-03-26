@@ -17,6 +17,8 @@ WEIGHTS = {
     "content_pattern": 2.0,
     "explanation_pattern": 1.0,
     "memory_updates_pattern": 1.0,
+    "memory_updates_scope_pattern": 1.0,
+    "memory_updates_count": 1.0,
     "memory_updates_message_pattern": 1.0,
 }
 
@@ -102,6 +104,27 @@ def score(response_text: str, assertions: dict) -> float:
         checks.append((
             "memory_updates_pattern",
             bool(re.search(assertions["memory_updates_pattern"], keys, re.IGNORECASE)),
+        ))
+
+    # memory_updates scopes must match pattern (joined with space)
+    if "memory_updates_scope_pattern" in assertions:
+        updates = response.get("memory_updates") or []
+        if not isinstance(updates, list):
+            updates = []
+        scopes = " ".join(u.get("scope", "") for u in updates if isinstance(u, dict))
+        checks.append((
+            "memory_updates_scope_pattern",
+            bool(re.search(assertions["memory_updates_scope_pattern"], scopes, re.IGNORECASE)),
+        ))
+
+    # memory_updates count must match expected
+    if "memory_updates_count" in assertions:
+        updates = response.get("memory_updates") or []
+        if not isinstance(updates, list):
+            updates = []
+        checks.append((
+            "memory_updates_count",
+            len(updates) == assertions["memory_updates_count"],
         ))
 
     # memory_updates_message must match pattern

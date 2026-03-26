@@ -74,21 +74,42 @@ def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) 
     return score(prediction.response_json, assertions)
 
 
-def memory_to_context(memory: list[dict] | None) -> str:
-    """Convert memory entries to a text block for the LLM."""
+def memory_to_context(memory: dict | None, cwd: str = "/") -> str:
+    """Convert scoped memory dict to a text block for the LLM.
+
+    Memory format: {"/": [{"fact": "..."}], "/path": [{"fact": "..."}]}
+
+    Filters by CWD prefix match (same logic as context.ts)
+    and formats with section headers.
+    """
     if not memory:
         return ""
-    return "\n".join(f"- {m['fact']}" for m in memory)
+
+    cwd_slash = cwd if cwd.endswith("/") else cwd + "/"
+    sections = []
+    for scope in sorted(memory.keys()):
+        scope_slash = scope if scope.endswith("/") else scope + "/"
+        if not cwd_slash.startswith(scope_slash):
+            continue
+        facts = memory[scope]
+        if not facts:
+            continue
+        header = "## System facts" if scope == "/" else f"## Facts about {scope}"
+        lines = "\n".join(f"- {f['fact']}" for f in facts)
+        sections.append(f"{header}\n{lines}")
+
+    return "\n\n".join(sections)
 
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
     """Convert seed examples to DSPy Example objects."""
     dspy_examples = []
     for ex in examples:
+        cwd = ex.get("cwd", "/")
         dspy_examples.append(
             dspy.Example(
                 natural_language_query=ex["input"],
-                memory_context=memory_to_context(ex.get("memory")),
+                memory_context=memory_to_context(ex.get("memory"), cwd),
                 assertions=ex["assertions"],
             ).with_inputs("natural_language_query", "memory_context")
         )
