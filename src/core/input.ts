@@ -8,7 +8,7 @@ export function parseInput(argv: string[]): Input {
   if (args.length === 0) return { type: "none" };
 
   const first = args[0];
-  if (first?.startsWith("--")) {
+  if (first?.startsWith("-")) {
     return { type: "flag", flag: first, args: args.slice(1) };
   }
 

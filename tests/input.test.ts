@@ -54,4 +54,19 @@ describe("parseInput", () => {
     const input = parseInput(["bun", "src/index.ts", "--log-pretty"]);
     expect(input).toEqual({ type: "flag", flag: "--log-pretty", args: [] });
   });
+
+  test("single-dash letter is parsed as flag", () => {
+    const input = parseInput(["bun", "src/index.ts", "-h"]);
+    expect(input).toEqual({ type: "flag", flag: "-h", args: [] });
+  });
+
+  test("single-dash flag passes through remaining args", () => {
+    const input = parseInput(["bun", "src/index.ts", "-h", "--log"]);
+    expect(input).toEqual({ type: "flag", flag: "-h", args: ["--log"] });
+  });
+
+  test("multi-char single-dash is also a flag", () => {
+    const input = parseInput(["bun", "src/index.ts", "-rf", "foo"]);
+    expect(input).toEqual({ type: "flag", flag: "-rf", args: ["foo"] });
+  });
 });

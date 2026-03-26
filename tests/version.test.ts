@@ -9,6 +9,12 @@ describe("--version", () => {
     expect(stderr).toBe("");
   });
 
+  test("-v alias prints version", async () => {
+    const { exitCode, stdout } = await wrap("-v");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
   test("does not accept an argument", async () => {
     const { exitCode, stderr } = await wrap("--version extra");
     expect(exitCode).toBe(1);

@@ -96,6 +96,12 @@ export const logCmd: Subcommand = {
   flag: "--log",
   description: "Show log entries",
   usage: "w --log [search] [N] [--raw]",
+  help: [
+    "Arguments:",
+    "  search    Filter entries containing this term",
+    "  N         Show only the last N entries",
+    "  --raw     Output raw JSONL instead of pretty-printed",
+  ].join("\n"),
   run: async (args) => {
     const { n, search, raw } = parseArgs(args);
     const writer = raw || !isTTY() ? writeRaw : writePretty;

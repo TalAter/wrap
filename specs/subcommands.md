@@ -52,7 +52,9 @@ parseInput(argv)
 
 ### `--help`
 
-Auto-generated from the registry. TTY-aware: animated gradient rendering when stdout is a TTY, plain text fallback when piped.
+Auto-generated from the registry. TTY-aware: animated gradient rendering when stdout is a TTY, plain text fallback when piped. `-h` is an alias.
+
+Per-subcommand help: `w --help --log` (or `w --help log`) prints detailed help for that subcommand — usage line, description, and optional extra help text from the subcommand's `help` field.
 
 ### `--version`
 

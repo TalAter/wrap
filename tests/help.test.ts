@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { renderPlain, renderStyled } from "../src/subcommands/help.ts";
+import { renderPlain, renderStyled, renderSubcommandHelp } from "../src/subcommands/help.ts";
 import type { Subcommand } from "../src/subcommands/types.ts";
 import { wrap } from "./helpers.ts";
 
@@ -77,6 +77,43 @@ describe("renderStyled", () => {
   });
 });
 
+describe("renderSubcommandHelp", () => {
+  test("includes usage and description", () => {
+    const cmd: Subcommand = {
+      flag: "--foo",
+      description: "Do foo",
+      usage: "w --foo [bar]",
+      run: async () => {},
+    };
+    const result = renderSubcommandHelp(cmd);
+    expect(result).toContain("w --foo [bar]");
+    expect(result).toContain("Do foo");
+  });
+
+  test("includes help text when present", () => {
+    const cmd: Subcommand = {
+      flag: "--foo",
+      description: "Do foo",
+      usage: "w --foo",
+      help: "Extra details here.",
+      run: async () => {},
+    };
+    const result = renderSubcommandHelp(cmd);
+    expect(result).toContain("Extra details here.");
+  });
+
+  test("omits help section when absent", () => {
+    const cmd: Subcommand = {
+      flag: "--foo",
+      description: "Do foo",
+      usage: "w --foo",
+      run: async () => {},
+    };
+    const lines = renderSubcommandHelp(cmd).trimEnd().split("\n");
+    expect(lines.length).toBe(3); // usage, blank, description
+  });
+});
+
 describe("--help", () => {
   test("prints help to stdout and exits 0", async () => {
     const { exitCode, stdout, stderr } = await wrap("--help");
@@ -100,9 +137,47 @@ describe("--help", () => {
     expect(stdout).toContain("Show this help");
   });
 
-  test("does not accept an argument", async () => {
-    const { exitCode, stderr } = await wrap("--help extra");
+  test("shows subcommand help for --help --log", async () => {
+    const { exitCode, stdout, stderr } = await wrap("--help --log");
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toContain("--log");
+    expect(stdout).toContain("Show log entries");
+  });
+
+  test("shows subcommand help without -- prefix", async () => {
+    const { exitCode, stdout } = await wrap("--help log");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--log");
+  });
+
+  test("shows subcommand help for --version", async () => {
+    const { exitCode, stdout } = await wrap("--help --version");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--version");
+    expect(stdout).toContain("Show version");
+  });
+
+  test("shows subcommand help for --help itself", async () => {
+    const { exitCode, stdout } = await wrap("--help --help");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--help");
+  });
+
+  test("errors on unknown subcommand", async () => {
+    const { exitCode, stderr } = await wrap("--help --nope");
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("does not take an argument");
+    expect(stderr).toContain("Unknown subcommand");
+  });
+
+  test("errors with too many arguments", async () => {
+    const { exitCode } = await wrap("--help --log extra");
+    expect(exitCode).toBe(1);
+  });
+
+  test("-h shows subcommand help", async () => {
+    const { exitCode, stdout } = await wrap("-h --log");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--log");
   });
 });

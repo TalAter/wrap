@@ -61,6 +61,13 @@ describe("dispatch", () => {
     expect(cmd.run).toHaveBeenCalledWith(["term", "--raw"]);
   });
 
+  test("resolves alias to subcommand", async () => {
+    const cmd = mockSubcommand({ aliases: ["-t"] });
+    subcommands.push(cmd);
+    await dispatch("-t", ["arg"]);
+    expect(cmd.run).toHaveBeenCalledWith(["arg"]);
+  });
+
   test("errors on unknown flag", async () => {
     captureStderr();
     let exitCode: number | undefined;

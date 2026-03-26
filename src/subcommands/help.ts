@@ -120,21 +120,46 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   }
 }
 
+export function renderSubcommandHelp(cmd: Subcommand): string {
+  const lines = [cmd.usage, "", `  ${cmd.description}`];
+  if (cmd.help) {
+    lines.push("", cmd.help);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 export const helpCmd: Subcommand = {
   flag: "--help",
+  aliases: ["-h"],
   description: "Show this help",
-  usage: "w --help",
+  usage: "w --help [subcommand]",
+  help: "With a subcommand name, show detailed help for that subcommand.",
   run: async (args) => {
-    if (args.length > 0) {
-      chrome("--help does not take an argument.");
+    const { subcommands } = await import("./registry.ts");
+
+    if (args.length === 0) {
+      if (isTTY()) {
+        await renderAnimated(subcommands);
+      } else {
+        process.stdout.write(renderPlain(subcommands));
+      }
+      return;
+    }
+
+    if (args.length > 1) {
+      chrome("--help takes at most one argument.");
       process.exit(1);
       return;
     }
-    const { subcommands } = await import("./registry.ts");
-    if (isTTY()) {
-      await renderAnimated(subcommands);
-    } else {
-      process.stdout.write(renderPlain(subcommands));
+
+    const name = (args[0] as string).replace(/^--/, "");
+    const cmd = subcommands.find((c) => c.flag === `--${name}`);
+    if (!cmd) {
+      chrome(`Unknown subcommand: ${args[0]}`);
+      process.exit(1);
+      return;
     }
+
+    process.stdout.write(renderSubcommandHelp(cmd));
   },
 };
