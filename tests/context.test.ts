@@ -11,6 +11,11 @@ function makeContext(overrides?: Partial<QueryContext>): QueryContext {
   };
 }
 
+function lastMessage(ctx: QueryContext) {
+  const result = assembleCommandPrompt(ctx);
+  return result.messages[result.messages.length - 1].content;
+}
+
 describe("assembleCommandPrompt", () => {
   test("system prompt contains SYSTEM_PROMPT and schema text", () => {
     const result = assembleCommandPrompt(makeContext());
@@ -55,26 +60,7 @@ describe("assembleCommandPrompt", () => {
     expect(last.content).toContain("find stuff");
   });
 
-  test("final user message includes memory facts", () => {
-    const ctx = makeContext({
-      memory: { "/": [{ fact: "OS is macOS" }, { fact: "shell is zsh" }] },
-    });
-    const result = assembleCommandPrompt(ctx);
-    const last = result.messages[result.messages.length - 1];
-    expect(last.content).toContain("OS is macOS");
-    expect(last.content).toContain("shell is zsh");
-  });
-
-  test("final user message omits known facts section when memory is empty", () => {
-    const result = assembleCommandPrompt(makeContext({ memory: {} }));
-    const last = result.messages[result.messages.length - 1];
-    expect(last.content).not.toContain("Known facts");
-  });
-
   test("no separator when there are no few-shot demos", () => {
-    // Even if the current optimized prompt has demos, test the logic:
-    // We can't easily mock the import, but we can verify structure.
-    // If demos exist, separator is at index demos*2. If not, first message is the user message.
     const result = assembleCommandPrompt(makeContext());
     if (FEW_SHOT_DEMOS.length === 0) {
       expect(result.messages.length).toBe(1);
@@ -90,5 +76,136 @@ describe("assembleCommandPrompt", () => {
         ? demoCount * 2 + 1 /* separator */ + 1 /* final user */
         : 1; /* just final user */
     expect(result.messages.length).toBe(expected);
+  });
+});
+
+describe("scoped memory in prompt", () => {
+  test("global facts always included", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/some/random/dir",
+        memory: { "/": [{ fact: "macOS arm64" }] },
+      }),
+    );
+    expect(content).toContain("macOS arm64");
+  });
+
+  test("global scope uses '## System facts' header", () => {
+    const content = lastMessage(
+      makeContext({
+        memory: { "/": [{ fact: "macOS" }] },
+      }),
+    );
+    expect(content).toContain("## System facts");
+    expect(content).not.toContain("## Facts about /");
+  });
+
+  test("directory scope uses '## Facts about {path}' header", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/Users/tal/project",
+        memory: {
+          "/": [{ fact: "macOS" }],
+          "/Users/tal/project": [{ fact: "Uses bun" }],
+        },
+      }),
+    );
+    expect(content).toContain("## Facts about /Users/tal/project");
+    expect(content).toContain("Uses bun");
+  });
+
+  test("subdirectory CWD matches parent scope", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/Users/tal/project/packages/api",
+        memory: {
+          "/Users/tal/project": [{ fact: "Uses bun" }],
+        },
+      }),
+    );
+    expect(content).toContain("Uses bun");
+  });
+
+  test("unrelated directory scope excluded", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/Users/tal/other",
+        memory: {
+          "/": [{ fact: "macOS" }],
+          "/Users/tal/project": [{ fact: "Uses bun" }],
+        },
+      }),
+    );
+    expect(content).toContain("macOS");
+    expect(content).not.toContain("Uses bun");
+    expect(content).not.toContain("Facts about /Users/tal/project");
+  });
+
+  test("sibling directory with shared prefix excluded", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/monorepo-tools",
+        memory: {
+          "/monorepo": [{ fact: "monorepo fact" }],
+        },
+      }),
+    );
+    expect(content).not.toContain("monorepo fact");
+  });
+
+  test("sections ordered global then specific (by key order)", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/Users/tal/project/packages/api",
+        memory: {
+          "/": [{ fact: "global" }],
+          "/Users/tal/project": [{ fact: "project" }],
+          "/Users/tal/project/packages/api": [{ fact: "api" }],
+        },
+      }),
+    );
+    const globalIdx = content.indexOf("## System facts");
+    const projectIdx = content.indexOf("## Facts about /Users/tal/project\n");
+    const apiIdx = content.indexOf("## Facts about /Users/tal/project/packages/api");
+    expect(globalIdx).toBeLessThan(projectIdx);
+    expect(projectIdx).toBeLessThan(apiIdx);
+  });
+
+  test("facts within scope preserve insertion order", () => {
+    const content = lastMessage(
+      makeContext({
+        memory: { "/": [{ fact: "first" }, { fact: "second" }, { fact: "third" }] },
+      }),
+    );
+    const firstIdx = content.indexOf("first");
+    const secondIdx = content.indexOf("second");
+    const thirdIdx = content.indexOf("third");
+    expect(firstIdx).toBeLessThan(secondIdx);
+    expect(secondIdx).toBeLessThan(thirdIdx);
+  });
+
+  test("omits entire facts block when no facts match", () => {
+    const content = lastMessage(makeContext({ memory: {} }));
+    expect(content).not.toContain("System facts");
+    expect(content).not.toContain("Facts about");
+    expect(content).not.toContain("Known facts");
+  });
+
+  test("omits section for scope with no facts after filtering", () => {
+    const content = lastMessage(
+      makeContext({
+        cwd: "/Users/tal/other",
+        memory: {
+          "/Users/tal/project": [{ fact: "irrelevant" }],
+        },
+      }),
+    );
+    expect(content).not.toContain("Facts about");
+    expect(content).not.toContain("irrelevant");
+  });
+
+  test("recency instruction appears in system prompt", () => {
+    const result = assembleCommandPrompt(makeContext());
+    expect(result.system).toContain("later (more recent) fact");
   });
 });

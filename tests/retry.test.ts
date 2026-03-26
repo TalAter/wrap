@@ -72,7 +72,7 @@ describe("structured output retry in runQuery", () => {
     const { runQuery } = await import("../src/core/query.ts");
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '[{"fact":"test"}]');
+    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
 
     let callCount = 0;
     const provider = {
@@ -87,6 +87,7 @@ describe("structured output retry in runQuery", () => {
     };
 
     const exitCode = await runQuery("test", provider, {
+      cwd: "/tmp",
       providerConfig: { type: "test" },
     });
     expect(callCount).toBe(2);
@@ -101,7 +102,7 @@ describe("structured output retry in runQuery", () => {
     const { runQuery } = await import("../src/core/query.ts");
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '[{"fact":"test"}]');
+    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
 
     let callCount = 0;
     const provider = {
@@ -113,6 +114,7 @@ describe("structured output retry in runQuery", () => {
 
     try {
       await runQuery("test", provider, {
+        cwd: "/tmp",
         providerConfig: { type: "test" },
       });
     } catch {

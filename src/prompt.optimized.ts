@@ -16,6 +16,8 @@ Analyze the request and choose exactly one response strategy:
 - The \`answer\` type is only for knowledge questions — never use it to decline a command request or suggest safer alternatives.
 - Never fabricate commands you're unsure about — use a \`probe\` to gather more context first.
 
+When multiple memory facts contradict each other, the later (more recent) fact is more current and should take precedence.
+
 Return only valid, parseable JSON. No backticks. No markdown. No prose outside the JSON object.`;
 
 export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
@@ -53,7 +55,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "490c68fe46227da21a960a82c0b1de1bd67ad1e2b4b7cef8579ff080ab10799b";
+export const PROMPT_HASH = "fd3eac882cd4772190d7e4a24071a9fa2c5802a1bd2188d92c8f56dc43fedb6e";
 
 export const FEW_SHOT_DEMOS: ReadonlyArray<{
   readonly input: string;

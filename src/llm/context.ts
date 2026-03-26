@@ -31,11 +31,15 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   // Final user message: context + prompt
   const sections: string[] = [];
 
-  // Temporarily flatten all scopes into a single list (scoped assembly comes in Step 7)
-  const allFacts = Object.values(ctx.memory).flat();
-  if (allFacts.length > 0) {
-    const facts = allFacts.map((m) => `- ${m.fact}`).join("\n");
-    sections.push(`## Known facts\n${facts}`);
+  // Filter memory scopes by CWD prefix match, in stored key order (alphabetical = global → specific)
+  const cwdSlash = ctx.cwd.endsWith("/") ? ctx.cwd : `${ctx.cwd}/`;
+  for (const scope of Object.keys(ctx.memory)) {
+    const scopeSlash = scope.endsWith("/") ? scope : `${scope}/`;
+    if (!cwdSlash.startsWith(scopeSlash)) continue;
+    const facts = ctx.memory[scope];
+    if (!facts || facts.length === 0) continue;
+    const header = scope === "/" ? "## System facts" : `## Facts about ${scope}`;
+    sections.push(`${header}\n${facts.map((f) => `- ${f.fact}`).join("\n")}`);
   }
 
   sections.push(`- Working directory (cwd): ${ctx.cwd}`);
