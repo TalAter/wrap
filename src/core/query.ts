@@ -4,7 +4,7 @@ import { runCommandPrompt } from "../llm/index.ts";
 import type { Provider, ProviderConfig } from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
-import { appendMemory } from "../memory/memory.ts";
+import { appendFacts } from "../memory/memory.ts";
 import type { Memory } from "../memory/types.ts";
 import { PROMPT_HASH } from "../prompt.optimized.ts";
 import { getWrapHome } from "./home.ts";
@@ -41,12 +41,13 @@ export async function runQuery(
     promptHash: PROMPT_HASH,
   });
   const round: Round = {};
+  let memory = options.memory ?? {};
 
   try {
     const input = assembleCommandPrompt({
       prompt,
       cwd: options.cwd,
-      memory: options.memory ?? {},
+      memory,
     });
 
     let response: Awaited<ReturnType<typeof runCommandPrompt>>;
@@ -80,11 +81,7 @@ export async function runQuery(
     round.parsed = response;
 
     if (response.memory_updates?.length) {
-      // Temporarily extract facts and append to global scope until appendFacts lands (Step 6)
-      appendMemory(
-        wrapHome,
-        response.memory_updates.map((u) => ({ fact: u.fact })),
-      );
+      memory = appendFacts(wrapHome, response.memory_updates, options.cwd);
       if (response.memory_updates_message) {
         chrome(`🧠 ${response.memory_updates_message}`);
       }

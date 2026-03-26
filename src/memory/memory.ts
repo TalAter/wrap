@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { chrome } from "../core/output.ts";
-import { prettyPath } from "../core/paths.ts";
+import { prettyPath, resolvePath } from "../core/paths.ts";
 import type { Provider } from "../llm/types.ts";
 import { parseDetectedTools, runProbes } from "./init-probes.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
@@ -58,12 +58,24 @@ export function saveMemory(wrapHome: string, memory: Memory): void {
   writeFileSync(path, JSON.stringify(sorted, null, 2));
 }
 
-/** Append new entries to the global "/" scope on disk. */
-export function appendMemory(wrapHome: string, newEntries: Fact[]): void {
+/**
+ * Resolve scopes, append facts to the correct scope, persist, and return updated Memory.
+ * Discards facts whose scope doesn't resolve to an existing directory.
+ */
+export function appendFacts(
+  wrapHome: string,
+  updates: Array<{ fact: string; scope: string }>,
+  cwd: string,
+): Memory {
   const memory = loadMemory(wrapHome);
-  const existing = memory["/"] ?? [];
-  memory["/"] = [...existing, ...newEntries];
+  for (const { fact, scope } of updates) {
+    const resolved = resolvePath(scope, cwd);
+    if (resolved === null) continue;
+    const existing = memory[resolved] ?? [];
+    memory[resolved] = [...existing, { fact }];
+  }
   saveMemory(wrapHome, memory);
+  return memory;
 }
 
 /** Parse LLM init response (one fact per line) into Fact[]. */

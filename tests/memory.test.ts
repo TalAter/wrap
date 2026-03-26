@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadMemory, saveMemory } from "../src/memory/memory.ts";
+import { appendFacts, loadMemory, saveMemory } from "../src/memory/memory.ts";
 import type { Memory } from "../src/memory/types.ts";
 
 function tempDir() {
@@ -123,5 +123,104 @@ describe("saveMemory", () => {
     const raw = readFileSync(join(dir, "memory.json"), "utf-8");
     const parsed = JSON.parse(raw);
     expect(parsed["/"].map((f: { fact: string }) => f.fact)).toEqual(["first", "second", "third"]);
+  });
+});
+
+describe("appendFacts", () => {
+  test("appends fact to global scope", () => {
+    const dir = tempDir();
+    saveMemory(dir, { "/": [{ fact: "existing" }] });
+    const result = appendFacts(dir, [{ fact: "new fact", scope: "/" }], "/");
+    expect(result["/"]).toEqual([{ fact: "existing" }, { fact: "new fact" }]);
+    // Verify persisted
+    expect(loadMemory(dir)).toEqual(result);
+  });
+
+  test("creates new scope if it doesn't exist", () => {
+    const dir = tempDir();
+    saveMemory(dir, { "/": [{ fact: "global" }] });
+    // Use /tmp as the scope — it exists on disk
+    const resolved = realpathSync("/tmp");
+    const result = appendFacts(dir, [{ fact: "tmp fact", scope: "/tmp" }], "/");
+    expect(result[resolved]).toEqual([{ fact: "tmp fact" }]);
+    expect(result["/"]).toEqual([{ fact: "global" }]);
+  });
+
+  test("discards facts with non-existent scope paths", () => {
+    const dir = tempDir();
+    saveMemory(dir, { "/": [{ fact: "global" }] });
+    const result = appendFacts(
+      dir,
+      [{ fact: "should be discarded", scope: "/nonexistent/path/xyz" }],
+      "/",
+    );
+    expect(result).toEqual({ "/": [{ fact: "global" }] });
+  });
+
+  test("resolves relative scope paths against CWD", () => {
+    const dir = tempDir();
+    const cwd = realpathSync("/tmp");
+    saveMemory(dir, {});
+    const result = appendFacts(dir, [{ fact: "relative scope fact", scope: "." }], cwd);
+    expect(result[cwd]).toEqual([{ fact: "relative scope fact" }]);
+  });
+
+  test("returns updated Memory map", () => {
+    const dir = tempDir();
+    saveMemory(dir, { "/": [{ fact: "a" }] });
+    const result = appendFacts(dir, [{ fact: "b", scope: "/" }], "/");
+    expect(result["/"]).toEqual([{ fact: "a" }, { fact: "b" }]);
+  });
+
+  test("sorts keys in persisted file", () => {
+    const dir = tempDir();
+    const resolved = realpathSync("/tmp");
+    saveMemory(dir, { [resolved]: [{ fact: "tmp" }] });
+    appendFacts(dir, [{ fact: "global", scope: "/" }], "/");
+    const raw = readFileSync(join(dir, "memory.json"), "utf-8");
+    const keys = Object.keys(JSON.parse(raw));
+    expect(keys[0]).toBe("/");
+  });
+
+  test("handles empty updates array", () => {
+    const dir = tempDir();
+    saveMemory(dir, { "/": [{ fact: "existing" }] });
+    const result = appendFacts(dir, [], "/");
+    expect(result).toEqual({ "/": [{ fact: "existing" }] });
+  });
+
+  test("resolves ~ scope to homedir", () => {
+    const dir = tempDir();
+    saveMemory(dir, {});
+    const result = appendFacts(dir, [{ fact: "home fact", scope: "~" }], "/");
+    const home = realpathSync(homedir());
+    expect(result[home]).toEqual([{ fact: "home fact" }]);
+  });
+
+  test("discards ~ subpath that doesn't exist", () => {
+    const dir = tempDir();
+    saveMemory(dir, {});
+    const result = appendFacts(
+      dir,
+      [{ fact: "should be discarded", scope: "~/nonexistent-dir-xyz" }],
+      "/",
+    );
+    expect(Object.keys(result)).toEqual([]);
+  });
+
+  test("appends multiple facts to different scopes", () => {
+    const dir = tempDir();
+    const resolved = realpathSync("/tmp");
+    saveMemory(dir, { "/": [{ fact: "global" }] });
+    const result = appendFacts(
+      dir,
+      [
+        { fact: "new global", scope: "/" },
+        { fact: "tmp fact", scope: "/tmp" },
+      ],
+      "/",
+    );
+    expect(result["/"]).toEqual([{ fact: "global" }, { fact: "new global" }]);
+    expect(result[resolved]).toEqual([{ fact: "tmp fact" }]);
   });
 });
