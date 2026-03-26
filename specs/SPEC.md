@@ -328,19 +328,9 @@ The LLM must return structured JSON:
 
 ### 8.4 Provider Support & Wire Format
 
-**Provider-agnostic interface via Vercel AI SDK.** Wrap uses a single `Provider` interface with one method (`runPrompt`). The AI SDK handles Anthropic and OpenAI natively; CLI tool providers (Claude Code) are also supported. See `specs/llm-sdk.md` for the full provider architecture.
+> **Implemented.** See `specs/llm-sdk.md` for full provider architecture: interface design, AI SDK integration, context assembly, config, and structured output retry.
 
-Current providers:
-- **Anthropic** — via `@ai-sdk/anthropic`
-- **OpenAI** — via `@ai-sdk/openai` (also works for Ollama, OpenRouter, etc. via `baseURL`)
-- **Claude Code CLI** — spawns `claude` as subprocess
-- API key configuration: BYOK (bring your own key)
-
-#### CLI Tool Providers
-
-In addition to API-based providers, Wrap supports CLI LLM tools as backends (currently: Claude Code). These are invoked as subprocesses. See `specs/llm-sdk.md` for provider architecture details.
-
-- **Disclaimer (not yet implemented):** On first selecting a CLI tool provider, Wrap should show a notice about reviewing the tool's terms of service.
+Provider-agnostic interface supporting API providers (Anthropic, OpenAI, Ollama via `baseURL`) and CLI tool providers (Claude Code). BYOK — bring your own key.
 
 ### 8.5 Context Sent to LLM
 
@@ -386,31 +376,9 @@ By default it will not continue a thread, only if we use the command for continu
 
 ## 10. Memory / Learning System
 
-> **Implemented.** See `specs/memory.md` for full architecture and implementation details.
+> **Implemented.** See `specs/memory.md` for full architecture: scoped storage, path conventions, data flow, prompt assembly, init flow, and runtime updates.
 
-### 10.1 Storage
-
-- **File:** `~/.wrap/memory.json` — map of directory scope → fact objects (`Record<string, {fact: string}[]>`)
-- `/` scope = global facts (system-wide). Directory scopes = project-specific facts.
-- Global facts sent on every request. Directory-specific facts only sent when CWD matches (prefix match).
-- Future: vector database for selective retrieval of relevant memories
-
-### 10.2 Learning Behavior
-
-- The LLM can return `memory_updates` in its structured response
-- **Memory updates are written immediately** — even mid-loop during probes. A flow that discovers `shell=zsh` but fails on the final command still persists that knowledge.
-- **Always notify the user** when something new is learned — notifications on stderr with scope prefix for non-global facts
-- Combine multiple learnings to one message. e.g.: `🧠 Noted: you use zsh, config at ~/.zshrc`
-
-### 10.3 Memory TTL (Future)
-
-Some learned facts are ephemeral — e.g., "pngquant is not installed" might change after a `brew install`. In the future, the LLM could assign a TTL to memory entries. Not in v1 — all memories persist until manually cleared or overwritten.
-
-### 10.4 Probing for Knowledge
-
-- **First run:** eager initialization — detect OS, shell type, basic environment immediately after config setup (same invocation, no LLM needed). Probe commands are in `src/memory/init-probes.ts`.
-- **Lazy probing:** everything else is discovered on-demand when the LLM determines it needs the information (via the agent loop / probe commands)
-- This means Wrap gets smarter over time as you use it
+Wrap learns facts about the user's environment and persists them to disk. Facts are scoped to directories — global facts always sent, project-specific facts only when CWD matches. The LLM returns `memory_updates` in its responses; these are written immediately (even mid-loop) and the user is notified on stderr. First run probes the system eagerly; everything else is discovered on-demand.
 
 ---
 
@@ -601,7 +569,8 @@ The following are acknowledged good ideas but **not in v1**:
 | Feature                         | Notes                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------- |
 | **Command recipes**             | User-defined natural language → command shortcuts. e.g., "deploy this" or "package wrap".    |
-| **REPL / conversational mode**  | Interactive session where user refines commands iteratively.                                 |
+| **Interactive mode**            | Free-text prompt area when `w` is run with no args. See `specs/interactive-mode.md`.        |
+| **REPL / conversational mode**  | Interactive session where user refines commands iteratively (separate from interactive mode).|
 | **Cost tracking**               | Per-command and cumulative LLM cost estimates.                                               |
 | **Secret redaction**            | Auto-detect and mask API keys/passwords before sending to LLM.                               |
 | **Shell completions**           | Tab-completion for `wrap` subcommands and recent queries.                                    |
@@ -615,13 +584,11 @@ The following are acknowledged good ideas but **not in v1**:
 ## 17. Open Questions
 
 1. **Name conflicts:** Does `wrap` conflict with existing packages on Homebrew, apt, npm, etc.? Need to research.
-2. ~~**Runtime choice:**~~ **Resolved:** Bun. Compiles via `bun build --compile`.
-3. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: confirmation TUI, interactive mode, answer rendering.
-4. ~~**JSONC parser:**~~ **Resolved:** Using `jsonc-parser` package (VS Code's parser).
-5. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants.
-6. **Thread linking:** How does a follow-up command find its parent thread? Most recent? Terminal session detection?
-7. **`w!` and `w?` as symlink names:** `!` and `?` are shell special characters. These may need to be flags (`w --cmd`, `w --ask`) rather than symlink names. Needs investigation.
-8. **Always-confirm alias:** What should the third invocation variant (always confirm) be named?
+2. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: confirmation TUI, interactive mode, answer rendering.
+3. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants.
+4. **Thread linking:** How does a follow-up command find its parent thread? Most recent? Terminal session detection?
+5. **`w!` and `w?` as symlink names:** `!` and `?` are shell special characters. These may need to be flags (`w --cmd`, `w --ask`) rather than symlink names. Needs investigation.
+6. **Always-confirm alias:** What should the third invocation variant (always confirm) be named?
 
 ---
 

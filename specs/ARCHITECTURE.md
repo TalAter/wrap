@@ -26,12 +26,10 @@ Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`
 
 ---
 
-## The Ensure Pattern
+## Prerequisites
 
-Prerequisites use "ensure" functions: load existing state or create it, then return. Either a value comes back or the function throws/exits. The caller never checks.
-
-- **`loadConfig()`** — Reads config from `~/.wrap/config.jsonc` + `WRAP_CONFIG` env var (shallow merge). Caller checks for missing provider.
-- **`ensureMemory(provider, wrapHome)`** — Reads `memory.json` or initializes (probes OS/shell/tools, sends to LLM, saves as global facts). Returns `Memory`.
+- **`loadConfig()`** — Reads config from `~/.wrap/config.jsonc` + `WRAP_CONFIG` env var (shallow merge). Returns `Config`. Caller checks for missing provider — will become an "ensure" function when the first-run wizard is built.
+- **`ensureMemory(provider, wrapHome)`** — The "ensure" pattern: loads existing memory or creates it (probes OS/shell/tools, sends to LLM, saves as global facts). Either returns `Memory` or throws. The caller never checks.
 
 ---
 
@@ -84,6 +82,7 @@ src/
     types.ts                  Provider interface, PromptInput, config types
     index.ts                  initProvider() dispatch + runCommandPrompt()
     context.ts                assembleCommandPrompt() — system + messages from context
+    utils.ts                  Shared LLM utilities (stripFences, etc.)
     providers/
       ai-sdk.ts               Anthropic + OpenAI via Vercel AI SDK
       claude-code.ts           Claude CLI subprocess provider

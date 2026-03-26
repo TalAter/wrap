@@ -58,7 +58,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Write memory from LLM `memory_updates` during probe loop (currently only in single-shot flow)
 - [ ] Lazy probing — on-demand discovery via agent loop probe commands (gets smarter over time)
-- [ ] Eval examples for memory behavior (contradicting facts, scope matching, tool availability)
+- [ ] Eval example: no memory for CWD — LLM probes or uses global facts only (other memory eval scenarios already covered in `eval/examples/seed.jsonl`)
 
 ## Logging (see specs/logging.md for architecture)
 
@@ -95,6 +95,10 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] `--config` — manual reconfigure (reuses config wizard)
 - [ ] `--memory` — view/manage memory
+
+## Eval System
+
+- [ ] Log-to-eval script — a script in `eval/` that parses `~/.wrap/logs/wrap.jsonl`, deduces implicit feedback (exit codes, retries, repeated prompts), identifies failure patterns and improvable scenarios, and outputs entries in `seed.jsonl` format for DSPy optimization.
 
 ## Build & Distribution
 

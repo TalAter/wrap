@@ -2,7 +2,7 @@
 
 > Always-on invocation logging for debugging, observability, and future eval/training data.
 
-> **Status:** Implemented — core logging works. See TODO section for gaps.
+> **Status:** Implemented — core logging works. See `specs/todo.md` for remaining gaps.
 
 ---
 
@@ -20,7 +20,8 @@ When the LLM returns a malformed response (invalid JSON, schema mismatch), Wrap 
 | Storage format | Single append-only JSONL file | One file, one line per invocation. Simple to tail, grep, parse. |
 | Granularity | One record per invocation | A `rounds` array captures multi-step interactions (probes, retries). Written once at end of invocation. |
 | Null fields | Omitted | Fields with undefined values are omitted from JSON. Absence = null. |
-| Sensitive data | Logged verbatim | Piped stdin, prompts, raw responses — all logged as-is. Same threat model as `~/.bash_history`. Local file on user's machine. |
+| Sensitive data | Logged verbatim | Piped stdin, prompts, raw responses — all logged as-is. Same threat model as `~/.bash_history`. Local file on user's machine. Document in help/README. |
+| Execution output | Not captured | Command stdout/stderr streams directly to the terminal (inherited). Capturing while streaming would require teeing. The primary debugging value — raw LLM responses — doesn't need execution capture. |
 | System prompt | Hash only | System prompt + schema + demos represented by a SHA-256 hash for reproducibility without bloat. Match hash to prompt version in git. |
 | Thread coupling | None (deferred) | No `thread_id` in log entries. Thread system will decide its own storage strategy when built. |
 | DSPy integration | Manual cherry-pick (future) | Logs not automatically piped to DSPy. Future: inspect logs, select entries, reshape into eval examples. |
@@ -82,6 +83,14 @@ Each element in `rounds`:
 {"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","prompt":"find all typescript files","cwd":"/Users/tal/projects","provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"command","command":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0}}],"outcome":"success"}
 ```
 
+### Parse failure (the primary debugging use case)
+
+When `raw_response` and `parse_error` are wired up (see `specs/todo.md`), a malformed LLM response will look like:
+
+```json
+{"id":"b2c3d4e5-...","timestamp":"2026-03-21T14:31:00.456Z","prompt":"list docker containers","cwd":"/Users/tal","provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"raw_response":"I'd be happy to help! Here's the command:\n```bash\ndocker ps\n```","parse_error":"LLM returned invalid JSON."}],"outcome":"error"}
+```
+
 ### Provider failure
 
 ```json
@@ -99,7 +108,7 @@ Each element in `rounds`:
 | LLM returns answer | Yes | `"success"` |
 | Provider subprocess crashes | Yes — `provider_error` | `"error"` |
 | Non-low risk command (confirmation needed) | Yes | `"refused"` |
-| Probe response (not yet supported) | Yes | `"refused"` |
+| Probe response | Yes — as a round in the same entry | Entry continues (not yet implemented — currently errors with "not supported") |
 | Provider init failure / config error / no args | No | — |
 
 ---

@@ -1,6 +1,8 @@
 # Memory System
 
 > **Status:** Implemented (2026-03-25)
+>
+> Part of the top-level flow in `specs/ARCHITECTURE.md`. Behavioral spec in `specs/SPEC.md` section 10.
 
 ---
 
