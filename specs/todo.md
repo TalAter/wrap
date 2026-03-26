@@ -17,6 +17,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Alias/symlink setup — scan for available single-letter commands on first run
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
 - [ ] Detect piped stdin, read full content into buffer, pass to LLM as context
+- [ ] Thread piped input through to `assembleCommandPrompt` (type exists, not wired) and log entry
 - [ ] Large input warning TUI — token estimate, confirmation before sending
 - [ ] Hard ceiling — reject input over max size (e.g., 50MB)
 
