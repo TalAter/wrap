@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { searchEntries } from "../src/subcommands/log.ts";
-import { wrap } from "./helpers.ts";
+import { tmpHome, wrap } from "./helpers.ts";
 
 function seedLog(wrapHome: string, lines: string[]): string {
   const logsDir = join(wrapHome, "logs");
@@ -18,7 +18,7 @@ function entry(id: string, prompt = "test") {
 
 describe("--log", () => {
   test("outputs all entries as raw JSONL (piped = raw default)", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     const lines = [entry("a"), entry("b"), entry("c")];
     seedLog(wrapHome, lines);
     const result = await wrap("--log", { WRAP_HOME: wrapHome });
@@ -28,26 +28,26 @@ describe("--log", () => {
   });
 
   test("--log N outputs last N entries", async () => {
-    const result1 = await wrap("--log");
+    const wrapHome = tmpHome();
     const lines = [entry("a"), entry("b"), entry("c")];
-    seedLog(result1.wrapHome, lines);
-    const result = await wrap("--log 2", { WRAP_HOME: result1.wrapHome });
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log 2", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(`${[entry("b"), entry("c")].join("\n")}\n`);
   });
 
   test("--log 1 outputs last entry", async () => {
-    const result1 = await wrap("--log");
-    seedLog(result1.wrapHome, [entry("a"), entry("b")]);
-    const result = await wrap("--log 1", { WRAP_HOME: result1.wrapHome });
+    const wrapHome = tmpHome();
+    seedLog(wrapHome, [entry("a"), entry("b")]);
+    const result = await wrap("--log 1", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(`${entry("b")}\n`);
   });
 
   test("--log 0 outputs nothing", async () => {
-    const result1 = await wrap("--log");
-    seedLog(result1.wrapHome, [entry("a"), entry("b")]);
-    const result = await wrap("--log 0", { WRAP_HOME: result1.wrapHome });
+    const wrapHome = tmpHome();
+    seedLog(wrapHome, [entry("a"), entry("b")]);
+    const result = await wrap("--log 0", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe("");
@@ -61,21 +61,21 @@ describe("--log", () => {
   });
 
   test("skips corrupt lines with warning", async () => {
-    const result1 = await wrap("--log");
+    const wrapHome = tmpHome();
     const lines = [entry("a"), "not-json", entry("c")];
-    seedLog(result1.wrapHome, lines);
-    const result = await wrap("--log", { WRAP_HOME: result1.wrapHome });
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(`${[entry("a"), entry("c")].join("\n")}\n`);
     expect(result.stderr).toContain("skipped 1 corrupt");
   });
 
   test("N counts raw lines including corrupt ones", async () => {
-    const result1 = await wrap("--log");
+    const wrapHome = tmpHome();
     // 5 raw lines, last 3 = [entry("c"), "bad", entry("e")]
     const lines = [entry("a"), entry("b"), entry("c"), "bad", entry("e")];
-    seedLog(result1.wrapHome, lines);
-    const result = await wrap("--log 3", { WRAP_HOME: result1.wrapHome });
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log 3", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     // Should output entry("c") and entry("e"), skip "bad"
     expect(result.stdout).toBe(`${[entry("c"), entry("e")].join("\n")}\n`);
@@ -83,7 +83,7 @@ describe("--log", () => {
   });
 
   test("--raw flag outputs raw JSONL", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     const lines = [entry("a"), entry("b")];
     seedLog(wrapHome, lines);
     const result = await wrap("--log --raw", { WRAP_HOME: wrapHome });
@@ -94,7 +94,7 @@ describe("--log", () => {
 
 describe("--log search", () => {
   test("search filters entries by substring", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     const lines = [entry("a", "find files"), entry("b", "list docker"), entry("c", "find ports")];
     seedLog(wrapHome, lines);
     const result = await wrap("--log find", { WRAP_HOME: wrapHome });
@@ -105,7 +105,7 @@ describe("--log search", () => {
   });
 
   test("search is case-insensitive", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     seedLog(wrapHome, [entry("a", "Find Files"), entry("b", "other")]);
     const result = await wrap("--log find", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
@@ -114,7 +114,7 @@ describe("--log search", () => {
   });
 
   test("search with no matches shows message", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     seedLog(wrapHome, [entry("a", "hello")]);
     const result = await wrap("--log zzzzz", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
@@ -123,7 +123,7 @@ describe("--log search", () => {
   });
 
   test("search combined with N takes last N matches", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     const lines = [entry("a", "find one"), entry("b", "find two"), entry("c", "find three")];
     seedLog(wrapHome, lines);
     const result = await wrap("--log find 2", { WRAP_HOME: wrapHome });
@@ -134,7 +134,7 @@ describe("--log search", () => {
   });
 
   test("search with --raw outputs raw JSONL", async () => {
-    const { wrapHome } = await wrap("--log");
+    const wrapHome = tmpHome();
     seedLog(wrapHome, [entry("a", "hello world"), entry("b", "other")]);
     const result = await wrap("--log hello --raw", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
