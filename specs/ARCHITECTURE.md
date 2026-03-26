@@ -1,6 +1,6 @@
 # Wrap — Runtime Architecture
 
-> Describes how Wrap runs: the flow from invocation to execution, module responsibilities, and key design decisions.
+> How Wrap runs: flow from invocation to execution, module responsibilities, and key design decisions.
 
 ---
 
@@ -9,181 +9,119 @@
 ```
 parseInput(argv)
        │
-       ├─ subcommand? ──→ runSubcommand()  (exit)
+       ├─ subcommand or no args? ──→ dispatch()  (exit)
        │
-       ├─ ensureConfig()  ──→ loads config or runs wizard (throws/exits on failure)
+       ├─ loadConfig()  ──→ loads config from file + env
        │
-       ├─ ensureMemory()  ──→ loads memory or initializes with basic probes
+       ├─ initProvider()  ──→ factory: config → Provider
+       │
+       ├─ ensureMemory()  ──→ loads memory or initializes with probes
        │
        ├─ resolvePath(cwd)  ──→ canonical CWD
        │
-       ├─ no prompt? ──→ showHelp()  (exit)
-       │
-       ├─ continuation? ──→ loadThread()
-       │
-       └─ runQuery({ prompt, mode, config, memory, cwd, thread?, pipedInput? })
+       └─ runQuery({ prompt, provider, memory, cwd })
 ```
 
-```ts
-// src/core/main.ts — the entire flow, readable at a glance
-async function main() {
-  const input = parseInput(process.argv)
-
-  if (input.subcommand) return runSubcommand(input.subcommand)
-
-  const config = await ensureConfig()
-  const memory = await ensureMemory()
-  const cwd = resolvePath(process.cwd())  // resolved once, passed through
-
-  if (!input.prompt) return showHelp()
-
-  const mode = resolveMode(input)  // TBD: how modes are detected/resolved
-  const thread = input.isContinuation ? await loadThread() : null
-
-  await runQuery({ prompt: input.prompt, mode, config, memory, cwd, thread })
-}
-```
+Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory.
 
 ---
 
 ## The Ensure Pattern
 
-Prerequisites use the "ensure" pattern: load existing state or create it, then return. Either a value comes back or the function throws/exits. The caller never checks.
+Prerequisites use "ensure" functions: load existing state or create it, then return. Either a value comes back or the function throws/exits. The caller never checks.
 
-- **`ensureConfig()`** — Reads config or runs the setup wizard. Throws on abort. Returns `Config`.
-- **`ensureMemory()`** — Reads memory or initializes (detects OS, shell, basic env). Returns `Memory` (`Record<string, Fact[]>`).
+- **`loadConfig()`** — Reads config from `~/.wrap/config.jsonc` + `WRAP_CONFIG` env var (shallow merge). Caller checks for missing provider.
+- **`ensureMemory(provider, wrapHome)`** — Reads `memory.json` or initializes (probes OS/shell/tools, sends to LLM, saves as global facts). Returns `Memory`.
 
 ---
 
 ## The Query Loop
 
-A single `for` loop handles probes, commands, answers, and error retries. Probes and retries share a **unified counter** (one budget for all LLM round-trips).
+Currently single-shot: one LLM call, optional structured output retry, then execute or print. The full multi-round loop (probes, error retries, unified round counter) is designed but not yet implemented — see `specs/SPEC.md` sections 6-7 for the target behavior.
 
-LLM context is a **multi-turn conversation** (message array). Each probe result and error becomes a conversation turn, giving the LLM full history for each subsequent call.
+**Current flow** (in `src/core/query.ts`):
+1. Assemble context (system prompt + few-shot + memory + user prompt)
+2. Call LLM → get structured `CommandResponse`
+3. On structured output error → retry once with failed output appended
+4. Handle memory updates (write immediately, notify user)
+5. Route by response type: answer → stdout, probe → error (not yet supported), command → execute if low-risk
 
-```ts
-// src/core/query.ts
-async function runQuery(params) {
-  const conversation = startConversation(params)
-
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await callLLM(conversation)
-
-    // Memory updates are written immediately, even mid-loop
-    if (response.memory_updates) {
-      await saveMemory(response.memory_updates)
-      notify(response.memory_updates_message)
-    }
-
-    switch (response.type) {
-      case "answer":
-        return printAnswer(response)
-
-      case "probe":
-        const probeResult = await executeProbe(response.command)
-        conversation.addProbeResult(response.command, probeResult)
-        continue
-
-      case "command": {
-        //if risk level is med or higher (configurable?) and not in yolo mode, confirm command first
-        const action = await confirmCommand(response, params.mode)
-        if (action.type === "cancel") return
-
-        const cmd = action.type === "edited" ? action.editedCommand : response.command
-        const result = await execute(cmd)
-        if (result.exitCode === 0) return
-
-        // On error on a user-edited commands: show error and stop. Do not attempt to fix with LLM
-        if (action.type === "edited") return showError(result)
-
-        // On error on LLM-generated commands: feed error back for auto-fix
-        conversation.addError(cmd, result)
-        continue
-      }
-    }
-  }
-
-  // TODO: define behavior when MAX_ROUNDS is exhausted.
-  // Show accumulated errors? Last error only? A summary?
-}
-```
-
-### Loop Rules
+### Loop Rules (Design — for when the multi-round loop is implemented)
 
 | Rule | Rationale |
 |---|---|
-| Unified counter for probes + retries | Simplicity. One budget prevents runaway loops regardless of response type. |
-| Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Must also update the in-memory state used by the conversation so the next LLM call in the same loop sees the updated memory — not just persist to disk. |
-| User-edited commands don't get auto-fix | The user took manual control. Don't second-guess their edit with LLM auto-fix. |
-| Prompt structured as multi-turn conversation | Natural fit for chat APIs. Probes/errors become conversation turns, giving the LLM full context. |
+| Unified counter for probes + retries | One budget prevents runaway loops regardless of response type. |
+| Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Updates both disk and in-memory state so the next LLM call in the same loop sees it. |
+| User-edited commands don't get auto-fix | The user took manual control — don't second-guess with LLM auto-fix. |
+| Multi-turn conversation context | Probes/errors become conversation turns, giving the LLM full history for each subsequent call. |
 
 ---
 
-## Proposed Module Structure
+## Module Structure
 
 ```
 src/
-  index.ts              Entry point. Imports main().
-  main.ts               Top-level orchestration flow
-  response.schema.ts    Zod schema for LLM responses (shared between core and providers)
-  prompt.optimized.ts   Auto-generated system prompt (DSPy)
+  index.ts                    Entry point
+  main.ts                     Top-level orchestration
+  prompt.ts                   Base prompt template
+  prompt.optimized.ts         DSPy-generated: system prompt, schema text, few-shot demos, prompt hash
+  command-response.schema.ts  Zod schema for LLM command/answer/probe responses
 
   core/
-    query.ts            The query loop (runQuery)
-    input.ts            CLI arg parsing, mode resolution
-    parse-response.ts   LLM response JSON parsing + validation
+    input.ts                  CLI arg parsing (prompt | flag | none)
+    query.ts                  Query execution, structured output retry, command execution
+    parse-response.ts         JSON parsing + schema validation
+    paths.ts                  resolvePath() + prettyPath()
+    output.ts                 isTTY(), hasJq(), chrome() (stderr output)
+    home.ts                   getWrapHome() — resolves ~/.wrap or WRAP_HOME
+    ansi.ts                   ANSI color/style utilities
 
   config/
-    config.ts           Config loading, merging, validation
-    config-wizard.ts    First-run setup TUI (reused by `wrap config` subcommand).
-                        Lives here (not ui/) — its logic is config-specific (provider
-                        selection, config file writing). It imports UI components from ui/.
-    config.schema.json  JSON Schema for editor support
+    config.ts                 Config loading + merging (file + env var)
+    config.schema.json        JSON Schema for editor support
 
-  providers/
-    llm.ts              Provider dispatch (factory: config → LLM client)
-    claude-code.ts      Claude CLI provider
-    test.ts             Deterministic test provider
+  llm/                        See specs/llm-sdk.md
+    types.ts                  Provider interface, PromptInput, config types
+    index.ts                  initProvider() dispatch + runCommandPrompt()
+    context.ts                assembleCommandPrompt() — system + messages from context
+    providers/
+      ai-sdk.ts               Anthropic + OpenAI via Vercel AI SDK
+      claude-code.ts           Claude CLI subprocess provider
+      test.ts                  Deterministic test mock
 
-  ui/
-    ...                 TUI components (confirmation panel, risk display, etc.)
+  logging/                    See specs/logging.md
+    entry.ts                  Log entry type, creation, round management
+    writer.ts                 JSONL append to ~/.wrap/logs/wrap.jsonl
 
-  memory/
-    memory.ts           Load, save, ensure
+  memory/                     See specs/memory.md
+    types.ts                  Fact, FactScope, Memory types
+    memory.ts                 load, save, append, ensure (init flow)
+    init-probes.ts            System probe commands (OS, shell, tools)
+    init-prompt.ts            LLM prompt for parsing probe output into facts
 
-  threads/
-    threads.ts          Load, save, TTL, thread linking
+  subcommands/                See specs/subcommands.md
+    types.ts                  Subcommand type
+    registry.ts               All subcommands registered here
+    dispatch.ts               Flag matching + dispatch
+    help.ts                   --help (auto-generated from registry)
+    version.ts                --version
+    log.ts                    --log (raw/pretty, search, filtering)
 ```
 
-Runtime data lives in `~/.wrap/` (overridable via `WRAP_HOME`):
-- `~/.wrap/config.jsonc` — user config
-- `~/.wrap/memory.json` — memory facts (see specs/memory.md)
-- `~/.wrap/threads/` — conversation history
-
----
-
-## Subcommands
-
-Detected by `parseInput()` before any ensure steps. Subcommands bypass the normal flow entirely:
-
-```ts
-if (input.subcommand) return runSubcommand(input.subcommand)
-```
-
-The config wizard is reusable — called by both `ensureConfig()` (first-run) and `wrap config` subcommands (manual reconfigure).
-
-Note: subcommands may need their own prerequisites. `wrap config` reads existing config to reflect current values in the TUI (falling back to defaults if none exists). `wrap memory` would need config to know where `~/.wrap/` is. Subcommands call their own `ensure*` or `load*` functions internally rather than relying on the main flow's ensure steps.
+Runtime data at `~/.wrap/` (overridable via `WRAP_HOME`):
+- `config.jsonc` — user config
+- `memory.json` — scoped facts (see `specs/memory.md`)
+- `logs/wrap.jsonl` — invocation logs (see `specs/logging.md`)
 
 ---
 
 ## Mode
 
-Mode is a simple string field (`"smart" | "yolo" | "force-cmd" | "force-answer" | "confirm-all"`) resolved from the invocation name (`w`, `wyolo`, etc. very TBD!) or flags. It's passed to `runQuery` and checked at decision points:
+Mode is a string (`"smart" | "yolo" | "force-cmd" | "force-answer" | "confirm-all"`) resolved from the invocation name or flags and passed to `runQuery`. **Not yet implemented** — all invocations currently behave as smart mode with only low-risk commands auto-executing; medium/high-risk commands are refused.
 
-- **Confirmation:** yolo skips, confirm-all always shows, smart checks risk level
-- **Response handling:** force-cmd / force-answer may constrain LLM behavior (feature out of current scope)
-
-Implementation of modes is deferred. The architecture supports them as a parameter to the query loop.
+Mode affects:
+- **Confirmation**: yolo skips, confirm-all always shows, smart checks risk level
+- **Response handling**: force-cmd / force-answer constrain LLM behavior
 
 ---
 
@@ -196,10 +134,3 @@ Considered and rejected. Wrap has a fixed, small set of flows — the composabil
 ### Why not hybrid resolve/execute?
 
 A pure `resolve()` → `execute()` separation breaks down when flows continue after prerequisites. First-run setup creates config, then the query should proceed — not re-resolve. The ensure pattern handles this naturally: `ensureConfig()` returns and the next line runs.
-
----
-
-## Notes
-
-* Treat all code in this document as pseudo code. Actual code and even function signatures can change.
-

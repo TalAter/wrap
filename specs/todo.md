@@ -1,6 +1,6 @@
 # Wrap — To Do
 
-All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and logging.md.
+All remaining implementation tasks. Completed features are omitted — see spec files for architecture reference.
 
 ---
 
@@ -16,7 +16,6 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias/symlink setup — scan for available single-letter commands on first run
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
-- [x] Subcommand detection and dispatch (`parseInput()` flag detection → `dispatch()`)
 - [ ] Detect piped stdin, read full content into buffer, pass to LLM as context
 - [ ] Large input warning TUI — token estimate, confirmation before sending
 - [ ] Hard ceiling — reject input over max size (e.g., 50MB)
@@ -33,7 +32,6 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Input buffer flush before rendering confirmation prompt
 - [ ] No-TTY detection — fail early with clear stderr message if `/dev/tty` unavailable
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
-- [ ] Long-running command passthrough (streaming stdout/stderr)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
 ## Agent Loop (Probes)
@@ -51,48 +49,26 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 
 ## LLM Integration
 
-- [x] AI SDK provider (Anthropic + OpenAI via Vercel AI SDK, native structured output)
 - [ ] Generalized CLI tool provider abstraction (currently only claude-code)
 - [ ] CLI provider terms-of-service disclaimer on first use
-- [x] Structured output retry (one retry with failed output appended + stricter instruction)
-- [x] Context assembly — `assembleCommandPrompt` in `src/llm/context.ts` (system prompt, few-shot, memory, cwd)
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history, piped stdin
 - [ ] Explain `memory_updates` usage in system prompt — when to write memories, what's worth remembering
 
-## Memory System (see specs/memory.md)
+## Memory System
 
-### Storage & types
-- [ ] `Fact` type (`{fact: string}`) and `Memory` type (`Record<string, Fact[]>`) with Zod validation
-- [x] Remove `MemoryEntry` and `MemoryFact` — consolidated to `Fact` in `src/memory/types.ts`
-- [x] `resolvePath()` / `prettyPath()` utilities in `src/core/paths.ts`
-- [ ] `loadMemory` / `saveMemory` with new format (sorted keys on write)
-- [ ] `appendFacts()` — resolve paths, append to correct scope, discard invalid paths
-- [ ] Single error message for corrupt/invalid memory.json
-
-### Init
-- [ ] `ensureMemory` returns `Memory`, wraps init facts under `"/"` scope
-- [ ] Init UX — spinner + summary line on stderr
-
-### LLM integration
-- [ ] Update `memory_updates` in Zod response schema — add `scope` field (required)
-- [ ] Update embedded `SCHEMA_TEXT` in `src/prompt.optimized.ts` with scope field + inline comments
-- [ ] Add recency instruction to system prompt
-- [ ] Prompt assembly in `context.ts` — filter memory by CWD prefix, sectioned format
-- [ ] CWD resolved via `resolvePath` once at startup, passed through context
-- [ ] Notify user on stderr — scope prefix for non-global facts
-
-### Eval
-- [ ] Eval example: contradicting facts in same scope — LLM uses later fact
-- [ ] Eval example: contradicting facts across scopes — LLM uses more specific scope
-- [ ] Eval example: memory says "uses bun" — LLM generates bun commands
-- [ ] Eval example: memory says tool not installed — LLM avoids it
-- [ ] Eval example: no memory for CWD — LLM probes or uses global facts only
-- [ ] Eval example: LLM returns memory_updates with correct scope
-- [ ] Future: probe response → LLM returns memory update scoped to directory
-
-### Existing (not yet done)
-- [ ] Write memory from LLM `memory_updates` field (immediately, even mid-loop)
+- [ ] Write memory from LLM `memory_updates` during probe loop (currently only in single-shot flow)
 - [ ] Lazy probing — on-demand discovery via agent loop probe commands (gets smarter over time)
+- [ ] Eval examples for memory behavior (contradicting facts, scope matching, tool availability)
+
+## Logging (see specs/logging.md for architecture)
+
+- [ ] Populate `raw_response` field — capture raw LLM text before parsing so failed responses are inspectable in logs
+- [ ] Populate `parse_error` field — capture the parse/validation error message alongside `raw_response`
+- [ ] Multi-round logging — separate round entries for probes and retries (blocked on multi-round query loop)
+- [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
+- [ ] `max_rounds` outcome type (blocked on multi-round query loop)
+- [ ] Wire `piped_input` field from stdin (blocked on piped input support)
+- [ ] `expires` field + retention pruning (future)
 
 ## Thread System
 
@@ -101,23 +77,6 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Thread TTL expiry
 - [ ] Thread identification — link follow-up to parent (initially: most recent in current terminal)
 - [ ] Large output warning before sending thread with large stored output to LLM
-
-## Logging
-
-- [ ] Log module (`src/logging/`) — create log entry, append rounds, write JSONL
-- [ ] Log entry creation at start of `runQuery` with invocation-level fields
-- [ ] Round appending after each LLM call (raw_response, parse_error/provider_error, parsed, execution)
-- [ ] JSONL writing to `~/.wrap/logs/wrap.jsonl` at end of `runQuery`
-- [ ] Prompt hash — exported from `src/prompt.optimized.ts`, not recomputed at runtime
-- [ ] Lazy `logs/` directory creation on first write
-- [ ] Omit null fields from JSON output
-- [ ] `piped_input` field — pass through from `parseInput` to log entry
-- [ ] Multi-round logging — probe + retry rounds accumulate in the same entry
-- [ ] `cancelled` outcome (requires signal handling)
-- [ ] `max_rounds` outcome (requires probe/retry loop)
-- [ ] `expires` field + retention pruning
-- [ ] Tests — assert on log file contents in integration tests (WRAP_HOME already isolated)
-- [ ] Document in help/README that logs contain full LLM exchanges
 
 ## Configuration & First-Run
 
@@ -132,43 +91,7 @@ All implementation tasks extracted from SPEC.md, ARCHITECTURE.md, memory.md, and
 - [ ] Answer rendering — colorful terminal markdown (syntax-highlighted code, bold/italic, lists). Blocked on TUI library.
 - [ ] TUI components — radio buttons, checkboxes, free text input, editable fields
 
-## Eval System
-
-- [ ] Structured JSONL logging for evals (opt-in)
-- [ ] Implicit feedback signal (exit code, retry, thread correction)
-- [ ] DSPy eval infrastructure in container
-
 ## Subcommands (see specs/subcommands.md)
-
-Implementation order: registry infra → --version → --help → --log.
-
-### 1. Registry & dispatch infrastructure
-
-- [x] `Subcommand` type definition (`src/subcommands/types.ts`)
-- [x] Subcommand registry (`src/subcommands/registry.ts`) — single source of truth
-- [x] Dispatcher with generic arg validation (`src/subcommands/dispatch.ts`)
-- [x] Flag detection in `parseInput()` — first arg `--` prefix check
-- [x] Input type update — discriminated union: prompt | flag | none
-- [x] Short-circuit in `main()` — dispatch before ensure steps
-
-### 2. `--version`
-
-- [x] Reads from package.json, prints to stdout
-
-### 3. `--help`
-
-- [x] Auto-generated from registry (preamble + dynamic flags table)
-
-### 4. `--log` / `--log-pretty`
-
-- [x] `--log` — raw JSONL output to stdout (all entries or last N)
-- [x] `--log-pretty` — indented JSON, jq piping when TTY + jq available
-- [x] Shared `isTTY()` / `hasJq()` utilities in `src/core/output.ts`
-- [x] Empty state — stderr "No log entries yet.", exit 0
-- [x] Corrupt JSONL line handling — skip with stderr warning
-- [x] jq detection via `Bun.which("jq")`
-
-### Deferred subcommands
 
 - [ ] `--config` — manual reconfigure (reuses config wizard)
 - [ ] `--memory` — view/manage memory

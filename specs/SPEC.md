@@ -50,7 +50,7 @@ Faster than switching to a browser or separate LLM to look up a command. Stays i
 
 ### 2.1 Core Binary: TypeScript
 
-- Written in TypeScript, compiled to a single executable via Bun or Deno
+- Written in TypeScript, compiled to a single executable via Bun (`bun build --compile`)
 - Handles: CLI parsing, TUI rendering, HTTP to LLM APIs, JSON/JSONC parsing, thread storage, memory system, config management
 - Rich ecosystem for all needs: TUI libraries, HTTP clients, JSON schema validation, testing frameworks
 
@@ -315,10 +315,10 @@ The LLM must return structured JSON:
 ### 8.2 Structured Output & Parsing
 
 - The LLM response schema (section 8.1) is defined as a **Zod schema** — single source of truth for TypeScript types, runtime validation, and JSON Schema generation.
-- Use the **OpenAI SDK** (`openai` package) with `response_format` for structured output.
-- Since all providers speak OpenAI format, one SDK handles everything — runtime provider switching is just changing `baseURL`.
+- Uses the **Vercel AI SDK** (`ai` v6 + `@ai-sdk/anthropic` + `@ai-sdk/openai`) with native structured output support.
 - If JSON parsing fails: retry once with a stricter prompt and the broken JSON ("respond ONLY with valid JSON").
 - No client-side JSON repair — rely on provider structured output support + one retry.
+- See `specs/llm-sdk.md` for full provider architecture and implementation details.
 
 ### 8.3 Prompt Strategy
 
@@ -328,41 +328,19 @@ The LLM must return structured JSON:
 
 ### 8.4 Provider Support & Wire Format
 
-**Single integration target: OpenAI-compatible chat completions API.**
+**Provider-agnostic interface via Vercel AI SDK.** Wrap uses a single `Provider` interface with one method (`runPrompt`). The AI SDK handles Anthropic and OpenAI natively; CLI tool providers (Claude Code) are also supported. See `specs/llm-sdk.md` for the full provider architecture.
 
-The LLM API landscape has converged on the OpenAI `/v1/chat/completions` format as a de facto standard. Anthropic, Ollama, Groq, Together, Mistral, and most other providers expose OpenAI-compatible endpoints. Wrap implements one HTTP client that speaks this format and gets broad provider support for free.
-
-A provider is just a configuration:
-```jsonc
-{
-  "baseUrl": "https://api.openai.com/v1",  // or any compatible endpoint
-  "apiKey": "sk-...",
-  "model": "gpt-4o-mini"
-}
-```
-
-- **Local models (Ollama):** Speak the same format at `http://localhost:11434/v1/chat/completions` — works with no extra code.
-- **Open-source routers (LiteLLM, OpenRouter):** Can sit in front of any provider and normalize the interface. Good for users who want flexibility without Wrap needing per-provider logic.
-- **One SDK for all API providers:** The `openai` npm package talks to any OpenAI-compatible endpoint. Runtime provider switching is just changing `baseURL` in the client config — no per-provider packages needed.
-- **Structured output:** OpenAI SDK's `response_format` with JSON Schema generated from the Zod schema (see 8.2). Falls back to prompt-based enforcement for providers that don't support it.
+Current providers:
+- **Anthropic** — via `@ai-sdk/anthropic`
+- **OpenAI** — via `@ai-sdk/openai` (also works for Ollama, OpenRouter, etc. via `baseURL`)
+- **Claude Code CLI** — spawns `claude` as subprocess
 - API key configuration: BYOK (bring your own key)
 
 #### CLI Tool Providers
 
-In addition to API-based providers, Wrap supports using locally-installed CLI LLM tools as backends:
+In addition to API-based providers, Wrap supports CLI LLM tools as backends (currently: Claude Code). These are invoked as subprocesses. See `specs/llm-sdk.md` for provider architecture details.
 
-- **Claude Code** (`claude`), **Codex** (`codex`), **AMP** (`amp`), and similar tools that accept a prompt via CLI and return output to stdout.
-- Wrap invokes them as subprocesses, passing the system prompt + user query, and parses their stdout as the structured JSON response.
-- This lets users leverage tools they already have installed and authenticated — Wrap is just calling them, not using their credentials externally.
-- **Disclaimer:** On first selecting a CLI tool provider, Wrap shows a notice: _"Wrap invokes [tool name] as a subprocess using your existing installation and authentication. Review [tool name]'s terms of service to confirm this usage is permitted."_ The user must acknowledge before proceeding.
-- CLI providers are configured like:
-  ```jsonc
-  {
-    "type": "cli",
-    "command": "claude",
-    "args": ["--print", "--output-format", "json"]  // TBD per tool
-  }
-  ```
+- **Disclaimer (not yet implemented):** On first selecting a CLI tool provider, Wrap should show a notice about reviewing the tool's terms of service.
 
 ### 8.5 Context Sent to LLM
 
@@ -408,31 +386,29 @@ By default it will not continue a thread, only if we use the command for continu
 
 ## 10. Memory / Learning System
 
+> **Implemented.** See `specs/memory.md` for full architecture and implementation details.
+
 ### 10.1 Storage
 
 - **File:** `~/.wrap/memory.json` — map of directory scope → fact objects (`Record<string, {fact: string}[]>`)
 - `/` scope = global facts (system-wide). Directory scopes = project-specific facts.
 - Global facts sent on every request. Directory-specific facts only sent when CWD matches (prefix match).
-- See `specs/memory.md` for full implementation spec.
 - Future: vector database for selective retrieval of relevant memories
 
 ### 10.2 Learning Behavior
 
 - The LLM can return `memory_updates` in its structured response
 - **Memory updates are written immediately** — even mid-loop during probes. A flow that discovers `shell=zsh` but fails on the final command still persists that knowledge.
-- **Always notify the user** when something new is learned
-- Notifications appear on the non-stdout channel (stderr or /dev/tty)
+- **Always notify the user** when something new is learned — notifications on stderr with scope prefix for non-global facts
 - Combine multiple learnings to one message. e.g.: `🧠 Noted: you use zsh, config at ~/.zshrc`
 
 ### 10.3 Memory TTL (Future)
 
-Some learned facts are ephemeral — e.g., "pngquant is not installed" or "sips is installed" might change after a `brew install`. In the future, the LLM could assign a TTL to memory entries (e.g., "remember this for 24 hours"). This prevents Wrap from repeatedly trying the same failing approach when a transient condition has already been discovered, while still allowing stale facts to expire naturally.
-
-Not in v1 — all memories persist until manually cleared or overwritten.
+Some learned facts are ephemeral — e.g., "pngquant is not installed" might change after a `brew install`. In the future, the LLM could assign a TTL to memory entries. Not in v1 — all memories persist until manually cleared or overwritten.
 
 ### 10.4 Probing for Knowledge
 
-- **First run:** eager initialization — detect OS, shell type, basic environment immediately after config setup (same invocation, no LLM needed)
+- **First run:** eager initialization — detect OS, shell type, basic environment immediately after config setup (same invocation, no LLM needed). Probe commands are in `src/memory/init-probes.ts`.
 - **Lazy probing:** everything else is discovered on-demand when the LLM determines it needs the information (via the agent loop / probe commands)
 - This means Wrap gets smarter over time as you use it
 
@@ -571,24 +547,9 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
 - Determine cheapest viable model
 - Troubleshoot and improve command generation quality
 
-### 13.2 Structured Logging
+### 13.2 Logging as Eval Data
 
-When evals are enabled (manual opt in only), log to JSONL:
-
-```json
-{
-  "timestamp": "2026-03-18T14:30:00Z",
-  "input": "find all zsh files",
-  "context": {"cwd": "/Users/tal", "os": "darwin", "shell": "zsh", "memory": [...]},
-  "llm_request": {"provider": "openai", "model": "gpt-4o-mini", "prompt": "..."},
-  "llm_response": {"command": "find ~ -name '*.zsh'", "risk_level": "low", ...},
-  "executed": true,
-  "exit_code": 0,
-  "stdout": "...",
-  "stderr": "...",
-  "implicit_feedback": "success_no_retry"
-}
-```
+Wrap's always-on logging (see `specs/logging.md`) captures every invocation to JSONL. This data serves as the foundation for eval — a future cherry-pick workflow will transform selected log entries into `eval/examples/seed.jsonl` format.
 
 ### 13.3 Feedback Signal
 
@@ -601,10 +562,9 @@ When evals are enabled (manual opt in only), log to JSONL:
 
 ### 13.4 Eval Infrastructure
 
-- Lives in the repo but not distributed
-- DSPy or similar
-- Ideally runs in a container so as not to polute the dev machine.
-- Currently evaluates on all examples every trial (`minibatch=False`). Re-enable minibatch sampling once structured logging (13.2) grows the eval dataset past ~100 examples.
+- Lives in `eval/dspy/` — Docker-based, not distributed with the binary
+- DSPy-based prompt optimization with seed examples in `eval/examples/seed.jsonl`
+- Currently evaluates on all examples every trial (`minibatch=False`). Re-enable minibatch sampling once the eval dataset grows past ~100 examples.
 
 ---
 
@@ -628,11 +588,9 @@ When evals are enabled (manual opt in only), log to JSONL:
 
 ## 15. Subcommands
 
-### 15.1 v1 Approach
+> See `specs/subcommands.md` for full architecture and current commands.
 
-- Focus entirely on the core `wrap <natural language>` flow
-- Subcommands (`wrap config`, `wrap memory`, `wrap thread`, `wrap history`, etc.) will be designed later as needs emerge
-- The only "subcommand-like" behavior in v1 is `wrap` with no arguments (triggers first-run setup or shows help)
+Subcommands use `--` flags to avoid colliding with natural language input. Currently implemented: `--help`, `--version`, `--log`. Future: `--config`, `--memory`.
 
 ---
 
@@ -657,9 +615,9 @@ The following are acknowledged good ideas but **not in v1**:
 ## 17. Open Questions
 
 1. **Name conflicts:** Does `wrap` conflict with existing packages on Homebrew, apt, npm, etc.? Need to research.
-2. **Runtime choice:** Bun or Deno for compiling to a single executable? Both support it. Evaluate tradeoffs (binary size, startup time, compatibility).
-3. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.)
-4. **JSONC parser:** Use an existing JSONC parser (e.g., `jsonc-parser` from VS Code) or strip comments before `JSON.parse`?
+2. ~~**Runtime choice:**~~ **Resolved:** Bun. Compiles via `bun build --compile`.
+3. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: confirmation TUI, interactive mode, answer rendering.
+4. ~~**JSONC parser:**~~ **Resolved:** Using `jsonc-parser` package (VS Code's parser).
 5. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants.
 6. **Thread linking:** How does a follow-up command find its parent thread? Most recent? Terminal session detection?
 7. **`w!` and `w?` as symlink names:** `!` and `?` are shell special characters. These may need to be flags (`w --cmd`, `w --ask`) rather than symlink names. Needs investigation.
