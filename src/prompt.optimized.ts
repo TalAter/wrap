@@ -33,11 +33,19 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   risk_level: z.enum(["low", "medium", "high"]),
   // Brief description of what the command does or why this answer was given
   explanation: z.string().nullable().optional(),
-  // Reusable facts learned about the user's environment (e.g. shell type, OS, installed tools). These will be saved and given to you in all future requests
+  // Reusable facts learned about the user's environment.
+  // These are saved and given to you in future requests.
   memory_updates: z
     .array(
       z.object({
+        // The fact to remember
         fact: z.string(),
+        // Absolute directory path this fact applies to.
+        // Use "/" for system-wide facts (installed tools, OS, shell).
+        // Use the project's root directory for project-specific facts
+        // (tooling, test commands, build systems).
+        // Default to "/" unless the fact is clearly project-specific.
+        scope: z.string(),
       }),
     )
     .nullable().optional(),
@@ -45,7 +53,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "4d7d79c588e3604dbdf59522a8458f45cb9ad2828ac9bfcb066b1bcf17ede5ce";
+export const PROMPT_HASH = "490c68fe46227da21a960a82c0b1de1bd67ad1e2b4b7cef8579ff080ab10799b";
 
 export const FEW_SHOT_DEMOS: ReadonlyArray<{
   readonly input: string;

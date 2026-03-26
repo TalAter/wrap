@@ -215,7 +215,7 @@ describe("wrap", () => {
       type: "command",
       content: "echo hi",
       risk_level: "low",
-      memory_updates: [{ fact: "Uses zsh" }],
+      memory_updates: [{ fact: "Uses zsh", scope: "/" }],
       memory_updates_message: "Noted: you use zsh",
     });
     expect(exitCode).toBe(0);

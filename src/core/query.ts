@@ -80,7 +80,11 @@ export async function runQuery(
     round.parsed = response;
 
     if (response.memory_updates?.length) {
-      appendMemory(wrapHome, response.memory_updates);
+      // Temporarily extract facts and append to global scope until appendFacts lands (Step 6)
+      appendMemory(
+        wrapHome,
+        response.memory_updates.map((u) => ({ fact: u.fact })),
+      );
       if (response.memory_updates_message) {
         chrome(`🧠 ${response.memory_updates_message}`);
       }

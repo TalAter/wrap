@@ -39,18 +39,32 @@ describe("CommandResponseSchema", () => {
     expect(result.content).toBe("echo $SHELL");
   });
 
-  test("parses response with memory_updates", () => {
+  test("parses response with memory_updates including scope", () => {
     const input = {
       type: "command",
       content: "echo 'alias ll=ls -la' >> ~/.zshrc",
       risk_level: "medium",
-      memory_updates: [{ fact: "Default shell is zsh" }, { fact: "Shell config at ~/.zshrc" }],
-      memory_updates_message: "Noted: you use zsh, config at ~/.zshrc",
+      memory_updates: [
+        { fact: "Default shell is zsh", scope: "/" },
+        { fact: "Uses bun", scope: "/Users/tal/project" },
+      ],
+      memory_updates_message: "Noted: you use zsh; this project uses bun",
     };
     const result = CommandResponseSchema.parse(input);
     expect(result.memory_updates).toHaveLength(2);
-    expect(result.memory_updates?.[0]).toEqual({ fact: "Default shell is zsh" });
-    expect(result.memory_updates_message).toBe("Noted: you use zsh, config at ~/.zshrc");
+    expect(result.memory_updates?.[0]).toEqual({ fact: "Default shell is zsh", scope: "/" });
+    expect(result.memory_updates?.[1]?.scope).toBe("/Users/tal/project");
+    expect(result.memory_updates_message).toBe("Noted: you use zsh; this project uses bun");
+  });
+
+  test("requires scope field in memory_updates entries", () => {
+    const input = {
+      type: "command",
+      content: "ls",
+      risk_level: "low",
+      memory_updates: [{ fact: "Uses zsh" }],
+    };
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("rejects invalid type", () => {

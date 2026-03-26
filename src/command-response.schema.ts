@@ -20,11 +20,19 @@ export const CommandResponseSchema = z.object({
   risk_level: z.enum(["low", "medium", "high"]),
   // Brief description of what the command does or why this answer was given
   explanation: z.string().nullable().optional(),
-  // Reusable facts learned about the user's environment (e.g. shell type, OS, installed tools). These will be saved and given to you in all future requests
+  // Reusable facts learned about the user's environment.
+  // These are saved and given to you in future requests.
   memory_updates: z
     .array(
       z.object({
+        // The fact to remember
         fact: z.string(),
+        // Absolute directory path this fact applies to.
+        // Use "/" for system-wide facts (installed tools, OS, shell).
+        // Use the project's root directory for project-specific facts
+        // (tooling, test commands, build systems).
+        // Default to "/" unless the fact is clearly project-specific.
+        scope: z.string(),
       }),
     )
     .nullable()
