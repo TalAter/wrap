@@ -57,7 +57,7 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `expires` | string? | (Future) ISO 8601 timestamp after which this entry can be pruned. Omitted until expiry/pruning is implemented. |
 | `prompt` | string | User's natural language input |
 | `cwd` | string | Working directory at invocation time |
-| `piped_input` | string? | Piped stdin content. Omitted if not piped. (Piping not yet implemented — field exists for when it is.) |
+| `piped_input` | string? | Piped stdin content, truncated to first 1,000 characters for large inputs (see `specs/piped-input.md`). Omitted if not piped. |
 | `memory` | object? | Memory state at invocation time — full `Memory` object (all scopes). Omitted if empty. CWD-filtered subset can be reconstructed from `cwd` field. |
 | `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
@@ -185,7 +185,7 @@ A log entry captures everything needed to reproduce an LLM call:
 - **Provider** — which model was called
 - **Version** — which Wrap release was running
 
-The only missing piece is `piped_input`, which isn't captured yet because piping isn't implemented.
+When piped input support is implemented (see `specs/piped-input.md`), `piped_input` completes the picture. Large piped inputs are aggressively truncated in logs (first 1,000 characters only) to keep log files manageable.
 
 ### stdout is sacred
 
@@ -204,7 +204,7 @@ All logging writes to the filesystem only. No logging output goes to stdout or s
 ## TODO
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes to test the round retry path)
-- [ ] `piped_input` field — thread through from `parseInput` to both log entry and `assembleCommandPrompt` (blocked on piping support)
+- [ ] `piped_input` field — thread through from `readPipedInput` to both log entry and `assembleCommandPrompt` (see `specs/piped-input.md`)
 - [ ] `cancelled` outcome (requires signal handling)
 - [ ] `max_rounds` outcome (requires probe/retry loop)
 - [ ] `expires` field + retention pruning

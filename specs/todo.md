@@ -16,10 +16,15 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias/symlink setup — scan for available single-letter commands on first run
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
-- [ ] Detect piped stdin, read full content into buffer, pass to LLM as context
-- [ ] Thread piped input through to `assembleCommandPrompt` (type exists, not wired) and log entry
-- [ ] Large input warning TUI — token estimate, confirmation before sending
-- [ ] Hard ceiling — reject input over max size (e.g., 50MB)
+- [ ] Piped input — see `specs/piped-input.md` for full design. Key tasks:
+  - [ ] `readPipedInput()` — detect `!process.stdin.isTTY`, read with `Bun.stdin.text()`, ignore empty
+  - [ ] Wire piped input through main → runQuery → assembleCommandPrompt → log entry
+  - [ ] Truncation at `maxPipedTokens` with note to LLM about total size
+  - [ ] `pipe_stdin` response schema field + re-pipe to spawned command via `Bun.spawn({ stdin: new Blob([...]) })`
+  - [ ] `maxPipedTokens` config key (default 50,000)
+  - [ ] System prompt section for piped input behavior
+  - [ ] No-args + pipe: piped content becomes prompt (bypass --help dispatch)
+  - [ ] Large input: currently truncates silently; replace with TUI confirmation when confirmation is built
 
 ## Execution & Safety
 
@@ -52,7 +57,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Generalized CLI tool provider abstraction (currently only claude-code)
 - [ ] CLI provider terms-of-service disclaimer on first use
-- [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history, piped stdin
+- [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
 - [ ] Explain `memory_updates` usage in system prompt — when to write memories, what's worth remembering
 
 ## Memory System
@@ -65,7 +70,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Multi-round logging — probe rounds accumulate in the same entry
-- [ ] Wire `piped_input` field from stdin (blocked on piped input support)
+- [ ] Wire `piped_input` field from stdin (see `specs/piped-input.md`)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
 - [ ] `max_rounds` outcome type (blocked on multi-round query loop)
 - [ ] `expires` field + retention pruning (future)
@@ -122,4 +127,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Shell keybinding integration — keybinding sends current command line text to Wrap
 - [ ] Speculative LLM call for large piped input — check if command can consume stdin directly
 - [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (probes still execute).
+- [ ] Piped input: `--full` flag to send complete content to LLM without truncation
+- [ ] Piped input: temp-file buffering for very large inputs (avoid holding multi-GB strings in memory)
+- [ ] Piped input: `Bun.stdin.bytes()` for binary-safe re-piping (current `text()` corrupts non-UTF-8)
 - [ ] Interactive mode — `w` with no args opens a free-text prompt area (see `specs/interactive-mode.md`). Blocked on TUI lib.

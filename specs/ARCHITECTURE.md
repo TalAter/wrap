@@ -9,7 +9,13 @@
 ```
 parseInput(argv)
        │
-       ├─ subcommand or no args? ──→ dispatch()  (exit)
+       ├─ readPipedInput()  ──→ reads stdin if piped, returns string | null
+       │
+       ├─ flag? ──→ dispatch subcommand (exit). Piped input silently ignored.
+       │
+       ├─ no args + no pipe? ──→ dispatch --help (exit)
+       │
+       ├─ no args + pipe? ──→ piped input becomes the prompt
        │
        ├─ loadConfig()  ──→ loads config from file + env
        │
@@ -21,10 +27,10 @@ parseInput(argv)
        │
        ├─ resolvePath(cwd)  ──→ canonical CWD
        │
-       └─ runQuery({ prompt, provider, memory, cwd, toolsOutput })
+       └─ runQuery({ prompt, provider, memory, cwd, toolsOutput, pipedInput })
 ```
 
-Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory.
+Piped input is read eagerly, before subcommand dispatch. Subcommands (including `--help` for no-args without pipe) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory. See `specs/piped-input.md` for piped input architecture.
 
 ---
 
@@ -41,7 +47,7 @@ Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`
 Currently single-shot: one LLM call, optional round retry, then execute or print. The full multi-round loop (probes, error retries, unified round counter) is designed but not yet implemented — see `specs/SPEC.md` sections 6-7 for the target behavior.
 
 **Current flow** (in `src/core/query.ts`):
-1. Assemble context (system prompt + few-shot + memory + user prompt)
+1. Assemble context (system prompt + few-shot + piped input + memory + user prompt)
 2. Call LLM → get structured `CommandResponse`
 3. On structured output error → round retry once with failed output appended
 4. Handle memory updates (write immediately, notify user)
@@ -70,6 +76,7 @@ src/
 
   core/
     input.ts                  CLI arg parsing (prompt | flag | none)
+    stdin.ts                  readPipedInput() — detection, reading, truncation (see specs/piped-input.md)
     query.ts                  Query execution, round retry, command execution
     parse-response.ts         JSON parsing + schema validation
     paths.ts                  resolvePath() + prettyPath()
