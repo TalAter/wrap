@@ -48,7 +48,16 @@ For **unbuilt or partially built features**:
 - Add a clear `## TODO` section at the end listing exactly what still needs to be implemented
 - Each TODO item should be specific enough to act on
 
-### Step 3: Cross-reference
+### Step 3: Glossary consistency
+
+The glossary in `specs/SPEC.md` (§ Glossary) defines canonical terms. Every spec file must use these terms consistently.
+
+- **Check every term usage** in the spec against the glossary. Flag and fix any mismatches — e.g., "retry" where the glossary says "round retry", "conversation" where it says "thread", "plugin" where it says "probe".
+- **Synonyms and near-misses count.** If the spec uses a different word for a glossary concept, replace it with the canonical term (or add a parenthetical on first use if context demands the informal word).
+- **New terms:** If the spec introduces a concept that isn't in the glossary but should be, **do not invent the term yourself.** Instead, ask the user: describe the concept, suggest candidate terms if helpful, and let the user pick. Then add the chosen term to the glossary.
+- **Ambiguity:** If you're unsure whether two words refer to the same concept, or whether a term needs to be in the glossary, **ask the user** rather than guessing.
+
+### Step 4: Cross-reference
 
 - SPEC.md and ARCHITECTURE.md are the main entry points. They should reference sub-specs (e.g., "See `specs/memory.md` for details") rather than duplicating content.
 - If a sub-spec covers a topic well, the main specs should summarize briefly and point there.
