@@ -99,6 +99,10 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] `wrap help <subcommand>` — per-subcommand help
 - [ ] `-h` alias for `--help`
 
+## Answer Voice & Piped Mode (see specs/answer-voice.md)
+
+- [ ] Answer personality — voice instructions in DSPy signature, TTY-only wit, piped bare-value mode, new eval examples
+
 ## Eval System
 
 - [ ] Log-to-eval script — a script in `eval/` that parses `~/.wrap/logs/wrap.jsonl`, deduces feedback signals (exit codes, round retries, repeated prompts), identifies failure patterns and improvable scenarios, and outputs eval examples in `seed.jsonl` format for optimization.
