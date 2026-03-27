@@ -1,6 +1,6 @@
 # Wrap — Structured Logging
 
-> Always-on invocation logging for debugging, observability, and future eval/training data.
+> Always-on invocation logging for debugging, observability, and future eval data.
 
 ---
 
@@ -8,7 +8,7 @@
 
 When the LLM returns a malformed response (invalid JSON, schema mismatch), Wrap shows a terse error and exits. The raw LLM output is discarded — there's no way to inspect what actually came back. This makes debugging prompt issues, provider quirks, and schema mismatches impossible without reproducing the failure.
 
-Logging solves this by capturing every LLM interaction to disk as it happens. The same data also serves as the foundation for future eval pipelines (DSPy cherry-picking) and thread/session history.
+Logging solves this by capturing every LLM interaction to disk as it happens. The same data also serves as the foundation for future eval pipelines and thread/session history.
 
 ---
 
@@ -18,15 +18,15 @@ Logging solves this by capturing every LLM interaction to disk as it happens. Th
 |---|---|---|
 | Always on | Yes | No `--verbose` or opt-in flag. Every invocation logs. You shouldn't need to predict failures. |
 | Storage format | Single append-only JSONL file | One file, one line per invocation. Simple to tail, grep, parse. |
-| Granularity | One record per invocation | A `rounds` array captures multi-step interactions (probes, retries). Written once at end of invocation. |
+| Granularity | One record per invocation | A `rounds` array captures multi-step interactions (probes, error-fix attempts). Written once at end of invocation. |
 | Null fields | Omitted | Fields with null values are omitted from the JSON to keep the file compact. Absence = null. |
 | Sensitive data | Logged verbatim | Piped stdin, prompts, raw responses — all logged as-is. Same threat model as `~/.bash_history`. Local file on user's machine. |
-| System prompt | Hash only | Per-invocation context (user prompt, cwd, piped input) is logged in full. System prompt + schema + demos are represented by a SHA-256 hash for reproducibility without bloat. Match hash to prompt version in git. |
+| System prompt | Hash only | Per-invocation context (user prompt, cwd, piped input) is logged in full. System prompt + schema + few-shot examples are represented by a SHA-256 hash for reproducibility without bloat. Match hash to prompt version in git. |
 | Memory | Full snapshot | The entire `Memory` object is logged, not just CWD-filtered facts. CWD is in the entry, so the reader can reconstruct which scopes matched. Logging full memory avoids duplicating the filtering logic and provides more context. |
 | Timing | Per-round durations | `llm_ms` and `exec_ms` are stored as `performance.now()` deltas on each round, not as absolute timestamps. Keeps the data simple; total time can be derived by summing. |
-| Retries vs rounds | Nested, not flat | Structured-output retries (transient JSON parse failures) are nested inside the round as a `retry` field. Real multi-turn interactions (probes) are separate rounds. This prevents conflating error recovery with meaningful conversation turns. |
+| Round retries vs rounds | Nested, not flat | Round retries (transient JSON parse failures) are nested inside the round as a `retry` field. Real multi-turn interactions (probes) are separate rounds. This prevents conflating error recovery with meaningful conversation turns. |
 | Thread coupling | None (deferred) | No `thread_id` in log entries. Thread system will decide its own storage strategy when built. |
-| DSPy integration | Manual cherry-pick (future) | Logs are not automatically piped to DSPy. Future workflow: inspect logs, select interesting entries, manually reshape into eval examples. |
+| DSPy integration | Manual cherry-pick (future) | Logs are not automatically piped to DSPy. Future workflow: inspect logs, select interesting entries, reshape into eval examples. |
 | Privacy | User's responsibility | Document in help/README that logs contain full LLM exchanges. No redaction. |
 
 ---
@@ -61,7 +61,7 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `memory` | object? | Memory state at invocation time — full `Memory` object (all scopes). Omitted if empty. CWD-filtered subset can be reconstructed from `cwd` field. |
 | `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
-| `rounds` | array | Array of LLM round-trips (see below) |
+| `rounds` | array | Array of rounds (see below) |
 | `outcome` | string | `"success"` \| `"error"` \| `"refused"` \| `"cancelled"` (future) \| `"max_rounds"` (future) |
 
 ### Round fields
@@ -77,7 +77,7 @@ Each element in `rounds`:
 | `execution` | object? | Execution result (see below). Omitted if no command was executed. |
 | `llm_ms` | number? | Wall-clock milliseconds for the LLM call (includes retry time if applicable). |
 | `exec_ms` | number? | Wall-clock milliseconds for command execution. Omitted if no command was executed. |
-| `retry` | object? | (Not yet implemented) First-attempt failure when structured output retry occurred. Contains `raw_response`, `parse_error`, and `llm_ms` from the failed attempt. Omitted when no retry happened. |
+| `retry` | object? | (Not yet implemented) First-attempt failure when a round retry occurred. Contains `raw_response`, `parse_error`, and `llm_ms` from the failed attempt. Omitted when no retry happened. |
 
 ### Execution fields
 
@@ -134,7 +134,7 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 | No args / help screen | No | — |
 | Config errors | No | — |
 | Probe round (future) | Yes — as a round in the same entry | |
-| Error retry (future) | Yes — nested in `round.retry`, not a separate round | |
+| Round retry (future) | Yes — nested in `round.retry`, not a separate round | |
 
 ---
 
@@ -171,17 +171,17 @@ The prompt hash is precomputed at DSPy optimization time and exported as `PROMPT
 The hash is the SHA-256 hex digest of the concatenation of all prompt components:
 
 ```
-sha256(systemPrompt + "\n" + schemaText + "\n" + JSON.stringify(fewShotDemos))
+sha256(systemPrompt + "\n" + schemaText + "\n" + JSON.stringify(fewShotExamples))
 ```
 
-Missing components use stable fallbacks (empty string for text, `[]` for demos) so the hash is always deterministic. The Python optimizer (`eval/dspy/optimize.py`) uses `json.dumps(demos, separators=(',', ':'))` to match JS `JSON.stringify()`'s compact output.
+Missing components use stable fallbacks (empty string for text, `[]` for few-shot examples) so the hash is always deterministic. The Python optimizer (`eval/dspy/optimize.py`) uses `json.dumps(demos, separators=(',', ':'))` to match JS `JSON.stringify()`'s compact output.
 
 ### Reproducibility
 
 A log entry captures everything needed to reproduce an LLM call:
 - **Prompt** — user's input
 - **Memory** — full fact state at invocation time (CWD determines which scopes the LLM saw)
-- **Prompt hash** — identifies the exact system prompt / schema / demos version
+- **Prompt hash** — identifies the exact system prompt / schema / few-shot examples version
 - **Provider** — which model was called
 - **Version** — which Wrap release was running
 
@@ -196,14 +196,14 @@ All logging writes to the filesystem only. No logging output goes to stdout or s
 ## Relationship to Other Systems
 
 - **Threads (future):** Logging and threads are independent. Threads may reference log entries by ID in the future, or maintain their own storage. Decided when threads are built.
-- **Eval / DSPy (future):** Logs serve as raw material for training data. A future `wrap log export` command or manual cherry-pick workflow transforms log entries into `eval/examples/seed.jsonl` format. No automated pipeline.
+- **Eval / DSPy (future):** Logs serve as raw material for eval examples. A future `wrap log export` command or manual cherry-pick workflow transforms log entries into examples (`eval/examples/seed.jsonl`). No automated pipeline.
 - **Memory:** Memory state is snapshotted in each log entry. Memory updates from the LLM response are visible in `parsed.memory_updates`. Memory persistence is a separate system (`~/.wrap/memory.json`).
 
 ---
 
 ## TODO
 
-- [ ] Retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes to test the retry path)
+- [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes to test the round retry path)
 - [ ] `piped_input` field — thread through from `parseInput` to both log entry and `assembleCommandPrompt` (blocked on piping support)
 - [ ] `cancelled` outcome (requires signal handling)
 - [ ] `max_rounds` outcome (requires probe/retry loop)

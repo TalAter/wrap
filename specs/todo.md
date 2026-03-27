@@ -6,7 +6,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Core Query Loop
 
-- [ ] Multi-round loop — probes, retries, and auto-fix within unified round counter (`maxRounds`)
+- [ ] Multi-round loop — probes, round retries, and error-fix rounds within unified round counter (`maxRounds`)
 - [ ] Multi-turn conversation context — probe results and errors as conversation turns passed to LLM
 - [ ] Define MAX_ROUNDS exhaustion behavior (show accumulated errors? last error? summary?)
 - [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
@@ -63,7 +63,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Logging (see specs/logging.md for architecture)
 
-- [ ] Retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
+- [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Multi-round logging — probe rounds accumulate in the same entry
 - [ ] Wire `piped_input` field from stdin (blocked on piped input support)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
@@ -74,7 +74,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Thread System
 
 - [ ] Thread storage (user inputs, commands, stdout/stderr, LLM responses)
-- [ ] Thread continuation via follow-up invocation (`wyada` or similar)
+- [ ] Thread continuation via new invocation (`wyada` or similar)
 - [ ] Thread TTL expiry
 - [ ] Thread identification — link follow-up to parent (initially: most recent in current terminal)
 - [ ] Large output warning before sending thread with large stored output to LLM
@@ -101,7 +101,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Eval System
 
-- [ ] Log-to-eval script — a script in `eval/` that parses `~/.wrap/logs/wrap.jsonl`, deduces implicit feedback (exit codes, retries, repeated prompts), identifies failure patterns and improvable scenarios, and outputs entries in `seed.jsonl` format for DSPy optimization.
+- [ ] Log-to-eval script — a script in `eval/` that parses `~/.wrap/logs/wrap.jsonl`, deduces feedback signals (exit codes, round retries, repeated prompts), identifies failure patterns and improvable scenarios, and outputs eval examples in `seed.jsonl` format for optimization.
 
 ## Build & Distribution
 

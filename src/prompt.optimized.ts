@@ -24,7 +24,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   type: z.enum([
     // command = shell command to execute. Use when you know what command to run to achieve the user's request.
     "command",
-    // probe = a safe, read-only discovery command to learn about the user's environment (e.g. what shell they use, what's installed). The probe output will be fed back to you in a follow-up request so you can then produce the final command.
+    // probe = a safe, read-only discovery command to learn about the user's environment (e.g. what shell they use, what's installed). The probe output will be fed back to you in the next round so you can then produce the final command.
     "probe",
     // answer = a direct text response. Use for general knowledge questions that don't need a shell command.
     "answer",
@@ -55,9 +55,9 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "fd3eac882cd4772190d7e4a24071a9fa2c5802a1bd2188d92c8f56dc43fedb6e";
+export const PROMPT_HASH = "b725869b5cc51e583801cf83972731cadd3352f3a60d5b21c4d309165ac3e927";
 
-export const FEW_SHOT_DEMOS: ReadonlyArray<{
+export const FEW_SHOT_EXAMPLES: ReadonlyArray<{
   readonly input: string;
   readonly output: string;
 }> = [

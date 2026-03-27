@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { assembleCommandPrompt, type QueryContext } from "../src/llm/context.ts";
-import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "../src/prompt.optimized.ts";
+import { FEW_SHOT_EXAMPLES, SCHEMA_TEXT, SYSTEM_PROMPT } from "../src/prompt.optimized.ts";
 
 function makeContext(overrides?: Partial<QueryContext>): QueryContext {
   return {
@@ -25,27 +25,27 @@ describe("assembleCommandPrompt", () => {
     }
   });
 
-  test("few-shot demos become user/assistant turn pairs", () => {
+  test("few-shot examples become user/assistant turn pairs", () => {
     const result = assembleCommandPrompt(makeContext());
-    if (FEW_SHOT_DEMOS.length === 0) return;
-    // Each demo = one user + one assistant message
-    const demoMessages = result.messages.slice(0, FEW_SHOT_DEMOS.length * 2);
-    for (let i = 0; i < FEW_SHOT_DEMOS.length; i++) {
-      expect(demoMessages[i * 2]).toEqual({
+    if (FEW_SHOT_EXAMPLES.length === 0) return;
+    // Each example = one user + one assistant message
+    const exampleMessages = result.messages.slice(0, FEW_SHOT_EXAMPLES.length * 2);
+    for (let i = 0; i < FEW_SHOT_EXAMPLES.length; i++) {
+      expect(exampleMessages[i * 2]).toEqual({
         role: "user",
-        content: FEW_SHOT_DEMOS[i].input,
+        content: FEW_SHOT_EXAMPLES[i].input,
       });
-      expect(demoMessages[i * 2 + 1]).toEqual({
+      expect(exampleMessages[i * 2 + 1]).toEqual({
         role: "assistant",
-        content: FEW_SHOT_DEMOS[i].output,
+        content: FEW_SHOT_EXAMPLES[i].output,
       });
     }
   });
 
-  test("separator message follows few-shot demos", () => {
+  test("separator message follows few-shot examples", () => {
     const result = assembleCommandPrompt(makeContext());
-    if (FEW_SHOT_DEMOS.length === 0) return;
-    const separatorIndex = FEW_SHOT_DEMOS.length * 2;
+    if (FEW_SHOT_EXAMPLES.length === 0) return;
+    const separatorIndex = FEW_SHOT_EXAMPLES.length * 2;
     expect(result.messages[separatorIndex]).toEqual({
       role: "user",
       content: "Now handle the following request.",
@@ -60,9 +60,9 @@ describe("assembleCommandPrompt", () => {
     expect(last.content).toContain("find stuff");
   });
 
-  test("no separator when there are no few-shot demos", () => {
+  test("no separator when there are no few-shot examples", () => {
     const result = assembleCommandPrompt(makeContext());
-    if (FEW_SHOT_DEMOS.length === 0) {
+    if (FEW_SHOT_EXAMPLES.length === 0) {
       expect(result.messages.length).toBe(1);
       expect(result.messages[0].role).toBe("user");
     }
@@ -70,10 +70,10 @@ describe("assembleCommandPrompt", () => {
 
   test("messages array length is correct", () => {
     const result = assembleCommandPrompt(makeContext());
-    const demoCount = FEW_SHOT_DEMOS.length;
+    const exampleCount = FEW_SHOT_EXAMPLES.length;
     const expected =
-      demoCount > 0
-        ? demoCount * 2 + 1 /* separator */ + 1 /* final user */
+      exampleCount > 0
+        ? exampleCount * 2 + 1 /* separator */ + 1 /* final user */
         : 1; /* just final user */
     expect(result.messages.length).toBe(expected);
   });

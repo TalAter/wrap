@@ -62,7 +62,7 @@ export async function runQuery(
         round.llm_ms = Math.round(performance.now() - llmStart);
         throw e;
       }
-      // Retry once with failed output appended
+      // Round retry: re-attempt once with failed output appended
       const retryInput = {
         system: input.system,
         messages: [

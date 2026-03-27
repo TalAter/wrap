@@ -9,7 +9,7 @@ export const CommandResponseSchema = z.object({
   type: z.enum([
     // command = shell command to execute. Use when you know what command to run to achieve the user's request.
     "command",
-    // probe = a safe, read-only discovery command to learn about the user's environment (e.g. what shell they use, what's installed). The probe output will be fed back to you in a follow-up request so you can then produce the final command.
+    // probe = a safe, read-only discovery command to learn about the user's environment (e.g. what shell they use, what's installed). The probe output will be fed back to you in the next round so you can then produce the final command.
     "probe",
     // answer = a direct text response. Use for general knowledge questions that don't need a shell command.
     "answer",

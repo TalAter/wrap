@@ -1,5 +1,5 @@
 import type { Memory } from "../memory/types.ts";
-import { FEW_SHOT_DEMOS, SCHEMA_TEXT, SYSTEM_PROMPT } from "../prompt.optimized.ts";
+import { FEW_SHOT_EXAMPLES, SCHEMA_TEXT, SYSTEM_PROMPT } from "../prompt.optimized.ts";
 import type { ConversationMessage, PromptInput } from "./types.ts";
 
 export type QueryContext = {
@@ -19,11 +19,11 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
 
   const messages: ConversationMessage[] = [];
 
-  // Few-shot demos as user/assistant turn pairs
-  if (FEW_SHOT_DEMOS.length > 0) {
-    for (const demo of FEW_SHOT_DEMOS) {
-      messages.push({ role: "user", content: demo.input });
-      messages.push({ role: "assistant", content: demo.output });
+  // Few-shot examples as user/assistant turn pairs
+  if (FEW_SHOT_EXAMPLES.length > 0) {
+    for (const example of FEW_SHOT_EXAMPLES) {
+      messages.push({ role: "user", content: example.input });
+      messages.push({ role: "assistant", content: example.output });
     }
     messages.push({ role: "user", content: "Now handle the following request." });
   }

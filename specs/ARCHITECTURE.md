@@ -35,12 +35,12 @@ Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`
 
 ## The Query Loop
 
-Currently single-shot: one LLM call, optional structured output retry, then execute or print. The full multi-round loop (probes, error retries, unified round counter) is designed but not yet implemented — see `specs/SPEC.md` sections 6-7 for the target behavior.
+Currently single-shot: one LLM call, optional round retry, then execute or print. The full multi-round loop (probes, error retries, unified round counter) is designed but not yet implemented — see `specs/SPEC.md` sections 6-7 for the target behavior.
 
 **Current flow** (in `src/core/query.ts`):
 1. Assemble context (system prompt + few-shot + memory + user prompt)
 2. Call LLM → get structured `CommandResponse`
-3. On structured output error → retry once with failed output appended
+3. On structured output error → round retry once with failed output appended
 4. Handle memory updates (write immediately, notify user)
 5. Route by response type: answer → stdout, probe → error (not yet supported), command → execute if low-risk
 
@@ -48,7 +48,7 @@ Currently single-shot: one LLM call, optional structured output retry, then exec
 
 | Rule | Rationale |
 |---|---|
-| Unified counter for probes + retries | One budget prevents runaway loops regardless of response type. |
+| Unified counter for probes + error-fix rounds | One budget prevents runaway loops regardless of response type. |
 | Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Updates both disk and in-memory state so the next LLM call in the same loop sees it. |
 | User-edited commands don't get auto-fix | The user took manual control — don't second-guess with LLM auto-fix. |
 | Multi-turn conversation context | Probes/errors become conversation turns, giving the LLM full history for each subsequent call. |
@@ -62,12 +62,12 @@ src/
   index.ts                    Entry point
   main.ts                     Top-level orchestration
   prompt.ts                   Base prompt template
-  prompt.optimized.ts         DSPy-generated: system prompt, schema text, few-shot demos, prompt hash
+  prompt.optimized.ts         DSPy-generated: system prompt, schema text, few-shot examples, prompt hash
   command-response.schema.ts  Zod schema for LLM command/answer/probe responses
 
   core/
     input.ts                  CLI arg parsing (prompt | flag | none)
-    query.ts                  Query execution, structured output retry, command execution
+    query.ts                  Query execution, round retry, command execution
     parse-response.ts         JSON parsing + schema validation
     paths.ts                  resolvePath() + prettyPath()
     output.ts                 isTTY(), hasJq(), chrome() (stderr output)

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
-  FEW_SHOT_DEMOS,
+  FEW_SHOT_EXAMPLES,
   PROMPT_HASH,
   SCHEMA_TEXT,
   SYSTEM_PROMPT,
@@ -19,12 +19,12 @@ describe("assemblePromptParts", () => {
     expect(parts.schema).toBe(SCHEMA_TEXT);
   });
 
-  test("returns fewShotDemos when FEW_SHOT_DEMOS is non-empty", () => {
+  test("returns fewShotExamples when FEW_SHOT_EXAMPLES is non-empty", () => {
     const parts = assemblePromptParts();
-    expect(parts.fewShotDemos).toBeDefined();
-    expect(parts.fewShotDemos).toHaveLength(FEW_SHOT_DEMOS.length);
-    expect(parts.fewShotDemos?.[0].input).toBe(FEW_SHOT_DEMOS[0].input);
-    expect(parts.fewShotDemos?.[0].output).toBe(FEW_SHOT_DEMOS[0].output);
+    expect(parts.fewShotExamples).toBeDefined();
+    expect(parts.fewShotExamples).toHaveLength(FEW_SHOT_EXAMPLES.length);
+    expect(parts.fewShotExamples?.[0].input).toBe(FEW_SHOT_EXAMPLES[0].input);
+    expect(parts.fewShotExamples?.[0].output).toBe(FEW_SHOT_EXAMPLES[0].output);
   });
 
   test("all parts are present (smoke test)", () => {
@@ -43,7 +43,7 @@ describe("PROMPT_HASH", () => {
     const input = [
       (SYSTEM_PROMPT || "").trim(),
       (SCHEMA_TEXT || "").trim(),
-      JSON.stringify(FEW_SHOT_DEMOS.length > 0 ? [...FEW_SHOT_DEMOS] : []),
+      JSON.stringify(FEW_SHOT_EXAMPLES.length > 0 ? [...FEW_SHOT_EXAMPLES] : []),
     ].join("\n");
     const expected = createHash("sha256").update(input).digest("hex");
     expect(PROMPT_HASH).toBe(expected);

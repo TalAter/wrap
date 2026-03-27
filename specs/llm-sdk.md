@@ -15,7 +15,7 @@ All LLM providers implement a single `runPrompt` method. Without a Zod schema it
 **PromptInput** separates system prompt from conversation messages:
 
 - **System**: always exactly one string. Maps directly to the AI SDK's `generateText({ system, messages })`. CLI providers get a clean system string for `--system-prompt`.
-- **Messages**: pure conversation turns (user/assistant). Used for few-shot demos, probe history, retry turns, thread continuation.
+- **Messages**: pure conversation turns (user/assistant). Used for few-shot examples, probe history, round retry turns, thread continuation.
 
 **Why a single method with optional schema** (not overloads): TypeScript has issues with overloaded signatures on object literal implementations. A single function signature with optional schema keeps every provider implementable as a plain object.
 
@@ -58,14 +58,14 @@ Deterministic mock for testing. Reads from `WRAP_TEST_RESPONSE` env var. With sc
 - `SYSTEM_PROMPT` + `SCHEMA_TEXT` from `prompt.optimized.ts`
 
 **Messages** (in order):
-1. **Few-shot demos** as user/assistant turn pairs (static, cacheable)
+1. **Few-shot examples** as user/assistant turn pairs (static, cacheable)
 2. **Separator**: `"Now handle the following request."` — marks boundary between examples and real conversation. Prevents the LLM from treating thread history or context as more examples.
 3. **Thread history** turns (if continuing — not yet implemented)
 4. **Final user message** — memory facts (filtered by CWD prefix, sectioned by scope) + CWD + user prompt
 
 **Why memory and CWD go in the final user message** (not the system prompt): They're dynamic per-request. Keeping them out of the system prompt makes the system + few-shot prefix fully static and cacheable.
 
-Updates to message structure must also be replicated in the DSPy eval pipeline.
+Updates to message structure must also be replicated in the eval pipeline.
 
 ---
 
@@ -88,9 +88,9 @@ Fields: `type` (required), `model` (optional, defaults vary by type), `apiKey` (
 
 ---
 
-## Structured Output Retry
+## Round Retry
 
-When `runCommandPrompt` throws a structured output error (invalid JSON, schema mismatch), retry once. The retry appends the failed output as an assistant turn + a stricter instruction as a user turn. Messages are cloned before retry to avoid mutating the caller's array (important inside a loop).
+When `runCommandPrompt` throws a structured output error (invalid JSON, schema mismatch), round retry: retry once. The retry appends the failed output as an assistant turn + a stricter instruction as a user turn. Messages are cloned before retry to avoid mutating the caller's array (important inside a loop).
 
 This logic lives in `src/core/query.ts` — it's provider-agnostic.
 
@@ -99,5 +99,5 @@ This logic lives in `src/core/query.ts` — it's provider-agnostic.
 ## Open Questions
 
 1. **Schema text in system prompt**: For API providers with native structured output, embedding schema text is redundant but helps the LLM understand field semantics. Always included for now — can optimize later.
-2. **Few-shot + structured output**: Few-shot assistant turns contain raw JSON. Need to verify this works well with `Output.object()`. If it causes issues, fall back to embedding demos in system prompt.
+2. **Few-shot + structured output**: Few-shot example assistant turns contain raw JSON. Need to verify this works well with `Output.object()`. If it causes issues, fall back to embedding few-shot examples in system prompt.
 3. **Separator message**: The "Now handle the following request." separator is a prompt engineering hypothesis. Should be validated via eval.

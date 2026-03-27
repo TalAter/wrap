@@ -1,12 +1,12 @@
 """DSPy optimizer for Wrap's system prompt and few-shot examples.
 
-Reads the Zod schema (with inline comments), loads seed examples, runs MIPRO
-optimization to discover the best instruction text + few-shot demos, and writes
+Reads the Zod schema (with inline comments), loads examples, runs MIPRO
+optimization to discover the best instruction text + few-shot examples, and writes
 the result to src/prompt.optimized.ts.
 
 The Zod schema's inline comments serve as structural guidance for the LLM —
 they explain what each type means, when to use probe vs command, etc. MIPRO
-optimizes the instruction text and selects demos around this fixed schema.
+optimizes the instruction text and selects few-shot examples around this fixed schema.
 """
 
 import hashlib
@@ -102,7 +102,7 @@ def memory_to_context(memory: dict | None, cwd: str = "/") -> str:
 
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
-    """Convert seed examples to DSPy Example objects."""
+    """Convert examples to DSPy Example objects."""
     dspy_examples = []
     for ex in examples:
         cwd = ex.get("cwd", "/")
@@ -142,7 +142,7 @@ def extract_instruction(optimized) -> str:
 
 
 def extract_demos(optimized) -> list[dict]:
-    """Extract few-shot demos from the compiled program."""
+    """Extract few-shot examples from the compiled program."""
     demos = []
     predict_demos = getattr(optimized.predict, "demos", None) or []
     print(f"Raw demos count: {len(predict_demos)}")
@@ -174,7 +174,7 @@ def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -
 
 
 def write_output(instruction: str, demos: list[dict], schema_text: str, path: Path) -> None:
-    """Write optimized prompt, schema, and demos to TypeScript file."""
+    """Write optimized prompt, schema, and few-shot examples to TypeScript file."""
     escaped = instruction.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
     escaped_schema = schema_text.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
     demos_json = json.dumps(demos, indent=2)
@@ -189,7 +189,7 @@ export const SCHEMA_TEXT = `{escaped_schema}`;
 
 export const PROMPT_HASH = "{prompt_hash}";
 
-export const FEW_SHOT_DEMOS: ReadonlyArray<{{
+export const FEW_SHOT_EXAMPLES: ReadonlyArray<{{
   readonly input: string;
   readonly output: string;
 }}> = {demos_json} as const;
@@ -243,7 +243,7 @@ def main():
     print(f"Train: {len(trainset)}, Val: {len(valset)}")
 
     # Configure DSPy models
-    # Teacher: proposes instruction candidates and bootstraps demos
+    # Teacher: proposes instruction candidates and bootstraps few-shot examples
     # Target: evaluates candidates (what the prompt will actually run on)
     teacher_lm = dspy.LM(
         f"anthropic/{teacher_model}",
@@ -259,7 +259,7 @@ def main():
     signature = make_signature(schema_text)
     predictor = WrapPredictor(signature)
 
-    # Run MIPRO — optimizes both instruction text and demos
+    # Run MIPRO — optimizes both instruction text and few-shot examples
     print("Running MIPROv2 optimization...")
     optimizer = dspy.MIPROv2(
         metric=wrap_metric,
@@ -287,12 +287,12 @@ def main():
     val_score = evaluate(optimized)
     print(f"Validation score: {val_score}")
 
-    # Extract optimized instruction + demos
+    # Extract optimized instruction + few-shot examples
     instruction = extract_instruction(optimized)
     demos = extract_demos(optimized)
 
     print(f"Optimized instruction ({len(instruction)} chars)")
-    print(f"Extracted {len(demos)} few-shot demos")
+    print(f"Extracted {len(demos)} few-shot examples")
 
     if instruction:
         print(f"\n--- Instruction preview ---\n{instruction[:500]}\n---")

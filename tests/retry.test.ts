@@ -42,7 +42,7 @@ describe("extractFailedText", () => {
   });
 });
 
-describe("structured output retry in runQuery", () => {
+describe("round retry in runQuery", () => {
   const originalConsoleLog = console.log;
   const originalStderrWrite = process.stderr.write;
   let stdoutOutput: string[];

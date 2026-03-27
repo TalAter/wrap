@@ -46,6 +46,77 @@ Faster than switching to a browser or separate LLM to look up a command. Stays i
 
 ---
 
+## Glossary
+
+Canonical terms used throughout specs, code, and discussion. Use these consistently.
+
+### Core execution
+
+| Term | Definition |
+|------|-----------|
+| **Invocation** | One complete Wrap run: parse → config → memory → query → log |
+| **Query** | The LLM interaction loop within an invocation (rounds, round retries) |
+| **Round** | One LLM call → parsed response → optional execution. Probes, commands, error-fix attempts, answers are each one round. |
+| **Round retry** | Re-attempt within a round when the response couldn't be parsed. Not a new round. |
+
+### Discovery & memory
+
+| Term | Definition |
+|------|-----------|
+| **Discovery** | The ongoing process of learning about the environment (init probes, query probes, memory updates) |
+| **Probe** | An individual command run for discovery (init probe = first-run, query probe = mid-query) |
+| **Memory** | A collection of scoped facts learned about the user or their machine. Memory → Scopes → Facts. |
+| **Scope** | The directory a fact belongs to in the file system |
+| **Fact** | An individual learned item in memory |
+
+### Response & behavior
+
+| Term | Definition |
+|------|-----------|
+| **Mode** | How you invoke Wrap (default, yolo, force-cmd, force-answer, confirm-all) |
+| **Response type** | What the LLM responds with: command, probe, or answer |
+| **Follow-up** | TUI action: invoked when the user chooses not to invoke a command and refine it via text input |
+| **Continuation** | Resuming a previous conversation thread in a new invocation |
+| **Subcommand** | CLI sub-action accessed via flag (--log, --help, --version) |
+
+### Input
+
+| Term | Definition |
+|------|-----------|
+| **User prompt** | The natural language text after `w`. Distinct from system prompt. |
+| **Piped input** | Data from stdin when Wrap is used in a pipe |
+
+### Output
+
+| Term | Definition |
+|------|-----------|
+| **Chrome** | Wrap's own UI elements (stderr/tty): spinners, confirmations, errors, memory update messages |
+| **Output** | Useful result on stdout: command output or answer text |
+| **Auto-execute** | Running a low-risk command without confirmation |
+
+### Logging & eval pipeline
+
+| Term | Definition |
+|------|-----------|
+| **Log** | Raw invocation record in JSONL |
+| **LogEntry** | Record of a single invocation (or thread) in the log |
+| **Example** | Curated input-output pair for eval (not "sample", "seed", "training data") |
+| **Eval** | Dev-only offline scoring of LLM performance against examples |
+| **Optimization** | Using eval results to improve the prompt (via DSPy or similar) |
+| **Few-shot example** | Example conversation embedded in the prompt |
+| **Feedback signal** | Implicit quality indicator extracted from logs (exit code, retries, etc.) |
+
+### Paths & safety
+
+| Term | Definition |
+|------|-----------|
+| **Pretty path** | Display path with ~ as the home directory |
+| **Resolved path** | Absolute canonical path used internally |
+| **Safety classification** | The two-layer risk system (LLM risk level + local rule engine) |
+| **Risk level** | low/medium/high rating from the LLM |
+
+---
+
 ## 2. Language & Architecture
 
 ### 2.1 Core Binary: TypeScript
@@ -59,12 +130,12 @@ Faster than switching to a browser or separate LLM to look up a command. Stays i
 - **Test-driven development as a guiding philosophy.** Write failing tests first, then code. Full coverage is the goal.
 - **LLM mock:** The LLM integration layer is behind an interface so tests can swap in a mock that returns deterministic structured JSON responses. This allows testing the entire pipeline — input parsing, context assembly, JSON response handling, safety classification, command execution, memory updates, thread storage — without hitting a real LLM.
 - **Memory testing:** Memory tests use real filesystem I/O against isolated temp directories (each test gets its own `WRAP_HOME`). No in-memory mock — test the real thing.
-- Tests should cover: invocation mode detection, safety rule engine, JSON parsing/retry logic, probe loop behavior, memory read/write, thread TTL expiry, TUI rendering (snapshot tests), config validation, piped stdin detection, and error-handling/auto-fix flow.
+- Tests should cover: mode detection, safety rule engine, JSON parsing/round retry logic, probe loop behavior, memory read/write, thread TTL expiry, TUI rendering (snapshot tests), config validation, piped stdin detection, and error-handling/auto-fix flow.
 
 ### 2.3 Dev-Only Tooling: Python Sidecar
 
 - Lives in the repo (e.g., `scripts/eval/` or `eval/`)
-- Used for DSPy prompt optimization and eval analysis
+- Used for DSPy optimization and eval
 - **Never shipped to end users** — not part of the distributed binary
 - Accessed via repo scripts (e.g., `make eval`, `python scripts/eval.py`), not via `wrap` subcommands
 - Open to alternatives to DSPy
@@ -73,7 +144,7 @@ Faster than switching to a browser or separate LLM to look up a command. Stays i
 
 ## 3. Invocation Modes
 
-Wrap supports multiple invocation variants via symlinks (or aliases — exact mechanism TBD):
+Wrap supports multiple modes via symlinks (or aliases — exact mechanism TBD):
 
 | Invocation (exact command TBD) | Behavior                                                                                                         |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
@@ -181,7 +252,7 @@ When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr �
 
 **`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the TUI panel. The user can then proceed with the other keybindings.
 
-**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the TUI updates with the new generated command. The user can follow up multiple times before executing or cancelling. This is only available in the confirmation TUI (medium/high risk commands) — for low-risk commands that auto-execute, the user can follow up via `wyada` in a new invocation.
+**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the TUI updates with the new generated command. The user can follow up multiple times before executing or cancelling. This is only available in the confirmation TUI (medium/high risk commands) — for low-risk commands that auto-execute, the user can continue via `wyada` in a new invocation.
 
 **Input buffer flush:** Before rendering the confirmation prompt, flush/discard any buffered terminal input. This prevents a stray `Enter` (pressed while waiting for the LLM response) from accidentally confirming a dangerous command. The prompt only accepts input after it is fully displayed.
 
@@ -240,7 +311,7 @@ Auto-fix triggers only on **infrastructure-level failures** — problems with th
 | No results | `grep` returns exit code 1 (no matches) | **No** — command worked, nothing matched |
 | Runtime failure | `node: Cannot find module './foo'` | **No** — the command ran, the program has a bug |
 
-When auto-fix does NOT apply, Wrap simply shows the command's output (stdout + stderr) and exits. The user can follow up via `wyada` if they want to try a different approach.
+When auto-fix does NOT apply, Wrap simply shows the command's output (stdout + stderr) and exits. The user can continue via `wyada` if they want to try a different approach.
 
 ### 6.1 Auto-Fix Flow
 
@@ -264,15 +335,15 @@ Note: `command not found: foo` (without `./`) means `foo` is not in `$PATH` anyw
 
 ### 6.3 Retry Loop
 
-- Error retries and probe rounds share a **unified counter** (see ARCHITECTURE.md — Loop Rules). One budget for all LLM round-trips, configurable via `maxRounds`.
-- **Default:** 5 rounds total (probes + retries), show each attempt (command + error)
+- Error-fix rounds and probe rounds share a **unified counter** (see ARCHITECTURE.md — Loop Rules). One budget for all rounds, configurable via `maxRounds`.
+- **Default:** 5 rounds total (probes + error-fix attempts), show each attempt (command + error)
 - After max rounds exhausted, show final error and stop
 
 ---
 
 ## 7. Agent Loop (Probe Commands)
 
-The LLM can return probe/discovery commands before the final command:
+The LLM can return probe commands before the final command:
 
 ```
 User: "add this alias to my shell config"
@@ -316,19 +387,19 @@ The LLM must return structured JSON:
 
 - The LLM response schema (section 8.1) is defined as a **Zod schema** — single source of truth for TypeScript types, runtime validation, and JSON Schema generation.
 - Uses the **Vercel AI SDK** (`ai` v6 + `@ai-sdk/anthropic` + `@ai-sdk/openai`) with native structured output support.
-- If JSON parsing fails: retry once with a stricter prompt and the broken JSON ("respond ONLY with valid JSON").
-- No client-side JSON repair — rely on provider structured output support + one retry.
+- If JSON parsing fails: round retry — retry once with a stricter prompt and the broken JSON ("respond ONLY with valid JSON").
+- No client-side JSON repair — rely on provider structured output support + one round retry.
 - See `specs/llm-sdk.md` for full provider architecture and implementation details.
 
 ### 8.3 Prompt Strategy
 
 - System prompt is a configurable template (not hardcoded)
 - Start with a basic functional prompt
-- Evolve and optimize via DSPy (or similar) in the dev eval pipeline
+- Evolve and optimize via DSPy (or similar) in the eval pipeline
 
 ### 8.4 Provider Support & Wire Format
 
-> **Implemented.** See `specs/llm-sdk.md` for full provider architecture: interface design, AI SDK integration, context assembly, config, and structured output retry.
+> **Implemented.** See `specs/llm-sdk.md` for full provider architecture: interface design, AI SDK integration, context assembly, config, and round retry.
 
 Provider-agnostic interface supporting API providers (Anthropic, OpenAI, Ollama via `baseURL`) and CLI tool providers (Claude Code). BYOK — bring your own key.
 
@@ -339,7 +410,7 @@ Each request includes:
 - User's natural language input
 - Current working directory
 - Curated environment variables: `PATH`, `EDITOR`, `SHELL` (never secrets like API keys)
-- Memory facts filtered to the current directory (global facts always included; directory-specific facts only when CWD matches)
+- Facts filtered to the current directory (global facts always included; directory-specific facts only when CWD matches)
 - Thread history (if continuing a thread)
 - Piped stdin content (if present — with token count warning presented to user for very large inputs)
 
@@ -370,7 +441,7 @@ By default it will not continue a thread, only if we use the command for continu
 
 ### 9.3 Thread Identification
 
-- Mechanism for linking a follow-up command to its parent thread. Initially it will just be the most recent thread in the current terminal window.
+- Mechanism for linking a continuation to its parent thread. Initially it will just be the most recent thread in the current terminal window.
 
 ---
 
@@ -492,7 +563,7 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
   "alwaysConfirm": ["docker", "kubectl", "aws", "rm"],
   "neverConfirm": ["ls", "cat", "echo", "pwd"],
 
-  // LLM round budget (probes + retries share one counter)
+  // LLM round budget (probes + error-fix rounds share one counter)
   "maxRounds": 5,
   "showRetryAttempts": true,
 
@@ -517,7 +588,7 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
 
 ### 13.2 Logging as Eval Data
 
-Wrap's always-on logging (see `specs/logging.md`) captures every invocation to JSONL. This data serves as the foundation for eval — a future cherry-pick workflow will transform selected log entries into `eval/examples/seed.jsonl` format.
+Wrap's always-on logging (see `specs/logging.md`) captures every invocation to JSONL. This data serves as the foundation for eval — a future cherry-pick workflow will transform selected log entries into eval examples (`eval/examples/seed.jsonl`).
 
 ### 13.3 Feedback Signal
 
@@ -531,7 +602,7 @@ Wrap's always-on logging (see `specs/logging.md`) captures every invocation to J
 ### 13.4 Eval Infrastructure
 
 - Lives in `eval/dspy/` — Docker-based, not distributed with the binary
-- DSPy-based prompt optimization with seed examples in `eval/examples/seed.jsonl`
+- DSPy-based optimization with examples in `eval/examples/seed.jsonl`
 - Currently evaluates on all examples every trial (`minibatch=False`). Re-enable minibatch sampling once the eval dataset grows past ~100 examples.
 
 ---
@@ -586,9 +657,9 @@ The following are acknowledged good ideas but **not in v1**:
 1. **Name conflicts:** Does `wrap` conflict with existing packages on Homebrew, apt, npm, etc.? Need to research.
 2. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: confirmation TUI, interactive mode, answer rendering.
 3. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants.
-4. **Thread linking:** How does a follow-up command find its parent thread? Most recent? Terminal session detection?
+4. **Thread linking:** How does a continuation find its parent thread? Most recent? Terminal session detection?
 5. **`w!` and `w?` as symlink names:** `!` and `?` are shell special characters. These may need to be flags (`w --cmd`, `w --ask`) rather than symlink names. Needs investigation.
-6. **Always-confirm alias:** What should the third invocation variant (always confirm) be named?
+6. **Always-confirm alias:** What should the third mode (always confirm) be named?
 
 ---
 
