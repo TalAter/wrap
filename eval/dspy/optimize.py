@@ -74,42 +74,81 @@ def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) 
     return score(prediction.response_json, assertions)
 
 
-def memory_to_context(memory: dict | None, cwd: str = "/") -> str:
-    """Convert scoped memory dict to a text block for the LLM.
+def memory_to_context(
+    memory: dict | None, cwd: str = "/", tools_output: str | None = None
+) -> str:
+    """Convert scoped memory dict + tools output to a text block for the LLM.
 
     Memory format: {"/": [{"fact": "..."}], "/path": [{"fact": "..."}]}
 
     Filters by CWD prefix match (same logic as context.ts)
-    and formats with section headers.
+    and formats with section headers. Tools output is injected as a
+    separate section matching the runtime prompt format.
     """
-    if not memory:
+    if not memory and not tools_output:
         return ""
 
     cwd_slash = cwd if cwd.endswith("/") else cwd + "/"
     sections = []
-    for scope in sorted(memory.keys()):
-        scope_slash = scope if scope.endswith("/") else scope + "/"
-        if not cwd_slash.startswith(scope_slash):
-            continue
-        facts = memory[scope]
-        if not facts:
-            continue
-        header = "## System facts" if scope == "/" else f"## Facts about {scope}"
-        lines = "\n".join(f"- {f['fact']}" for f in facts)
-        sections.append(f"{header}\n{lines}")
+
+    if memory:
+        for scope in sorted(memory.keys()):
+            scope_slash = scope if scope.endswith("/") else scope + "/"
+            if not cwd_slash.startswith(scope_slash):
+                continue
+            facts = memory[scope]
+            if not facts:
+                continue
+            header = "## System facts" if scope == "/" else f"## Facts about {scope}"
+            lines = "\n".join(f"- {f['fact']}" for f in facts)
+            sections.append(f"{header}\n{lines}")
+
+    if tools_output:
+        sections.append(f"## Tools available in current directory\n{tools_output}")
 
     return "\n\n".join(sections)
 
 
+# Defaults applied to every example unless overridden.
+# At runtime the LLM always sees system facts + tools output,
+# so eval samples should reflect that.
+DEFAULT_MEMORY = {"/": [{"fact": "Runs macOS on arm64 (Apple Silicon)"}, {"fact": "Default shell is zsh"}]}
+DEFAULT_TOOLS_OUTPUT = (
+    "/opt/homebrew/bin/brew\napt not found\ndnf not found\npacman not found\nyum not found\n"
+    "/usr/bin/git\ndocker not found\nkubectl not found\n/opt/homebrew/bin/python3\n"
+    "/usr/local/bin/node\n/Users/tal/.bun/bin/bun\n/usr/bin/curl\n/usr/bin/jq\n"
+    "tldr not found\nrg not found\nfd not found\nbat not found\n/opt/homebrew/bin/eza\n"
+    "/usr/bin/pbcopy\n/usr/bin/pbpaste\nxclip not found\nxsel not found\n"
+    "wl-copy not found\nwl-paste not found"
+)
+
+
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
-    """Convert examples to DSPy Example objects."""
+    """Convert examples to DSPy Example objects.
+
+    Applies DEFAULT_MEMORY and DEFAULT_TOOLS_OUTPUT to examples that
+    don't provide their own, so every sample includes system context
+    matching what the LLM sees at runtime.
+    """
     dspy_examples = []
     for ex in examples:
         cwd = ex.get("cwd", "/")
+        memory = ex.get("memory")
+        tools_output = ex.get("tools_output")
+
+        # Apply defaults: merge default system facts if example has no "/" scope
+        if memory is None:
+            memory = DEFAULT_MEMORY
+        elif "/" not in memory:
+            memory = {"/": DEFAULT_MEMORY["/"], **memory}
+
+        if tools_output is None:
+            tools_output = DEFAULT_TOOLS_OUTPUT
+
         dspy_examples.append(
             dspy.Example(
                 natural_language_query=ex["input"],
-                memory_context=memory_to_context(ex.get("memory"), cwd),
+                memory_context=memory_to_context(memory, cwd, tools_output),
                 assertions=ex["assertions"],
             ).with_inputs("natural_language_query", "memory_context")
         )
