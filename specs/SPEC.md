@@ -435,6 +435,7 @@ By default it will not continue a thread, only if we use the command for continu
 
 - Stored in a `./threads` folder  (or similar)
 - Each thread stores: user inputs, generated commands, command stdout/stderr (full output), LLM responses
+  - **Note:** stdout/stderr capture may conflict with the logging spec's decision to stream output directly via `inherit` (see `specs/logging.md`, Execution fields). Needs investigation before implementation — teeing can break TTY behavior, colors, and interactive commands.
 - **Persistence:** threads persist across terminal sessions
 - **TTL:** threads expire after a configurable time period
 - **Large output warning:** before sending a thread with large stored output to the LLM, warn the user about token count
