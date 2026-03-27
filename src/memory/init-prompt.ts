@@ -4,7 +4,7 @@ export const INIT_SYSTEM_PROMPT = `You are analyzing raw output from system prob
 Rules:
 - Return one fact per line, plain text (not JSON, not markdown)
 - Infer implicit facts (e.g., Darwin → macOS, arm64 → Apple Silicon)
-- Include: OS + version + architecture, shell + config file location, package manager, list of installed tools from the probe
+- Include: OS + version + architecture, shell + config file location
 - Be concise — each fact should be a single short line
 - Do not include facts that cannot be determined from the probe output
 - Do not add bullet points or numbering`;

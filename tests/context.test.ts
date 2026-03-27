@@ -209,3 +209,31 @@ describe("scoped memory in prompt", () => {
     expect(result.system).toContain("later (more recent) fact");
   });
 });
+
+describe("tools output in prompt", () => {
+  test("includes tools section when toolsOutput provided", () => {
+    const content = lastMessage(makeContext({ toolsOutput: "/usr/bin/git\ndocker not found" }));
+    expect(content).toContain("## Tools available in current directory");
+    expect(content).toContain("/usr/bin/git");
+    expect(content).toContain("docker not found");
+  });
+
+  test("omits tools section when toolsOutput not provided", () => {
+    const content = lastMessage(makeContext());
+    expect(content).not.toContain("Tools available");
+  });
+
+  test("tools section appears after memory facts and before cwd", () => {
+    const content = lastMessage(
+      makeContext({
+        memory: { "/": [{ fact: "macOS" }] },
+        toolsOutput: "/usr/bin/git",
+      }),
+    );
+    const factsIdx = content.indexOf("## System facts");
+    const toolsIdx = content.indexOf("## Tools available");
+    const cwdIdx = content.indexOf("Working directory");
+    expect(factsIdx).toBeLessThan(toolsIdx);
+    expect(toolsIdx).toBeLessThan(cwdIdx);
+  });
+});

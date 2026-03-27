@@ -15,11 +15,13 @@ parseInput(argv)
        │
        ├─ initProvider()  ──→ factory: config → Provider
        │
+       ├─ probeTools()  ──→ `which` for available tools (~5ms, every run)
+       │
        ├─ ensureMemory()  ──→ loads memory or initializes with probes
        │
        ├─ resolvePath(cwd)  ──→ canonical CWD
        │
-       └─ runQuery({ prompt, provider, memory, cwd })
+       └─ runQuery({ prompt, provider, memory, cwd, toolsOutput })
 ```
 
 Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory.
@@ -29,7 +31,8 @@ Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`
 ## Prerequisites
 
 - **`loadConfig()`** — Reads config from `~/.wrap/config.jsonc` + `WRAP_CONFIG` env var (shallow merge). Returns `Config`. Caller checks for missing provider — will become an "ensure" function when the first-run wizard is built.
-- **`ensureMemory(provider, wrapHome)`** — The "ensure" pattern: loads existing memory or creates it (probes OS/shell/tools, sends to LLM, saves as global facts). Either returns `Memory` or throws. The caller never checks.
+- **`probeTools()`** — Runs `which` for all tools in `PROBED_TOOLS` (package managers, dev tools, clipboard utilities). Runs every startup, not stored in memory — see `specs/discovery.md` for details.
+- **`ensureMemory(provider, wrapHome)`** — The "ensure" pattern: loads existing memory or creates it (probes OS/shell/config, sends to LLM, saves as global facts). Either returns `Memory` or throws. The caller never checks.
 
 ---
 
@@ -81,7 +84,7 @@ src/
   llm/                        See specs/llm-sdk.md
     types.ts                  Provider interface, PromptInput, config types
     index.ts                  initProvider() dispatch + runCommandPrompt()
-    context.ts                assembleCommandPrompt() — system + messages from context
+    context.ts                assembleCommandPrompt() — system + memory + tools + messages
     utils.ts                  Shared LLM utilities (stripFences, etc.)
     providers/
       ai-sdk.ts               Anthropic + OpenAI via Vercel AI SDK
@@ -95,7 +98,7 @@ src/
   memory/                     See specs/memory.md
     types.ts                  Fact, FactScope, Memory types
     memory.ts                 load, save, append, ensure (init flow)
-    init-probes.ts            System probe commands (OS, shell, tools)
+    init-probes.ts            Init probe commands (OS, shell) + runtime tool probe
     init-prompt.ts            LLM prompt for parsing probe output into facts
 
   subcommands/                See specs/subcommands.md

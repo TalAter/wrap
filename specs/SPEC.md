@@ -64,7 +64,7 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 | Term | Definition |
 |------|-----------|
 | **Discovery** | The ongoing process of learning about the environment (init probes, query probes, memory updates) |
-| **Probe** | An individual command run for discovery (init probe = first-run, query probe = mid-query) |
+| **Probe** | An individual command run for discovery (init probe = first-run, tool probe = before every query, query probe = mid-query triggered by LLM) |
 | **Memory** | A collection of scoped facts learned about the user or their machine. Memory → Scopes → Facts. |
 | **Scope** | The directory a fact belongs to in the file system |
 | **Fact** | An individual learned item in memory |

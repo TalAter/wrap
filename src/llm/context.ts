@@ -8,6 +8,7 @@ export type QueryContext = {
   memory: Memory;
   threadHistory?: ConversationMessage[];
   pipedInput?: string;
+  toolsOutput?: string;
 };
 
 /** Assemble a PromptInput for a command prompt call. */
@@ -40,6 +41,10 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
     if (!facts || facts.length === 0) continue;
     const header = scope === "/" ? "## System facts" : `## Facts about ${scope}`;
     sections.push(`${header}\n${facts.map((f) => `- ${f.fact}`).join("\n")}`);
+  }
+
+  if (ctx.toolsOutput) {
+    sections.push(`## Tools available in current directory\n${ctx.toolsOutput}`);
   }
 
   sections.push(`- Working directory (cwd): ${ctx.cwd}`);

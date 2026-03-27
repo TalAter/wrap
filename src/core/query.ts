@@ -32,6 +32,7 @@ export async function runQuery(
     memory?: Memory;
     cwd: string;
     providerConfig: ProviderConfig;
+    toolsOutput?: string;
   },
 ): Promise<number> {
   const wrapHome = getWrapHome();
@@ -50,6 +51,7 @@ export async function runQuery(
       prompt,
       cwd: options.cwd,
       memory,
+      toolsOutput: options.toolsOutput,
     });
 
     let response: Awaited<ReturnType<typeof runCommandPrompt>>;

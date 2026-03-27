@@ -5,6 +5,7 @@ import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { runQuery } from "./core/query.ts";
 import { initProvider } from "./llm/index.ts";
+import { probeTools } from "./memory/init-probes.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 
@@ -27,6 +28,7 @@ export async function main() {
     }
 
     const provider = initProvider(config.provider);
+    const toolsOutput = probeTools();
     const memory = await ensureMemory(provider, getWrapHome());
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
     process.exit(
@@ -34,6 +36,7 @@ export async function main() {
         memory,
         cwd,
         providerConfig: config.provider,
+        toolsOutput,
       }),
     );
   } catch (e) {

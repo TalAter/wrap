@@ -4,7 +4,7 @@ import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
 import type { Provider } from "../llm/types.ts";
-import { parseDetectedTools, runProbes } from "./init-probes.ts";
+import { runProbes } from "./init-probes.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
 
 import type { Fact, Memory } from "./types.ts";
@@ -87,15 +87,6 @@ export function parseInitResponse(response: string): Fact[] {
     .map((fact) => ({ fact }));
 }
 
-/** Build the summary line shown after init (e.g. "Detected OS, shell, git, docker, ..."). */
-function buildSummary(probeOutput: string): string {
-  // Extract just the "Core tools" section from probe output
-  const coreToolsSection = probeOutput.split("## Core tools\n")[1] ?? "";
-  const tools = parseDetectedTools(coreToolsSection.split("\n\n")[0]);
-  const parts = ["OS", "shell", ...tools];
-  return `🧠 Detected ${parts.join(", ")}`;
-}
-
 /** Load existing memory or initialize by probing the system and asking the LLM. */
 export async function ensureMemory(provider: Provider, wrapHome: string): Promise<Memory> {
   const existing = loadMemory(wrapHome);
@@ -113,7 +104,7 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
 
   saveMemory(wrapHome, memory);
 
-  chrome(buildSummary(probeOutput));
+  chrome("🧠 Detected OS and shell");
 
   return memory;
 }

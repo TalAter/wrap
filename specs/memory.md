@@ -12,7 +12,9 @@ Memory lets Wrap learn and remember facts about the user's environment. Facts ar
 
 Each fact has a **scope** — a directory it applies to. Facts scoped to `/` are global and always sent. Facts scoped to a specific directory are only sent when CWD is that directory or a subdirectory. This lets Wrap learn per-project knowledge — tooling, test commands, build systems — without polluting every request.
 
-On first run, Wrap probes the system, sends raw output to the LLM to parse into concise facts, and saves them as global facts. Subsequent runs load memory from disk. Project-specific facts emerge organically during use — the LLM discovers project tooling (lockfiles, config files) and returns memory updates with the appropriate scope.
+On first run, Wrap probes the system (OS, shell, distro, config files), sends raw output to the LLM to parse into concise facts, and saves them as global facts. Subsequent runs load memory from disk. Project-specific facts emerge organically during use — the LLM discovers project tooling (lockfiles, config files) and returns memory updates with the appropriate scope.
+
+Tool availability (package managers, dev tools, clipboard utilities) is **not** stored in memory. It is probed fresh on every run via `which` and injected directly into the prompt. This avoids stale facts — installed tools change over time and may differ by cwd (e.g. nvm, fnm, pyenv do per-directory version switching).
 
 ---
 
@@ -29,9 +31,7 @@ Map of scope (resolved absolute path) → fact objects, validated with Zod on lo
 {
   "/": [
     {"fact": "Runs macOS Darwin 25.3.0 on arm64 (Apple Silicon)"},
-    {"fact": "Default shell is zsh, config at ~/.zshrc"},
-    {"fact": "Homebrew is the package manager"},
-    {"fact": "Installed: git, docker, node, python3, bun, curl, jq"}
+    {"fact": "Default shell is zsh, config at ~/.zshrc"}
   ],
   "/Users/tal/monorepo": [
     {"fact": "Uses bun"},
@@ -94,6 +94,7 @@ Global facts are always included because every CWD starts with `/`.
 - `/` scope → `## System facts`
 - All other scopes → `## Facts about {resolved_path}` (full absolute paths so the LLM can reference and return them)
 - Sections only appear if they have facts after filtering. If no facts match at all, the entire block is omitted.
+- After memory facts, before CWD: `## Tools available in current directory` — runtime `which` output.
 
 ### Recency
 
@@ -112,16 +113,18 @@ ensureMemory(provider, wrapHome)
   │    ──→ load and return Memory
   │
   └─ first run (file missing or empty map):
-       ├─ run local probe commands (no LLM)
+       ├─ run local probe commands: OS, shell, distro, config files (no LLM)
        ├─ show "✨ Learning about your system..." on stderr
        ├─ send raw probe output to LLM (plain text, one fact per line)
        ├─ wrap result as { "/": facts }
        ├─ save to memory.json
-       ├─ show summary: "🧠 Detected OS, shell, git, docker..."
+       ├─ show summary: "🧠 Detected OS and shell"
        └─ return Memory
 ```
 
 If the LLM call fails → error and exit. If we can't reach the LLM for memory init, we can't reach it for the user's query either.
+
+Init only covers OS/shell/distro/config — things that rarely change and benefit from LLM semantic parsing. Tool availability is handled separately by runtime probing (see above).
 
 Init always scopes facts to `/` (global). The init flow uses its own plain-text prompt and response parsing, not the Zod command response schema.
 
