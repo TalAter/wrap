@@ -269,22 +269,42 @@ def extract_demos(optimized) -> list[dict]:
     return demos
 
 
-def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -> str:
-    """Compute SHA-256 hash of all prompt components, matching the TypeScript computation.
+def build_prompt_hash_manifest(
+    instruction: str, schema_text: str, demos: list[dict]
+) -> list[list[object]]:
+    """Return the static prompt toolset that PROMPT_HASH versions.
 
-    Hash input covers everything the LLM sees: the optimized instruction,
-    fixed instructions (recency, tools, voice), schema, and few-shot examples.
-    Uses compact JSON (no spaces) to match JS JSON.stringify() default.
+    This is intentionally broader than any one invocation's exact prompt. The goal
+    is to version every generated/static prompt fragment that the runtime may use,
+    including conditionally included sections like the piped-output instruction.
     """
-    # Concatenate all parts that form the full system prompt at runtime
-    full_system = "\n\n".join([
-        (instruction or "").strip(),
-        MEMORY_RECENCY_INSTRUCTION,
-        TOOLS_SCOPE_INSTRUCTION,
-        VOICE_INSTRUCTIONS,
-    ])
-    demos_compact = json.dumps(demos, separators=(",", ":"))
-    hash_input = "\n".join([full_system, (schema_text or "").strip(), demos_compact])
+    return [
+        ["SYSTEM_PROMPT", (instruction or "").strip()],
+        ["MEMORY_RECENCY_INSTRUCTION", MEMORY_RECENCY_INSTRUCTION],
+        ["TOOLS_SCOPE_INSTRUCTION", TOOLS_SCOPE_INSTRUCTION],
+        ["VOICE_INSTRUCTIONS", VOICE_INSTRUCTIONS],
+        ["SCHEMA_INSTRUCTION", SCHEMA_INSTRUCTION],
+        ["SCHEMA_TEXT", (schema_text or "").strip()],
+        ["FEW_SHOT_SEPARATOR", FEW_SHOT_SEPARATOR],
+        ["SECTION_SYSTEM_FACTS", SECTION_SYSTEM_FACTS],
+        ["SECTION_FACTS_ABOUT", SECTION_FACTS_ABOUT],
+        ["SECTION_DETECTED_TOOLS", SECTION_DETECTED_TOOLS],
+        ["SECTION_USER_REQUEST", SECTION_USER_REQUEST],
+        ["SECTION_PIPED_INPUT", SECTION_PIPED_INPUT],
+        ["CWD_PREFIX", CWD_PREFIX],
+        ["PIPED_INSTRUCTION", PIPED_INSTRUCTION],
+        ["FEW_SHOT_EXAMPLES", demos or []],
+    ]
+
+
+def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -> str:
+    """Compute SHA-256 hash of the full static prompt toolset.
+
+    Uses a compact JSON manifest so Python and TypeScript can deterministically
+    hash the same ordered set of prompt fragments.
+    """
+    manifest = build_prompt_hash_manifest(instruction, schema_text, demos)
+    hash_input = json.dumps(manifest, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(hash_input.encode()).hexdigest()
 
 

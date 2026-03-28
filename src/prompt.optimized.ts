@@ -70,7 +70,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "48168c87dfb39a372d24acae443c44973618c0dc6d892078c8cc98cdf26298fb";
+export const PROMPT_HASH = "cb6de7c70fab671bc0affdc17e794357418ee723be914bc051c0d930b672a870";
 
 export const FEW_SHOT_EXAMPLES: ReadonlyArray<{
   readonly input: string;

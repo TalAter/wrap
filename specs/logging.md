@@ -168,20 +168,14 @@ Logging wraps the query loop in `runQuery` (`src/core/query.ts`):
 
 The prompt hash is precomputed at DSPy optimization time and exported as `PROMPT_HASH` from `src/prompt.optimized.ts`. It is **not** recomputed at runtime — the optimizer writes it once when generating the file.
 
-The hash is the SHA-256 hex digest of the concatenation of all prompt components:
-
-```
-sha256(systemPrompt + "\n" + schemaText + "\n" + JSON.stringify(fewShotExamples))
-```
-
-Missing components use stable fallbacks (empty string for text, `[]` for few-shot examples) so the hash is always deterministic. The Python optimizer (`eval/dspy/optimize.py`) uses `json.dumps(demos, separators=(',', ':'))` to match JS `JSON.stringify()`'s compact output.
+The hash versions the full **static prompt toolset**, not one invocation's exact prompt. It covers the generated prompt artifacts and fixed prompt fragments the runtime may use, including conditionally included static sections.
 
 ### Reproducibility
 
 A log entry captures everything needed to reproduce an LLM call:
 - **Prompt** — user's input
 - **Memory** — full fact state at invocation time (CWD determines which scopes the LLM saw)
-- **Prompt hash** — identifies the exact system prompt / schema / few-shot examples version
+- **Prompt hash** — identifies the exact static prompt toolset version
 - **Provider** — which model was called
 - **Version** — which Wrap release was running
 
