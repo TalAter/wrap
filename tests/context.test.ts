@@ -13,7 +13,9 @@ function makeContext(overrides?: Partial<QueryContext>): QueryContext {
 
 function lastMessage(ctx: QueryContext) {
   const result = assembleCommandPrompt(ctx);
-  return result.messages[result.messages.length - 1].content;
+  const last = result.messages[result.messages.length - 1];
+  if (!last) throw new Error("expected at least one message");
+  return last.content;
 }
 
 describe("assembleCommandPrompt", () => {
@@ -31,14 +33,13 @@ describe("assembleCommandPrompt", () => {
     // Each example = one user + one assistant message
     const exampleMessages = result.messages.slice(0, FEW_SHOT_EXAMPLES.length * 2);
     for (let i = 0; i < FEW_SHOT_EXAMPLES.length; i++) {
-      expect(exampleMessages[i * 2]).toEqual({
-        role: "user",
-        content: FEW_SHOT_EXAMPLES[i].input,
-      });
-      expect(exampleMessages[i * 2 + 1]).toEqual({
-        role: "assistant",
-        content: FEW_SHOT_EXAMPLES[i].output,
-      });
+      const example = FEW_SHOT_EXAMPLES[i];
+      const userMsg = exampleMessages[i * 2];
+      const assistantMsg = exampleMessages[i * 2 + 1];
+      if (!example || !userMsg || !assistantMsg)
+        throw new Error(`missing example or message at index ${i}`);
+      expect(userMsg).toEqual({ role: "user", content: example.input });
+      expect(assistantMsg).toEqual({ role: "assistant", content: example.output });
     }
   });
 
@@ -46,7 +47,9 @@ describe("assembleCommandPrompt", () => {
     const result = assembleCommandPrompt(makeContext());
     if (FEW_SHOT_EXAMPLES.length === 0) return;
     const separatorIndex = FEW_SHOT_EXAMPLES.length * 2;
-    expect(result.messages[separatorIndex]).toEqual({
+    const separator = result.messages[separatorIndex];
+    if (!separator) throw new Error("expected separator message");
+    expect(separator).toEqual({
       role: "user",
       content: "Now handle the following request.",
     });
@@ -55,6 +58,7 @@ describe("assembleCommandPrompt", () => {
   test("final user message contains cwd and prompt", () => {
     const result = assembleCommandPrompt(makeContext({ cwd: "/tmp/test", prompt: "find stuff" }));
     const last = result.messages[result.messages.length - 1];
+    if (!last) throw new Error("expected at least one message");
     expect(last.role).toBe("user");
     expect(last.content).toContain("/tmp/test");
     expect(last.content).toContain("find stuff");
@@ -64,7 +68,9 @@ describe("assembleCommandPrompt", () => {
     const result = assembleCommandPrompt(makeContext());
     if (FEW_SHOT_EXAMPLES.length === 0) {
       expect(result.messages.length).toBe(1);
-      expect(result.messages[0].role).toBe("user");
+      const first = result.messages[0];
+      if (!first) throw new Error("expected at least one message");
+      expect(first.role).toBe("user");
     }
   });
 

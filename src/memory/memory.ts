@@ -51,8 +51,8 @@ function memoryError(filePath: string): Error {
 export function saveMemory(wrapHome: string, memory: Memory): void {
   mkdirSync(wrapHome, { recursive: true });
   const sorted: Memory = {};
-  for (const key of Object.keys(memory).sort()) {
-    sorted[key] = memory[key];
+  for (const [key, value] of Object.entries(memory).sort(([a], [b]) => a.localeCompare(b))) {
+    sorted[key] = value;
   }
   const path = join(wrapHome, MEMORY_FILE);
   writeFileSync(path, JSON.stringify(sorted, null, 2));

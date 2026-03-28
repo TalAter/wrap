@@ -4,7 +4,7 @@ import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
 import { type ZodType, z } from "zod";
 import type { AISDKProviderConfig, Provider } from "../types.ts";
 
-const DEFAULT_MODELS: Record<string, string> = {
+const DEFAULT_MODELS = {
   anthropic: "claude-sonnet-4-latest",
   openai: "gpt-4o-mini",
 };

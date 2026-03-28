@@ -126,7 +126,9 @@ describe("addRound", () => {
     const round: Round = { raw_response: '{"type":"answer"}' };
     addRound(entry, round);
     expect(entry.rounds).toHaveLength(1);
-    expect(entry.rounds[0].raw_response).toBe('{"type":"answer"}');
+    const saved = entry.rounds[0];
+    if (!saved) throw new Error("expected a round");
+    expect(saved.raw_response).toBe('{"type":"answer"}');
   });
 
   test("accumulates multiple rounds", () => {
@@ -246,7 +248,9 @@ describe("appendLogEntry", () => {
     const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
     const lines = content.trimEnd().split("\n");
     expect(lines).toHaveLength(1);
-    expect(() => JSON.parse(lines[0])).not.toThrow();
+    const line = lines[0];
+    if (!line) throw new Error("expected a line");
+    expect(() => JSON.parse(line)).not.toThrow();
   });
 
   test("appends multiple entries as separate lines", () => {

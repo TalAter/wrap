@@ -141,7 +141,9 @@ describe("--log search", () => {
     // Raw = one JSON object per line, no indentation
     const lines = result.stdout.trim().split("\n");
     expect(lines.length).toBe(1);
-    expect(JSON.parse(lines[0]).prompt).toBe("hello world");
+    const line = lines[0];
+    if (!line) throw new Error("expected at least one line");
+    expect(JSON.parse(line).prompt).toBe("hello world");
   });
 
   test("errors on two search terms", async () => {

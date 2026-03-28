@@ -63,7 +63,9 @@ describe("OpenAI strict schema round-trip", () => {
     const raw = z.toJSONSchema(CommandResponseSchema) as Record<string, unknown>;
     const props = raw.properties as Record<string, Record<string, unknown>>;
     // explanation is nullable().optional() → anyOf: [string, null]
-    expect(props.explanation.anyOf).toEqual([{ type: "string" }, { type: "null" }]);
+    const explanation = props.explanation;
+    if (!explanation) throw new Error("expected explanation in schema properties");
+    expect(explanation.anyOf).toEqual([{ type: "string" }, { type: "null" }]);
     // content is required string → just {type: "string"}
     expect(props.content).toEqual({ type: "string" });
   });

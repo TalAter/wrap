@@ -136,8 +136,10 @@ describe("ensureMemory", () => {
 
     await ensureMemory(provider, dir);
     const { messages } = capturedInput as { messages: { content: string }[] };
-    expect(messages[0].content).toContain("## OS");
-    expect(messages[0].content).toContain("## Shell");
+    const first = messages[0];
+    if (!first) throw new Error("expected at least one message");
+    expect(first.content).toContain("## OS");
+    expect(first.content).toContain("## Shell");
   });
 
   test("facts saved under / scope in new map format", async () => {

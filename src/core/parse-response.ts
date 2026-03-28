@@ -7,7 +7,7 @@ export function stripFences(text: string): string {
   const trimmed = text.trim();
   const match = trimmed.match(FENCE_RE);
   if (!match) return trimmed;
-  const inner = match[1];
+  const inner = match[1] ?? "";
   // If there are more triple backticks inside, this isn't a single clean block
   if (inner.includes("```")) return trimmed;
   return inner.trim();

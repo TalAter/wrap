@@ -1,11 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { NoObjectGeneratedError } from "ai";
+import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
 import { extractFailedText, isStructuredOutputError } from "../src/core/query.ts";
+
+const STUB_USAGE: LanguageModelUsage = {
+  inputTokens: undefined,
+  inputTokenDetails: {
+    noCacheTokens: undefined,
+    cacheReadTokens: undefined,
+    cacheWriteTokens: undefined,
+  },
+  outputTokens: undefined,
+  outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined },
+  totalTokens: undefined,
+};
+
+function mockNoObjectError(opts: { text?: string } = {}) {
+  return new NoObjectGeneratedError({
+    ...opts,
+    response: { id: "", timestamp: new Date(), modelId: "" },
+    usage: STUB_USAGE,
+    finishReason: "stop",
+  });
+}
 
 describe("isStructuredOutputError", () => {
   test("detects NoObjectGeneratedError", () => {
-    const e = new NoObjectGeneratedError({ text: "bad" });
-    expect(isStructuredOutputError(e)).toBe(true);
+    expect(isStructuredOutputError(mockNoObjectError({ text: "bad" }))).toBe(true);
   });
 
   test("detects error with 'invalid JSON' message", () => {
@@ -28,13 +48,13 @@ describe("isStructuredOutputError", () => {
 
 describe("extractFailedText", () => {
   test("extracts text from NoObjectGeneratedError", () => {
-    const e = new NoObjectGeneratedError({ text: "bad output here" });
-    expect(extractFailedText(e)).toBe("bad output here");
+    expect(extractFailedText(mockNoObjectError({ text: "bad output here" }))).toBe(
+      "bad output here",
+    );
   });
 
   test("returns empty string for NoObjectGeneratedError without text", () => {
-    const e = new NoObjectGeneratedError({});
-    expect(extractFailedText(e)).toBe("");
+    expect(extractFailedText(mockNoObjectError())).toBe("");
   });
 
   test("returns empty string for other errors", () => {
@@ -79,7 +99,7 @@ describe("round retry in runQuery", () => {
       runPrompt: async (_input: unknown, _schema: unknown) => {
         callCount++;
         if (callCount === 1) {
-          throw new NoObjectGeneratedError({ text: "not valid json" });
+          throw mockNoObjectError({ text: "not valid json" });
         }
         // Second call succeeds
         return { type: "answer", content: "retried ok", risk_level: "low" };
