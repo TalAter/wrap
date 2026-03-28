@@ -83,6 +83,7 @@ export const SECTION_DETECTED_TOOLS = "## Detected tools";
 export const SECTION_USER_REQUEST = "## User's request";
 export const SECTION_PIPED_INPUT = "## Piped input";
 export const CWD_PREFIX = "- Working directory (cwd):";
-export const PIPED_INSTRUCTION = "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.";
+export const PIPED_INSTRUCTION =
+  "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.";
 export const FEW_SHOT_SEPARATOR = "Now handle the following request.";
 export const SCHEMA_INSTRUCTION = "Respond with a JSON object conforming to this schema:";
