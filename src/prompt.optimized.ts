@@ -74,3 +74,15 @@ export const FEW_SHOT_EXAMPLES: ReadonlyArray<{
       '{\n  "type": "command",\n  "content": "docker ps",\n  "risk_level": "low",\n  "explanation": "The \'docker ps\' command lists all running Docker containers with their IDs, names, images, status, ports, and other metadata. This is a read-only command that safely displays container information without modifying anything."\n}',
   },
 ] as const;
+
+// Fixed prompt strings — not optimized by MIPRO, but centralized here so
+// the TypeScript runtime reads all prompt content from one file.
+export const SECTION_SYSTEM_FACTS = "## System facts";
+export const SECTION_FACTS_ABOUT = "## Facts about";
+export const SECTION_DETECTED_TOOLS = "## Detected tools";
+export const SECTION_USER_REQUEST = "## User's request";
+export const SECTION_PIPED_INPUT = "## Piped input";
+export const CWD_PREFIX = "- Working directory (cwd):";
+export const PIPED_INSTRUCTION = "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.";
+export const FEW_SHOT_SEPARATOR = "Now handle the following request.";
+export const SCHEMA_INSTRUCTION = "Respond with a JSON object conforming to this schema:";

@@ -65,7 +65,7 @@ Deterministic mock for testing. Reads from `WRAP_TEST_RESPONSE` env var. With sc
 
 **Why memory and CWD go in the final user message** (not the system prompt): They're dynamic per-request. Keeping them out of the system prompt makes the system + few-shot prefix fully static and cacheable.
 
-Updates to message structure must also be replicated in the eval pipeline.
+All prompt strings (section headers, separators, behavioral instructions) are defined in `eval/dspy/optimize.py` and automatically written into `src/prompt.optimized.ts` by the optimizer. When you add or modify a prompt string in `eval/dspy/optimize.py`, also update `src/prompt.optimized.ts` manually — this ensures tests pass before running `bun run optimize` (which will overwrite that file). No prompt strings are hardcoded in runtime code — TypeScript imports everything from `prompt.optimized.ts`.
 
 ---
 

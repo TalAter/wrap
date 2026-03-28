@@ -1,5 +1,17 @@
 import type { Memory } from "../memory/types.ts";
-import { FEW_SHOT_EXAMPLES, SCHEMA_TEXT, SYSTEM_PROMPT } from "../prompt.optimized.ts";
+import {
+  CWD_PREFIX,
+  FEW_SHOT_EXAMPLES,
+  FEW_SHOT_SEPARATOR,
+  PIPED_INSTRUCTION,
+  SCHEMA_INSTRUCTION,
+  SCHEMA_TEXT,
+  SECTION_DETECTED_TOOLS,
+  SECTION_FACTS_ABOUT,
+  SECTION_SYSTEM_FACTS,
+  SECTION_USER_REQUEST,
+  SYSTEM_PROMPT,
+} from "../prompt.optimized.ts";
 import type { ConversationMessage, PromptInput } from "./types.ts";
 
 export type QueryContext = {
@@ -16,7 +28,7 @@ export type QueryContext = {
 export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   const systemParts: string[] = [SYSTEM_PROMPT];
   if (SCHEMA_TEXT) {
-    systemParts.push(`Respond with a JSON object conforming to this schema:\n${SCHEMA_TEXT}`);
+    systemParts.push(`${SCHEMA_INSTRUCTION}\n${SCHEMA_TEXT}`);
   }
 
   const messages: ConversationMessage[] = [];
@@ -27,7 +39,7 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
       messages.push({ role: "user", content: example.input });
       messages.push({ role: "assistant", content: example.output });
     }
-    messages.push({ role: "user", content: "Now handle the following request." });
+    messages.push({ role: "user", content: FEW_SHOT_SEPARATOR });
   }
 
   // Final user message: context + prompt
@@ -40,22 +52,20 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
     if (!cwdSlash.startsWith(scopeSlash)) continue;
     const facts = ctx.memory[scope];
     if (!facts || facts.length === 0) continue;
-    const header = scope === "/" ? "## System facts" : `## Facts about ${scope}`;
+    const header = scope === "/" ? SECTION_SYSTEM_FACTS : `${SECTION_FACTS_ABOUT} ${scope}`;
     sections.push(`${header}\n${facts.map((f) => `- ${f.fact}`).join("\n")}`);
   }
 
   if (ctx.toolsOutput) {
-    sections.push(`## Detected tools\n${ctx.toolsOutput}`);
+    sections.push(`${SECTION_DETECTED_TOOLS}\n${ctx.toolsOutput}`);
   }
 
   if (ctx.piped) {
-    sections.push(
-      "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.",
-    );
+    sections.push(PIPED_INSTRUCTION);
   }
 
-  sections.push(`- Working directory (cwd): ${ctx.cwd}`);
-  sections.push(`## User's request\n${ctx.prompt}`);
+  sections.push(`${CWD_PREFIX} ${ctx.cwd}`);
+  sections.push(`${SECTION_USER_REQUEST}\n${ctx.prompt}`);
 
   messages.push({ role: "user", content: sections.join("\n\n") });
 

@@ -27,6 +27,20 @@ OUTPUT_PATH = Path("/app/src/prompt.optimized.ts")
 
 SEED = 42
 
+# ── Prompt string constants ─────────────────────────────────────────────
+# Authoritative source for all fixed prompt strings. write_output() writes
+# these into src/prompt.optimized.ts so the TypeScript runtime imports them.
+# MIPRO never touches these — they're data formatting, not the optimizable
+# instruction.
+SECTION_SYSTEM_FACTS = "## System facts"
+SECTION_FACTS_ABOUT = "## Facts about"
+SECTION_DETECTED_TOOLS = "## Detected tools"
+SECTION_USER_REQUEST = "## User's request"
+SECTION_PIPED_INPUT = "## Piped input"
+CWD_PREFIX = "- Working directory (cwd):"
+FEW_SHOT_SEPARATOR = "Now handle the following request."
+SCHEMA_INSTRUCTION = "Respond with a JSON object conforming to this schema:"
+
 
 def load_examples(path: Path) -> list[dict]:
     """Load JSONL examples."""
@@ -99,14 +113,14 @@ def memory_to_context(
             facts = memory[scope]
             if not facts:
                 continue
-            header = "## System facts" if scope == "/" else f"## Facts about {scope}"
+            header = SECTION_SYSTEM_FACTS if scope == "/" else f"{SECTION_FACTS_ABOUT} {scope}"
             lines = "\n".join(f"- {f['fact']}" for f in facts)
             sections.append(f"{header}\n{lines}")
 
     if tools_output:
-        sections.append(f"## Detected tools\n{tools_output}")
+        sections.append(f"{SECTION_DETECTED_TOOLS}\n{tools_output}")
 
-    sections.append(f"- Working directory (cwd): {cwd}")
+    sections.append(f"{CWD_PREFIX} {cwd}")
 
     return "\n\n".join(sections)
 
@@ -257,6 +271,18 @@ export const FEW_SHOT_EXAMPLES: ReadonlyArray<{{
   readonly input: string;
   readonly output: string;
 }}> = {demos_json} as const;
+
+// Fixed prompt strings — not optimized by MIPRO, but centralized here so
+// the TypeScript runtime reads all prompt content from one file.
+export const SECTION_SYSTEM_FACTS = "{SECTION_SYSTEM_FACTS}";
+export const SECTION_FACTS_ABOUT = "{SECTION_FACTS_ABOUT}";
+export const SECTION_DETECTED_TOOLS = "{SECTION_DETECTED_TOOLS}";
+export const SECTION_USER_REQUEST = "{SECTION_USER_REQUEST}";
+export const SECTION_PIPED_INPUT = "{SECTION_PIPED_INPUT}";
+export const CWD_PREFIX = "{CWD_PREFIX}";
+export const PIPED_INSTRUCTION = "{PIPED_INSTRUCTION}";
+export const FEW_SHOT_SEPARATOR = "{FEW_SHOT_SEPARATOR}";
+export const SCHEMA_INSTRUCTION = "{SCHEMA_INSTRUCTION}";
 """
     path.write_text(content)
     print(f"Wrote optimized prompt to {path} (hash: {prompt_hash})")
