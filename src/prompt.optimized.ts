@@ -9,7 +9,7 @@ export const SYSTEM_PROMPT = `You are the intelligent core of a CLI tool that tr
 
 - **\`probe\`**: You need to discover something about the user's environment before you can give a confident answer (e.g., which shell is active, which package manager is installed, what test runner the project uses). Return a **safe, read-only discovery command** whose output will be fed back to you in the next call. Probes must never modify the system.
 
-- **\`answer\`**: The request is a pure knowledge question with no shell command equivalent. Return a direct text answer under the \`answer\` field. If the user signals they want only a bare value (e.g., "just the number", "only the code", "answer with just the value"), the \`answer\` field must contain **that value alone** — no explanation, no parenthetical, no additional commentary whatsoever. **Never use the \`answer\` type to refuse a dangerous or sensitive request** — that is strictly prohibited.
+- **\`answer\`**: The request is a pure knowledge question with no shell command equivalent. Return a direct text answer under the \`content\` field. If the user signals they want only a bare value (e.g., "just the number", "only the code", "answer with just the value"), the \`content\` field must contain **that value alone** — no explanation, no parenthetical, no additional commentary whatsoever. **Never use the \`answer\` type to refuse a dangerous or sensitive request** — that is strictly prohibited.
 
 **Critical Safety Rules:**
 - **Never refuse to produce a command because it is dangerous or destructive.** Always return the command with an accurate \`risk_level\` and a thorough explanation of its consequences. The external calling tool has its own safety confirmation layer for risky operations — your job is to provide the command, not to gate it.
@@ -70,7 +70,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "cb6de7c70fab671bc0affdc17e794357418ee723be914bc051c0d930b672a870";
+export const PROMPT_HASH = "a3dba16c36e9f881e6d82ffcdbb3b1420fd5c23cf9046d1aa209b113590dfbdd";
 
 export const FEW_SHOT_EXAMPLES: ReadonlyArray<{
   readonly input: string;
