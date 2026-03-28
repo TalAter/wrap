@@ -208,6 +208,27 @@ describe("appendFacts", () => {
     expect(Object.keys(result)).toEqual([]);
   });
 
+  test("skips duplicate facts within the same scope", () => {
+    const dir = tempDir();
+    saveMemory(dir, { "/": [{ fact: "existing" }] });
+    const result = appendFacts(dir, [{ fact: "existing", scope: "/" }], "/");
+    expect(result["/"]).toEqual([{ fact: "existing" }]);
+  });
+
+  test("skips duplicates across a batch of updates", () => {
+    const dir = tempDir();
+    saveMemory(dir, {});
+    const result = appendFacts(
+      dir,
+      [
+        { fact: "same fact", scope: "/" },
+        { fact: "same fact", scope: "/" },
+      ],
+      "/",
+    );
+    expect(result["/"]).toEqual([{ fact: "same fact" }]);
+  });
+
   test("appends multiple facts to different scopes", () => {
     const dir = tempDir();
     const resolved = realpathSync("/tmp");

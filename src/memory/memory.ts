@@ -72,7 +72,9 @@ export function appendFacts(
     const resolved = resolvePath(scope, cwd);
     if (resolved === null) continue;
     const existing = memory[resolved] ?? [];
-    memory[resolved] = [...existing, { fact }];
+    if (!existing.some((e) => e.fact === fact)) {
+      memory[resolved] = [...existing, { fact }];
+    }
   }
   saveMemory(wrapHome, memory);
   return memory;
