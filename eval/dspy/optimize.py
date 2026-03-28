@@ -106,6 +106,8 @@ def memory_to_context(
     if tools_output:
         sections.append(f"## Detected tools\n{tools_output}")
 
+    sections.append(f"- Working directory (cwd): {cwd}")
+
     return "\n\n".join(sections)
 
 
