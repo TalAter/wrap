@@ -70,6 +70,10 @@ export function probeTools(): string {
   const result = Bun.spawnSync(["sh", "-c", `which ${PROBED_TOOLS.join(" ")} 2>&1`]);
   const output = result.stdout.toString().trim();
 
+  // If which completely failed or returned nothing, skip tool context
+  // rather than marking every tool as "not found".
+  if (!output) return "";
+
   // Some shells (bash) silently omit missing tools from `which` output.
   // Append explicit "not found" for any tool not mentioned.
   // Match tool at end of path (/<tool>) or start of line (alias/function/not-found)
