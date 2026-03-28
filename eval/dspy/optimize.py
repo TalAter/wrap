@@ -90,8 +90,15 @@ class WrapPredictor(dspy.Module):
             f"{VOICE_INSTRUCTIONS}"
         )
         full_sig = sig.with_instructions(combined)
+        # Runtime inserts FEW_SHOT_SEPARATOR between few-shot turns and the live request.
+        # Mirror that in eval so candidate prompts are optimized against the same boundary cue.
+        query_with_separator = (
+            f"{FEW_SHOT_SEPARATOR}\n\n{natural_language_query}"
+            if natural_language_query
+            else FEW_SHOT_SEPARATOR
+        )
         return self.predict(
-            natural_language_query=natural_language_query,
+            natural_language_query=query_with_separator,
             memory_context=memory_context,
             signature=full_sig,
         )
@@ -124,7 +131,8 @@ def memory_to_context(
     sections = []
 
     if memory:
-        for scope in sorted(memory.keys()):
+        # Preserve provided key order to match runtime behavior.
+        for scope in memory.keys():
             scope_slash = scope if scope.endswith("/") else scope + "/"
             if not cwd_slash.startswith(scope_slash):
                 continue
