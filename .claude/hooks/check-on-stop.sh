@@ -19,7 +19,13 @@ if [ $? -ne 0 ]; then
   ERRORS="${ERRORS}Biome check failed:\n${LINT_OUTPUT}\n\n"
 fi
 
-# 3. Tests
+# 3. Typecheck
+TSC_OUTPUT=$(bunx tsc --noEmit 2>&1)
+if [ $? -ne 0 ]; then
+  ERRORS="${ERRORS}Typecheck failed:\n${TSC_OUTPUT}\n\n"
+fi
+
+# 4. Tests
 TEST_OUTPUT=$(bun test 2>&1)
 if [ $? -ne 0 ]; then
   ERRORS="${ERRORS}Tests failed:\n${TEST_OUTPUT}\n\n"

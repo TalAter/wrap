@@ -5,7 +5,7 @@ Wrap is a CLI tool that translates natural language into shell commands and runs
 ## Stack
 
 - **Runtime:** Bun (TypeScript). Use `bun add` / `bun add -D` for dependencies. Never npm or pnpm.
-- **Lint/format:** Biome (`bun run check` = lint + test)
+- **Lint/format:** Biome (`bun run check` = lint + typecheck + test)
 - **Test:** `bun test` (files in `tests/`)
 - **Build:** `bun build src/index.ts --compile --outfile wrap`
 
@@ -24,4 +24,4 @@ Aim for maximum test coverage.
 
 ## Stop hook
 
-A stop hook runs `format`, `lint`, and `bun test` automatically when you finish. Don't run these as a final check before stopping — they'll just run twice. Mid-work test runs are fine.
+A stop hook runs `format` then `check` (lint + typecheck + test) automatically when you finish. Don't run these as a final check before stopping — they'll just run twice. Mid-work test runs are fine.
