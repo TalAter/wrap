@@ -1,10 +1,4 @@
 #!/bin/bash
-INPUT=$(cat)
-
-# Prevent infinite loops — if we already triggered a continuation, skip
-if [ "$(echo "$INPUT" | jq -r '.stop_hook_active')" = "true" ]; then
-  exit 0
-fi
 
 cd "$(dirname "$0")/../.." || exit 0
 
