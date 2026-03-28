@@ -245,19 +245,33 @@ describe("tools output in prompt", () => {
 });
 
 describe("piped-mode prompt", () => {
-  test("piped: true appends piped-mode instruction to system prompt", () => {
-    const result = assembleCommandPrompt(makeContext({ piped: true }));
-    expect(result.system).toContain("stdout is being piped");
-    expect(result.system).toContain("bare value");
+  test("piped: true appends piped-mode instruction to user message", () => {
+    const content = lastMessage(makeContext({ piped: true }));
+    expect(content).toContain("stdout is being piped");
+    expect(content).toContain("bare value");
   });
 
-  test("piped: false does not append piped-mode instruction", () => {
-    const result = assembleCommandPrompt(makeContext({ piped: false }));
-    expect(result.system).not.toContain("stdout is being piped");
+  test("piped: false does not include piped-mode instruction", () => {
+    const content = lastMessage(makeContext({ piped: false }));
+    expect(content).not.toContain("stdout is being piped");
   });
 
   test("piped defaults to false (no piped-mode instruction)", () => {
-    const result = assembleCommandPrompt(makeContext());
-    expect(result.system).not.toContain("stdout is being piped");
+    const content = lastMessage(makeContext());
+    expect(content).not.toContain("stdout is being piped");
+  });
+
+  test("piped instruction appears after tools and before cwd", () => {
+    const content = lastMessage(
+      makeContext({
+        toolsOutput: "/usr/bin/git",
+        piped: true,
+      }),
+    );
+    const toolsIdx = content.indexOf("## Detected tools");
+    const pipedIdx = content.indexOf("stdout is being piped");
+    const cwdIdx = content.indexOf("Working directory");
+    expect(toolsIdx).toBeLessThan(pipedIdx);
+    expect(pipedIdx).toBeLessThan(cwdIdx);
   });
 });

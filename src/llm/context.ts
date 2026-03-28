@@ -18,11 +18,6 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   if (SCHEMA_TEXT) {
     systemParts.push(`Respond with a JSON object conforming to this schema:\n${SCHEMA_TEXT}`);
   }
-  if (ctx.piped) {
-    systemParts.push(
-      "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.",
-    );
-  }
 
   const messages: ConversationMessage[] = [];
 
@@ -51,6 +46,12 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
 
   if (ctx.toolsOutput) {
     sections.push(`## Detected tools\n${ctx.toolsOutput}`);
+  }
+
+  if (ctx.piped) {
+    sections.push(
+      "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.",
+    );
   }
 
   sections.push(`- Working directory (cwd): ${ctx.cwd}`);
