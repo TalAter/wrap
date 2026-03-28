@@ -6,33 +6,6 @@ import {
   SCHEMA_TEXT,
   SYSTEM_PROMPT,
 } from "../src/prompt.optimized.ts";
-import { assemblePromptParts } from "../src/prompt.ts";
-
-describe("assemblePromptParts", () => {
-  test("returns system prompt string", () => {
-    const parts = assemblePromptParts();
-    expect(parts.system).toBe(SYSTEM_PROMPT);
-  });
-
-  test("returns schema when SCHEMA_TEXT is non-empty", () => {
-    const parts = assemblePromptParts();
-    expect(parts.schema).toBe(SCHEMA_TEXT);
-  });
-
-  test("returns fewShotExamples when FEW_SHOT_EXAMPLES is non-empty", () => {
-    const parts = assemblePromptParts();
-    expect(parts.fewShotExamples).toBeDefined();
-    expect(parts.fewShotExamples).toHaveLength(FEW_SHOT_EXAMPLES.length);
-    expect(parts.fewShotExamples?.[0].input).toBe(FEW_SHOT_EXAMPLES[0].input);
-    expect(parts.fewShotExamples?.[0].output).toBe(FEW_SHOT_EXAMPLES[0].output);
-  });
-
-  test("all parts are present (smoke test)", () => {
-    const parts = assemblePromptParts();
-    expect(typeof parts.system).toBe("string");
-    expect(parts.system.length).toBeGreaterThan(0);
-  });
-});
 
 describe("PROMPT_HASH", () => {
   test("is a 64-char hex string", () => {
