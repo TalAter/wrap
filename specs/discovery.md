@@ -139,19 +139,6 @@ This would let the LLM skip a probe round that reads the file, at the cost of sl
 
 ---
 
-## Prompt Section Order
-
-The user message assembles context sections in this order:
-
-1. **Memory facts** — `## System facts`, then `## Facts about {path}` for matching scopes
-2. **Detected tools** — `## Detected tools` (runtime `which` output)
-3. **CWD** — `- Working directory (cwd): {path}` (+ `## Files in CWD` when listing is implemented)
-4. **User's request** — `## User's request`
-
-Piped input, when present, appears before the user's request (see `specs/piped-input.md`).
-
----
-
 ## LLM Probes
 
 > **Status:** Not implemented. Depends on the multi-round query loop (see `specs/SPEC.md` §6.3 and `specs/ARCHITECTURE.md` — Loop Rules). Implementation target: `src/core/query.ts`.

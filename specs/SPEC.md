@@ -390,6 +390,14 @@ Each request includes:
 - Thread history (if continuing a thread)
 - Piped stdin content (if present — with token count warning presented to user for very large inputs)
 
+**Prompt section order** — the final user message assembles context sections in this order:
+
+1. **Piped input** — `## Piped input` (when present — first section, before memory; see `specs/piped-input.md`. Not yet implemented)
+2. **Memory facts** — `## System facts`, then `## Facts about {path}` for matching scopes
+3. **Detected tools** — `## Detected tools` (runtime `which` output)
+4. **CWD** — `- Working directory (cwd): {path}` (+ `## Files in CWD` when listing is implemented)
+5. **User's request** — `## User's request`
+
 ---
 
 ## 9. Thread System
