@@ -214,6 +214,16 @@ describe("scoped memory in prompt", () => {
     const result = assembleCommandPrompt(makeContext());
     expect(result.system).toContain("later (more recent) fact");
   });
+
+  test("tools scope instruction appears in system prompt", () => {
+    const result = assembleCommandPrompt(makeContext());
+    expect(result.system).toContain("not exhaustive");
+  });
+
+  test("voice instructions appear in system prompt", () => {
+    const result = assembleCommandPrompt(makeContext());
+    expect(result.system).toContain("dry wit");
+  });
 });
 
 describe("tools output in prompt", () => {

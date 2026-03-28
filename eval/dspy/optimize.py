@@ -79,7 +79,22 @@ class WrapPredictor(dspy.Module):
         self.predict = dspy.Predict(signature)
 
     def forward(self, natural_language_query: str, memory_context: str = "") -> dspy.Prediction:
-        return self.predict(natural_language_query=natural_language_query, memory_context=memory_context)
+        # Append fixed instructions to whatever instruction MIPRO set.
+        # MIPRO optimizes the stored signature; this appends immutable text
+        # at call time so the LLM always sees it during eval, matching runtime.
+        sig = self.predict.signature
+        combined = (
+            f"{sig.instructions}\n\n"
+            f"{MEMORY_RECENCY_INSTRUCTION}\n\n"
+            f"{TOOLS_SCOPE_INSTRUCTION}\n\n"
+            f"{VOICE_INSTRUCTIONS}"
+        )
+        full_sig = sig.with_instructions(combined)
+        return self.predict(
+            natural_language_query=natural_language_query,
+            memory_context=memory_context,
+            signature=full_sig,
+        )
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
@@ -89,17 +104,20 @@ def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) 
 
 
 def memory_to_context(
-    memory: dict | None, cwd: str = "/", tools_output: str | None = None
+    memory: dict | None,
+    cwd: str = "/",
+    tools_output: str | None = None,
+    piped: bool = False,
 ) -> str:
     """Convert scoped memory dict + tools output to a text block for the LLM.
 
     Memory format: {"/": [{"fact": "..."}], "/path": [{"fact": "..."}]}
 
     Filters by CWD prefix match (same logic as context.ts)
-    and formats with section headers. Tools output is injected as a
-    separate section matching the runtime prompt format.
+    and formats with section headers. Order matches runtime context.ts:
+    memory → tools → piped instruction → cwd.
     """
-    if not memory and not tools_output:
+    if not memory and not tools_output and not piped:
         return ""
 
     cwd_slash = cwd if cwd.endswith("/") else cwd + "/"
@@ -119,6 +137,9 @@ def memory_to_context(
 
     if tools_output:
         sections.append(f"{SECTION_DETECTED_TOOLS}\n{tools_output}")
+
+    if piped:
+        sections.append(PIPED_INSTRUCTION)
 
     sections.append(f"{CWD_PREFIX} {cwd}")
 
@@ -141,8 +162,10 @@ DEFAULT_TOOLS_OUTPUT = (
 
 PIPED_INSTRUCTION = "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value."
 
-# Appended to the optimized instruction in write_output, not part of the
-# MIPRO-optimizable docstring. This ensures MIPRO can't drop or dilute it.
+# ── Fixed instructions ─────────────────────────────────────────────────
+# Appended to the MIPRO instruction at call time in forward() and at
+# runtime in context.ts. MIPRO can't drop or dilute these.
+
 VOICE_INSTRUCTIONS = (
     "**Answer voice:** Lead with the answer, follow with dry wit. Concise first "
     "— don't say in 10 words what can be said in 5. Have opinions. A raised "
@@ -152,6 +175,17 @@ VOICE_INSTRUCTIONS = (
     "mention being a CLI tool unless it's funny. Light self-awareness is OK "
     '("not exactly my wheelhouse, but...") — never apologetic. Command and '
     "probe types are unaffected — they must remain dry and accurate."
+)
+
+MEMORY_RECENCY_INSTRUCTION = (
+    "When multiple memory facts contradict each other, the later (more recent) "
+    "fact is more current and should take precedence."
+)
+
+TOOLS_SCOPE_INSTRUCTION = (
+    "The tools listed in memory and detected tools are not exhaustive — you may "
+    "use any command available on the system. Prefer confirmed tools when "
+    "relevant, but do not limit yourself to them."
 )
 
 
@@ -177,11 +211,7 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
         if tools_output is None:
             tools_output = DEFAULT_TOOLS_OUTPUT
 
-        memory_ctx = memory_to_context(memory, cwd, tools_output)
-
-        # Mirror runtime: when piped, append the piped-mode instruction to memory context
-        if ex.get("piped"):
-            memory_ctx = f"{memory_ctx}\n\n{PIPED_INSTRUCTION}".strip()
+        memory_ctx = memory_to_context(memory, cwd, tools_output, piped=bool(ex.get("piped")))
 
         dspy_examples.append(
             dspy.Example(
@@ -240,24 +270,43 @@ def extract_demos(optimized) -> list[dict]:
 
 
 def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -> str:
-    """Compute SHA-256 hash of prompt components, matching the TypeScript computation.
+    """Compute SHA-256 hash of all prompt components, matching the TypeScript computation.
 
-    Hash input is: systemPrompt + "\\n" + schemaText + "\\n" + JSON.stringify(demos)
+    Hash input covers everything the LLM sees: the optimized instruction,
+    fixed instructions (recency, tools, voice), schema, and few-shot examples.
     Uses compact JSON (no spaces) to match JS JSON.stringify() default.
     """
+    # Concatenate all parts that form the full system prompt at runtime
+    full_system = "\n\n".join([
+        (instruction or "").strip(),
+        MEMORY_RECENCY_INSTRUCTION,
+        TOOLS_SCOPE_INSTRUCTION,
+        VOICE_INSTRUCTIONS,
+    ])
     demos_compact = json.dumps(demos, separators=(",", ":"))
-    hash_input = "\n".join([(instruction or "").strip(), (schema_text or "").strip(), demos_compact])
+    hash_input = "\n".join([full_system, (schema_text or "").strip(), demos_compact])
     return hashlib.sha256(hash_input.encode()).hexdigest()
+
+
+def _escape_backtick(s: str) -> str:
+    """Escape a string for use inside JS backtick template literals."""
+    return s.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
+
+
+def _escape_dquote(s: str) -> str:
+    """Escape a string for use inside JS double-quoted strings."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def write_output(instruction: str, demos: list[dict], schema_text: str, path: Path) -> None:
     """Write optimized prompt, schema, and few-shot examples to TypeScript file."""
-    # Append fixed voice instructions — outside MIPRO's control
-    full_instruction = f"{instruction}\n\n{VOICE_INSTRUCTIONS}"
-    escaped = full_instruction.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
-    escaped_schema = schema_text.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
+    escaped = _escape_backtick(instruction)
+    escaped_schema = _escape_backtick(schema_text)
     demos_json = json.dumps(demos, indent=2)
-    prompt_hash = compute_prompt_hash(full_instruction, schema_text, demos)
+    prompt_hash = compute_prompt_hash(instruction, schema_text, demos)
+
+    # Constants that use double-quoted strings need " escaped
+    dq = _escape_dquote
 
     content = f"""// AUTO-GENERATED by DSPy optimizer. Do not edit manually.
 // Re-generate with: bun run optimize
@@ -275,15 +324,18 @@ export const FEW_SHOT_EXAMPLES: ReadonlyArray<{{
 
 // Fixed prompt strings — not optimized by MIPRO, but centralized here so
 // the TypeScript runtime reads all prompt content from one file.
-export const SECTION_SYSTEM_FACTS = "{SECTION_SYSTEM_FACTS}";
-export const SECTION_FACTS_ABOUT = "{SECTION_FACTS_ABOUT}";
-export const SECTION_DETECTED_TOOLS = "{SECTION_DETECTED_TOOLS}";
-export const SECTION_USER_REQUEST = "{SECTION_USER_REQUEST}";
-export const SECTION_PIPED_INPUT = "{SECTION_PIPED_INPUT}";
-export const CWD_PREFIX = "{CWD_PREFIX}";
-export const PIPED_INSTRUCTION = "{PIPED_INSTRUCTION}";
-export const FEW_SHOT_SEPARATOR = "{FEW_SHOT_SEPARATOR}";
-export const SCHEMA_INSTRUCTION = "{SCHEMA_INSTRUCTION}";
+export const SECTION_SYSTEM_FACTS = "{dq(SECTION_SYSTEM_FACTS)}";
+export const SECTION_FACTS_ABOUT = "{dq(SECTION_FACTS_ABOUT)}";
+export const SECTION_DETECTED_TOOLS = "{dq(SECTION_DETECTED_TOOLS)}";
+export const SECTION_USER_REQUEST = "{dq(SECTION_USER_REQUEST)}";
+export const SECTION_PIPED_INPUT = "{dq(SECTION_PIPED_INPUT)}";
+export const CWD_PREFIX = "{dq(CWD_PREFIX)}";
+export const PIPED_INSTRUCTION = "{dq(PIPED_INSTRUCTION)}";
+export const FEW_SHOT_SEPARATOR = "{dq(FEW_SHOT_SEPARATOR)}";
+export const SCHEMA_INSTRUCTION = "{dq(SCHEMA_INSTRUCTION)}";
+export const MEMORY_RECENCY_INSTRUCTION = "{dq(MEMORY_RECENCY_INSTRUCTION)}";
+export const TOOLS_SCOPE_INSTRUCTION = "{dq(TOOLS_SCOPE_INSTRUCTION)}";
+export const VOICE_INSTRUCTIONS = "{dq(VOICE_INSTRUCTIONS)}";
 """
     path.write_text(content)
     print(f"Wrote optimized prompt to {path} (hash: {prompt_hash})")
