@@ -1,7 +1,8 @@
 import { NoObjectGeneratedError } from "ai";
+import type { CommandResponse } from "../command-response.schema.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
-import type { Provider, ProviderConfig } from "../llm/types.ts";
+import type { PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendFacts } from "../memory/memory.ts";
@@ -22,6 +23,33 @@ export function isStructuredOutputError(e: unknown): boolean {
 export function extractFailedText(e: unknown): string {
   if (NoObjectGeneratedError.isInstance(e)) return e.text ?? "";
   return "";
+}
+
+/**
+ * Call the LLM; on a structured-output parse failure, retry once with the
+ * broken output appended so the model can self-correct.
+ */
+export async function callWithRetry(
+  provider: Provider,
+  input: PromptInput,
+): Promise<CommandResponse> {
+  try {
+    return await runCommandPrompt(provider, input);
+  } catch (e) {
+    if (!isStructuredOutputError(e)) throw e;
+    return runCommandPrompt(provider, {
+      system: input.system,
+      messages: [
+        ...input.messages,
+        { role: "assistant" as const, content: extractFailedText(e) },
+        {
+          role: "user" as const,
+          content:
+            "Your response was not valid JSON. Respond ONLY with valid JSON matching the schema.",
+        },
+      ],
+    });
+  }
 }
 
 /** Returns the process exit code. Caller is responsible for process.exit(). */
@@ -55,36 +83,14 @@ export async function runQuery(
       piped: !process.stdout.isTTY,
     });
 
-    let response: Awaited<ReturnType<typeof runCommandPrompt>>;
     const llmStart = performance.now();
+    let response: CommandResponse;
     try {
-      response = await runCommandPrompt(provider, input);
+      response = await callWithRetry(provider, input);
     } catch (e) {
-      if (!isStructuredOutputError(e)) {
-        round.provider_error = e instanceof Error ? e.message : String(e);
-        round.llm_ms = Math.round(performance.now() - llmStart);
-        throw e;
-      }
-      // Round retry: re-attempt once with failed output appended
-      const retryInput = {
-        system: input.system,
-        messages: [
-          ...input.messages,
-          { role: "assistant" as const, content: extractFailedText(e) },
-          {
-            role: "user" as const,
-            content:
-              "Your response was not valid JSON. Respond ONLY with valid JSON matching the schema.",
-          },
-        ],
-      };
-      try {
-        response = await runCommandPrompt(provider, retryInput);
-      } catch (retryErr) {
-        round.provider_error = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        round.llm_ms = Math.round(performance.now() - llmStart);
-        throw retryErr;
-      }
+      round.provider_error = e instanceof Error ? e.message : String(e);
+      round.llm_ms = Math.round(performance.now() - llmStart);
+      throw e;
     }
     round.llm_ms = Math.round(performance.now() - llmStart);
     round.parsed = response;
