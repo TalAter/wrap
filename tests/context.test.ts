@@ -213,7 +213,7 @@ describe("scoped memory in prompt", () => {
 describe("tools output in prompt", () => {
   test("includes tools section when toolsOutput provided", () => {
     const content = lastMessage(makeContext({ toolsOutput: "/usr/bin/git\ndocker not found" }));
-    expect(content).toContain("## Tools available in current directory");
+    expect(content).toContain("## Detected tools");
     expect(content).toContain("/usr/bin/git");
     expect(content).toContain("docker not found");
   });
@@ -231,7 +231,7 @@ describe("tools output in prompt", () => {
       }),
     );
     const factsIdx = content.indexOf("## System facts");
-    const toolsIdx = content.indexOf("## Tools available");
+    const toolsIdx = content.indexOf("## Detected tools");
     const cwdIdx = content.indexOf("Working directory");
     expect(factsIdx).toBeLessThan(toolsIdx);
     expect(toolsIdx).toBeLessThan(cwdIdx);

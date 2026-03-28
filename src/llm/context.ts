@@ -50,7 +50,7 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   }
 
   if (ctx.toolsOutput) {
-    sections.push(`## Tools available in current directory\n${ctx.toolsOutput}`);
+    sections.push(`## Detected tools\n${ctx.toolsOutput}`);
   }
 
   sections.push(`- Working directory (cwd): ${ctx.cwd}`);

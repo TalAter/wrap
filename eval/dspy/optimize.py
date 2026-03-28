@@ -104,7 +104,7 @@ def memory_to_context(
             sections.append(f"{header}\n{lines}")
 
     if tools_output:
-        sections.append(f"## Tools available in current directory\n{tools_output}")
+        sections.append(f"## Detected tools\n{tools_output}")
 
     return "\n\n".join(sections)
 

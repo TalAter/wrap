@@ -40,11 +40,15 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
-## Agent Loop (Probes)
+## Discovery & Probes (see specs/discovery.md)
 
-- [ ] Probe command execution (silent, not shown in stdout)
-- [ ] Subtle stderr/tty indicator during probes (e.g., `🔍 Checking shell type...`)
-- [ ] Probe results fed back to LLM as context
+- [ ] Multi-round probe loop — LLM returns `type: "probe"`, Wrap executes silently, feeds result back
+- [ ] Subtle stderr indicator during probes (e.g., `🔍 Checking shell type...`)
+- [ ] Probe results as conversation turns (multi-turn context for subsequent LLM calls)
+- [ ] CWD files in every LLM request
+- [ ] On last round, append "do not probe" instruction to LLM prompt
+- [ ] Few-shot examples showing probe flows (via DSPy eval examples)
+- [ ] Future: parse package.json scripts / Makefile targets into CWD context summary
 
 ## Error Handling & Auto-Fix
 

@@ -63,8 +63,8 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 
 | Term | Definition |
 |------|-----------|
-| **Discovery** | The ongoing process of learning about the environment (init probes, query probes, memory updates) |
-| **Probe** | An individual command run for discovery (init probe = first-run, tool probe = before every query, query probe = mid-query triggered by LLM) |
+| **Discovery** | The ongoing process of learning about the environment (init probes, tool probes, LLM probes, memory updates) |
+| **Probe** | An individual command run for discovery (init probe = first-run, tool probe = before every query, LLM probe = mid-query triggered by LLM) |
 | **Memory** | A collection of scoped facts learned about the user or their machine. Memory → Scopes → Facts. |
 | **Scope** | The directory a fact belongs to in the file system |
 | **Fact** | An individual learned item in memory |
@@ -329,24 +329,11 @@ Note: `command not found: foo` (without `./`) means `foo` is not in `$PATH` anyw
 
 ---
 
-## 7. Agent Loop (Probe Commands)
+## 7. Discovery
 
-The LLM can return probe commands before the final command:
+> **See `specs/discovery.md`** for full architecture: init probes, runtime tool probes, CWD context, and LLM probes.
 
-```
-User: "add this alias to my shell config"
-LLM: {type: "probe", command: "echo $SHELL"}  → result: /bin/zsh
-LLM: {type: "probe", command: "ls ~/.zshrc ~/.zprofile 2>/dev/null"}  → result: /Users/tal/.zshrc
-LLM: {type: "command", command: "echo 'alias ll=ls -la' >> ~/.zshrc"}
-```
-
-### 7.1 Probe Behavior
-
-- Probes execute silently (not shown in stdout)
-- Subtle indicator on /dev/tty or stderr during probes: e.g., `🔍 Checking shell type...`
-- Probe results are fed back to the LLM as context
-- Probes count toward the unified round budget (`maxRounds`, see 6.1)
-- Probe results that reveal reusable facts trigger the memory system
+Wrap learns about its environment through four mechanisms: init probes on first run (baseline OS/shell knowledge), a runtime tool probe on every startup (~5ms `which` call), CWD files on every request (immediate project awareness), and LLM probes during the query loop (on-demand discovery). LLM probes count toward the unified round budget (`maxRounds`); discovered facts flow into scoped memory so the same question is never probed twice.
 
 ---
 
@@ -399,6 +386,7 @@ Each request includes:
 - Current working directory
 - Curated environment variables: `PATH`, `EDITOR`, `SHELL` (never secrets like API keys)
 - Facts filtered to the current directory (global facts always included; directory-specific facts only when CWD matches)
+- Detected tools from runtime `which` probe (see `specs/discovery.md` — Runtime Tool Probe)
 - Thread history (if continuing a thread)
 - Piped stdin content (if present — with token count warning presented to user for very large inputs)
 

@@ -94,7 +94,7 @@ Global facts are always included because every CWD starts with `/`.
 - `/` scope → `## System facts`
 - All other scopes → `## Facts about {resolved_path}` (full absolute paths so the LLM can reference and return them)
 - Sections only appear if they have facts after filtering. If no facts match at all, the entire block is omitted.
-- After memory facts, before CWD: `## Tools available in current directory` — runtime `which` output.
+- After memory facts, before CWD: `## Detected tools` — runtime `which` output (see `specs/discovery.md`).
 
 ### Recency
 
@@ -104,29 +104,9 @@ The system prompt includes: *"When multiple memory facts contradict each other, 
 
 ## Init Flow
 
-Called from `main()` after `loadConfig()` and `initProvider()`:
+> **See `specs/discovery.md`** for full init probe details: probe commands, LLM prompt, UX, and the complete `ensureMemory` flow diagram.
 
-```
-ensureMemory(provider, wrapHome)
-  │
-  ├─ memory.json exists and has at least one scope key?
-  │    ──→ load and return Memory
-  │
-  └─ first run (file missing or empty map):
-       ├─ run local probe commands: OS, shell, distro, config files (no LLM)
-       ├─ show "✨ Learning about your system..." on stderr
-       ├─ send raw probe output to LLM (plain text, one fact per line)
-       ├─ wrap result as { "/": facts }
-       ├─ save to memory.json
-       ├─ show summary: "🧠 Detected OS and shell"
-       └─ return Memory
-```
-
-If the LLM call fails → error and exit. If we can't reach the LLM for memory init, we can't reach it for the user's query either.
-
-Init only covers OS/shell/distro/config — things that rarely change and benefit from LLM semantic parsing. Tool availability is handled separately by runtime probing (see above).
-
-Init always scopes facts to `/` (global). The init flow uses its own plain-text prompt and response parsing, not the Zod command response schema.
+Called from `main()` after `loadConfig()` and `initProvider()`. On first run, probes the system locally (OS, shell, distro, config files), sends raw output to the LLM to parse into concise global facts, and saves them. On subsequent runs, loads from disk. If the LLM call fails → error and exit.
 
 ---
 
