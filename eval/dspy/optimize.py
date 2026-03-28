@@ -128,6 +128,7 @@ def memory_to_context(
 # Defaults applied to every example unless overridden.
 # At runtime the LLM always sees system facts + tools output,
 # so eval samples should reflect that.
+DEFAULT_CWD = "/Users/talater/project"
 DEFAULT_MEMORY = {"/": [{"fact": "Runs macOS on arm64 (Apple Silicon)"}, {"fact": "Default shell is zsh"}]}
 DEFAULT_TOOLS_OUTPUT = (
     "/opt/homebrew/bin/brew\napt not found\ndnf not found\npacman not found\nyum not found\n"
@@ -157,13 +158,13 @@ VOICE_INSTRUCTIONS = (
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
     """Convert examples to DSPy Example objects.
 
-    Applies DEFAULT_MEMORY and DEFAULT_TOOLS_OUTPUT to examples that
-    don't provide their own, so every sample includes system context
-    matching what the LLM sees at runtime.
+    Applies DEFAULT_CWD, DEFAULT_MEMORY, and DEFAULT_TOOLS_OUTPUT to
+    examples that don't provide their own, so every sample includes
+    system context matching what the LLM sees at runtime.
     """
     dspy_examples = []
     for ex in examples:
-        cwd = ex.get("cwd", "/")
+        cwd = ex.get("cwd", DEFAULT_CWD)
         memory = ex.get("memory")
         tools_output = ex.get("tools_output")
 
