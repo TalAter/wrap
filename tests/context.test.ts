@@ -237,3 +237,21 @@ describe("tools output in prompt", () => {
     expect(toolsIdx).toBeLessThan(cwdIdx);
   });
 });
+
+describe("piped-mode prompt", () => {
+  test("piped: true appends piped-mode instruction to system prompt", () => {
+    const result = assembleCommandPrompt(makeContext({ piped: true }));
+    expect(result.system).toContain("stdout is being piped");
+    expect(result.system).toContain("bare value");
+  });
+
+  test("piped: false does not append piped-mode instruction", () => {
+    const result = assembleCommandPrompt(makeContext({ piped: false }));
+    expect(result.system).not.toContain("stdout is being piped");
+  });
+
+  test("piped defaults to false (no piped-mode instruction)", () => {
+    const result = assembleCommandPrompt(makeContext());
+    expect(result.system).not.toContain("stdout is being piped");
+  });
+});

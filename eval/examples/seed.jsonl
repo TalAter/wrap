@@ -59,3 +59,13 @@
 {"input": "explain: du -sh * | sort -rh | head -5", "assertions": {"type": "answer", "content_pattern": "(?=.*(disk|size|space|usage))(?=.*(sort|larg|bigg|top|first))"}}
 {"input": "how does 2>&1 work", "assertions": {"type": "answer", "content_pattern": "(?=.*(stderr|standard error))(?=.*(stdout|standard out|output|merge|combin))"}}
 {"input": "break down this command: curl -sS -X POST -H 'Content-Type: application/json' -d '{\"key\":\"val\"}' https://api.example.com/data", "assertions": {"type": "answer", "content_pattern": "(?=.*(POST|post))(?=.*(JSON|json|header|body|data))"}}
+{"_note": "General knowledge — should have personality, no unsolicited CLI mention", "input": "what is the airspeed velocity of an unladen swallow", "assertions": {"type": "answer", "content_pattern": "(?=.*(11|m/s|meter|speed))(?=.*swallow)"}}
+{"_note": "General knowledge — no unsolicited CLI mention", "input": "who wrote hamlet", "assertions": {"type": "answer", "content_pattern": "(?i)shakespeare"}}
+{"_note": "General knowledge — numeric fact", "input": "what is the boiling point of water in fahrenheit", "assertions": {"type": "answer", "content_pattern": "212"}}
+{"_note": "General knowledge — approximate numeric answer", "input": "how far is the moon", "assertions": {"type": "answer", "content_pattern": "(384|238|km|mile|thousand)"}}
+{"_note": "Piped stdout — bare number, no thousands separators", "input": "what is the speed of light in km per second", "piped": true, "assertions": {"type": "answer", "content_pattern": "^[\\d.]+$"}}
+{"_note": "Piped stdout — bare name, no prose", "input": "who wrote hamlet", "piped": true, "assertions": {"type": "answer", "content_pattern": "^(William )?Shakespeare$"}}
+{"_note": "Piped stdout — bare integer", "input": "what is the boiling point of water in fahrenheit", "piped": true, "assertions": {"type": "answer", "content_pattern": "^\\d+$"}}
+{"_note": "Piped stdout, non-reducible — concise prose, no personality", "input": "what's the difference between curl and wget", "piped": true, "assertions": {"type": "answer", "content_pattern": "(?=.*(curl))(?=.*(wget))(?!.*(!|\\?\\s*$))"}}
+{"_note": "CLI knowledge — commands expected in answer", "input": "what's the difference between curl and wget", "assertions": {"type": "answer", "content_pattern": "(?=.*(curl|URL))(?=.*(wget|download))"}}
+{"_note": "CLI knowledge — shell concept explanation", "input": "explain what pipes do in bash", "assertions": {"type": "answer", "content_pattern": "(?=.*(pipe|\\|))(?=.*(stdout|output|command))"}}

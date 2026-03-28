@@ -52,6 +52,7 @@ export async function runQuery(
       cwd: options.cwd,
       memory,
       toolsOutput: options.toolsOutput,
+      piped: !process.stdout.isTTY,
     });
 
     let response: Awaited<ReturnType<typeof runCommandPrompt>>;
