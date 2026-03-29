@@ -4,10 +4,7 @@ cd "$(dirname "$0")/../.." || exit 0
 
 ERRORS=""
 
-# 1. Biome format (autoformat, don't block)
-bun run format 2>&1 | tail -1 >&2
-
-# 2. Biome lint
+# 1. Biome lint (autofixes safe issues including formatting)
 LINT_OUTPUT=$(bun run lint 2>&1)
 if [ $? -ne 0 ]; then
   ERRORS="${ERRORS}Biome check failed:\n${LINT_OUTPUT}\n\n"
