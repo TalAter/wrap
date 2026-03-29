@@ -70,7 +70,7 @@ export const SCHEMA_TEXT = `export const CommandResponseSchema = z.object({
   memory_updates_message: z.string().nullable().optional(),
 });`;
 
-export const PROMPT_HASH = "a3dba16c36e9f881e6d82ffcdbb3b1420fd5c23cf9046d1aa209b113590dfbdd";
+export const PROMPT_HASH = "7a540c9fdaf6a4fd73183826ee7308cb34a0849d7d7cd6cf9da21bd9268820b4";
 
 export const FEW_SHOT_EXAMPLES: ReadonlyArray<{
   readonly input: string;
@@ -94,9 +94,8 @@ export const SECTION_SYSTEM_FACTS = "## System facts";
 export const SECTION_FACTS_ABOUT = "## Facts about";
 export const SECTION_DETECTED_TOOLS = "## Detected tools";
 export const SECTION_USER_REQUEST = "## User's request";
-export const SECTION_PIPED_INPUT = "## Piped input";
 export const CWD_PREFIX = "- Working directory (cwd):";
-export const PIPED_INSTRUCTION =
+export const PIPED_OUTPUT_INSTRUCTION =
   "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value.";
 export const FEW_SHOT_SEPARATOR = "Now handle the following request.";
 export const SCHEMA_INSTRUCTION = "Respond with a JSON object conforming to this schema:";

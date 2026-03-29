@@ -4,7 +4,7 @@ import {
   FEW_SHOT_EXAMPLES,
   FEW_SHOT_SEPARATOR,
   MEMORY_RECENCY_INSTRUCTION,
-  PIPED_INSTRUCTION,
+  PIPED_OUTPUT_INSTRUCTION,
   SCHEMA_INSTRUCTION,
   SCHEMA_TEXT,
   SECTION_DETECTED_TOOLS,
@@ -69,7 +69,7 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   }
 
   if (ctx.piped) {
-    sections.push(PIPED_INSTRUCTION);
+    sections.push(PIPED_OUTPUT_INSTRUCTION);
   }
 
   sections.push(`${CWD_PREFIX} ${ctx.cwd}`);

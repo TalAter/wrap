@@ -36,7 +36,6 @@ SECTION_SYSTEM_FACTS = "## System facts"
 SECTION_FACTS_ABOUT = "## Facts about"
 SECTION_DETECTED_TOOLS = "## Detected tools"
 SECTION_USER_REQUEST = "## User's request"
-SECTION_PIPED_INPUT = "## Piped input"
 CWD_PREFIX = "- Working directory (cwd):"
 FEW_SHOT_SEPARATOR = "Now handle the following request."
 SCHEMA_INSTRUCTION = "Respond with a JSON object conforming to this schema:"
@@ -147,7 +146,7 @@ def memory_to_context(
         sections.append(f"{SECTION_DETECTED_TOOLS}\n{tools_output}")
 
     if piped:
-        sections.append(PIPED_INSTRUCTION)
+        sections.append(PIPED_OUTPUT_INSTRUCTION)
 
     sections.append(f"{CWD_PREFIX} {cwd}")
 
@@ -168,7 +167,7 @@ DEFAULT_TOOLS_OUTPUT = (
     "wl-copy not found\nwl-paste not found"
 )
 
-PIPED_INSTRUCTION = "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value."
+PIPED_OUTPUT_INSTRUCTION = "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value."
 
 # ── Fixed instructions ─────────────────────────────────────────────────
 # Appended to the MIPRO instruction at call time in forward() and at
@@ -298,9 +297,8 @@ def build_prompt_hash_manifest(
         ["SECTION_FACTS_ABOUT", SECTION_FACTS_ABOUT],
         ["SECTION_DETECTED_TOOLS", SECTION_DETECTED_TOOLS],
         ["SECTION_USER_REQUEST", SECTION_USER_REQUEST],
-        ["SECTION_PIPED_INPUT", SECTION_PIPED_INPUT],
         ["CWD_PREFIX", CWD_PREFIX],
-        ["PIPED_INSTRUCTION", PIPED_INSTRUCTION],
+        ["PIPED_OUTPUT_INSTRUCTION", PIPED_OUTPUT_INSTRUCTION],
         ["FEW_SHOT_EXAMPLES", demos or []],
     ]
 
@@ -356,9 +354,8 @@ export const SECTION_SYSTEM_FACTS = "{dq(SECTION_SYSTEM_FACTS)}";
 export const SECTION_FACTS_ABOUT = "{dq(SECTION_FACTS_ABOUT)}";
 export const SECTION_DETECTED_TOOLS = "{dq(SECTION_DETECTED_TOOLS)}";
 export const SECTION_USER_REQUEST = "{dq(SECTION_USER_REQUEST)}";
-export const SECTION_PIPED_INPUT = "{dq(SECTION_PIPED_INPUT)}";
 export const CWD_PREFIX = "{dq(CWD_PREFIX)}";
-export const PIPED_INSTRUCTION = "{dq(PIPED_INSTRUCTION)}";
+export const PIPED_OUTPUT_INSTRUCTION = "{dq(PIPED_OUTPUT_INSTRUCTION)}";
 export const FEW_SHOT_SEPARATOR = "{dq(FEW_SHOT_SEPARATOR)}";
 export const SCHEMA_INSTRUCTION = "{dq(SCHEMA_INSTRUCTION)}";
 export const MEMORY_RECENCY_INSTRUCTION = "{dq(MEMORY_RECENCY_INSTRUCTION)}";
