@@ -7,7 +7,7 @@ import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendFacts } from "../memory/memory.ts";
 import type { Memory } from "../memory/types.ts";
-import { PROMPT_HASH } from "../prompt.optimized.ts";
+import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";

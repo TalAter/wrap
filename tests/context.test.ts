@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { assembleCommandPrompt, type QueryContext } from "../src/llm/context.ts";
-import { FEW_SHOT_EXAMPLES, SCHEMA_TEXT, SYSTEM_PROMPT } from "../src/prompt.optimized.ts";
+import promptOptimized from "../src/prompt.optimized.json";
+
+const SYSTEM_PROMPT = promptOptimized.instruction;
+const SCHEMA_TEXT = promptOptimized.schemaText;
+const FEW_SHOT_EXAMPLES = promptOptimized.fewShotExamples;
 
 function makeContext(overrides?: Partial<QueryContext>): QueryContext {
   return {

@@ -11,7 +11,7 @@
     "lint": "bunx biome check . --write --error-on-warnings",
     "format": "bunx biome format . --write",
     "check": "bunx biome check . --error-on-warnings && bunx tsc --noEmit && bun test",
-    "optimize": "docker build -t wrap-dspy eval/dspy && docker run --rm -v \"$(pwd)/eval\":/app/eval -v \"$(pwd)/src\":/app/src --env-file eval/dspy/.env wrap-dspy && bunx biome format src/prompt.optimized.ts --write"
+    "optimize": "docker build -t wrap-dspy eval/dspy && docker run --rm -v \"$(pwd)/eval\":/app/eval -v \"$(pwd)/src\":/app/src --env-file eval/dspy/.env wrap-dspy && bunx biome format src/prompt.optimized.json --write"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",

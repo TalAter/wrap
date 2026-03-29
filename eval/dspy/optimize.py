@@ -2,7 +2,7 @@
 
 Reads the Zod schema (with inline comments), loads examples, runs MIPRO
 optimization to discover the best instruction text + few-shot examples, and writes
-the result to src/prompt.optimized.ts.
+the result to src/prompt.optimized.json.
 
 The Zod schema's inline comments serve as structural guidance for the LLM —
 they explain what each type means, when to use probe vs command, etc. MIPRO
@@ -23,22 +23,17 @@ from read_schema import read_schema
 
 # Paths (container mount points)
 EXAMPLES_PATH = Path("/app/eval/examples/seed.jsonl")
-OUTPUT_PATH = Path("/app/src/prompt.optimized.ts")
+CONSTANTS_PATH = Path("/app/src/prompt.constants.json")
+OUTPUT_PATH = Path("/app/src/prompt.optimized.json")
 
 SEED = 42
 
 # ── Prompt string constants ─────────────────────────────────────────────
-# Authoritative source for all fixed prompt strings. write_output() writes
-# these into src/prompt.optimized.ts so the TypeScript runtime imports them.
+# Shared JSON file read by both TypeScript and Python.
 # MIPRO never touches these — they're data formatting, not the optimizable
 # instruction.
-SECTION_SYSTEM_FACTS = "## System facts"
-SECTION_FACTS_ABOUT = "## Facts about"
-SECTION_DETECTED_TOOLS = "## Detected tools"
-SECTION_USER_REQUEST = "## User's request"
-CWD_PREFIX = "- Working directory (cwd):"
-FEW_SHOT_SEPARATOR = "Now handle the following request."
-SCHEMA_INSTRUCTION = "Respond with a JSON object conforming to this schema:"
+with open(CONSTANTS_PATH) as _f:
+    CONSTANTS = json.load(_f)
 
 
 def load_examples(path: Path) -> list[dict]:
@@ -84,17 +79,17 @@ class WrapPredictor(dspy.Module):
         sig = self.predict.signature
         combined = (
             f"{sig.instructions}\n\n"
-            f"{MEMORY_RECENCY_INSTRUCTION}\n\n"
-            f"{TOOLS_SCOPE_INSTRUCTION}\n\n"
-            f"{VOICE_INSTRUCTIONS}"
+            f'{CONSTANTS["memoryRecencyInstruction"]}\n\n'
+            f'{CONSTANTS["toolsScopeInstruction"]}\n\n'
+            f'{CONSTANTS["voiceInstructions"]}'
         )
         full_sig = sig.with_instructions(combined)
         # Runtime inserts FEW_SHOT_SEPARATOR between few-shot turns and the live request.
         # Mirror that in eval so candidate prompts are optimized against the same boundary cue.
         query_with_separator = (
-            f"{FEW_SHOT_SEPARATOR}\n\n{SECTION_USER_REQUEST}\n{natural_language_query}"
+            f'{CONSTANTS["fewShotSeparator"]}\n\n{CONSTANTS["sectionUserRequest"]}\n{natural_language_query}'
             if natural_language_query
-            else FEW_SHOT_SEPARATOR
+            else CONSTANTS["fewShotSeparator"]
         )
         return self.predict(
             natural_language_query=query_with_separator,
@@ -138,17 +133,17 @@ def memory_to_context(
             facts = memory[scope]
             if not facts:
                 continue
-            header = SECTION_SYSTEM_FACTS if scope == "/" else f"{SECTION_FACTS_ABOUT} {scope}"
+            header = CONSTANTS["sectionSystemFacts"] if scope == "/" else f'{CONSTANTS["sectionFactsAbout"]} {scope}'
             lines = "\n".join(f"- {f['fact']}" for f in facts)
             sections.append(f"{header}\n{lines}")
 
     if tools_output:
-        sections.append(f"{SECTION_DETECTED_TOOLS}\n{tools_output}")
+        sections.append(f'{CONSTANTS["sectionDetectedTools"]}\n{tools_output}')
 
     if piped:
-        sections.append(PIPED_OUTPUT_INSTRUCTION)
+        sections.append(CONSTANTS["pipedOutputInstruction"])
 
-    sections.append(f"{CWD_PREFIX} {cwd}")
+    sections.append(f'{CONSTANTS["cwdPrefix"]} {cwd}')
 
     return "\n\n".join(sections)
 
@@ -166,35 +161,6 @@ DEFAULT_TOOLS_OUTPUT = (
     "/usr/bin/pbcopy\n/usr/bin/pbpaste\nxclip not found\nxsel not found\n"
     "wl-copy not found\nwl-paste not found"
 )
-
-PIPED_OUTPUT_INSTRUCTION = "stdout is being piped to another program. For answer-type responses: return the bare value with no prose, no commentary, no personality. If the answer is a number, return just the number with no thousands separators or formatting. If it's a name, return just the name. Only add minimal prose when the answer genuinely can't be reduced to a bare value."
-
-# ── Fixed instructions ─────────────────────────────────────────────────
-# Appended to the MIPRO instruction at call time in forward() and at
-# runtime in context.ts. MIPRO can't drop or dilute these.
-
-VOICE_INSTRUCTIONS = (
-    "**Answer voice:** Lead with the answer, follow with dry wit. Concise first "
-    "— don't say in 10 words what can be said in 5. Have opinions. A raised "
-    "eyebrow beats an exclamation mark. One good joke is better than three okay "
-    "ones — don't force it. If the question isn't about CLI/shell, just answer "
-    "it — don't offer shell commands, don't steer toward CLI topics, don't "
-    "mention being a CLI tool unless it's funny. Light self-awareness is OK "
-    '("not exactly my wheelhouse, but...") — never apologetic. Command and '
-    "probe types are unaffected — they must remain dry and accurate."
-)
-
-MEMORY_RECENCY_INSTRUCTION = (
-    "When multiple memory facts contradict each other, the later (more recent) "
-    "fact is more current and should take precedence."
-)
-
-TOOLS_SCOPE_INSTRUCTION = (
-    "The tools listed in memory and detected tools are not exhaustive — you may "
-    "use any command available on the system. Prefer confirmed tools when "
-    "relevant, but do not limit yourself to them."
-)
-
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
     """Convert examples to DSPy Example objects.
@@ -287,18 +253,18 @@ def build_prompt_hash_manifest(
     """
     return [
         ["SYSTEM_PROMPT", (instruction or "").strip()],
-        ["MEMORY_RECENCY_INSTRUCTION", MEMORY_RECENCY_INSTRUCTION],
-        ["TOOLS_SCOPE_INSTRUCTION", TOOLS_SCOPE_INSTRUCTION],
-        ["VOICE_INSTRUCTIONS", VOICE_INSTRUCTIONS],
-        ["SCHEMA_INSTRUCTION", SCHEMA_INSTRUCTION],
+        ["MEMORY_RECENCY_INSTRUCTION", CONSTANTS["memoryRecencyInstruction"]],
+        ["TOOLS_SCOPE_INSTRUCTION", CONSTANTS["toolsScopeInstruction"]],
+        ["VOICE_INSTRUCTIONS", CONSTANTS["voiceInstructions"]],
+        ["SCHEMA_INSTRUCTION", CONSTANTS["schemaInstruction"]],
         ["SCHEMA_TEXT", (schema_text or "").strip()],
-        ["FEW_SHOT_SEPARATOR", FEW_SHOT_SEPARATOR],
-        ["SECTION_SYSTEM_FACTS", SECTION_SYSTEM_FACTS],
-        ["SECTION_FACTS_ABOUT", SECTION_FACTS_ABOUT],
-        ["SECTION_DETECTED_TOOLS", SECTION_DETECTED_TOOLS],
-        ["SECTION_USER_REQUEST", SECTION_USER_REQUEST],
-        ["CWD_PREFIX", CWD_PREFIX],
-        ["PIPED_OUTPUT_INSTRUCTION", PIPED_OUTPUT_INSTRUCTION],
+        ["FEW_SHOT_SEPARATOR", CONSTANTS["fewShotSeparator"]],
+        ["SECTION_SYSTEM_FACTS", CONSTANTS["sectionSystemFacts"]],
+        ["SECTION_FACTS_ABOUT", CONSTANTS["sectionFactsAbout"]],
+        ["SECTION_DETECTED_TOOLS", CONSTANTS["sectionDetectedTools"]],
+        ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
+        ["CWD_PREFIX", CONSTANTS["cwdPrefix"]],
+        ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
         ["FEW_SHOT_EXAMPLES", demos or []],
     ]
 
@@ -314,55 +280,18 @@ def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -
     return hashlib.sha256(hash_input.encode()).hexdigest()
 
 
-def _escape_backtick(s: str) -> str:
-    """Escape a string for use inside JS backtick template literals."""
-    return s.replace("\\", "\\\\").replace("`", "\\`").replace("${", "\\${")
-
-
-def _escape_dquote(s: str) -> str:
-    """Escape a string for use inside JS double-quoted strings."""
-    return s.replace("\\", "\\\\").replace('"', '\\"')
-
-
 def write_output(instruction: str, demos: list[dict], schema_text: str, path: Path) -> None:
-    """Write optimized prompt, schema, and few-shot examples to TypeScript file."""
-    escaped = _escape_backtick(instruction)
-    escaped_schema = _escape_backtick(schema_text)
-    demos_json = json.dumps(demos, indent=2)
+    """Write optimized prompt, schema, and few-shot examples to JSON file."""
     prompt_hash = compute_prompt_hash(instruction, schema_text, demos)
-
-    # Constants that use double-quoted strings need " escaped
-    dq = _escape_dquote
-
-    content = f"""// AUTO-GENERATED by DSPy optimizer. Do not edit manually.
-// Re-generate with: bun run optimize
-
-export const SYSTEM_PROMPT = `{escaped}`;
-
-export const SCHEMA_TEXT = `{escaped_schema}`;
-
-export const PROMPT_HASH = "{prompt_hash}";
-
-export const FEW_SHOT_EXAMPLES: ReadonlyArray<{{
-  readonly input: string;
-  readonly output: string;
-}}> = {demos_json} as const;
-
-// Fixed prompt strings — not optimized by MIPRO, but centralized here so
-// the TypeScript runtime reads all prompt content from one file.
-export const SECTION_SYSTEM_FACTS = "{dq(SECTION_SYSTEM_FACTS)}";
-export const SECTION_FACTS_ABOUT = "{dq(SECTION_FACTS_ABOUT)}";
-export const SECTION_DETECTED_TOOLS = "{dq(SECTION_DETECTED_TOOLS)}";
-export const SECTION_USER_REQUEST = "{dq(SECTION_USER_REQUEST)}";
-export const CWD_PREFIX = "{dq(CWD_PREFIX)}";
-export const PIPED_OUTPUT_INSTRUCTION = "{dq(PIPED_OUTPUT_INSTRUCTION)}";
-export const FEW_SHOT_SEPARATOR = "{dq(FEW_SHOT_SEPARATOR)}";
-export const SCHEMA_INSTRUCTION = "{dq(SCHEMA_INSTRUCTION)}";
-export const MEMORY_RECENCY_INSTRUCTION = "{dq(MEMORY_RECENCY_INSTRUCTION)}";
-export const TOOLS_SCOPE_INSTRUCTION = "{dq(TOOLS_SCOPE_INSTRUCTION)}";
-export const VOICE_INSTRUCTIONS = "{dq(VOICE_INSTRUCTIONS)}";
-"""
-    path.write_text(content)
+    output = {
+        "instruction": instruction,
+        "fewShotExamples": demos,
+        "schemaText": schema_text,
+        "promptHash": prompt_hash,
+    }
+    with open(path, "w") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+        f.write("\n")
     print(f"Wrote optimized prompt to {path} (hash: {prompt_hash})")
 
 
