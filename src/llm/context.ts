@@ -3,13 +3,12 @@ import promptConstants from "../prompt.constants.json";
 import promptOptimized from "../prompt.optimized.json";
 import { buildPrompt } from "./build-prompt.ts";
 import { formatContext } from "./format-context.ts";
-import type { ConversationMessage, PromptInput } from "./types.ts";
+import type { PromptInput } from "./types.ts";
 
 export type QueryContext = {
   prompt: string;
   cwd: string;
   memory: Memory;
-  threadHistory?: ConversationMessage[];
   pipedInput?: string;
   toolsOutput?: string;
   piped?: boolean;
