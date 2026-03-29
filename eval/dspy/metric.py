@@ -15,6 +15,7 @@ WEIGHTS = {
     "type": 3.0,
     "risk_level": 3.0,
     "content_pattern": 2.0,
+    "content_forbidden_pattern": 2.0,
     "explanation_pattern": 1.0,
     "memory_updates_pattern": 1.0,
     "memory_updates_scope_pattern": 1.0,
@@ -79,6 +80,18 @@ def score(response_text: str, assertions: dict) -> float:
         checks.append((
             "content_pattern",
             bool(re.search(assertions["content_pattern"], content or "", re.IGNORECASE)),
+        ))
+
+    # content must not match forbidden regex pattern
+    if "content_forbidden_pattern" in assertions:
+        content = response.get("content", "")
+        checks.append((
+            "content_forbidden_pattern",
+            not bool(
+                re.search(
+                    assertions["content_forbidden_pattern"], content or "", re.IGNORECASE
+                )
+            ),
         ))
 
     # explanation must match pattern
