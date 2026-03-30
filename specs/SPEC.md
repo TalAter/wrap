@@ -65,6 +65,7 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 |------|-----------|
 | **Discovery** | The ongoing process of learning about the environment (init probes, tool probes, LLM probes, memory updates) |
 | **Probe** | An individual command run for discovery (init probe = first-run, tool probe = before every query, LLM probe = mid-query triggered by LLM) |
+| **Tool watchlist** | Persistent list of tool names to check via `which` on every run, grown by LLM responses via `watchlist_additions`. Stored in `tool-watchlist.json`, separate from default `PROBED_TOOLS`. |
 | **Memory** | A collection of scoped facts learned about the user or their machine. Memory → Scopes → Facts. |
 | **Scope** | The directory a fact belongs to in the file system |
 | **Fact** | An individual learned item in memory |
@@ -331,9 +332,11 @@ Note: `command not found: foo` (without `./`) means `foo` is not in `$PATH` anyw
 
 ## 7. Discovery
 
-> **See `specs/discovery.md`** for full architecture: init probes, runtime tool probes, CWD context, and LLM probes.
+> **See `specs/discovery.md`** for full architecture: init probes, runtime tool probes, tool watchlist, CWD context, and LLM probes.
 
 Wrap learns about its environment through four mechanisms: init probes on first run (baseline OS/shell knowledge), a runtime tool probe on every startup (~5ms `which` call), CWD files on every request (immediate project awareness), and LLM probes during the query loop (on-demand discovery). LLM probes count toward the unified round budget (`maxRounds`); discovered facts flow into scoped memory so the same question is never probed twice.
+
+The **tool watchlist** (`tool-watchlist.json`) extends the runtime tool probe over time. LLM responses can nominate tools via `watchlist_additions`; these are checked via `which` on every future invocation. See `specs/discovery.md` for details.
 
 ---
 
@@ -353,7 +356,8 @@ The LLM must return structured JSON. All response types use a single `content` f
     {"fact": "Default shell is zsh, config at ~/.zshrc", "scope": "/"},
     {"fact": "Uses pnpm", "scope": "/Users/tal/myproject"}
   ],
-  "memory_updates_message": "Noted: you use zsh; this project uses pnpm"
+  "memory_updates_message": "Noted: you use zsh; this project uses pnpm",
+  "watchlist_additions": ["sips", "convert", "magick", "pngquant"]
 }
 ```
 

@@ -59,6 +59,8 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `cwd` | string | Working directory at invocation time |
 | `piped_input` | string? | Piped stdin content, truncated to first 1,000 characters for large inputs (see `specs/piped-input.md`). Omitted if not piped. |
 | `memory` | object? | Memory state at invocation time — full `Memory` object (all scopes). Omitted if empty. CWD-filtered subset can be reconstructed from `cwd` field. |
+| `tools_available` | string[]? | Tool names found by the runtime `which` probe (defaults + watchlist). Omitted if probe returned nothing. |
+| `tools_unavailable` | string[]? | Tool names not found by the runtime `which` probe. Omitted if all tools were found. |
 | `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
 | `rounds` | array | Array of rounds (see below) |
@@ -77,6 +79,7 @@ Each element in `rounds`:
 | `execution` | object? | Execution result (see below). Omitted if no command was executed. |
 | `llm_ms` | number? | Wall-clock milliseconds for the LLM call (includes retry time if applicable). |
 | `exec_ms` | number? | Wall-clock milliseconds for command execution. Omitted if no command was executed. |
+| `watchlist_additions` | string[]? | Tool names the LLM nominated for the watchlist in this round. Omitted when absent. Enables pruning: tools nominated long ago but never again may be stale. |
 | `retry` | object? | (Not yet implemented) First-attempt failure when a round retry occurred. Contains `raw_response`, `parse_error`, and `llm_ms` from the failed attempt. Omitted when no retry happened. |
 
 ### Execution fields
@@ -96,7 +99,7 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 ### Successful command
 
 ```json
-{"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","version":"0.1.0","prompt":"find all typescript files","cwd":"/Users/tal/projects","memory":{"/":[{"fact":"macOS 14.6, Apple Silicon (arm64)"},{"fact":"zsh"}],"/Users/tal/projects":[{"fact":"uses bun"}]},"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"command","content":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0,"shell":"/bin/zsh"},"llm_ms":820,"exec_ms":45}],"outcome":"success"}
+{"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","version":"0.1.0","prompt":"find all typescript files","cwd":"/Users/tal/projects","memory":{"/":[{"fact":"macOS 14.6, Apple Silicon (arm64)"},{"fact":"zsh"}],"/Users/tal/projects":[{"fact":"uses bun"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum"],"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"command","content":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0,"shell":"/bin/zsh"},"llm_ms":820,"exec_ms":45}],"outcome":"success"}
 ```
 
 ### Parse failure (the primary debugging use case)
@@ -114,7 +117,13 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 ### Multi-round invocation (future: probe + command)
 
 ```json
-{"id":"x9y8z7w6-...","timestamp":"2026-03-21T14:33:00.000Z","version":"0.1.0","prompt":"add alias to shell config","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"echo $SHELL","risk_level":"low"},"execution":{"command":"echo $SHELL","exit_code":0,"shell":"/bin/zsh"},"llm_ms":400,"exec_ms":5},{"parsed":{"type":"command","content":"echo \"alias ll='ls -la'\" >> ~/.zshrc","risk_level":"medium"},"llm_ms":500}],"outcome":"success"}
+{"id":"x9y8z7w6-...","timestamp":"2026-03-21T14:33:00.000Z","version":"0.1.0","prompt":"add alias to shell config","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum","docker","kubectl","python3","tldr","fd","bat","eza","xclip","xsel","wl-copy","wl-paste"],"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"echo $SHELL","risk_level":"low"},"execution":{"command":"echo $SHELL","exit_code":0,"shell":"/bin/zsh"},"llm_ms":400,"exec_ms":5},{"parsed":{"type":"command","content":"echo \"alias ll='ls -la'\" >> ~/.zshrc","risk_level":"medium"},"llm_ms":500}],"outcome":"success"}
+```
+
+### Watchlist growth (future: probe with watchlist_additions)
+
+```json
+{"id":"d4e5f6g7-...","timestamp":"2026-03-21T14:34:00.000Z","version":"0.1.0","prompt":"convert all gifs to pngs","cwd":"/Users/tal/images","tools_available":["brew","git","sips"],"tools_unavailable":["convert","magick"],"provider":{"type":"anthropic","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"which sips convert magick mogrify pngquant optipng cwebp","risk_level":"low","watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"]},"watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"],"execution":{"command":"which sips convert magick mogrify pngquant optipng cwebp","exit_code":1,"shell":"/bin/zsh"},"llm_ms":600,"exec_ms":4},{"parsed":{"type":"command","content":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","risk_level":"low"},"execution":{"command":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","exit_code":0,"shell":"/bin/zsh"},"llm_ms":450,"exec_ms":120}],"outcome":"success"}
 ```
 
 ---
@@ -175,6 +184,7 @@ The hash versions the full **static prompt toolset**, not one invocation's exact
 A log entry captures everything needed to reproduce an LLM call:
 - **Prompt** — user's input
 - **Memory** — full fact state at invocation time (CWD determines which scopes the LLM saw)
+- **Tools** — available and unavailable tool lists from the runtime probe (determines what the LLM saw in `## Detected tools` / `## Unavailable tools`)
 - **Prompt hash** — identifies the exact static prompt toolset version
 - **Provider** — which model was called
 - **Version** — which Wrap release was running
@@ -192,11 +202,14 @@ All logging writes to the filesystem only. No logging output goes to stdout or s
 - **Threads (future):** Logging and threads are independent. Threads may reference log entries by ID in the future, or maintain their own storage. Decided when threads are built.
 - **Eval / DSPy (future):** Logs serve as raw material for eval examples. A future `wrap log export` command or manual cherry-pick workflow transforms log entries into examples (`eval/examples/seed.jsonl`). No automated pipeline.
 - **Memory:** Memory state is snapshotted in each log entry. Memory updates from the LLM response are visible in `parsed.memory_updates`. Memory persistence is a separate system (`~/.wrap/memory.json`).
+- **Tool watchlist (future):** `tools_available`/`tools_unavailable` capture the runtime probe results (defaults + watchlist). `watchlist_additions` in rounds tracks growth. Together these enable pruning: a tool added to the watchlist long ago that was never nominated again and was never found available is a candidate for removal. See `specs/discovery.md` — Tool Watchlist.
 
 ---
 
 ## TODO
 
+- [ ] `tools_available` / `tools_unavailable` fields — `probeTools()` needs to return structured data (not a raw string) so both the prompt formatter and the logger can consume it
+- [ ] `watchlist_additions` round field — pass through from parsed LLM response
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes to test the round retry path)
 - [ ] `piped_input` field — thread through from `readPipedInput` to both log entry and `assembleCommandPrompt` (see `specs/piped-input.md`)
 - [ ] `cancelled` outcome (requires signal handling)
