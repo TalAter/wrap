@@ -4,7 +4,8 @@ import promptOptimized from "../src/prompt.optimized.json";
 
 const SYSTEM_PROMPT = promptOptimized.instruction;
 const SCHEMA_TEXT = promptOptimized.schemaText;
-const FEW_SHOT_EXAMPLES = promptOptimized.fewShotExamples;
+const FEW_SHOT_EXAMPLES: readonly { input: string; output: string }[] =
+  promptOptimized.fewShotExamples;
 
 function makeContext(overrides?: Partial<QueryContext>): QueryContext {
   return {
