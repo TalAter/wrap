@@ -12,7 +12,7 @@ Wrap has four discovery mechanisms, each operating at a different timescale:
 |-----------|------|----------|------|--------|
 | **Init probes** | First run | Global memory facts | One-time LLM call | Implemented |
 | **Tool probe** | Every invocation | No (ephemeral context) | ~5ms (local `which`) | Implemented |
-| **CWD files** | Every invocation | No (ephemeral context) | Negligible (local readdir) | Not implemented |
+| **CWD files** | Every invocation | No (ephemeral context) | Negligible (local readdir) | Implemented |
 | **LLM probes** | On-demand during query loop | Scoped memory facts (when appropriate) | 1 round per probe | Not implemented |
 
 The **tool watchlist** (see section below) extends the tool probe over time — it's not a separate mechanism but a persistent layer that grows the set of tools the tool probe checks.
