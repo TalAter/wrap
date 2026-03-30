@@ -24,9 +24,13 @@ def score(response: dict, assertions: dict) -> float:
     """Score a validated response dict against assertions. Returns 0.0-1.0."""
     checks = []
 
-    # type must match expected
+    # type must match expected (string or list of accepted types)
     if "type" in assertions:
-        checks.append(("type", response["type"] == assertions["type"]))
+        expected = assertions["type"]
+        if isinstance(expected, list):
+            checks.append(("type", response["type"] in expected))
+        else:
+            checks.append(("type", response["type"] == expected))
 
     # risk_level must be within expected range
     if "risk_range" in assertions:
