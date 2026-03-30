@@ -425,6 +425,7 @@ def main():
         trainset=trainset,
         num_trials=num_trials,
         minibatch=False,
+        requires_permission_to_run=False,
     )
 
     # Extract optimized instruction + few-shot examples
