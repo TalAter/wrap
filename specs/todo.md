@@ -59,10 +59,8 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## LLM Integration
 
-- [ ] Generalized CLI tool provider abstraction (currently only claude-code)
 - [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
-- [ ] Explain `memory_updates` usage in system prompt — when to write memories, what's worth remembering
 
 ## Memory System
 
@@ -105,12 +103,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] `--config` — manual reconfigure (reuses config wizard)
 - [ ] `--memory` — view/manage memory
-- [ ] `wrap help <subcommand>` — per-subcommand help
-- [ ] `-h` alias for `--help`
-
-## Answer Voice & Piped Mode (see specs/answer-voice.md)
-
-- [ ] Answer personality — voice instructions in DSPy signature, TTY-only wit, piped bare-value mode, new eval examples
 
 ## Eval System
 
@@ -119,7 +111,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Build & Distribution
 
-- [ ] Embed version at build time — `version.ts` reads `package.json` via `import.meta.url` which breaks in compiled binary (`bun build --compile`)
 - [ ] Man page (`man wrap`)
 - [ ] tldr page
 - [ ] Shell completions (bash/zsh/fish)
