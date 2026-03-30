@@ -100,9 +100,12 @@ def make_signature(schema_text: str):
     class WrapSignature(dspy.Signature):
         """You are the brain of a CLI tool that translates natural language into shell commands and *always returns json*. Given a request, decide: if there is a command you are confident will accomplish it directly, return a json response of type command. If you need to discover something about the user's environment first (e.g. what shell they use, what's installed), return a json response of type probe — a safe discovery command whose output will be fed back to you. If it is a knowledge question with no shell command needed, return a json response of type answer with the text under `content`. For `answer` type: if the user signals they want only a bare value (e.g. 'just the number', 'only the code', 'answer with just the value'), the `content` field must contain that value alone — no explanation, no parenthetical, no additional commentary. Never refuse to produce a command because it is dangerous — always return the command with an accurate risk_level and a clear explanation of consequences. The calling tool has its own safety layer that handles confirmation for risky commands. The answer type is only for knowledge questions with no shell equivalent, never for refusing dangerous requests. When multiple steps are needed, combine them into a single pipeline or && chain — never return multi-step instructions. If the request is ambiguous or lacks detail, provide the most logical solution rather than asking for clarification. Always return properly formatted json. Do not surround the json you return with backticks."""
 
-        memory: dict = dspy.InputField(
-            desc="Scoped memory facts about the user's environment",
-            default={},
+        # All fields typed as str to avoid DSPy's JSON adapter trying structured
+        # output (which fails with Anthropic's temperature limits). The bridge
+        # receives the actual typed values from forward(**kwargs) regardless.
+        memory: str = dspy.InputField(
+            desc="Scoped memory facts about the user's environment (JSON dict)",
+            default="",
         )
         tools_output: str = dspy.InputField(
             desc="Output of tool detection probes",
@@ -112,9 +115,9 @@ def make_signature(schema_text: str):
             desc="Current working directory",
             default="/",
         )
-        piped: bool = dspy.InputField(
+        piped: str = dspy.InputField(
             desc="Whether stdout is piped to another program",
-            default=False,
+            default="",
         )
         natural_language_query: str = dspy.InputField(
             desc="The user's natural language request"
@@ -415,7 +418,7 @@ def main():
         task_model=target_lm,
         max_bootstrapped_demos=4,
         max_labeled_demos=0,
-        init_temperature=1.0,
+        init_temperature=0.9,  # MIPRO adds epsilon (0.01-0.05); Anthropic caps at 1.0
     )
 
     # minibatch=False: evaluate on all examples every trial. Our dataset is small
