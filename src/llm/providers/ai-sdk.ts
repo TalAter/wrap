@@ -14,10 +14,14 @@ const MODEL_FACTORIES: Record<string, (config: AISDKProviderConfig) => LanguageM
     createAnthropic({ apiKey: resolveApiKey(c.apiKey), baseURL: c.baseURL })(
       c.model ?? DEFAULT_MODELS.anthropic,
     ),
+  // @ai-sdk/openai requires an API key even for local endpoints that don't need one.
+  // When a custom baseURL is set and no key is provided, use a placeholder so local
+  // models (Ollama, LM Studio, etc.) work without the user having to set a dummy key.
   openai: (c) =>
-    createOpenAI({ apiKey: resolveApiKey(c.apiKey), baseURL: c.baseURL })(
-      c.model ?? DEFAULT_MODELS.openai,
-    ),
+    createOpenAI({
+      apiKey: resolveApiKey(c.apiKey) ?? (c.baseURL ? "nokey" : undefined),
+      baseURL: c.baseURL,
+    })(c.model ?? DEFAULT_MODELS.openai),
 };
 
 /**
