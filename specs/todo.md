@@ -107,6 +107,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Eval System
 
 - [ ] Log-to-eval script — a script in `eval/` that parses `~/.wrap/logs/wrap.jsonl`, deduces feedback signals (exit codes, round retries, repeated prompts), identifies failure patterns and improvable scenarios, and outputs eval examples in `seed.jsonl` format for optimization.
+- [ ] LLM-as-judge for context-sensitive eval samples (see eval spec)
 - [ ] Evaluate conditional prompt sections. For example, piped input instructions (~150 tokens) are always in the system prompt even when unused. Consider a tested pattern for context-dependent prompt assembly that works with DSPy optimization. Applies to any future context-specific prompt sections too.
 
 ## Build & Distribution

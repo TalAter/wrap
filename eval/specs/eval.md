@@ -268,6 +268,18 @@ Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO 
 
 DSPy Examples store raw data (memory dict, tools, cwd) instead of pre-formatted `memory_context` string. MIPRO's teacher model may see raw JSON when inspecting examples for instruction proposal. Teacher is Claude Sonnet — it understands JSON. Monitor instruction quality; if it degrades, consider a formatting step for teacher-visible fields.
 
+### LLM-as-judge for context-sensitive samples (not yet implemented)
+
+Some eval samples can't be scored with pattern matching alone. When the correct response depends on how the LLM interprets context, multiple response types may be valid — but only if the response acknowledges the context appropriately. Regex can't distinguish intent.
+
+**Example:** tools_output says `docker not found`, user asks "show running docker containers."
+
+- Good: `command` with `docker ps 2>&1 || echo 'Docker not installed'` — tries the command, handles failure gracefully in one shot.
+- Good: `probe` with `docker ps 2>&1` — checks availability, LLM can give an intelligent follow-up.
+- Bad: `command` with `docker ps` — ignores the "not found" context, will just fail.
+
+Pattern matching can't distinguish the good command from the bad one — both match `docker.*ps`. A targeted LLM-as-judge could: an optional `judge_prompt` field in assertions that sends the response + context to a scoring LLM. Most samples keep fast pattern matching; only samples with this kind of ambiguity opt in.
+
 ## Assumptions
 
 - **v1 bridge is per-call subprocess.** Can evolve to long-running server if overhead becomes a problem.
