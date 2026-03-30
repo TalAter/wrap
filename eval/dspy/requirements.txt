@@ -1,2 +1,2 @@
-dspy>=2.5
+dspy>=2.5,<3
 anthropic>=0.39
