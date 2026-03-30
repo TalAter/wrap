@@ -9,13 +9,11 @@
 ```
 parseInput(argv)
        │
-       ├─ readPipedInput()  ──→ reads stdin if piped, returns string | null
+       ├─ readPipedInput()  ──→ reads stdin if piped, returns string | null  [NOT YET IMPLEMENTED]
        │
-       ├─ flag? ──→ dispatch subcommand (exit). Piped input silently ignored.
+       ├─ flag? ──→ dispatch subcommand (exit)
        │
-       ├─ no args + no pipe? ──→ dispatch --help (exit)
-       │
-       ├─ no args + pipe? ──→ piped input becomes the prompt
+       ├─ no args? ──→ dispatch --help (exit)  [will change: no args + pipe → piped input becomes prompt]
        │
        ├─ loadConfig()  ──→ loads config from file + env
        │
@@ -27,10 +25,12 @@ parseInput(argv)
        │
        ├─ resolvePath(cwd)  ──→ canonical CWD
        │
-       └─ runQuery({ prompt, provider, memory, cwd, toolsOutput, pipedInput })
+       └─ runQuery({ prompt, provider, memory, cwd, toolsOutput })
 ```
 
-Piped input is read eagerly, before subcommand dispatch. Subcommands (including `--help` for no-args without pipe) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory. See `specs/piped-input.md` for piped input architecture.
+Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory.
+
+When piped input is implemented (see `specs/piped-input.md`), `readPipedInput()` will run eagerly before subcommand dispatch, and the no-args branch will check for piped content before dispatching `--help`.
 
 ---
 
@@ -47,7 +47,7 @@ Piped input is read eagerly, before subcommand dispatch. Subcommands (including 
 Currently single-shot: one LLM call, optional round retry, then execute or print. The full multi-round loop (probes, error retries, unified round counter) is designed but not yet implemented — see `specs/SPEC.md` sections 6-7 for the target behavior.
 
 **Current flow** (in `src/core/query.ts`):
-1. Assemble context (system prompt + few-shot + piped input + memory + user prompt)
+1. Assemble context (system prompt + few-shot + memory + tools + user prompt)
 2. Call LLM → get structured `CommandResponse`
 3. On structured output error → round retry once with failed output appended
 4. Handle memory updates (write immediately, notify user)
@@ -70,13 +70,11 @@ Currently single-shot: one LLM call, optional round retry, then execute or print
 src/
   index.ts                    Entry point
   main.ts                     Top-level orchestration
-  prompt.ts                   Base prompt template
-  prompt.optimized.ts         DSPy-generated: system prompt, schema text, few-shot examples, prompt hash
+  prompt.optimized.ts         DSPy-generated: system prompt, schema text, few-shot examples, voice instructions, prompt hash
   command-response.schema.ts  Zod schema for LLM command/answer/probe responses
 
   core/
     input.ts                  CLI arg parsing (prompt | flag | none)
-    stdin.ts                  readPipedInput() — detection, reading, truncation (see specs/piped-input.md)
     query.ts                  Query execution, round retry, command execution
     parse-response.ts         JSON parsing + schema validation
     paths.ts                  resolvePath() + prettyPath()

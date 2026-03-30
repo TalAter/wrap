@@ -341,13 +341,12 @@ Wrap learns about its environment through four mechanisms: init probes on first 
 
 ### 8.1 Structured JSON Output
 
-The LLM must return structured JSON:
+The LLM must return structured JSON. All response types use a single `content` field:
 
 ```json
 {
   "type": "command" | "probe" | "answer",
-  "command": "the shell command (if type is command/probe)",
-  "answer": "text response (if type is answer)",
+  "content": "the shell command (command/probe) or text response (answer)",
   "risk_level": "low" | "medium" | "high",
   "explanation": "brief description of what this does",
   "memory_updates": [
@@ -534,25 +533,25 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
   - Type checking
 - Schema uses `oneOf` for discriminated unions (e.g., different provider types have different required fields)
 
-### 12.4 Configurable Settings (non-exhaustive)
+### 12.4 Configurable Settings
+
+Currently only `provider` is implemented. Future settings shown below for reference:
 
 ```jsonc
 {
-  // LLM provider configuration
-  "provider": "openai", // or "anthropic", "ollama", etc.
-  "model": "gpt-4o-mini",
-  "apiKey": "sk-...", // or reference env var
+  // LLM provider configuration (IMPLEMENTED — see specs/llm-sdk.md)
+  "provider": { "type": "anthropic" },
 
-  // Safety
+  // Safety (NOT YET IMPLEMENTED)
   "defaultMode": "smart", // "smart" | "yolo" | "confirm-all"
   "alwaysConfirm": ["docker", "kubectl", "aws", "rm"],
   "neverConfirm": ["ls", "cat", "echo", "pwd"],
 
-  // LLM round budget (probes + error-fix rounds share one counter)
+  // LLM round budget (NOT YET IMPLEMENTED)
   "maxRounds": 5,
   "showRetryAttempts": true,
 
-  // Threads
+  // Threads (NOT YET IMPLEMENTED)
   "threadTTL": "24h",
 
   // Display
