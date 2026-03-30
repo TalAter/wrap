@@ -47,3 +47,6 @@ eval/results/*.json
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Private notes
+PRIVATE.md
