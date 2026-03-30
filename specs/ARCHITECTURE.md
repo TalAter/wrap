@@ -103,10 +103,12 @@ src/
     entry.ts                  Log entry type, creation, round management
     writer.ts                 JSONL append to ~/.wrap/logs/wrap.jsonl
 
+  discovery/                  See specs/discovery.md
+    init-probes.ts            Init probe commands (OS, shell) + runtime tool probe
+
   memory/                     See specs/memory.md
     types.ts                  Fact, FactScope, Memory types
     memory.ts                 load, save, append, ensure (init flow)
-    init-probes.ts            Init probe commands (OS, shell) + runtime tool probe
     init-prompt.ts            LLM prompt for parsing probe output into facts
 
   subcommands/                See specs/subcommands.md
