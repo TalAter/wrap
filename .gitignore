@@ -42,5 +42,8 @@ eval/dspy/.env
 # Python bytecode
 __pycache__/
 
+# Eval results (generated each optimize run)
+eval/results/*.json
+
 # Claude Code worktrees
 .claude/worktrees/

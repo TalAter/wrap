@@ -15,6 +15,7 @@ import os
 import random
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import dspy
@@ -165,12 +166,25 @@ class WrapPredictor(dspy.Module):
         )
 
 
+# Accumulates (score, error_type) per example across all MIPRO trials.
+_trial_scores: dict[tuple, list] = {}
+
+
+def _example_key(ex):
+    # Include assertions hash to distinguish duplicate queries with different expectations
+    assertions_hash = hashlib.md5(json.dumps(ex.assertions, sort_keys=True).encode()).hexdigest()[:8]
+    return (ex.natural_language_query, ex.cwd, ex.piped, assertions_hash)
+
+
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
     """DSPy-compatible metric function. Handles bridge error types."""
     error_type = getattr(prediction, "error_type", None)
     if error_type is not None:
-        return 0.0
-    return score(prediction.response_dict, example.assertions)
+        s = 0.0
+    else:
+        s = score(prediction.response_dict, example.assertions)
+    _trial_scores.setdefault(_example_key(example), []).append((s, error_type))
+    return s
 
 
 # Defaults applied to every example unless overridden.
@@ -314,10 +328,10 @@ def write_output(instruction: str, demos: list[dict], schema_text: str, path: Pa
     print(f"Wrote optimized prompt to {path} (hash: {prompt_hash})")
 
 
-def bridge_evaluate(val_examples, instruction, demos, schema_text):
-    """Evaluate the winning candidate through the bridge on the validation set."""
-    scores = []
-    for ex in val_examples:
+def bridge_evaluate(examples, split, instruction, demos, schema_text):
+    """Evaluate the winning prompt through the bridge. Returns (avg_score, results_list)."""
+    results = []
+    for ex in examples:
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -328,13 +342,70 @@ def bridge_evaluate(val_examples, instruction, demos, schema_text):
             piped=ex.piped,
             query=ex.natural_language_query,
         )
-        if error_type is not None:
-            scores.append(0.0)
-        else:
-            scores.append(score(response, ex.assertions))
-    avg = sum(scores) / len(scores) if scores else 0.0
-    print(f"Bridge eval: {avg:.3f} ({len(scores)} examples)")
-    return avg
+        s = 0.0 if error_type else score(response, ex.assertions)
+        results.append({
+            "query": ex.natural_language_query,
+            "cwd": ex.cwd,
+            "piped": ex.piped,
+            "score": s,
+            "error_type": error_type,
+            "response": response,
+            "assertions": ex.assertions,
+        })
+    avg = sum(r["score"] for r in results) / len(results) if results else 0.0
+    print(f"Bridge eval ({split}): {avg:.3f} ({len(results)} examples)")
+    return avg, results
+
+
+RESULTS_DIR = Path("/app/eval/results")
+
+
+def save_eval_results(
+    teacher_model, target_model, num_candidates, num_trials,
+    instruction, demos, train_score, val_score,
+    train_results, val_results,
+):
+    """Save optimization results to JSON for post-hoc analysis."""
+    # Build trial difficulty from accumulated wrap_metric data
+    difficulty = []
+    for key, entries in sorted(
+        _trial_scores.items(),
+        key=lambda x: sum(s for s, _ in x[1]) / len(x[1]),
+    ):
+        query, cwd, piped, _hash = key
+        total = len(entries)
+        perfect = sum(1 for s, _ in entries if s >= 1.0)
+        avg = sum(s for s, _ in entries) / total
+        errors = sum(1 for _, e in entries if e is not None)
+        difficulty.append({
+            "query": query, "cwd": cwd, "piped": piped,
+            "evals": total, "perfect": perfect, "avg": round(avg, 3), "errors": errors,
+        })
+
+    ts = datetime.now(timezone.utc)
+    output = {
+        "timestamp": ts.isoformat(),
+        "models": {"teacher": teacher_model, "target": target_model},
+        "num_candidates": num_candidates,
+        "num_trials": num_trials,
+        "winning_instruction": instruction,
+        "winning_demos": demos,
+        "training_score": round(train_score, 3),
+        "validation_score": round(val_score, 3),
+        "trial_difficulty": difficulty,
+        "train_results": train_results,
+        "val_results": val_results,
+    }
+
+    try:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        path = RESULTS_DIR / f"{ts.strftime('%Y%m%d-%H%M%S')}.json"
+        with open(path, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        print(f"Wrote eval results to {path}")
+    except OSError as e:
+        print(f"Warning: could not write eval results: {e}", file=sys.stderr)
 
 
 def main():
@@ -441,12 +512,20 @@ def main():
     if instruction:
         print(f"\n--- Instruction preview ---\n{instruction[:500]}\n---")
 
-    # Evaluate on validation set through the bridge
-    print("Evaluating on validation set...")
-    bridge_evaluate(valset, instruction, demos, schema_text)
+    # Evaluate winning prompt on both sets through the bridge
+    print("Evaluating winning prompt...")
+    train_score, train_results = bridge_evaluate(trainset, "train", instruction, demos, schema_text)
+    val_score, val_results = bridge_evaluate(valset, "val", instruction, demos, schema_text)
 
-    # Write output
+    # Write optimized prompt
     write_output(instruction, demos, schema_text, OUTPUT_PATH)
+
+    # Write detailed eval results
+    save_eval_results(
+        teacher_model, target_model, num_candidates, num_trials,
+        instruction, demos, train_score, val_score,
+        train_results, val_results,
+    )
     print("Done!")
 
 
