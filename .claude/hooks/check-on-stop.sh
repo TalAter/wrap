@@ -3,30 +3,28 @@
 # Stop hook: runs lint, typecheck, and tests when Claude stops.
 #
 # Optimizations to avoid unnecessary work:
-#   1. Skip entirely if no files changed since last commit.
-#   2. Skip if only non-code files changed (specs/, *.md).
-#   3. Fingerprint the code-relevant diff and cache it on success.
-#      If the fingerprint matches a previous successful run, skip.
-#      On failure, don't cache — so the next stop always re-checks.
-#   4. Run lint, tsc, and tests in parallel (~4s instead of ~5s).
+#   1. Fingerprint = HEAD sha + uncommitted code-relevant diff.
+#      Non-code files (specs/, *.md) are excluded from the diff.
+#   2. Fingerprint is cached on success. If it matches next run,
+#      skip. On failure, cache is not updated — next stop re-checks.
+#      Fingerprint is recomputed after checks because lint --write
+#      may have changed files (so the cached state matches post-fix).
+#   3. Lint, tsc, and tests run in parallel (~4s instead of ~5s).
 #
 # The lint script (`bun run lint`) uses `biome check --write`, so safe
 # fixable issues (import ordering, formatting) are corrected automatically.
 
 cd "$(dirname "$0")/../.." || exit 0
 
-# --- Determine code-relevant changes ---
-CHANGED=$(git diff --name-only HEAD 2>/dev/null)
-[ -z "$CHANGED" ] && exit 0
-
-# Filter out files that can't affect checks (specs/, .md)
-CODE_CHANGED=$(echo "$CHANGED" | grep -v -e '^specs/' -e '\.md$' || true)
-[ -z "$CODE_CHANGED" ] && exit 0
-
-# --- Fingerprint: skip if checks already passed for this state ---
-FINGERPRINT=$(git diff HEAD -- $CODE_CHANGED 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
 REPO_ID=$(pwd | shasum -a 256 | cut -c1-12)
 CACHE_FILE="/tmp/wrap-hook-${REPO_ID}"
+
+# --- Build fingerprint: HEAD commit + uncommitted code-relevant diff ---
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null)
+CODE_CHANGED=$(git diff --name-only HEAD 2>/dev/null | grep -v -e '^specs/' -e '\.md$' || true)
+CODE_DIFF=$([ -n "$CODE_CHANGED" ] && echo "$CODE_CHANGED" | tr '\n' '\0' | xargs -0 git diff HEAD -- 2>/dev/null || true)
+FINGERPRINT=$(printf '%s%s' "$HEAD_SHA" "$CODE_DIFF" | shasum -a 256 | cut -d' ' -f1)
+
 if [ -f "$CACHE_FILE" ] && [ "$(cat "$CACHE_FILE")" = "$FINGERPRINT" ]; then
   exit 0
 fi
@@ -56,6 +54,10 @@ if [ -n "$ERRORS" ]; then
   exit 2
 fi
 
-# Cache fingerprint on success only
+# Recompute fingerprint after checks (lint --write may have changed files)
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null)
+CODE_CHANGED=$(git diff --name-only HEAD 2>/dev/null | grep -v -e '^specs/' -e '\.md$' || true)
+CODE_DIFF=$([ -n "$CODE_CHANGED" ] && echo "$CODE_CHANGED" | tr '\n' '\0' | xargs -0 git diff HEAD -- 2>/dev/null || true)
+FINGERPRINT=$(printf '%s%s' "$HEAD_SHA" "$CODE_DIFF" | shasum -a 256 | cut -d' ' -f1)
 echo "$FINGERPRINT" >"$CACHE_FILE"
 exit 0
