@@ -26,9 +26,14 @@ All remaining implementation tasks. Completed features are omitted — see spec 
   - [ ] No-args + pipe: piped content becomes prompt (bypass --help dispatch)
   - [ ] Large input: currently truncates silently; replace with TUI confirmation when confirmation is built
 
-## Execution & Safety
+## Execution & Safety (see specs/safety.md)
 
-- [ ] Local safety rule engine — hard-coded patterns (rm -rf, sudo, dd, chmod, mkfs, etc.)
+- [ ] Local safety rule engine — pattern list, `classifyLocal()`, integration in `query.ts` (see `specs/safety.md`)
+- [ ] Adversarial eval samples — indirect phrasing, obfuscated commands, social engineering
+- [ ] Piped injection eval samples (gated on `pipedInput` bridge support)
+- [ ] Nonce delimiters for untrusted prompt sections
+- [ ] System prompt instruction: piped input is data, not instructions
+- [ ] Trust boundary fence in user message assembly
 - [ ] Confirmation TUI — bordered panel with syntax-highlighted command, risk indicator, explanation
 - [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, Enter=cancel)
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation

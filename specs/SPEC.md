@@ -203,18 +203,9 @@ The shell handles `| grep rc` — Wrap only sees `find zsh files`.
 
 ### 5.1 Smart Safety Classification (Layered)
 
-Two layers, either can escalate to confirmation:
+> **See `specs/safety.md`** for full architecture: local rule engine patterns, adversarial eval, prompt injection resistance, and prompt ordering.
 
-**Layer 1 — LLM Risk Assessment:**
-
-- The LLM returns a risk level alongside the generated command (part of structured JSON response)
-- Risk levels inform whether to auto-execute or confirm
-
-**Layer 2 — Local Rule Engine:**
-
-- Hard-coded patterns: `rm`, `rm -rf`, `sudo`, `dd`, `chmod`, `mkfs`, `> /dev/`, `shutdown`, `reboot`, etc.
-- Fast, deterministic, no extra tokens
-- Acts as a safety net even if the LLM misclassifies risk
+Two layers, either can escalate to confirmation. LLM risk assessment provides the initial signal; a local rule engine (deterministic pattern matching) acts as an independent safety net. The rule engine can only escalate — never lower — the LLM's risk level.
 
 **Behavior by mode:**
 
@@ -546,10 +537,8 @@ Currently only `provider` is implemented. Future settings shown below for refere
   // LLM provider configuration (IMPLEMENTED — see specs/llm-sdk.md)
   "provider": { "type": "anthropic" },
 
-  // Safety (NOT YET IMPLEMENTED)
+  // Safety (NOT YET IMPLEMENTED — see specs/safety.md)
   "defaultMode": "smart", // "smart" | "yolo" | "confirm-all"
-  "alwaysConfirm": ["docker", "kubectl", "aws", "rm"],
-  "neverConfirm": ["ls", "cat", "echo", "pwd"],
 
   // LLM round budget (NOT YET IMPLEMENTED)
   "maxRounds": 5,
