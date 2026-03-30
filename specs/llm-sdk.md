@@ -52,20 +52,24 @@ Deterministic mock for testing. Reads from `WRAP_TEST_RESPONSE` env var. With sc
 
 ## Context Assembly (`src/llm/context.ts`)
 
-`assembleCommandPrompt(ctx)` builds a `PromptInput` from the query context. Ordering is designed for **cache efficiency** (static prefix first) and **contamination prevention** (few-shot separated from real context).
+`assembleCommandPrompt(ctx)` builds a `PromptInput` from the query context. It delegates to two pure functions:
+
+- **`formatContext()`** (`src/llm/format-context.ts`) — converts memory, tools, cwd, piped flag into a context string
+- **`buildPrompt()`** (`src/llm/build-prompt.ts`) — assembles system message + messages array from config, context, and query
+
+Ordering is designed for **cache efficiency** (static prefix first) and **contamination prevention** (few-shot separated from real context).
 
 **System prompt** (static, cacheable):
-- `SYSTEM_PROMPT` + `SCHEMA_TEXT` from `prompt.optimized.ts`
+- `instruction` + `schemaText` from `prompt.optimized.json`, plus fixed instructions from `prompt.constants.json`
 
 **Messages** (in order):
 1. **Few-shot examples** as user/assistant turn pairs (static, cacheable)
 2. **Separator**: `"Now handle the following request."` — marks boundary between examples and real conversation. Prevents the LLM from treating thread history or context as more examples.
-3. **Thread history** turns (if continuing — not yet implemented)
-4. **Final user message** — memory facts (filtered by CWD prefix, sectioned by scope) + CWD + user prompt
+3. **Final user message** — memory facts (filtered by CWD prefix, sectioned by scope) + CWD + user prompt
 
 **Why memory and CWD go in the final user message** (not the system prompt): They're dynamic per-request. Keeping them out of the system prompt makes the system + few-shot prefix fully static and cacheable.
 
-All prompt strings (section headers, separators, behavioral instructions) are defined in `eval/dspy/optimize.py` and automatically written into `src/prompt.optimized.ts` by the optimizer. When you add or modify a prompt string in `eval/dspy/optimize.py`, also update `src/prompt.optimized.ts` manually — this ensures tests pass before running `bun run optimize` (which will overwrite that file). No prompt strings are hardcoded in runtime code — TypeScript imports everything from `prompt.optimized.ts`.
+Prompt data lives in two shared JSON files. **`src/prompt.constants.json`** contains static strings (section headers, separators, behavioral instructions) — committed to git, edited by hand. **`src/prompt.optimized.json`** contains optimizer output (instruction, demos, schema text, prompt hash) — written by `bun run optimize`. See `eval/specs/eval.md` for the optimization pipeline.
 
 ---
 

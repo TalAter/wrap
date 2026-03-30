@@ -166,7 +166,7 @@ Logging wraps the query loop in `runQuery` (`src/core/query.ts`):
 
 ### Prompt hash computation
 
-The prompt hash is precomputed at DSPy optimization time and exported as `PROMPT_HASH` from `src/prompt.optimized.ts`. It is **not** recomputed at runtime — the optimizer writes it once when generating the file.
+The prompt hash is precomputed at DSPy optimization time and stored as `promptHash` in `src/prompt.optimized.json`. It is **not** recomputed at runtime — the optimizer writes it once when generating the file.
 
 The hash versions the full **static prompt toolset**, not one invocation's exact prompt. It covers the generated prompt artifacts and fixed prompt fragments the runtime may use, including conditionally included static sections.
 

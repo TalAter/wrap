@@ -1,41 +1,18 @@
-# Bun Eval Bridge — Spec
+# Eval System
 
-Wrap is a CLI tool that translates natural language into shell commands (e.g., `w find all typescript files` → `find . -name '*.ts'`). It's built in TypeScript/Bun, with a Python/DSPy pipeline that optimizes the system prompt offline.
+Wrap's prompt optimization pipeline. DSPy/MIPRO discovers the best instruction text and few-shot examples by evaluating candidates through a **Bun eval bridge** — a TypeScript subprocess that uses the same prompt assembly and LLM execution as runtime, guaranteeing parity between what's optimized and what ships.
 
-## Problem
+> **Status:** Implemented
 
-Wrap has two independent implementations of prompt assembly and LLM execution:
+## Overview
 
-1. **TypeScript runtime** (`src/llm/context.ts`): assembles prompts from system prompt + memory + tools + query, calls LLM via AI SDK provider.
-2. **Python eval/optimizer** (`eval/dspy/optimize.py`): duplicates prompt assembly logic (`memory_to_context()`, section headers, instruction constants), calls LLM via DSPy's own abstraction.
+The eval system has three layers:
 
-This causes:
-- **Duplicated logic**: Memory filtering (CWD prefix match), context section assembly, and prompt constants are implemented independently in both languages.
-- **Parity gap**: DSPy's MIPRO optimizer evaluates candidate instructions using DSPy's own prompt formatting, then deploys the winner into Wrap's different prompt structure. The instruction may not transfer perfectly.
-- **Maintenance burden**: Any change to prompt assembly must be made in two places. Drift is inevitable.
+1. **Python (DSPy/MIPRO)** — drives the optimization loop. Proposes candidate instructions via a teacher model, manages few-shot demo bootstrapping, scores results, selects the winner.
+2. **Bun eval bridge** (`eval/bridge.ts`) — a TypeScript subprocess that Python calls for each evaluation. Receives candidate instruction + example data via stdin, uses the same `formatContext` → `buildPrompt` → LLM call path as runtime, returns validated response or classified error via stdout.
+3. **Shared JSON artifacts** — two files that connect Python and TypeScript: static prompt constants (shared, committed) and optimization output (written by Python, read by TS at runtime).
 
-## Solution
-
-A **Bun eval bridge**: a single TypeScript script (`eval/bridge.ts`) that Python calls as a subprocess during optimization. The bridge lets DSPy use the same prompt assembly and LLM execution machinery as runtime, eliminating duplication and guaranteeing parity.
-
-### What changes
-
-| Concern | Before | After |
-|---------|--------|-------|
-| Prompt assembly during eval | Duplicated in Python + TS | TS only (via bridge) |
-| LLM execution during eval | DSPy's LM abstraction | AI SDK provider (via bridge) |
-| Memory context formatting | Python `memory_to_context()` | TS `formatContext()` (via bridge) |
-| Static prompt constants | Defined in Python `optimize.py`, exported to `.ts` | Shared `prompt.constants.json`, read by both |
-| Optimized prompt config | `prompt.optimized.ts` (generated TS source) | `prompt.optimized.json` (JSON, written by Python) |
-| Scoring | `metric.score()` parses raw text + validates | Bridge validates with Zod; `metric.score()` receives validated dict |
-
-### What stays the same
-
-- DSPy/MIPRO still drives optimization search (instruction proposal, demo bootstrapping via teacher model)
-- Python still owns the optimization loop and writes the optimized artifact
-- `read_schema.py` still extracts Zod schema text (with field comments) from the `.ts` file
-- Eval examples format (`seed.jsonl`) unchanged
-- Runtime behavior unchanged (same prompts, same execution)
+Every candidate evaluation goes through the bridge, so the instruction is always tested against the real prompt shape. Teacher model calls (instruction proposals, demo generation) stay in DSPy — they're meta-level search operations that don't need runtime parity.
 
 ## Architecture
 
@@ -242,507 +219,16 @@ callWithRetry(provider, promptInput)
 Process response (execute command / print answer / save memory)
 ```
 
-### Why bridge replaces DSPy's LLM call (not adds to it)
+### Why every eval goes through the bridge
 
-Previously considered: DSPy evaluates candidates through its own LM, and the bridge is only used for a final eval pass. This would mean MIPRO optimizes against DSPy's prompt formatting (different from runtime), then we verify the winner with the bridge.
+An alternative would be letting DSPy evaluate candidates through its own LM and only using the bridge for a final validation pass. The problem: DSPy's internal prompt formatting wraps fields in its own template (`dspy.Predict` adds field descriptions, formatting markers, etc.), so the candidate instruction would be tested against DSPy's prompt shape, not Wrap's — and might perform differently in production.
 
-The problem: DSPy's internal prompt formatting wraps fields in its own template (`dspy.Predict` adds field descriptions, formatting markers, etc.). The candidate instruction is tested against DSPy's prompt shape, not Wrap's. The instruction might perform differently in Wrap's actual structure.
-
-The solution: `WrapPredictor.forward()` calls the bridge instead of `self.predict()`. MIPRO still manages candidates (instruction text, demos), but every evaluation goes through the bridge — which uses `buildPrompt` (Wrap's real prompt assembly). No double LLM calls: the bridge call replaces DSPy's LM call.
+Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO still manages candidates (instruction text, demos), but every scoring call goes through the bridge — which uses `buildPrompt` (Wrap's real prompt assembly). No double LLM calls: the bridge call replaces DSPy's LM call, not adds to it.
 
 **Overhead**: ~50-100ms Bun subprocess startup per call. ~400 calls × 75ms = ~30 seconds. Full optimization run is ~30-60 minutes (dominated by LLM latency). Net overhead: ~1-2%. Acceptable.
 
 **Teacher model calls stay in DSPy**: MIPRO's teacher proposes instruction candidates and bootstraps demos through DSPy's own LM abstraction. These are meta-level search operations — the teacher generates ideas for the target model, it doesn't need to go through the bridge. Only evaluation of candidates goes through the bridge.
 
-## Implementation steps
-
-### Step 1: TS refactor + JSON artifact switch
-
-**Standalone value**: Cleaner separation of concerns in TypeScript. Pure, injectable prompt assembly. Shared JSON constants instead of generated TypeScript source. Improves code quality independent of the bridge.
-
-This step touches both TypeScript and Python (combined change) because the JSON artifact is written by Python and read by TypeScript — changing one side without the other leaves a broken state. Doing both together ensures the pipeline works end-to-end.
-
-#### 1a. Create `src/prompt.constants.json`
-
-Manually create this file once by extracting the static prompt strings currently defined in Python's `optimize.py`. This file is committed to git and maintained by hand going forward — it changes rarely (only when prompt structure changes, not during optimization). Both TS and Python read it; neither generates it.
-
-```json
-{
-  "sectionSystemFacts": "## System facts",
-  "sectionFactsAbout": "## Facts about",
-  "sectionDetectedTools": "## Detected tools",
-  "sectionUserRequest": "## User's request",
-  "cwdPrefix": "- Working directory (cwd):",
-  "fewShotSeparator": "Now handle the following request.",
-  "schemaInstruction": "Respond with a JSON object conforming to this schema:",
-  "memoryRecencyInstruction": "Later facts override earlier ones...",
-  "toolsScopeInstruction": "Listed tools aren't exhaustive...",
-  "voiceInstructions": "Response voice guidelines...",
-  "pipedOutputInstruction": "stdout is piped to another program..."
-}
-```
-
-#### 1b. Extract `formatContext` from `context.ts`
-
-New file: `src/llm/format-context.ts`
-
-```typescript
-export type FormatContextParams = {
-  memory: Memory;
-  toolsOutput?: string;
-  cwd: string;
-  piped?: boolean;
-  constants: {
-    sectionSystemFacts: string;
-    sectionFactsAbout: string;
-    sectionDetectedTools: string;
-    cwdPrefix: string;
-    pipedOutputInstruction: string;
-  };
-};
-
-export function formatContext(params: FormatContextParams): string
-```
-
-Contains: memory scope filtering by CWD prefix match, alphabetical scope sorting, section header formatting, fact bullet formatting, tools section, piped instruction, CWD line. All extracted from the current `assembleCommandPrompt`.
-
-#### 1c. Extract `buildPrompt` from `context.ts`
-
-New file: `src/llm/build-prompt.ts`
-
-```typescript
-export type PromptConfig = {
-  instruction: string;
-  schemaInstruction: string;
-  schemaText: string;
-  memoryRecencyInstruction: string;
-  toolsScopeInstruction: string;
-  voiceInstructions: string;
-  fewShotExamples: Array<{ input: string; output: string }>;
-  fewShotSeparator: string;
-  sectionUserRequest: string;
-};
-
-export function buildPrompt(
-  config: PromptConfig,
-  contextString: string,
-  query: string,
-): PromptInput
-```
-
-Assembles:
-- **System message**: config.instruction + config.memoryRecencyInstruction + config.toolsScopeInstruction + config.voiceInstructions + config.schemaInstruction + config.schemaText
-- **Messages array**: few-shot pairs (user/assistant) + separator message + final user message (contextString + "## User's request\n" + query)
-
-Pure function. No file reads, no imports from JSON files, no side effects.
-
-#### 1d. Refactor `assembleCommandPrompt` as thin wrapper
-
-`src/llm/context.ts` becomes:
-
-```typescript
-import promptConstants from '../prompt.constants.json';
-import promptOptimized from '../prompt.optimized.json';
-import { formatContext } from './format-context';
-import { buildPrompt } from './build-prompt';
-
-export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
-  const contextString = formatContext({
-    memory: ctx.memory,
-    toolsOutput: ctx.toolsOutput,
-    cwd: ctx.cwd,
-    piped: ctx.piped,
-    constants: promptConstants,
-  });
-
-  return buildPrompt(
-    {
-      instruction: promptOptimized.instruction,
-      schemaInstruction: promptConstants.schemaInstruction,
-      schemaText: promptOptimized.schemaText,
-      memoryRecencyInstruction: promptConstants.memoryRecencyInstruction,
-      toolsScopeInstruction: promptConstants.toolsScopeInstruction,
-      voiceInstructions: promptConstants.voiceInstructions,
-      fewShotExamples: promptOptimized.fewShotExamples,
-      fewShotSeparator: promptConstants.fewShotSeparator,
-      sectionUserRequest: promptConstants.sectionUserRequest,
-    },
-    contextString,
-    ctx.prompt,
-  );
-}
-```
-
-#### 1e. Update Python optimizer to write JSON
-
-Modify `optimize.py`'s `write_output()` to write `src/prompt.optimized.json` instead of `src/prompt.optimized.ts`:
-
-```python
-def write_output(instruction, demos, schema_text, prompt_hash):
-    output = {
-        "instruction": instruction,
-        "fewShotExamples": [
-            {"input": d["input"], "output": d["output"]}
-            for d in demos
-        ],
-        "schemaText": schema_text,
-        "promptHash": prompt_hash,
-    }
-    with open("/app/src/prompt.optimized.json", "w") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
-```
-
-Remove: the `prompt.optimized.ts` generation code (backtick escaping, TypeScript source formatting).
-
-Delete: `src/prompt.optimized.ts`.
-
-Remove inline constant definitions from `optimize.py` and replace with a JSON load:
-
-```python
-import json
-with open("/app/src/prompt.constants.json") as f:
-    CONSTANTS = json.load(f)
-```
-
-All existing references (e.g., `VOICE_INSTRUCTIONS`) become `CONSTANTS["voiceInstructions"]`. This is a pure refactor — Python reads the same values from the shared JSON file instead of defining them inline. `WrapPredictor.forward()` continues to work as before, appending these constants to the signature. The constants are deleted from `optimize.py` source but still accessible via the JSON load.
-
-#### 1f. Update tests
-
-- Existing `context.test.ts` updated for new function signatures
-- New unit tests for `formatContext` (memory filtering, section assembly, edge cases)
-- New unit tests for `buildPrompt` (system message composition, message array structure)
-- Verify JSON import works correctly in compiled binary context
-- Parity test: `assembleCommandPrompt` produces identical output before and after refactor
-
----
-
-### Step 2: Bridge script
-
-Add `eval/bridge.ts` with JSON-over-stdin / JSON-over-stdout protocol.
-
-#### Bridge implementation
-
-```typescript
-// eval/bridge.ts
-import { formatContext } from '../src/llm/format-context';
-import { buildPrompt } from '../src/llm/build-prompt';
-import { loadConfig } from '../src/config/config';
-import { initProvider } from '../src/llm/index';
-import { CommandResponseSchema } from '../src/command-response.schema';
-import promptConstants from '../src/prompt.constants.json';
-
-// Read stdin
-const input = JSON.parse(await Bun.stdin.text());
-
-// Format context from raw example data
-const contextString = formatContext({
-  memory: input.memory,
-  toolsOutput: input.toolsOutput,
-  cwd: input.cwd,
-  piped: input.piped,
-  constants: promptConstants,
-});
-
-// Build prompt
-const promptInput = buildPrompt(
-  {
-    instruction: input.instruction,
-    schemaText: input.schemaText,
-    schemaInstruction: promptConstants.schemaInstruction,
-    memoryRecencyInstruction: promptConstants.memoryRecencyInstruction,
-    toolsScopeInstruction: promptConstants.toolsScopeInstruction,
-    voiceInstructions: promptConstants.voiceInstructions,
-    fewShotExamples: input.fewShotExamples,
-    fewShotSeparator: promptConstants.fewShotSeparator,
-    sectionUserRequest: promptConstants.sectionUserRequest,
-  },
-  contextString,
-  input.query,
-);
-
-if (input.mode === 'assemble') {
-  console.log(JSON.stringify({ ok: true, promptInput }));
-  process.exit(0);
-}
-
-// Execute mode: call LLM once (no retry)
-const config = loadConfig();
-const provider = initProvider(config.provider);
-
-try {
-  const response = await provider.runPrompt(promptInput, CommandResponseSchema);
-  console.log(JSON.stringify({ ok: true, response }));
-} catch (error) {
-  // Classify error for Python scoring.
-  // AI SDK throws NoObjectGeneratedError with a .text property for LLM output.
-  // Network/auth errors are plain Error instances without .text.
-  const rawText = 'text' in error ? (error as any).text : undefined;
-  const isProvider = !rawText && !(error instanceof SyntaxError);
-
-  if (isProvider) {
-    console.log(JSON.stringify({ ok: false, error: 'provider_error', message: String(error) }));
-  } else if (rawText && !tryParseJson(rawText)) {
-    console.log(JSON.stringify({ ok: false, error: 'invalid_json', rawText, message: String(error) }));
-  } else {
-    console.log(JSON.stringify({ ok: false, error: 'invalid_schema', rawText, message: String(error) }));
-  }
-}
-```
-
-**No retry**: Single LLM attempt. If the response fails Zod validation, return `{ok: false}`. MIPRO needs clean signal about which candidate instructions produce valid JSON.
-
-**Why no retry in bridge?** Runtime does a round retry on structured output failure (appends the broken response + "respond only with valid JSON" and retries). During optimization, retrying would mask formatting issues. If a candidate instruction causes 30% of responses to be malformed JSON, MIPRO should see that as a lower score, not have the retry paper over it. This gives the optimizer better signal for selecting instructions that reliably produce well-structured output.
-
-#### Bridge location
-
-`eval/bridge.ts` lives in `eval/` alongside the Python code that calls it. It's eval-specific tooling, not runtime code. It imports from `../src/` using relative paths (Bun resolves these). It won't accidentally end up in the compiled binary since it's outside `src/`.
-
----
-
-### Step 3: Python changes
-
-#### 3a. `WrapPredictor.forward()` calls bridge
-
-```python
-class WrapPredictor(dspy.Module):
-    def __init__(self, signature, constants, schema_text):
-        self.predict = dspy.Predict(signature)
-        self.constants = constants  # not used for prompt assembly, but for passing to bridge
-        self.schema_text = schema_text
-
-    def forward(self, **kwargs):
-        # Read current candidate instruction + demos from DSPy's state
-        instruction = self.predict.signature.instructions
-        demos = [
-            {"input": d.natural_language_query, "output": d.response_json}
-            for d in (self.predict.demos or [])
-        ]
-
-        response, error_type = call_bridge_execute(
-            instruction=instruction,
-            demos=demos,
-            schema_text=self.schema_text,
-            memory=kwargs['memory'],
-            tools_output=kwargs['tools_output'],
-            cwd=kwargs['cwd'],
-            piped=kwargs.get('piped', False),
-            query=kwargs['natural_language_query'],
-        )
-
-        # response_json must be a JSON string (not dict) because:
-        # 1. DSPy signature declares it as str output field
-        # 2. MIPRO stores successful predictions as demos — demo.response_json
-        #    is read back as a string when building few-shot examples for the bridge
-        return dspy.Prediction(
-            response_json=json.dumps(response) if response else None,
-            response_dict=response,       # dict for metric scoring (avoids re-parsing)
-            error_type=error_type,         # None on success, error string on failure
-        )
-```
-
-**Key insight**: MIPRO modifies `self.predict.signature.instructions` and `self.predict.demos` before each evaluation call. The `forward()` method reads these dynamically, so each evaluation uses the current candidate instruction + demos being tested.
-
-#### 3b. Bridge subprocess helper
-
-```python
-import subprocess, json
-
-def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd, piped, query):
-    payload = json.dumps({
-        "mode": mode,
-        "instruction": instruction,
-        "fewShotExamples": demos,
-        "schemaText": schema_text,
-        "memory": memory,
-        "toolsOutput": tools_output,
-        "cwd": cwd,
-        "piped": piped,
-        "query": query,
-    })
-    try:
-        result = subprocess.run(
-            ["bun", "run", "/app/eval/bridge.ts"],
-            input=payload, capture_output=True, text=True,
-            timeout=120,  # seconds — prevents silent hangs on LLM stalls
-        )
-    except subprocess.TimeoutExpired:
-        print("Bridge call timed out (120s)", file=sys.stderr)
-        return None
-    if result.returncode != 0:
-        print(f"Bridge error: {result.stderr}", file=sys.stderr)
-        return None
-    return json.loads(result.stdout)
-
-def call_bridge_execute(**kwargs):
-    """Returns (response_dict, error_type) tuple.
-    On success: (dict, None). On failure: (None, error_type_string).
-    error_type is one of: 'invalid_json', 'invalid_schema', 'provider_error', 'bridge_crash'.
-    """
-    result = call_bridge(mode="execute", **kwargs)
-    if result is None:
-        return None, "bridge_crash"
-    if not result.get("ok"):
-        return None, result.get("error", "unknown")
-    return result["response"], None
-```
-
-#### 3c. DSPy example conversion
-
-Examples in `seed.jsonl` store raw data (memory dict, tools, cwd, piped, query). The conversion to DSPy Examples now passes raw fields instead of pre-formatted context:
-
-```python
-def examples_to_dspy(raw_examples):
-    """Convert raw JSONL examples to DSPy Examples with defaults.
-
-    Memory merge logic (matches current behavior):
-    - If example has no "memory" key: use DEFAULT_MEMORY (full default system facts)
-    - If example has "memory" with a "/" scope: use as-is (example controls system facts)
-    - If example has "memory" without "/" scope: merge DEFAULT_MEMORY["/"] as system facts
-    - To explicitly test with NO system facts: set "/" to empty list: {"memory": {"/": []}}
-    """
-    examples = []
-    for ex in raw_examples:
-        memory = ex.get("memory")
-        if memory is None:
-            memory = DEFAULT_MEMORY
-        elif "/" not in memory:
-            # Example has project-scoped memory but no system facts — merge defaults
-            memory = {"/": DEFAULT_MEMORY["/"], **memory}
-
-        examples.append(dspy.Example(
-            memory=memory,
-            tools_output=ex.get("tools_output", DEFAULT_TOOLS_OUTPUT),
-            cwd=ex.get("cwd", DEFAULT_CWD),
-            piped=ex.get("piped", False),
-            natural_language_query=ex["input"],
-            assertions=ex["assertions"],
-        ).with_inputs("memory", "tools_output", "cwd", "piped", "natural_language_query"))
-    return examples
-```
-
-#### 3d. Simplify `metric.py`
-
-With the bridge doing Zod validation and returning typed errors, the metric handles three cases:
-
-```python
-def wrap_metric(example, prediction, trace=None):
-    """MIPRO metric function. Handles bridge error types."""
-    error_type = getattr(prediction, 'error_type', None)
-
-    if error_type is not None:
-        # All errors score as 0.0. provider_error is logged separately for
-        # post-hoc analysis, but still scores 0 — returning None from a DSPy
-        # metric is not reliably supported across versions.
-        return 0.0
-
-    return score(prediction.response_dict, example.assertions)
-
-
-def score(response: dict, assertions: dict) -> float:
-    """Score a validated response against assertions. Returns 0.0-1.0."""
-    checks = []
-    weights = []
-
-    if "type" in assertions:
-        checks.append(response["type"] == assertions["type"])
-        weights.append(3.0)
-
-    if "risk_range" in assertions:
-        checks.append(response["risk_level"] in assertions["risk_range"])
-        weights.append(3.0)
-
-    if "content_pattern" in assertions:
-        checks.append(bool(re.search(assertions["content_pattern"], response["content"])))
-        weights.append(2.0)
-
-    # ... other assertion checks ...
-
-    if not weights:
-        return 1.0
-    return sum(w * c for w, c in zip(weights, checks)) / sum(weights)
-```
-
-**Error type handling**: All errors score `0.0`. Returning `None` from a DSPy metric is not reliably supported, so `provider_error` also scores `0.0` rather than trying to skip. The distinct error types are still valuable: they're logged separately for post-hoc analysis (e.g., if 10% of calls failed due to rate limits, you know to adjust concurrency, not the instruction).
-
-Removed: `strip_fences()`, JSON parse hard gates, enum validation, `FENCE_PENALTY`. These are now handled by the bridge's Zod validation.
-
-#### 3e. Custom eval loop after optimization
-
-```python
-def bridge_evaluate(val_examples, instruction, demos, schema_text):
-    scores = []
-    for ex in val_examples:
-        response, error_type = call_bridge_execute(
-            instruction=instruction,
-            demos=demos,
-            schema_text=schema_text,
-            memory=ex.memory,
-            tools_output=ex.tools_output,
-            cwd=ex.cwd,
-            piped=ex.piped,
-            query=ex.natural_language_query,
-        )
-        if error_type is not None:
-            scores.append(0.0)
-        else:
-            scores.append(score(response, ex.assertions))
-    avg = sum(scores) / len(scores) if scores else 0.0
-    print(f"Bridge eval: {avg:.3f} ({len(scores)} examples)")
-    return avg
-```
-
-**Why custom eval loop instead of `dspy.Evaluate`?** The winning candidate must be validated through the bridge (real TS prompt assembly + real LLM execution). `dspy.Evaluate` would route through DSPy's own evaluation framework. Our custom loop gives full control and directly measures what matters.
-
-#### 3f. Remove remaining Python duplication
-
-Delete from `optimize.py`:
-- `memory_to_context()` function (bridge does context formatting now)
-- The old `write_output()` that generates TypeScript source (replaced in step 1e)
-
-Keep `DEFAULT_MEMORY`, `DEFAULT_TOOLS_OUTPUT`, `DEFAULT_CWD` — these are still used by `examples_to_dspy()` (step 3c) to fill in defaults for examples that don't specify them. They're example defaults, not prompt constants.
-
-Note: inline prompt constant definitions (section headers, instructions) were already moved to `prompt.constants.json` in step 1e.
-
-Keep:
-- `read_schema.py` (extracts schema text from .ts file)
-- MIPRO orchestration (train/val split, optimizer configuration, execution)
-- `make_signature()` (DSPy signature creation — still needed for MIPRO's teacher)
-
-#### 3g. Dockerfile update
-
-Multi-stage build with both Python and Bun:
-
-```dockerfile
-FROM oven/bun:1 AS bun-deps
-WORKDIR /app
-COPY package.json bun.lock ./
-COPY src/ src/
-RUN bun install --frozen-lockfile
-
-FROM python:3.12-slim
-WORKDIR /app
-
-# Install Bun runtime
-COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
-
-# Python deps
-COPY eval/dspy/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Bun deps + TS source (from first stage)
-COPY --from=bun-deps /app/node_modules node_modules/
-COPY --from=bun-deps /app/src src/
-
-# Python source
-COPY eval/dspy/*.py eval/dspy/
-
-# Bridge script
-COPY eval/bridge.ts eval/
-
-ENTRYPOINT ["python", "eval/dspy/optimize.py"]
-```
-
-**Why multi-stage?** Bun installs node_modules (AI SDK, Zod) in the first stage — these are Linux binaries, built inside Docker (not mounted from macOS host). Python installs in the second stage. Hermetic and reproducible. Avoids platform-mismatch issues with native modules.
 
 ## Decisions and reasoning summary
 
@@ -759,62 +245,34 @@ ENTRYPOINT ["python", "eval/dspy/optimize.py"]
 | Error granularity | `invalid_json`, `invalid_schema`, `provider_error` as distinct types | Provider errors (network) shouldn't penalize instruction quality. JSON vs schema errors are different failure modes. Free signal, zero cost. |
 | Error channels | Structured JSON for expected errors, non-zero exit for fatal | Expected failures (validation, provider) return JSON. Bridge crashes exit non-zero. Two channels, each appropriate. |
 | TS refactor shape | `formatContext` + `buildPrompt` + `assembleCommandPrompt` wrapper | Each function has one job. Pure core is injectable. Wrapper preserves runtime ergonomics. |
-| Step 1 scope | Combined TS + Python | JSON artifact requires both sides to switch at once. No intermediate broken state. |
 | Docker setup | Multi-stage (Bun + Python) | Hermetic. Linux binaries built in Docker. No host platform leakage. |
 | Post-optimization eval | Custom bridge eval loop | Direct measurement of bridge-scored performance. Full control. Not coupled to DSPy's Evaluate. |
 | Metric adaptation | `score(dict)` takes validated dicts only | Bridge always validates. No raw text scoring needed. Simpler metric. |
 | Prompt hash | Computed once by Python, covers both JSON files | Hash versions the full prompt surface (constants + optimized data). Never recomputed at runtime. Read-only for logging/caching. |
 
-## Risks and open questions
+## Risks and notes
 
 ### Bun subprocess reliability at scale
 
-~400 subprocess spawns during a single optimization run. If any spawn fails (resource limits, file descriptor exhaustion), the optimization run could break. **Mitigation**: Wrap bridge calls in try/catch with clear error reporting. The subprocess model is simple and each call is independent. If reliability becomes a real issue, evolve to a long-running server (v2).
+~400 subprocess spawns during a single optimization run. Bridge calls are wrapped in try/catch with clear error reporting. Each call is independent. If reliability becomes a real issue, evolve to a long-running server (v2).
 
 ### DSPy compatibility with custom `forward()`
 
-Overriding `WrapPredictor.forward()` to call the bridge bypasses DSPy's internal `Predict` module. MIPRO expects standard module behavior. Need to verify: demo bootstrapping still works, instruction compilation still works, the teacher model can still propose candidates. **Mitigation**: Test with a small optimization run before full adoption.
+`WrapPredictor.forward()` bypasses DSPy's internal `Predict` module. MIPRO still manages `self.predict.signature.instructions` and `self.predict.demos` — `forward()` reads these dynamically. Verify with a small optimization run before full adoption.
 
-### AI SDK structured output differences
+### Prompt hash
 
-The bridge uses Vercel AI SDK's structured output (native JSON mode). DSPy uses its own output parsing. Edge cases may differ. **Not a concern**: We explicitly chose bridge-scored results as the source of truth. What matters is how the prompt performs through the real execution path.
-
-### Docker image size
-
-Adding Bun + node_modules increases image size from ~200MB to ~400-500MB. **Acceptable**: Dev-only tool, not shipped to users.
-
-### Prompt hash computation
-
-`promptHash` is a SHA-256 hash covering the full prompt surface: all fields from both `prompt.constants.json` and `prompt.optimized.json`. Python computes it once at the end of optimization by building an ordered manifest of all prompt fragments (instruction, constants, schema text, demos) and hashing the compact JSON representation. The hash is written into `prompt.optimized.json`. Runtime reads the hash for logging/cache-invalidation purposes but never recomputes it. This preserves the "compute once, consume many times" model.
-
-### Thread history
-
-`buildPrompt` doesn't support `threadHistory` (multi-round conversations). Not needed now — multi-round is not yet implemented in runtime. Add the parameter when the feature lands.
+`promptHash` is a SHA-256 hash covering the full prompt surface: all fields from both `prompt.constants.json` and `prompt.optimized.json`. Python computes it once at the end of optimization. Runtime reads the hash for logging/cache-invalidation purposes but never recomputes it.
 
 ### DSPy signature field changes
 
-DSPy Examples now store raw data (memory dict, tools, cwd) instead of pre-formatted `memory_context` string. MIPRO's teacher model may see raw JSON when inspecting examples for instruction proposal. Teacher is Claude Sonnet — it understands JSON. Monitor instruction quality; if it degrades, consider a formatting step for teacher-visible fields.
+DSPy Examples store raw data (memory dict, tools, cwd) instead of pre-formatted `memory_context` string. MIPRO's teacher model may see raw JSON when inspecting examples for instruction proposal. Teacher is Claude Sonnet — it understands JSON. Monitor instruction quality; if it degrades, consider a formatting step for teacher-visible fields.
 
-## Acceptance criteria
+## Assumptions
 
-The implementation is done when:
-
-- Runtime prompt assembly is driven by pure `buildPrompt()` + `formatContext()` core functions
-- Runtime behavior is identical to before the refactor (same prompts, same execution)
-- `prompt.optimized.ts` is deleted; runtime reads from `prompt.constants.json` + `prompt.optimized.json`
-- Eval bridge can assemble prompts using the exact runtime message structure (`assemble` mode)
-- DSPy candidate evaluation goes through the bridge, not `dspy.LM` for the target model call
-- Eval bridge does not retry malformed outputs
-- Python scoring still grades type/risk/content/memory assertions against validated response dicts
-- Optimized prompt output is a JSON artifact consumed by runtime
-- `promptHash` covers both JSON files, is written once during optimization, and is never recomputed at runtime
-
-## Assumptions and defaults
-
-- **v1 bridge is per-call subprocess.** Matches current runtime boundary. Can evolve to long-running server if overhead becomes a problem.
+- **v1 bridge is per-call subprocess.** Can evolve to long-running server if overhead becomes a problem.
 - **Eval bridge never retries.** Malformed output is optimization signal, not something to repair.
-- **JSON artifact is the final format.** Data artifact, not code artifact.
 - **Static constants live in a shared JSON file.** Neither language owns them. Changed by hand, committed to git.
-- **Python owns optimized instruction/demo data and writes the artifact.** DSPy produces the winning candidate.
+- **Python owns optimized instruction/demo data and writes the artifact.**
 - **Provider config for eval is always explicit and Docker-local.** Eval must not depend on user Wrap runtime config.
 - **Bridge protocol is stdin/stdout JSON.** Designed so it can later become a long-lived worker with the same request/response shape.

@@ -2,7 +2,7 @@
 
 > **Status:** Implemented (2026-03-28)
 >
-> Voice instructions live in `eval/dspy/optimize.py` (source of truth) and are written into `src/prompt.optimized.ts` by the optimizer.
+> Voice instructions live in `src/prompt.constants.json` (shared by runtime and eval).
 
 ---
 
@@ -76,7 +76,7 @@ curl is a library and CLI tool for transferring data with URLs, supporting many 
 
 ## Architecture
 
-- **Voice instructions** (`VOICE_INSTRUCTIONS`): defined in `optimize.py`, exported from `prompt.optimized.ts`. Appended to the system prompt in `context.ts`.
-- **Piped output instruction** (`PIPED_OUTPUT_INSTRUCTION`): defined in `optimize.py`, exported from `prompt.optimized.ts`. Conditionally appended in `context.ts` when `ctx.piped` is true.
+- **Voice instructions**: defined in `src/prompt.constants.json`, appended to the system prompt by `buildPrompt`.
+- **Piped output instruction**: defined in `src/prompt.constants.json`, conditionally appended by `formatContext` when `piped` is true.
 - **TTY detection**: `query.ts` checks `!process.stdout.isTTY` and passes the result as `piped` to `assembleCommandPrompt`.
-- **Eval examples**: `seed.jsonl` contains answer personality examples in both TTY and piped variants. The optimizer applies `PIPED_OUTPUT_INSTRUCTION` during eval when `piped: true`.
+- **Eval examples**: `seed.jsonl` contains answer personality examples in both TTY and piped variants.
