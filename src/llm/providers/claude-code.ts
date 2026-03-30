@@ -25,6 +25,9 @@ export function claudeCodeProvider(config: ClaudeCodeProviderConfig): Provider {
         "--model",
         model,
         "--no-session-persistence",
+        // "--bare" skips config/MCP discovery (10x faster startup) but also
+        // skips credential loading, so `claude` exits with "Not logged in".
+        // Enable if this is fixed in Claude Code
       ];
       if (schema) {
         args.push("--json-schema", JSON.stringify(z.toJSONSchema(schema)));
