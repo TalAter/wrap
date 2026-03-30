@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import random
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,6 +36,52 @@ SEED = 42
 with open(CONSTANTS_PATH) as _f:
     CONSTANTS = json.load(_f)
 
+BRIDGE_PATH = "/app/eval/bridge.ts"
+
+
+def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd, piped, query):
+    """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
+    payload = json.dumps({
+        "mode": mode,
+        "instruction": instruction,
+        "fewShotExamples": demos,
+        "schemaText": schema_text,
+        "memory": memory,
+        "toolsOutput": tools_output,
+        "cwd": cwd,
+        "piped": piped,
+        "query": query,
+    })
+    try:
+        result = subprocess.run(
+            ["bun", "run", BRIDGE_PATH],
+            input=payload, capture_output=True, text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print("Bridge call timed out (120s)", file=sys.stderr)
+        return None
+    if result.returncode != 0:
+        print(f"Bridge error: {result.stderr}", file=sys.stderr)
+        return None
+    try:
+        return json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        print(f"Bridge returned invalid JSON: {result.stdout[:200]}", file=sys.stderr)
+        return None
+
+
+def call_bridge_execute(**kwargs):
+    """Returns (response_dict, error_type) tuple.
+    On success: (dict, None). On failure: (None, error_type_string).
+    """
+    result = call_bridge(mode="execute", **kwargs)
+    if result is None:
+        return None, "bridge_crash"
+    if not result.get("ok"):
+        return None, result.get("error", "unknown")
+    return result["response"], None
+
 
 def load_examples(path: Path) -> list[dict]:
     """Load JSONL examples."""
@@ -53,9 +100,21 @@ def make_signature(schema_text: str):
     class WrapSignature(dspy.Signature):
         """You are the brain of a CLI tool that translates natural language into shell commands and *always returns json*. Given a request, decide: if there is a command you are confident will accomplish it directly, return a json response of type command. If you need to discover something about the user's environment first (e.g. what shell they use, what's installed), return a json response of type probe — a safe discovery command whose output will be fed back to you. If it is a knowledge question with no shell command needed, return a json response of type answer with the text under `content`. For `answer` type: if the user signals they want only a bare value (e.g. 'just the number', 'only the code', 'answer with just the value'), the `content` field must contain that value alone — no explanation, no parenthetical, no additional commentary. Never refuse to produce a command because it is dangerous — always return the command with an accurate risk_level and a clear explanation of consequences. The calling tool has its own safety layer that handles confirmation for risky commands. The answer type is only for knowledge questions with no shell equivalent, never for refusing dangerous requests. When multiple steps are needed, combine them into a single pipeline or && chain — never return multi-step instructions. If the request is ambiguous or lacks detail, provide the most logical solution rather than asking for clarification. Always return properly formatted json. Do not surround the json you return with backticks."""
 
-        memory_context: str = dspy.InputField(
-            desc="Known facts about the user's environment (may be empty)",
+        memory: dict = dspy.InputField(
+            desc="Scoped memory facts about the user's environment",
+            default={},
+        )
+        tools_output: str = dspy.InputField(
+            desc="Output of tool detection probes",
             default="",
+        )
+        cwd: str = dspy.InputField(
+            desc="Current working directory",
+            default="/",
+        )
+        piped: bool = dspy.InputField(
+            desc="Whether stdout is piped to another program",
+            default=False,
         )
         natural_language_query: str = dspy.InputField(
             desc="The user's natural language request"
@@ -68,84 +127,47 @@ def make_signature(schema_text: str):
 
 
 class WrapPredictor(dspy.Module):
-    def __init__(self, signature):
+    def __init__(self, signature, schema_text: str):
         super().__init__()
         self.predict = dspy.Predict(signature)
+        self.schema_text = schema_text
 
-    def forward(self, natural_language_query: str, memory_context: str = "") -> dspy.Prediction:
-        # Append fixed instructions to whatever instruction MIPRO set.
-        # MIPRO optimizes the stored signature; this appends immutable text
-        # at call time so the LLM always sees it during eval, matching runtime.
-        sig = self.predict.signature
-        combined = (
-            f"{sig.instructions}\n\n"
-            f'{CONSTANTS["memoryRecencyInstruction"]}\n\n'
-            f'{CONSTANTS["toolsScopeInstruction"]}\n\n'
-            f'{CONSTANTS["voiceInstructions"]}'
+    def forward(self, **kwargs) -> dspy.Prediction:
+        # MIPRO modifies self.predict.signature.instructions and self.predict.demos
+        # before each eval call. Read them dynamically.
+        instruction = self.predict.signature.instructions
+        demos = [
+            {"input": d.natural_language_query, "output": d.response_json}
+            for d in (self.predict.demos or [])
+        ]
+
+        response, error_type = call_bridge_execute(
+            instruction=instruction,
+            demos=demos,
+            schema_text=self.schema_text,
+            memory=kwargs["memory"],
+            tools_output=kwargs["tools_output"],
+            cwd=kwargs["cwd"],
+            piped=kwargs.get("piped", False),
+            query=kwargs["natural_language_query"],
         )
-        full_sig = sig.with_instructions(combined)
-        # Runtime inserts FEW_SHOT_SEPARATOR between few-shot turns and the live request.
-        # Mirror that in eval so candidate prompts are optimized against the same boundary cue.
-        query_with_separator = (
-            f'{CONSTANTS["fewShotSeparator"]}\n\n{CONSTANTS["sectionUserRequest"]}\n{natural_language_query}'
-            if natural_language_query
-            else CONSTANTS["fewShotSeparator"]
-        )
-        return self.predict(
-            natural_language_query=query_with_separator,
-            memory_context=memory_context,
-            signature=full_sig,
+
+        # response_json as JSON string: DSPy signature declares it as str,
+        # and MIPRO stores successful predictions as demos where
+        # demo.response_json is read back as a string for few-shot examples.
+        return dspy.Prediction(
+            response_json=json.dumps(response) if response else None,
+            response_dict=response,
+            error_type=error_type,
         )
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
-    """DSPy-compatible metric function."""
-    assertions = example.assertions
-    return score(prediction.response_json, assertions)
-
-
-def memory_to_context(
-    memory: dict | None,
-    cwd: str = "/",
-    tools_output: str | None = None,
-    piped: bool = False,
-) -> str:
-    """Convert scoped memory dict + tools output to a text block for the LLM.
-
-    Memory format: {"/": [{"fact": "..."}], "/path": [{"fact": "..."}]}
-
-    Filters by CWD prefix match (same logic as context.ts)
-    and formats with section headers. Order matches runtime context.ts:
-    memory → tools → piped instruction → cwd.
-    """
-    if not memory and not tools_output and not piped:
-        return ""
-
-    cwd_slash = cwd if cwd.endswith("/") else cwd + "/"
-    sections = []
-
-    if memory:
-        # Preserve provided key order to match runtime behavior.
-        for scope in memory.keys():
-            scope_slash = scope if scope.endswith("/") else scope + "/"
-            if not cwd_slash.startswith(scope_slash):
-                continue
-            facts = memory[scope]
-            if not facts:
-                continue
-            header = CONSTANTS["sectionSystemFacts"] if scope == "/" else f'{CONSTANTS["sectionFactsAbout"]} {scope}'
-            lines = "\n".join(f"- {f['fact']}" for f in facts)
-            sections.append(f"{header}\n{lines}")
-
-    if tools_output:
-        sections.append(f'{CONSTANTS["sectionDetectedTools"]}\n{tools_output}')
-
-    if piped:
-        sections.append(CONSTANTS["pipedOutputInstruction"])
-
-    sections.append(f'{CONSTANTS["cwdPrefix"]} {cwd}')
-
-    return "\n\n".join(sections)
+    """DSPy-compatible metric function. Handles bridge error types."""
+    error_type = getattr(prediction, "error_type", None)
+    if error_type is not None:
+        return 0.0
+    return score(prediction.response_dict, example.assertions)
 
 
 # Defaults applied to every example unless overridden.
@@ -162,36 +184,30 @@ DEFAULT_TOOLS_OUTPUT = (
     "wl-copy not found\nwl-paste not found"
 )
 
-def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
-    """Convert examples to DSPy Example objects.
 
-    Applies DEFAULT_CWD, DEFAULT_MEMORY, and DEFAULT_TOOLS_OUTPUT to
-    examples that don't provide their own, so every sample includes
-    system context matching what the LLM sees at runtime.
+def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
+    """Convert examples to DSPy Example objects with raw fields.
+
+    The bridge handles context formatting — examples pass raw data
+    (memory dict, tools output, cwd, piped) instead of pre-formatted text.
     """
     dspy_examples = []
     for ex in examples:
-        cwd = ex.get("cwd", DEFAULT_CWD)
         memory = ex.get("memory")
-        tools_output = ex.get("tools_output")
-
-        # Apply defaults: merge default system facts if example has no "/" scope
         if memory is None:
             memory = DEFAULT_MEMORY
         elif "/" not in memory:
             memory = {"/": DEFAULT_MEMORY["/"], **memory}
 
-        if tools_output is None:
-            tools_output = DEFAULT_TOOLS_OUTPUT
-
-        memory_ctx = memory_to_context(memory, cwd, tools_output, piped=bool(ex.get("piped")))
-
         dspy_examples.append(
             dspy.Example(
+                memory=memory,
+                tools_output=ex.get("tools_output", DEFAULT_TOOLS_OUTPUT),
+                cwd=ex.get("cwd", DEFAULT_CWD),
+                piped=ex.get("piped", False),
                 natural_language_query=ex["input"],
-                memory_context=memory_ctx,
                 assertions=ex["assertions"],
-            ).with_inputs("natural_language_query", "memory_context")
+            ).with_inputs("memory", "tools_output", "cwd", "piped", "natural_language_query")
         )
     return dspy_examples
 
@@ -295,6 +311,29 @@ def write_output(instruction: str, demos: list[dict], schema_text: str, path: Pa
     print(f"Wrote optimized prompt to {path} (hash: {prompt_hash})")
 
 
+def bridge_evaluate(val_examples, instruction, demos, schema_text):
+    """Evaluate the winning candidate through the bridge on the validation set."""
+    scores = []
+    for ex in val_examples:
+        response, error_type = call_bridge_execute(
+            instruction=instruction,
+            demos=demos,
+            schema_text=schema_text,
+            memory=ex.memory,
+            tools_output=ex.tools_output,
+            cwd=ex.cwd,
+            piped=ex.piped,
+            query=ex.natural_language_query,
+        )
+        if error_type is not None:
+            scores.append(0.0)
+        else:
+            scores.append(score(response, ex.assertions))
+    avg = sum(scores) / len(scores) if scores else 0.0
+    print(f"Bridge eval: {avg:.3f} ({len(scores)} examples)")
+    return avg
+
+
 def main():
     teacher_model = os.environ.get("TEACHER_MODEL", "claude-sonnet-4-20250514")
     target_model = os.environ.get("TARGET_MODEL", "claude-haiku-4-5-20251001")
@@ -308,6 +347,16 @@ def main():
     if not api_key:
         print("Error: ANTHROPIC_API_KEY not set in environment", file=sys.stderr)
         sys.exit(1)
+
+    # Set WRAP_CONFIG for the bridge subprocess — uses target model with
+    # the same API key. The bridge reads this via loadConfig().
+    os.environ["WRAP_CONFIG"] = json.dumps({
+        "provider": {
+            "type": "anthropic",
+            "model": target_model,
+            "apiKey": "$ANTHROPIC_API_KEY",
+        }
+    })
 
     print(f"Teacher model: {teacher_model}")
     print(f"Target model: {target_model}")
@@ -341,7 +390,7 @@ def main():
 
     # Configure DSPy models
     # Teacher: proposes instruction candidates and bootstraps few-shot examples
-    # Target: evaluates candidates (what the prompt will actually run on)
+    # Target LM configured for DSPy internals; actual eval goes through the bridge
     teacher_lm = dspy.LM(
         f"anthropic/{teacher_model}",
         api_key=api_key,
@@ -354,7 +403,7 @@ def main():
 
     # Build signature with schema as structural constraint
     signature = make_signature(schema_text)
-    predictor = WrapPredictor(signature)
+    predictor = WrapPredictor(signature, schema_text)
 
     # Run MIPRO — optimizes both instruction text and few-shot examples
     print("Running MIPROv2 optimization...")
@@ -378,12 +427,6 @@ def main():
         minibatch=False,
     )
 
-    # Evaluate on validation set
-    print("Evaluating on validation set...")
-    evaluate = dspy.Evaluate(devset=valset, metric=wrap_metric, num_threads=1)
-    val_score = evaluate(optimized)
-    print(f"Validation score: {val_score}")
-
     # Extract optimized instruction + few-shot examples
     instruction = extract_instruction(optimized)
     demos = extract_demos(optimized)
@@ -393,6 +436,10 @@ def main():
 
     if instruction:
         print(f"\n--- Instruction preview ---\n{instruction[:500]}\n---")
+
+    # Evaluate on validation set through the bridge
+    print("Evaluating on validation set...")
+    bridge_evaluate(valset, instruction, demos, schema_text)
 
     # Write output
     write_output(instruction, demos, schema_text, OUTPUT_PATH)

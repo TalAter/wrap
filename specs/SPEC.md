@@ -563,31 +563,12 @@ Currently only `provider` is implemented. Future settings shown below for refere
 
 ## 13. Eval System (Dev-Only)
 
-### 13.1 Purpose
+Dev-only prompt optimization pipeline. DSPy/MIPRO discovers the best instruction text and few-shot examples by evaluating candidates through a Bun eval bridge that uses the same prompt assembly and LLM execution as runtime — guaranteeing parity between what's optimized and what ships.
 
-- Evaluate different LLM models and prompts
-- Optimize system prompt via DSPy
-- Determine cheapest viable model
-- Troubleshoot and improve command generation quality
-
-### 13.2 Logging as Eval Data
-
-Wrap's always-on logging (see `specs/logging.md`) captures every invocation to JSONL. This data serves as the foundation for eval — a future cherry-pick workflow will transform selected log entries into eval examples (`eval/examples/seed.jsonl`).
-
-### 13.3 Feedback Signal
-
-- **Implicit only** (no explicit thumbs-up/down prompt in the tool)
-- Correctness inferred from:
-  - Exit code (0 = likely correct)
-  - Whether the user retried or continued the thread with a correction
-  - Whether the auto-fix loop was triggered
-- This data feeds into DSPy for prompt optimization
-
-### 13.4 Eval Infrastructure
-
-- Lives in `eval/dspy/` — Docker-based, not distributed with the binary
-- DSPy-based optimization with examples in `eval/examples/seed.jsonl`
-- Currently evaluates on all examples every trial (`minibatch=False`). Re-enable minibatch sampling once the eval dataset grows past ~100 examples.
+- Lives in `eval/` — Docker-based, not distributed with the binary
+- Examples in `eval/examples/seed.jsonl`; logging data (see `specs/logging.md`) feeds future examples
+- Output: `src/prompt.optimized.json` (instruction, demos, schema text, prompt hash)
+- Full architecture: `eval/specs/eval.md`
 
 ---
 

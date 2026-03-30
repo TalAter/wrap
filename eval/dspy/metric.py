@@ -1,14 +1,10 @@
-"""Scoring function for evaluating LLM responses against assertions.
+"""Scoring function for evaluating validated LLM responses against assertions.
 
-Hard gates: JSON must parse, type and risk_level must be valid schema values.
-If any hard gate fails, score is 0. Then weighted scoring for assertion checks.
+The bridge validates responses with Zod before scoring. This module only does
+weighted assertion checks against already-validated response dicts.
 """
 
-import json
 import re
-
-VALID_TYPES = {"command", "probe", "answer"}
-VALID_RISK_LEVELS = {"low", "medium", "high"}
 
 # Weights for assertion checks (higher = more important)
 WEIGHTS = {
@@ -24,46 +20,8 @@ WEIGHTS = {
 }
 
 
-FENCE_RE = re.compile(r"^```\w*\s*\n(.*)\n```\s*$", re.DOTALL)
-
-# Penalty for wrapping JSON in a single clean code fence
-FENCE_PENALTY = 0.5
-
-
-def strip_fences(text: str) -> tuple[str, bool]:
-    """Strip markdown code fences only if the entire response is a single fenced block.
-    Returns (cleaned text, had fences)."""
-    m = FENCE_RE.match(text.strip())
-    if m:
-        inner = m.group(1)
-        # Multiple code blocks = not a clean single-block response, don't strip
-        if "```" in inner:
-            return text, False
-        return inner.strip(), True
-    return text, False
-
-
-def score(response_text: str, assertions: dict) -> float:
-    """Score a response against assertions. Returns 0.0-1.0."""
-    text, had_fences = strip_fences(response_text)
-
-    # Hard gate: must be valid JSON
-    try:
-        response = json.loads(text)
-    except (json.JSONDecodeError, TypeError):
-        return 0.0
-
-    if not isinstance(response, dict):
-        return 0.0
-
-    # Hard gate: type must be a valid schema value
-    if response.get("type") not in VALID_TYPES:
-        return 0.0
-
-    # Hard gate: risk_level must be a valid schema value
-    if response.get("risk_level") not in VALID_RISK_LEVELS:
-        return 0.0
-
+def score(response: dict, assertions: dict) -> float:
+    """Score a validated response dict against assertions. Returns 0.0-1.0."""
     checks = []
 
     # type must match expected
@@ -108,18 +66,18 @@ def score(response_text: str, assertions: dict) -> float:
             ),
         ))
 
-    # memory_updates keys must match pattern
+    # memory_updates facts must match pattern
     if "memory_updates_pattern" in assertions:
         updates = response.get("memory_updates") or []
         if not isinstance(updates, list):
             updates = []
-        keys = " ".join(u.get("fact", "") for u in updates if isinstance(u, dict))
+        facts = " ".join(u.get("fact", "") for u in updates if isinstance(u, dict))
         checks.append((
             "memory_updates_pattern",
-            bool(re.search(assertions["memory_updates_pattern"], keys, re.IGNORECASE)),
+            bool(re.search(assertions["memory_updates_pattern"], facts, re.IGNORECASE)),
         ))
 
-    # memory_updates scopes must match pattern (joined with space)
+    # memory_updates scopes must match pattern
     if "memory_updates_scope_pattern" in assertions:
         updates = response.get("memory_updates") or []
         if not isinstance(updates, list):
@@ -155,13 +113,8 @@ def score(response_text: str, assertions: dict) -> float:
         ))
 
     if not checks:
-        return 0.0
+        return 1.0
 
     weighted_sum = sum(WEIGHTS.get(name, 1.0) * passed for name, passed in checks)
     max_sum = sum(WEIGHTS.get(name, 1.0) for name, _ in checks)
-    result = weighted_sum / max_sum
-
-    if had_fences:
-        result *= FENCE_PENALTY
-
-    return result
+    return weighted_sum / max_sum

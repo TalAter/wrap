@@ -70,7 +70,8 @@ Currently single-shot: one LLM call, optional round retry, then execute or print
 src/
   index.ts                    Entry point
   main.ts                     Top-level orchestration
-  prompt.optimized.ts         DSPy-generated: system prompt, schema text, few-shot examples, voice instructions, prompt hash
+  prompt.constants.json       Shared prompt strings (section headers, fixed instructions)
+  prompt.optimized.json       DSPy-generated: instruction, schema text, few-shot examples, prompt hash
   command-response.schema.ts  Zod schema for LLM command/answer/probe responses
 
   core/
@@ -89,7 +90,9 @@ src/
   llm/                        See specs/llm-sdk.md
     types.ts                  Provider interface, PromptInput, config types
     index.ts                  initProvider() dispatch + runCommandPrompt()
-    context.ts                assembleCommandPrompt() — system + memory + tools + messages
+    context.ts                assembleCommandPrompt() — thin wrapper over format-context + build-prompt
+    format-context.ts         Pure: memory + tools + cwd → context string
+    build-prompt.ts           Pure: config + context + query → PromptInput
     utils.ts                  Shared LLM utilities (stripFences, etc.)
     providers/
       ai-sdk.ts               Anthropic + OpenAI via Vercel AI SDK
