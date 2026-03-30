@@ -173,4 +173,37 @@ describe("formatContext", () => {
     expect(result).toContain("## System facts\n- macOS\n\n## Detected tools");
     expect(result).toContain("/usr/bin/git\n\nstdout is being piped");
   });
+
+  test("cwdFiles section included when provided", () => {
+    const result = formatContext(makeParams({ cwdFiles: "package.json\nsrc/\nREADME.md" }));
+    expect(result).toContain("## Files in CWD");
+    expect(result).toContain("package.json\nsrc/\nREADME.md");
+  });
+
+  test("cwdFiles section omitted when not provided", () => {
+    const result = formatContext(makeParams());
+    expect(result).not.toContain("Files in CWD");
+  });
+
+  test("cwdFiles appears after piped and before cwd line", () => {
+    const result = formatContext(
+      makeParams({
+        toolsOutput: "/usr/bin/git",
+        cwdFiles: "package.json",
+        piped: true,
+      }),
+    );
+    const pipedIdx = result.indexOf("stdout is being piped");
+    const cwdFilesIdx = result.indexOf("## Files in CWD");
+    const cwdIdx = result.indexOf("Working directory");
+    expect(pipedIdx).toBeLessThan(cwdFilesIdx);
+    expect(cwdFilesIdx).toBeLessThan(cwdIdx);
+  });
+
+  test("cwdFiles appears before cwd line", () => {
+    const result = formatContext(makeParams({ cwdFiles: "package.json" }));
+    const cwdFilesIdx = result.indexOf("## Files in CWD");
+    const cwdIdx = result.indexOf("Working directory");
+    expect(cwdFilesIdx).toBeLessThan(cwdIdx);
+  });
 });

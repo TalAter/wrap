@@ -105,6 +105,7 @@ src/
 
   discovery/                  See specs/discovery.md
     init-probes.ts            Init probe commands (OS, shell) + runtime tool probe
+    cwd-files.ts              CWD file listing (readdir + lstat, mtime sorted, cap 50)
 
   memory/                     See specs/memory.md
     types.ts                  Fact, FactScope, Memory types

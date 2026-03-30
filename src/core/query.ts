@@ -61,6 +61,7 @@ export async function runQuery(
     cwd: string;
     providerConfig: ProviderConfig;
     toolsOutput?: string;
+    cwdFiles?: string;
   },
 ): Promise<number> {
   const wrapHome = getWrapHome();
@@ -80,6 +81,7 @@ export async function runQuery(
       cwd: options.cwd,
       memory,
       toolsOutput: options.toolsOutput,
+      cwdFiles: options.cwdFiles,
       piped: !process.stdout.isTTY,
     });
 

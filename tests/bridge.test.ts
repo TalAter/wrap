@@ -62,6 +62,24 @@ describe("bridge — assemble mode", () => {
     expect(last.content).toContain("/usr/bin/git");
   });
 
+  test("context includes cwdFiles when provided", async () => {
+    const result = await bridgeResult({
+      ...baseInput,
+      mode: "assemble",
+      cwdFiles: "package.json\nsrc/\nREADME.md",
+    });
+    const last = result.promptInput.messages.at(-1);
+    expect(last.content).toContain("## Files in CWD");
+    expect(last.content).toContain("package.json");
+    expect(last.content).toContain("src/");
+  });
+
+  test("context omits cwdFiles section when not provided", async () => {
+    const result = await bridgeResult({ ...baseInput, mode: "assemble" });
+    const last = result.promptInput.messages.at(-1);
+    expect(last.content).not.toContain("Files in CWD");
+  });
+
   test("final message contains query under user request header", async () => {
     const result = await bridgeResult({ ...baseInput, mode: "assemble" });
     const last = result.promptInput.messages.at(-1);

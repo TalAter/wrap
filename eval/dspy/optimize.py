@@ -40,9 +40,9 @@ with open(CONSTANTS_PATH) as _f:
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
 
-def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd, piped, query):
+def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd, piped, query, cwd_files=None):
     """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
-    payload = json.dumps({
+    payload_dict = {
         "mode": mode,
         "instruction": instruction,
         "fewShotExamples": demos,
@@ -52,7 +52,10 @@ def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd
         "cwd": cwd,
         "piped": piped,
         "query": query,
-    })
+    }
+    if cwd_files is not None:
+        payload_dict["cwdFiles"] = cwd_files
+    payload = json.dumps(payload_dict)
     try:
         result = subprocess.run(
             ["bun", "run", BRIDGE_PATH],
@@ -120,6 +123,10 @@ def make_signature(schema_text: str):
             desc="Whether stdout is piped to another program",
             default="",
         )
+        cwd_files: str = dspy.InputField(
+            desc="Listing of files in the current working directory (by mtime)",
+            default="",
+        )
         natural_language_query: str = dspy.InputField(
             desc="The user's natural language request"
         )
@@ -145,6 +152,7 @@ class WrapPredictor(dspy.Module):
             for d in (self.predict.demos or [])
         ]
 
+        cwd_files = kwargs.get("cwd_files")
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -154,6 +162,7 @@ class WrapPredictor(dspy.Module):
             cwd=kwargs["cwd"],
             piped=kwargs.get("piped", False),
             query=kwargs["natural_language_query"],
+            cwd_files=cwd_files,
         )
 
         # response_json as JSON string: DSPy signature declares it as str,
@@ -173,7 +182,7 @@ _trial_scores: dict[tuple, list] = {}
 def _example_key(ex):
     # Include assertions hash to distinguish duplicate queries with different expectations
     assertions_hash = hashlib.md5(json.dumps(ex.assertions, sort_keys=True).encode()).hexdigest()[:8]
-    return (ex.natural_language_query, ex.cwd, ex.piped, assertions_hash)
+    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), assertions_hash)
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
@@ -222,9 +231,10 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
                 tools_output=ex.get("tools_output", DEFAULT_TOOLS_OUTPUT),
                 cwd=ex.get("cwd", DEFAULT_CWD),
                 piped=ex.get("piped", False),
+                cwd_files=ex.get("cwd_files"),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
-            ).with_inputs("memory", "tools_output", "cwd", "piped", "natural_language_query")
+            ).with_inputs("memory", "tools_output", "cwd", "piped", "cwd_files", "natural_language_query")
         )
     return dspy_examples
 
@@ -295,6 +305,7 @@ def build_prompt_hash_manifest(
         ["SECTION_SYSTEM_FACTS", CONSTANTS["sectionSystemFacts"]],
         ["SECTION_FACTS_ABOUT", CONSTANTS["sectionFactsAbout"]],
         ["SECTION_DETECTED_TOOLS", CONSTANTS["sectionDetectedTools"]],
+        ["SECTION_CWD_FILES", CONSTANTS["sectionCwdFiles"]],
         ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
         ["CWD_PREFIX", CONSTANTS["cwdPrefix"]],
         ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
@@ -332,6 +343,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
     """Evaluate the winning prompt through the bridge. Returns (avg_score, results_list)."""
     results = []
     for ex in examples:
+        cwd_files = getattr(ex, "cwd_files", None)
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -341,6 +353,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
             cwd=ex.cwd,
             piped=ex.piped,
             query=ex.natural_language_query,
+            cwd_files=cwd_files,
         )
         s = 0.0 if error_type else score(response, ex.assertions)
         results.append({

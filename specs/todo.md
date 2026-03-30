@@ -42,7 +42,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Discovery & Probes (see specs/discovery.md)
 
-- [ ] CWD files in every LLM request (`ls -1a`, oldest 20 + newest 30, cap 50)
+- [x] CWD files in every LLM request (`readdir` + `lstat`, oldest 20 + newest 30, cap 50, gap indicator)
 - [ ] Tool watchlist — `watchlist_additions` schema field, `tool-watchlist.json` storage, merge into `probeTools()`
 - [ ] Tool probe refactor — `probeTools()` returns structured data (available/unavailable), separate `## Detected tools` / `## Unavailable tools` sections
 - [ ] Multi-round probe loop — LLM returns `type: "probe"`, Wrap executes silently, feeds result back

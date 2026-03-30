@@ -25,7 +25,7 @@ The tool watchlist is a persistent extension of the tool probe. As the LLM disco
 
 ## Init Probes
 
-> **Status:** Implemented. Code in `src/memory/init-probes.ts`, `src/memory/init-prompt.ts`, `src/memory/memory.ts`.
+> **Status:** Implemented. Code in `src/discovery/init-probes.ts`, `src/memory/init-prompt.ts`, `src/memory/memory.ts`.
 
 On first run, Wrap probes the system locally (no LLM needed for the probes themselves), sends raw output to the LLM to parse into concise facts, and saves them as global (`/` scope) memory facts. See `specs/memory.md` for storage format and scoping.
 
@@ -70,7 +70,7 @@ If the LLM call fails → error and exit. If we can't reach the LLM for init, we
 
 ## Runtime Tool Probe
 
-> **Status:** Implemented. Code in `src/memory/init-probes.ts` (`probeTools`, `PROBED_TOOLS`), injected via `src/main.ts` and `src/llm/context.ts`.
+> **Status:** Implemented. Code in `src/discovery/init-probes.ts` (`probeTools`, `PROBED_TOOLS`), injected via `src/main.ts` and `src/llm/context.ts`.
 
 Runs before every query. `probeTools()` in `init-probes.ts`:
 
@@ -107,7 +107,7 @@ The probed output preserves full paths (e.g. `/opt/homebrew/bin/python3`) — an
 >
 > **Implementation touches:**
 > - Response schema: add `watchlist_additions` field (`command-response.schema.ts`)
-> - Tool probe: return structured data (available/unavailable lists), merge in watchlist (`init-probes.ts`)
+> - Tool probe: return structured data (available/unavailable lists), merge in watchlist (`src/discovery/init-probes.ts`)
 > - Context formatting: render `## Detected tools` and `## Unavailable tools` sections from structured data (`format-context.ts`)
 > - Watchlist storage: new `tool-watchlist.json` file in `WRAP_HOME`, read/write/validate functions
 > - Query loop: persist `watchlist_additions` from LLM response to watchlist file (`query.ts`)
@@ -280,20 +280,21 @@ The `which` probe now checks default tools + `sips, convert, magick, mogrify, pn
 
 ## CWD Files
 
-> **Status:** Not implemented. Implementation target: `src/llm/context.ts` (`assembleCommandPrompt`).
+> **Status:** Implemented. Code in `src/discovery/cwd-files.ts`, integrated via `src/main.ts` → `src/core/query.ts` → `src/llm/context.ts` → `src/llm/format-context.ts`. Eval support in `eval/bridge.ts` and `eval/dspy/optimize.py`; CWD-files-driven samples in `eval/examples/seed.jsonl`.
 
 Every LLM request includes a listing of files in the current working directory. This gives the LLM immediate filesystem awareness without spending a probe round — it can see `package.json`, `Makefile`, `.eslintrc`, `node_modules/`, etc. and infer project tooling.
 
 ### Format
 
-- Implementation: `ls -1a` (depth 1, includes dotfiles)
+- `readdir` + `lstat` per entry (depth 1, includes dotfiles). Entries that fail to stat (broken symlinks, permission errors) are silently skipped.
 - Hard cap at 50 entries. No exclusions — `node_modules/` appearing as a directory name is a useful signal.
 - **Sort order:** oldest 20 (by mtime) + newest 30. This captures the skeleton files created at project init (package.json, Makefile, README) plus recently active files. If ≤50 total, include all sorted by mtime ascending.
-- If truncated, append total count: `(showing 50 of 73 entries)`
+- When truncated: a `... (N entries omitted) ...` gap line between the oldest and newest groups, plus a total count: `(showing 50 of 73 entries)`.
+- Returns `undefined` for empty or unreadable directories (section omitted from prompt).
 
 ### Context Placement
 
-Included in the user message as `## Files in CWD`:
+Included in the user message as `## Files in CWD`, placed adjacent to the CWD line (after piped instruction, before `- Working directory`):
 
 ```
 ## Files in CWD
@@ -302,12 +303,16 @@ Makefile
 README.md
 .gitignore
 src/
-...
+... (23 entries omitted) ...
 tests/
 node_modules/
 .eslintrc.json
 (showing 50 of 73 entries)
 ```
+
+### Eval
+
+New discovery features must be accompanied by eval support: the bridge must pass the new field through to `formatContext()`, the Python optimizer must accept it from samples and thread it through the full pipeline, and `seed.jsonl` should include samples that demonstrate the feature's effect on LLM behavior. See the CWD files implementation for the pattern.
 
 ### Future Enhancement Idea
 

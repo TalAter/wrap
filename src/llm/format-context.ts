@@ -3,12 +3,14 @@ import type { Memory } from "../memory/types.ts";
 export type FormatContextParams = {
   memory: Memory;
   toolsOutput?: string;
+  cwdFiles?: string;
   cwd: string;
   piped?: boolean;
   constants: {
     sectionSystemFacts: string;
     sectionFactsAbout: string;
     sectionDetectedTools: string;
+    sectionCwdFiles: string;
     cwdPrefix: string;
     pipedOutputInstruction: string;
   };
@@ -16,7 +18,7 @@ export type FormatContextParams = {
 
 /** Build the context string from memory, tools, piped flag, and cwd. Pure function. */
 export function formatContext(params: FormatContextParams): string {
-  const { memory, toolsOutput, cwd, piped, constants } = params;
+  const { memory, toolsOutput, cwdFiles, cwd, piped, constants } = params;
   const sections: string[] = [];
 
   const cwdSlash = cwd.endsWith("/") ? cwd : `${cwd}/`;
@@ -36,6 +38,10 @@ export function formatContext(params: FormatContextParams): string {
 
   if (piped) {
     sections.push(constants.pipedOutputInstruction);
+  }
+
+  if (cwdFiles) {
+    sections.push(`${constants.sectionCwdFiles}\n${cwdFiles}`);
   }
 
   sections.push(`${constants.cwdPrefix} ${cwd}`);

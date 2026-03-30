@@ -11,6 +11,7 @@ export type QueryContext = {
   memory: Memory;
   pipedInput?: string;
   toolsOutput?: string;
+  cwdFiles?: string;
   piped?: boolean;
 };
 
@@ -19,6 +20,7 @@ export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   const contextString = formatContext({
     memory: ctx.memory,
     toolsOutput: ctx.toolsOutput,
+    cwdFiles: ctx.cwdFiles,
     cwd: ctx.cwd,
     piped: ctx.piped,
     constants: promptConstants,

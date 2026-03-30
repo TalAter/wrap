@@ -4,6 +4,7 @@ import { parseInput } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { runQuery } from "./core/query.ts";
+import { listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { initProvider } from "./llm/index.ts";
 import { ensureMemory } from "./memory/memory.ts";
@@ -31,12 +32,14 @@ export async function main() {
     const toolsOutput = probeTools();
     const memory = await ensureMemory(provider, getWrapHome());
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
+    const cwdFiles = await listCwdFiles(cwd);
     process.exit(
       await runQuery(input.prompt, provider, {
         memory,
         cwd,
         providerConfig: config.provider,
         toolsOutput,
+        cwdFiles,
       }),
     );
   } catch (e) {
