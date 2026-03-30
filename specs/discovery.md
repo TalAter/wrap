@@ -103,7 +103,7 @@ The probed output preserves full paths (e.g. `/opt/homebrew/bin/python3`) — an
 
 ## Tool Watchlist
 
-> **Status:** Not implemented. Depends on LLM probes (multi-round query loop).
+> **Status:** Not implemented.
 >
 > **Implementation touches:**
 > - Response schema: add `watchlist_additions` field (`command-response.schema.ts`)
@@ -322,7 +322,7 @@ This would let the LLM skip a probe round that reads the file, at the cost of sl
 
 ## LLM Probes
 
-> **Status:** Not implemented. Depends on the multi-round query loop (see `specs/SPEC.md` §6.3 and `specs/ARCHITECTURE.md` — Loop Rules). Implementation target: `src/core/query.ts`.
+> **Status:** Not implemented. Stub exists in `src/core/query.ts` (rejects probe responses with a message). Depends on the multi-round query loop (see `specs/SPEC.md` §6.3 and `specs/ARCHITECTURE.md` — Loop Rules). Implementation target: `src/core/query.ts`.
 
 The LLM can return `type: "probe"` to run a discovery command before generating the final command. Probe results are fed back as conversation turns, building context across rounds.
 
