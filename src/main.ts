@@ -4,8 +4,8 @@ import { parseInput } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { runQuery } from "./core/query.ts";
+import { probeTools } from "./discovery/init-probes.ts";
 import { initProvider } from "./llm/index.ts";
-import { probeTools } from "./memory/init-probes.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 

@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
+import { runProbes } from "../discovery/init-probes.ts";
 import type { Provider } from "../llm/types.ts";
-import { runProbes } from "./init-probes.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
 
 import type { Fact, Memory } from "./types.ts";
