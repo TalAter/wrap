@@ -6,7 +6,10 @@ import type { ProviderConfig } from "../llm/types.ts";
 
 export type Config = {
   provider?: ProviderConfig;
+  maxRounds?: number;
 };
+
+export const DEFAULT_MAX_ROUNDS = 5;
 
 const CONFIG_FILENAME = "config.jsonc";
 

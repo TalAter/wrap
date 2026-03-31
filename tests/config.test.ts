@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import configSchema from "../src/config/config.schema.json";
-import { loadConfig } from "../src/config/config.ts";
+import { DEFAULT_MAX_ROUNDS, loadConfig } from "../src/config/config.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-test-"));
@@ -169,6 +169,34 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("maxRounds", () => {
+    test("reads maxRounds from config file", () => {
+      const dir = tempDir();
+      writeFileSync(
+        join(dir, "config.jsonc"),
+        JSON.stringify({ provider: { type: "test" }, maxRounds: 3 }),
+      );
+      const config = loadConfig({ WRAP_HOME: dir });
+      expect(config.maxRounds).toBe(3);
+    });
+
+    test("reads maxRounds from WRAP_CONFIG", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" }, maxRounds: 7 }),
+      });
+      expect(config.maxRounds).toBe(7);
+    });
+
+    test("maxRounds is undefined when not set", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      });
+      expect(config.maxRounds).toBeUndefined();
+    });
+  });
+
   describe("JSON Schema", () => {
     test("config.jsonc with $schema property parses correctly", () => {
       const dir = tempDir();
@@ -187,6 +215,13 @@ describe("loadConfig", () => {
       expect(configSchema.$schema).toBe("http://json-schema.org/draft-07/schema#");
       expect(configSchema.type).toBe("object");
       expect(configSchema.properties.provider.oneOf.length).toBeGreaterThan(0);
+    });
+
+    test("configSchema includes maxRounds with default 5", () => {
+      const mr = configSchema.properties.maxRounds;
+      expect(mr.type).toBe("integer");
+      expect(mr.default).toBe(DEFAULT_MAX_ROUNDS);
+      expect(mr.minimum).toBe(1);
     });
   });
 });

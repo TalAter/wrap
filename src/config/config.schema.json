@@ -6,6 +6,12 @@
     "$schema": {
       "type": "string"
     },
+    "maxRounds": {
+      "type": "integer",
+      "description": "Maximum number of LLM rounds (probes + error-fix attempts) per invocation. Default: 5.",
+      "minimum": 1,
+      "default": 5
+    },
     "provider": {
       "description": "LLM provider configuration",
       "oneOf": [
