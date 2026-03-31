@@ -14,7 +14,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Input & Invocation
 
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
-- [ ] Alias/symlink setup — scan for available single-letter commands on first run
+- [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
 - [ ] Piped input — see `specs/piped-input.md` for full design. Key tasks:
   - [ ] `readPipedInput()` — detect `!process.stdin.isTTY`, read with `Bun.stdin.text()`, ignore empty
@@ -95,7 +95,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] First-run config wizard TUI — provider selection, API key entry, model selection
 - [ ] CLI tool provider detection (Claude Code, Codex, AMP) in wizard
-- [ ] Alias setup in wizard — scan available single-letter commands, create symlinks/aliases
+- [ ] Alias setup in wizard — scan available single-letter commands, detect shell, write glob-protected aliases to shell rc file
 - [ ] Full first-run flow: config wizard → alias setup → memory init → ready
 
 ## Output & UI
@@ -125,7 +125,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Consider running Claude Code in user's cwd as CLI tool provider for filesystem context
 - [ ] Model-switching shorthand — e.g., `W` (uppercase) uses premium model, `w` uses default
-- [ ] Shell keybinding integration — keybinding sends current command line text to Wrap
+- [ ] Shell keybinding integration — keybinding reads raw line buffer (`$BUFFER` in zsh, `$READLINE_LINE` in bash) and sends to Wrap. Fully bypasses shell expansion (globs, `$()`, backticks). Aliases only protect against globs; this is the complete solution.
 - [ ] Speculative LLM call for large piped input — check if command can consume stdin directly
 - [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (probes still execute).
 - [ ] Piped input: `--full` flag to send complete content to LLM without truncation

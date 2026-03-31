@@ -577,7 +577,12 @@ Dev-only prompt optimization pipeline. DSPy/MIPRO discovers the best instruction
 4. **Alias setup:** scan for available single-letter commands, suggest best option
    - Priority list: `w` > `c` > others (tbd)
    - Show available options, let user choose
-   - Create symlinks (or aliases) for chosen shortcuts including mode variants (`wy`, `w!`, `w?`)
+   - Create shell aliases with glob protection — natural language prompts should never be expanded by the shell:
+     - **zsh:** `alias w='noglob wrap'` — `noglob` prevents glob expansion (`*`, `?`, `[…]`) on the command's arguments
+     - **bash:** `w() { (set -f; command wrap "$@"); }` — `set -f` disables globbing; subshell prevents leaking
+     - **fish:** `function w; command wrap $argv; end` — fish passes non-matching globs literally, but matching globs still expand; no `noglob` equivalent exists
+   - Mode variants (`wy`, `w!`, `w?`) get the same glob protection
+   - Note: glob protection does not prevent `$()` or backtick expansion — only the keybinding integration (see §16) fully solves that
 5. `ensureMemory()` finds no existing memory → probes the system, sends output to LLM to parse into facts, saves to disk
 6. **Done** — if user provided a query, it continues to execute. Otherwise, ready for next invocation.
 
@@ -614,7 +619,7 @@ The following are acknowledged good ideas but **not in v1**:
 
 1. **Name conflicts:** Does `wrap` conflict with existing packages on Homebrew, apt, npm, etc.? Need to research.
 2. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: confirmation TUI, interactive mode, answer rendering.
-3. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants.
+3. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants. Aliases are preferred over symlinks because they enable glob protection via `noglob` (zsh) / `set -f` (bash). Symlinks can't provide this.
 4. **Thread linking:** How does a continuation find its parent thread? Most recent? Terminal session detection?
 5. **`w!` and `w?` as symlink names:** `!` and `?` are shell special characters. These may need to be flags (`w --cmd`, `w --ask`) rather than symlink names. Needs investigation.
 6. **Always-confirm alias:** What should the third mode (always confirm) be named?
