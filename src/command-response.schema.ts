@@ -39,6 +39,12 @@ export const CommandResponseSchema = z.object({
     .optional(),
   // Human-readable summary of what learning was saved to memory. Will be shown to the user
   memory_updates_message: z.string().nullable().optional(),
+  // Tool names to add to the persistent watchlist.
+  // Checked on every future invocation.
+  // When probing for tool availability, include ALL well-known tools
+  // for this task on this OS — not just the one you plan to use.
+  // This gives balanced visibility into what's installed.
+  watchlist_additions: z.array(z.string()).nullable().optional(),
 });
 // SCHEMA_END
 

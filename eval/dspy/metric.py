@@ -17,6 +17,8 @@ WEIGHTS = {
     "memory_updates_scope_pattern": 1.0,
     "memory_updates_count": 1.0,
     "memory_updates_message_pattern": 1.0,
+    "watchlist_additions_pattern": 1.0,
+    "watchlist_additions_min_count": 1.0,
 }
 
 
@@ -114,6 +116,27 @@ def score(response: dict, assertions: dict) -> float:
                     re.IGNORECASE,
                 )
             ),
+        ))
+
+    # watchlist_additions tools must match pattern
+    if "watchlist_additions_pattern" in assertions:
+        additions = response.get("watchlist_additions") or []
+        if not isinstance(additions, list):
+            additions = []
+        tools_text = " ".join(str(t) for t in additions)
+        checks.append((
+            "watchlist_additions_pattern",
+            bool(re.search(assertions["watchlist_additions_pattern"], tools_text, re.IGNORECASE)),
+        ))
+
+    # watchlist_additions must have at least N entries
+    if "watchlist_additions_min_count" in assertions:
+        additions = response.get("watchlist_additions") or []
+        if not isinstance(additions, list):
+            additions = []
+        checks.append((
+            "watchlist_additions_min_count",
+            len(additions) >= assertions["watchlist_additions_min_count"],
         ))
 
     if not checks:

@@ -1,6 +1,7 @@
 import { NoObjectGeneratedError } from "ai";
 import type { CommandResponse } from "../command-response.schema.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
+import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import type { PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
@@ -108,6 +109,10 @@ export async function runQuery(
         const prefix = deepest ? `🧠 (${prettyPath(deepest)}) ` : "🧠 ";
         chrome(`${prefix}${response.memory_updates_message}`);
       }
+    }
+
+    if (response.watchlist_additions?.length) {
+      addToWatchlist(wrapHome, response.watchlist_additions);
     }
 
     if (!response.content.trim()) {

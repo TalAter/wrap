@@ -68,7 +68,7 @@ export function runProbes(): string {
 // validate them to prevent command injection. extraTools comes from the
 // persistent watchlist file, which a user (or a compromised LLM response)
 // could fill with malicious strings like `; rm -rf /`.
-const VALID_TOOL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+export const VALID_TOOL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * Probe tool availability via a single `which` call.

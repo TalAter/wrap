@@ -131,4 +131,28 @@ describe("CommandResponseSchema", () => {
     };
     expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
+
+  test("parses response with watchlist_additions", () => {
+    const input = {
+      type: "probe",
+      content: "which sips convert magick",
+      risk_level: "low",
+      watchlist_additions: ["sips", "convert", "magick"],
+    };
+    const result = CommandResponseSchema.parse(input);
+    expect(result.watchlist_additions).toEqual(["sips", "convert", "magick"]);
+  });
+
+  test("allows watchlist_additions to be null or omitted", () => {
+    const base = { type: "command", content: "ls", risk_level: "low" };
+    expect(CommandResponseSchema.parse(base).watchlist_additions).toBeUndefined();
+    expect(
+      CommandResponseSchema.parse({ ...base, watchlist_additions: null }).watchlist_additions,
+    ).toBeNull();
+  });
+
+  test("allows empty watchlist_additions array", () => {
+    const input = { type: "command", content: "ls", risk_level: "low", watchlist_additions: [] };
+    expect(CommandResponseSchema.parse(input).watchlist_additions).toEqual([]);
+  });
 });

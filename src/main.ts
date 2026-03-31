@@ -6,6 +6,7 @@ import { resolvePath } from "./core/paths.ts";
 import { runQuery } from "./core/query.ts";
 import { listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
+import { loadWatchlist } from "./discovery/watchlist.ts";
 import { initProvider } from "./llm/index.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
@@ -29,8 +30,10 @@ export async function main() {
     }
 
     const provider = initProvider(config.provider);
-    const tools = probeTools();
-    const memory = await ensureMemory(provider, getWrapHome());
+    const wrapHome = getWrapHome();
+    const watchlist = loadWatchlist(wrapHome);
+    const tools = probeTools(watchlist.map((e) => e.tool));
+    const memory = await ensureMemory(provider, wrapHome);
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
     const cwdFiles = await listCwdFiles(cwd);
     process.exit(
