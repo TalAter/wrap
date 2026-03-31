@@ -1,8 +1,9 @@
+import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import type { Memory } from "../memory/types.ts";
 
 export type FormatContextParams = {
   memory: Memory;
-  toolsOutput?: string;
+  tools?: ToolProbeResult | null;
   cwdFiles?: string;
   cwd: string;
   piped?: boolean;
@@ -10,6 +11,7 @@ export type FormatContextParams = {
     sectionSystemFacts: string;
     sectionFactsAbout: string;
     sectionDetectedTools: string;
+    sectionUnavailableTools: string;
     sectionCwdFiles: string;
     cwdPrefix: string;
     pipedOutputInstruction: string;
@@ -18,7 +20,7 @@ export type FormatContextParams = {
 
 /** Build the context string from memory, tools, piped flag, and cwd. Pure function. */
 export function formatContext(params: FormatContextParams): string {
-  const { memory, toolsOutput, cwdFiles, cwd, piped, constants } = params;
+  const { memory, tools, cwdFiles, cwd, piped, constants } = params;
   const sections: string[] = [];
 
   const cwdSlash = cwd.endsWith("/") ? cwd : `${cwd}/`;
@@ -32,8 +34,13 @@ export function formatContext(params: FormatContextParams): string {
     sections.push(`${header}\n${facts.map((f) => `- ${f.fact}`).join("\n")}`);
   }
 
-  if (toolsOutput) {
-    sections.push(`${constants.sectionDetectedTools}\n${toolsOutput}`);
+  if (tools) {
+    if (tools.available.length > 0) {
+      sections.push(`${constants.sectionDetectedTools}\n${tools.available.join("\n")}`);
+    }
+    if (tools.unavailable.length > 0) {
+      sections.push(`${constants.sectionUnavailableTools}\n${tools.unavailable.join(", ")}`);
+    }
   }
 
   if (piped) {

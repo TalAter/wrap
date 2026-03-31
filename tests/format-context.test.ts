@@ -111,23 +111,73 @@ describe("formatContext", () => {
     expect(result).not.toContain("System facts");
   });
 
-  test("tools section included when toolsOutput provided", () => {
-    const result = formatContext(makeParams({ toolsOutput: "/usr/bin/git\ndocker not found" }));
+  test("detected tools section included when available tools provided", () => {
+    const result = formatContext(
+      makeParams({ tools: { available: ["/usr/bin/git", "/usr/bin/curl"], unavailable: [] } }),
+    );
     expect(result).toContain("## Detected tools");
     expect(result).toContain("/usr/bin/git");
-    expect(result).toContain("docker not found");
+    expect(result).toContain("/usr/bin/curl");
   });
 
-  test("tools section omitted when toolsOutput not provided", () => {
+  test("unavailable tools section included when unavailable tools provided", () => {
+    const result = formatContext(
+      makeParams({
+        tools: { available: ["/usr/bin/git"], unavailable: ["docker", "kubectl"] },
+      }),
+    );
+    expect(result).toContain("## Unavailable tools");
+    expect(result).toContain("docker, kubectl");
+  });
+
+  test("unavailable tools rendered as comma-separated single line", () => {
+    const result = formatContext(
+      makeParams({
+        tools: { available: [], unavailable: ["apt", "dnf", "pacman"] },
+      }),
+    );
+    const lines = result.split("\n");
+    const unavailLine = lines.find((l) => l.includes("apt"));
+    expect(unavailLine).toBe("apt, dnf, pacman");
+  });
+
+  test("tools sections omitted when tools not provided", () => {
     const result = formatContext(makeParams());
     expect(result).not.toContain("Detected tools");
+    expect(result).not.toContain("Unavailable tools");
   });
 
-  test("tools section appears after memory and before cwd", () => {
+  test("tools sections omitted when both arrays empty", () => {
+    const result = formatContext(makeParams({ tools: { available: [], unavailable: [] } }));
+    expect(result).not.toContain("Detected tools");
+    expect(result).not.toContain("Unavailable tools");
+  });
+
+  test("tools sections omitted when tools is null", () => {
+    const result = formatContext(makeParams({ tools: null }));
+    expect(result).not.toContain("Detected tools");
+    expect(result).not.toContain("Unavailable tools");
+  });
+
+  test("only detected tools section when no unavailable", () => {
+    const result = formatContext(
+      makeParams({ tools: { available: ["/usr/bin/git"], unavailable: [] } }),
+    );
+    expect(result).toContain("## Detected tools");
+    expect(result).not.toContain("Unavailable tools");
+  });
+
+  test("only unavailable tools section when no available", () => {
+    const result = formatContext(makeParams({ tools: { available: [], unavailable: ["docker"] } }));
+    expect(result).not.toContain("Detected tools");
+    expect(result).toContain("## Unavailable tools");
+  });
+
+  test("tools sections appear after memory and before cwd", () => {
     const result = formatContext(
       makeParams({
         memory: { "/": [{ fact: "macOS" }] },
-        toolsOutput: "/usr/bin/git",
+        tools: { available: ["/usr/bin/git"], unavailable: ["docker"] },
       }),
     );
     const factsIdx = result.indexOf("## System facts");
@@ -154,7 +204,9 @@ describe("formatContext", () => {
   });
 
   test("piped instruction appears after tools and before cwd", () => {
-    const result = formatContext(makeParams({ toolsOutput: "/usr/bin/git", piped: true }));
+    const result = formatContext(
+      makeParams({ tools: { available: ["/usr/bin/git"], unavailable: [] }, piped: true }),
+    );
     const toolsIdx = result.indexOf("## Detected tools");
     const pipedIdx = result.indexOf("stdout is being piped");
     const cwdIdx = result.indexOf("Working directory");
@@ -166,12 +218,12 @@ describe("formatContext", () => {
     const result = formatContext(
       makeParams({
         memory: { "/": [{ fact: "macOS" }] },
-        toolsOutput: "/usr/bin/git",
+        tools: { available: ["/usr/bin/git"], unavailable: ["docker"] },
         piped: true,
       }),
     );
     expect(result).toContain("## System facts\n- macOS\n\n## Detected tools");
-    expect(result).toContain("/usr/bin/git\n\nstdout is being piped");
+    expect(result).toContain("## Unavailable tools\ndocker\n\nstdout is being piped");
   });
 
   test("cwdFiles section included when provided", () => {
@@ -188,7 +240,7 @@ describe("formatContext", () => {
   test("cwdFiles appears after piped and before cwd line", () => {
     const result = formatContext(
       makeParams({
-        toolsOutput: "/usr/bin/git",
+        tools: { available: ["/usr/bin/git"], unavailable: [] },
         cwdFiles: "package.json",
         piped: true,
       }),

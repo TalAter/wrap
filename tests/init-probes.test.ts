@@ -70,29 +70,69 @@ describe("PROBED_TOOLS", () => {
 });
 
 describe("probeTools", () => {
-  test("returns a non-empty string", () => {
-    const output = probeTools();
-    expect(output.length).toBeGreaterThan(0);
+  function probe() {
+    const result = probeTools();
+    if (!result) throw new Error("probeTools() returned null unexpectedly");
+    return result;
+  }
+
+  test("returns structured data with available and unavailable arrays", () => {
+    const result = probe();
+    expect(Array.isArray(result.available)).toBe(true);
+    expect(Array.isArray(result.unavailable)).toBe(true);
   });
 
-  test("every probed tool appears in output (found or not found)", () => {
-    const output = probeTools();
+  test("every probed tool appears in either available or unavailable", () => {
+    const result = probe();
+    const all = [...result.available, ...result.unavailable];
     for (const tool of PROBED_TOOLS) {
-      expect(output).toContain(tool);
+      const found = all.some((entry) => entry.endsWith(`/${tool}`) || entry === tool);
+      expect(found).toBe(true);
     }
   });
 
-  test("missing tools have 'not found' in output", () => {
-    const output = probeTools();
-    // At least one of these exotic tools should be missing on any dev machine
+  test("available entries are full paths", () => {
+    const result = probe();
+    const gitEntry = result.available.find((p) => p.endsWith("/git"));
+    expect(gitEntry).toBeDefined();
+    expect(gitEntry).toMatch(/^\//);
+  });
+
+  test("unavailable entries are bare tool names", () => {
+    const result = probe();
     const unlikely = ["wl-copy", "wl-paste", "pacman", "dnf", "yum"];
-    const hasMissing = unlikely.some((t) => output.includes(`${t} not found`));
+    const hasMissing = unlikely.some((t) => result.unavailable.includes(t));
     expect(hasMissing).toBe(true);
   });
 
-  test("found tools show a path", () => {
-    const output = probeTools();
-    // git should be installed on any dev machine
-    expect(output).toMatch(/\/.*git/);
+  test("returns non-null on a normal system", () => {
+    expect(probeTools()).not.toBeNull();
+  });
+
+  test("extraTools are included in results", () => {
+    // "thistooldoesnotexist" won't be installed anywhere
+    const result = probeTools(["thistooldoesnotexist"]);
+    if (!result) throw new Error("probeTools() returned null unexpectedly");
+    expect(result.unavailable).toContain("thistooldoesnotexist");
+  });
+
+  test("extraTools deduplicates with default tools", () => {
+    const result = probeTools(["git"]);
+    if (!result) throw new Error("probeTools() returned null unexpectedly");
+    // git should appear exactly once in available (not duplicated)
+    const gitPaths = result.available.filter((p) => p.endsWith("/git"));
+    expect(gitPaths.length).toBe(1);
+  });
+
+  test("extraTools with invalid names are silently dropped", () => {
+    const result = probeTools(["; rm -rf /", "valid-tool", "$(whoami)", ""]);
+    if (!result) throw new Error("probeTools() returned null unexpectedly");
+    // Malicious strings should not appear in either list
+    const all = [...result.available, ...result.unavailable];
+    expect(all).not.toContain("; rm -rf /");
+    expect(all).not.toContain("$(whoami)");
+    expect(all).not.toContain("");
+    // valid-tool should be in unavailable (not installed)
+    expect(result.unavailable).toContain("valid-tool");
   });
 });

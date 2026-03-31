@@ -1,5 +1,6 @@
 import { NoObjectGeneratedError } from "ai";
 import type { CommandResponse } from "../command-response.schema.ts";
+import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import type { PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
@@ -60,7 +61,7 @@ export async function runQuery(
     memory?: Memory;
     cwd: string;
     providerConfig: ProviderConfig;
-    toolsOutput?: string;
+    tools?: ToolProbeResult | null;
     cwdFiles?: string;
   },
 ): Promise<number> {
@@ -80,7 +81,7 @@ export async function runQuery(
       prompt,
       cwd: options.cwd,
       memory,
-      toolsOutput: options.toolsOutput,
+      tools: options.tools,
       cwdFiles: options.cwdFiles,
       piped: !process.stdout.isTTY,
     });

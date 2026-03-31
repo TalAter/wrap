@@ -232,23 +232,33 @@ describe("scoped memory in prompt", () => {
 });
 
 describe("tools output in prompt", () => {
-  test("includes tools section when toolsOutput provided", () => {
-    const content = lastMessage(makeContext({ toolsOutput: "/usr/bin/git\ndocker not found" }));
+  test("includes detected tools section when available tools provided", () => {
+    const content = lastMessage(
+      makeContext({ tools: { available: ["/usr/bin/git"], unavailable: ["docker"] } }),
+    );
     expect(content).toContain("## Detected tools");
     expect(content).toContain("/usr/bin/git");
-    expect(content).toContain("docker not found");
   });
 
-  test("omits tools section when toolsOutput not provided", () => {
+  test("includes unavailable tools section", () => {
+    const content = lastMessage(
+      makeContext({ tools: { available: [], unavailable: ["docker", "kubectl"] } }),
+    );
+    expect(content).toContain("## Unavailable tools");
+    expect(content).toContain("docker, kubectl");
+  });
+
+  test("omits tools sections when no tools provided", () => {
     const content = lastMessage(makeContext());
-    expect(content).not.toContain("Tools available");
+    expect(content).not.toContain("Detected tools");
+    expect(content).not.toContain("Unavailable tools");
   });
 
   test("tools section appears after memory facts and before cwd", () => {
     const content = lastMessage(
       makeContext({
         memory: { "/": [{ fact: "macOS" }] },
-        toolsOutput: "/usr/bin/git",
+        tools: { available: ["/usr/bin/git"], unavailable: [] },
       }),
     );
     const factsIdx = content.indexOf("## System facts");
@@ -279,7 +289,7 @@ describe("piped-mode prompt", () => {
   test("piped instruction appears after tools and before cwd", () => {
     const content = lastMessage(
       makeContext({
-        toolsOutput: "/usr/bin/git",
+        tools: { available: ["/usr/bin/git"], unavailable: [] },
         piped: true,
       }),
     );

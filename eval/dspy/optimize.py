@@ -40,7 +40,7 @@ with open(CONSTANTS_PATH) as _f:
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
 
-def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd, piped, query, cwd_files=None):
+def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None):
     """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
     payload_dict = {
         "mode": mode,
@@ -48,7 +48,7 @@ def call_bridge(mode, instruction, demos, schema_text, memory, tools_output, cwd
         "fewShotExamples": demos,
         "schemaText": schema_text,
         "memory": memory,
-        "toolsOutput": tools_output,
+        "tools": tools,
         "cwd": cwd,
         "piped": piped,
         "query": query,
@@ -111,8 +111,8 @@ def make_signature(schema_text: str):
             desc="Scoped memory facts about the user's environment (JSON dict)",
             default="",
         )
-        tools_output: str = dspy.InputField(
-            desc="Output of tool detection probes",
+        tools: str = dspy.InputField(
+            desc="Structured tool probe result (JSON with available/unavailable arrays)",
             default="",
         )
         cwd: str = dspy.InputField(
@@ -158,7 +158,7 @@ class WrapPredictor(dspy.Module):
             demos=demos,
             schema_text=self.schema_text,
             memory=kwargs["memory"],
-            tools_output=kwargs["tools_output"],
+            tools=kwargs["tools"],
             cwd=kwargs["cwd"],
             piped=kwargs.get("piped", False),
             query=kwargs["natural_language_query"],
@@ -201,14 +201,17 @@ def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) 
 # so eval samples should reflect that.
 DEFAULT_CWD = "/Users/talater/project"
 DEFAULT_MEMORY = {"/": [{"fact": "Runs macOS on arm64 (Apple Silicon)"}, {"fact": "Default shell is zsh"}]}
-DEFAULT_TOOLS_OUTPUT = (
-    "/opt/homebrew/bin/brew\napt not found\ndnf not found\npacman not found\nyum not found\n"
-    "/usr/bin/git\ndocker not found\nkubectl not found\n/opt/homebrew/bin/python3\n"
-    "/usr/local/bin/node\n/Users/tal/.bun/bin/bun\n/usr/bin/curl\n/usr/bin/jq\n"
-    "tldr not found\nrg not found\nfd not found\nbat not found\n/opt/homebrew/bin/eza\n"
-    "/usr/bin/pbcopy\n/usr/bin/pbpaste\nxclip not found\nxsel not found\n"
-    "wl-copy not found\nwl-paste not found"
-)
+DEFAULT_TOOLS = {
+    "available": [
+        "/opt/homebrew/bin/brew", "/usr/bin/git", "/opt/homebrew/bin/python3",
+        "/usr/local/bin/node", "/Users/tal/.bun/bin/bun", "/usr/bin/curl",
+        "/usr/bin/jq", "/opt/homebrew/bin/eza", "/usr/bin/pbcopy", "/usr/bin/pbpaste",
+    ],
+    "unavailable": [
+        "apt", "dnf", "pacman", "yum", "docker", "kubectl",
+        "tldr", "rg", "fd", "bat", "xclip", "xsel", "wl-copy", "wl-paste",
+    ],
+}
 
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
@@ -228,13 +231,13 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
         dspy_examples.append(
             dspy.Example(
                 memory=memory,
-                tools_output=ex.get("tools_output", DEFAULT_TOOLS_OUTPUT),
+                tools=ex.get("tools", DEFAULT_TOOLS),
                 cwd=ex.get("cwd", DEFAULT_CWD),
                 piped=ex.get("piped", False),
                 cwd_files=ex.get("cwd_files"),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
-            ).with_inputs("memory", "tools_output", "cwd", "piped", "cwd_files", "natural_language_query")
+            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "natural_language_query")
         )
     return dspy_examples
 
@@ -305,6 +308,7 @@ def build_prompt_hash_manifest(
         ["SECTION_SYSTEM_FACTS", CONSTANTS["sectionSystemFacts"]],
         ["SECTION_FACTS_ABOUT", CONSTANTS["sectionFactsAbout"]],
         ["SECTION_DETECTED_TOOLS", CONSTANTS["sectionDetectedTools"]],
+        ["SECTION_UNAVAILABLE_TOOLS", CONSTANTS["sectionUnavailableTools"]],
         ["SECTION_CWD_FILES", CONSTANTS["sectionCwdFiles"]],
         ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
         ["CWD_PREFIX", CONSTANTS["cwdPrefix"]],
@@ -349,7 +353,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
             demos=demos,
             schema_text=schema_text,
             memory=ex.memory,
-            tools_output=ex.tools_output,
+            tools=ex.tools,
             cwd=ex.cwd,
             piped=ex.piped,
             query=ex.natural_language_query,

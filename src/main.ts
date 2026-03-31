@@ -29,7 +29,7 @@ export async function main() {
     }
 
     const provider = initProvider(config.provider);
-    const toolsOutput = probeTools();
+    const tools = probeTools();
     const memory = await ensureMemory(provider, getWrapHome());
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
     const cwdFiles = await listCwdFiles(cwd);
@@ -38,7 +38,7 @@ export async function main() {
         memory,
         cwd,
         providerConfig: config.provider,
-        toolsOutput,
+        tools,
         cwdFiles,
       }),
     );

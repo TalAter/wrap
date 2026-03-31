@@ -31,7 +31,7 @@ const baseInput = {
   fewShotExamples: [] as { input: string; output: string }[],
   schemaText: "z.object({ type: z.string() })",
   memory: { "/": [{ fact: "macOS arm64" }] },
-  toolsOutput: "/usr/bin/git",
+  tools: { available: ["/usr/bin/git"], unavailable: ["docker"] },
   cwd: "/home/user",
   piped: false,
   query: "list files",
@@ -56,10 +56,13 @@ describe("bridge — assemble mode", () => {
     expect(last.content).toContain("macOS arm64");
   });
 
-  test("context includes tools output", async () => {
+  test("context includes detected and unavailable tools", async () => {
     const result = await bridgeResult({ ...baseInput, mode: "assemble" });
     const last = result.promptInput.messages.at(-1);
+    expect(last.content).toContain("## Detected tools");
     expect(last.content).toContain("/usr/bin/git");
+    expect(last.content).toContain("## Unavailable tools");
+    expect(last.content).toContain("docker");
   });
 
   test("context includes cwdFiles when provided", async () => {

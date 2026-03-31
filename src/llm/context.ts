@@ -1,3 +1,4 @@
+import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import type { Memory } from "../memory/types.ts";
 import promptConstants from "../prompt.constants.json";
 import promptOptimized from "../prompt.optimized.json";
@@ -10,7 +11,7 @@ export type QueryContext = {
   cwd: string;
   memory: Memory;
   pipedInput?: string;
-  toolsOutput?: string;
+  tools?: ToolProbeResult | null;
   cwdFiles?: string;
   piped?: boolean;
 };
@@ -19,7 +20,7 @@ export type QueryContext = {
 export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
   const contextString = formatContext({
     memory: ctx.memory,
-    toolsOutput: ctx.toolsOutput,
+    tools: ctx.tools,
     cwdFiles: ctx.cwdFiles,
     cwd: ctx.cwd,
     piped: ctx.piped,

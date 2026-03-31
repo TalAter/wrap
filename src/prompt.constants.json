@@ -2,6 +2,7 @@
   "sectionSystemFacts": "## System facts",
   "sectionFactsAbout": "## Facts about",
   "sectionDetectedTools": "## Detected tools",
+  "sectionUnavailableTools": "## Unavailable tools",
   "sectionCwdFiles": "## Files in CWD",
   "sectionUserRequest": "## User's request",
   "cwdPrefix": "- Working directory (cwd):",

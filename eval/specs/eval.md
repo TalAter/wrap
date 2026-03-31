@@ -68,7 +68,7 @@ One script: `eval/bridge.ts`. Reads JSON from stdin, writes JSON to stdout.
   "fewShotExamples": [{"input": "...", "output": "..."}],
   "schemaText": "const CommandResponseSchema = z.object({...})",
   "memory": {"/": [{"fact": "Runs macOS on arm64"}]},
-  "toolsOutput": "/opt/homebrew/bin/git\n/opt/homebrew/bin/bun",
+  "tools": {"available": ["/opt/homebrew/bin/git", "/opt/homebrew/bin/bun"], "unavailable": ["docker"]},
   "cwd": "/Users/tal/project",
   "piped": false,
   "query": "find all typescript files"

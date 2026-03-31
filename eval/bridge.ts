@@ -31,7 +31,7 @@ const input = JSON.parse(await Bun.stdin.text());
 
 const contextString = formatContext({
   memory: input.memory,
-  toolsOutput: input.toolsOutput,
+  tools: input.tools,
   cwdFiles: input.cwdFiles,
   cwd: input.cwd,
   piped: input.piped,

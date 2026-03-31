@@ -1,5 +1,10 @@
 export type ProbeCommand = { label: string; command: string };
 
+export type ToolProbeResult = {
+  available: string[];
+  unavailable: string[];
+};
+
 /**
  * Probe commands sent to the init LLM for semantic parsing.
  */
@@ -59,30 +64,39 @@ export function runProbes(): string {
   return sections.join("\n\n");
 }
 
+// Tool names are interpolated into a shell `which` command, so we must
+// validate them to prevent command injection. extraTools comes from the
+// persistent watchlist file, which a user (or a compromised LLM response)
+// could fill with malicious strings like `; rm -rf /`.
+const VALID_TOOL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
 /**
  * Probe tool availability via a single `which` call.
  * Runs every startup (not just init) because installed tools may change
  * over time and differ by cwd (e.g. nvm, fnm version switching).
- * Returns the raw `which` output with "not found" appended for any
- * tools silently omitted (bash doesn't print missing tools).
+ * Returns structured data: available tools with full paths,
+ * unavailable tools as bare names. Returns null if `which` fails entirely.
  */
-export function probeTools(): string {
-  const result = Bun.spawnSync(["sh", "-c", `which ${PROBED_TOOLS.join(" ")} 2>&1`]);
+export function probeTools(extraTools?: readonly string[]): ToolProbeResult | null {
+  const allTools = extraTools ? [...new Set([...PROBED_TOOLS, ...extraTools])] : PROBED_TOOLS;
+  const tools = allTools.filter((t) => VALID_TOOL_NAME.test(t));
+
+  const result = Bun.spawnSync(["sh", "-c", `which ${tools.join(" ")} 2>&1`]);
   const output = result.stdout.toString().trim();
 
   // If which completely failed or returned nothing, skip tool context
   // rather than marking every tool as "not found".
-  if (!output) return "";
+  if (!output) return null;
 
-  // Some shells (bash) silently omit missing tools from `which` output.
-  // Append explicit "not found" for any tool not mentioned.
-  // Match tool at end of path (/<tool>) or start of line (alias/function/not-found)
-  // to avoid false positives from tool names appearing in directory paths.
-  const missing = PROBED_TOOLS.filter((tool) => {
-    const re = new RegExp(`(/${tool}$|^${tool}\\b)`, "m");
-    return !re.test(output);
-  });
-  const additions = missing.map((tool) => `${tool} not found`);
+  // Parse `which` output: lines starting with / are resolved paths.
+  // Other lines are shell noise ("X not found", warnings, MOTD).
+  const available = output.split("\n").filter((line) => line.startsWith("/"));
 
-  return [output, ...additions].filter(Boolean).join("\n");
+  // Unavailable = any tool not found in the available paths.
+  // This handles all shells uniformly: bash silently omits missing tools,
+  // zsh/fish print "X not found" — either way, if there's no path for it,
+  // it's unavailable.
+  const unavailable = tools.filter((tool) => !available.some((path) => path.endsWith(`/${tool}`)));
+
+  return { available, unavailable };
 }
