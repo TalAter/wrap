@@ -19,13 +19,13 @@ parseInput(argv)
        │
        ├─ initProvider()  ──→ factory: config → Provider
        │
-       ├─ probeTools()  ──→ `which` for available tools (~5ms, every run)
+       ├─ loadWatchlist() + probeTools()  ──→ `which` for defaults + watchlist
        │
        ├─ ensureMemory()  ──→ loads memory or initializes with probes
        │
        ├─ resolvePath(cwd)  ──→ canonical CWD
        │
-       └─ runQuery({ prompt, provider, memory, cwd, toolsOutput })
+       └─ runQuery({ prompt, provider, memory, cwd, tools })
 ```
 
 Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory.

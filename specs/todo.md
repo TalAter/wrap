@@ -47,8 +47,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Discovery & Probes (see specs/discovery.md)
 
-- [ ] Tool probe refactor — `probeTools()` returns structured data (available/unavailable), separate `## Detected tools` / `## Unavailable tools` sections
-- [ ] Tool watchlist — `watchlist_additions` schema field, `tool-watchlist.json` storage, merge into `probeTools()`
 - [ ] Multi-round probe loop — LLM returns `type: "probe"`, Wrap executes silently, feeds result back
 - [ ] Subtle stderr indicator during probes (e.g., `🔍 Checking shell type...`)
 - [ ] Probe results as conversation turns (multi-turn context for subsequent LLM calls)
@@ -78,6 +76,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Multi-round logging — probe rounds accumulate in the same entry
+- [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
 - [ ] Wire `piped_input` field from stdin (see `specs/piped-input.md`)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
 - [ ] `max_rounds` outcome type (blocked on multi-round query loop)

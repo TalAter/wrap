@@ -11,7 +11,7 @@ Wrap has four discovery mechanisms, each operating at a different timescale:
 | Mechanism | When | Persists | Cost | Status |
 |-----------|------|----------|------|--------|
 | **Init probes** | First run | Global memory facts | One-time LLM call | Implemented |
-| **Tool probe** | Every invocation | No (ephemeral context) | ~5ms (local `which`) | Implemented |
+| **Tool probe + watchlist** | Every invocation | Watchlist persists | ~5ms (local `which`) | Implemented |
 | **CWD files** | Every invocation | No (ephemeral context) | Negligible (local readdir) | Implemented |
 | **LLM probes** | On-demand during query loop | Scoped memory facts (when appropriate) | 1 round per probe | Not implemented |
 
@@ -70,15 +70,13 @@ If the LLM call fails → error and exit. If we can't reach the LLM for init, we
 
 ## Runtime Tool Probe
 
-> **Status:** Implemented. Code in `src/discovery/init-probes.ts` (`probeTools`, `PROBED_TOOLS`), injected via `src/main.ts` and `src/llm/context.ts`.
+> **Status:** Implemented.
 
-Runs before every query. `probeTools()` in `init-probes.ts`:
+Runs before every query. `probeTools()` merges `PROBED_TOOLS` + the tool watchlist, runs a single `which` call, and returns structured data: `{ available: string[], unavailable: string[] } | null`. Returns `null` if `which` fails entirely (tool context omitted from prompt).
 
-1. Runs a single `which` call for all tools in `PROBED_TOOLS` (package managers, dev tools, clipboard utilities)
-2. Post-processes the output: any tool from the list not mentioned in the output gets `<toolname> not found` appended (handles shells like bash that silently omit missing tools)
-3. Result is injected into the prompt as `## Detected tools`
+Tool names (especially from the watchlist) are validated against `VALID_TOOL_NAME` (`/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/`) before interpolation into the shell command.
 
-If `which` fails entirely (empty output), the tool section is omitted from the prompt — Wrap continues without tool context rather than marking every tool as "not found". The LLM can always run its own `which` probes if needed.
+Available tools are determined by parsing lines starting with `/` from `which` output. Unavailable tools are everything else — defined as "not in the available list" rather than regex on raw output. This handles all shells uniformly (bash silently omits missing tools, zsh/fish print "not found" messages).
 
 ### Why every run, not init?
 
@@ -86,180 +84,91 @@ Installed tools change over time (`brew install`, `apt install`). Version manage
 
 ### What gets probed
 
-The `PROBED_TOOLS` array covers:
+The `PROBED_TOOLS` array covers package managers (brew, apt, dnf, pacman, yum), core dev tools (git, docker, kubectl, python3, node, bun, curl, jq), modern CLI alternatives (tldr, rg, fd, bat, eza), and clipboard utilities (pbcopy, pbpaste, xclip, xsel, wl-copy, wl-paste).
 
-| Category | Tools |
-|----------|-------|
-| Package managers | brew, apt, dnf, pacman, yum |
-| Core dev tools | git, docker, kubectl, python3, node, bun, curl, jq |
-| Modern CLI alternatives | tldr, rg, fd, bat, eza |
-| Clipboard utilities | pbcopy, pbpaste, xclip, xsel, wl-copy, wl-paste |
+### Prompt format
 
-### Output format
+Two sections in the user message, rendered by `formatContext()`:
 
-The probed output preserves full paths (e.g. `/opt/homebrew/bin/python3`) — an implicit signal to the LLM about how tools were installed. Missing tools appear as `<toolname> not found`. This lets the LLM make informed choices: prefer `rg` over `grep` when available, use `pbcopy` on macOS vs `xclip` on Linux, etc.
+- **`## Detected tools`** — available tools listed with full paths (one per line). Full paths are an implicit signal about how tools were installed.
+- **`## Unavailable tools`** — comma-separated single line. Token-efficient compared to one "not found" line per tool.
+
+Either section is omitted when empty.
 
 ---
 
 ## Tool Watchlist
 
-> **Status:** Not implemented.
+> **Status:** Implemented. Code in `src/discovery/watchlist.ts` (storage), `src/discovery/init-probes.ts` (merge into `probeTools`), `src/command-response.schema.ts` (`watchlist_additions` field), `src/core/query.ts` (persistence). Eval support in `eval/dspy/metric.py` and `eval/examples/seed.jsonl`.
 >
-> **Implementation touches:**
-> - Response schema: add `watchlist_additions` field (`command-response.schema.ts`)
-> - Tool probe: return structured data (available/unavailable lists), merge in watchlist (`src/discovery/init-probes.ts`)
-> - Context formatting: render `## Detected tools` and `## Unavailable tools` sections from structured data (`format-context.ts`)
-> - Watchlist storage: new `tool-watchlist.json` file in `WRAP_HOME`, read/write/validate functions
-> - Query loop: persist `watchlist_additions` from LLM response to watchlist file (`query.ts`)
-> - **Logging (see `specs/logging.md`):** add `tools_available`/`tools_unavailable` to invocation-level fields, add `watchlist_additions` to round fields. `probeTools()` must return structured data for both the prompt formatter and the logger to consume.
+> **Not yet wired to logging** — see `specs/logging.md` for the planned `tools_available`/`tools_unavailable` invocation-level fields and `watchlist_additions` round field.
 
-### Problem
+### Why
 
-The default `PROBED_TOOLS` list is static — a hand-picked set of ~30 common tools baked into the Wrap binary. This works for general-purpose tools (git, curl, docker), but misses entire domains that specific users care about. A graphic designer may use `sips`, `convert`, `pngquant`, `optipng`, `cwebp`. A data engineer may use `duckdb`, `csvkit`, `xsv`, `miller`. A sysadmin may use `htop`, `ncdu`, `lsof`, `ss`.
+The default `PROBED_TOOLS` list is static — ~30 common tools baked into the binary. This works for general-purpose tools but misses entire domains specific users care about (image editing, data processing, etc.). Without the watchlist, the LLM has to spend a probe round on `which` every time — even if the user does this kind of work regularly.
 
-Today, when a user asks Wrap to do something in one of these domains, the LLM has to spend a probe round running `which` to check tool availability — every time, even if the user does this kind of work regularly. The LLM already has the world knowledge to know which tools are relevant to a task on a given OS, but that knowledge is lost after each invocation.
+### Design
 
-### Solution: LLM-Grown Tool Watchlist
+Any LLM response (probe, command, or answer) can include `watchlist_additions` — tool names to check via `which` on every future invocation. Stored in `~/.wrap/tool-watchlist.json`, separate from memory. On startup, `probeTools()` merges defaults + watchlist, runs a single `which`, and the LLM sees results in `## Detected tools` / `## Unavailable tools`.
 
-Any LLM response (probe, command, or answer) can include a `watchlist_additions` field — a list of tool names that should be checked via `which` on every future invocation. These tools are saved to a persistent **tool watchlist** at `~/.wrap/tool-watchlist.json` (overridable via `WRAP_HOME`), separate from the hardcoded defaults.
-
-On startup, `probeTools()` merges the default `PROBED_TOOLS` + the user's watchlist and runs a single `which` call for all of them. The result is the same `## Detected tools` / `## Unavailable tools` sections in the prompt. The LLM doesn't need to know which tools came from defaults vs. watchlist — it just sees what's available.
-
-**Why "watchlist" and not "discovered tools":** the list contains tools we want to *repeatedly check*, not tools we've confirmed exist. A tool on the watchlist might not be installed — that's fine. Knowing "convert is not installed" is as useful as knowing "sips is installed" because it saves the LLM from probing.
-
-### How It Grows
-
-The watchlist grows through LLM responses — most commonly probes, but any response type can include `watchlist_additions`. When the LLM decides it needs to check tool availability for a task, it returns `watchlist_additions` alongside the probe command:
-
-```json
-{
-  "type": "probe",
-  "content": "which sips convert magick mogrify pngquant optipng cwebp",
-  "watchlist_additions": ["sips", "convert", "magick", "mogrify", "pngquant", "optipng", "cwebp"],
-  "risk_level": "low",
-  "explanation": "Checking available image conversion tools"
-}
-```
-
-Watchlist additions are written to `tool-watchlist.json` immediately when the response is parsed — before the probe command executes, consistent with how `memory_updates` are handled. The probe then runs, results are fed back to the LLM, and the LLM picks the best available tool for the final command. On every future invocation — even months later, even for unrelated queries — the `which` probe checks all of them. If the user later installs ImageMagick, the LLM will see it immediately without needing a probe round.
+**Why "watchlist" and not "discovered tools":** the list contains tools to *repeatedly check*, not tools confirmed to exist. Knowing "convert is not installed" saves a probe round just as much as knowing "sips is installed."
 
 ### Comprehensive Nominations (Avoiding Steering)
 
-A critical prompt instruction: **when returning `watchlist_additions`, include all well-known tools for this task on this OS — not just the one you plan to use.**
+When returning `watchlist_additions`, the LLM must include **all well-known tools for the domain on this OS** — not just the one it plans to use. This instruction appears both as a schema comment and in eval examples.
 
-Without this, a subtle problem arises. If the user asks to compress PNGs and the LLM only nominates `sips` (because it plans to use it), then on future invocations the LLM sees "sips is available" in the tools section but has no information about alternatives like `pngquant` or `optipng`. This creates an information asymmetry that steers the LLM toward the first tool it happened to try, even when better alternatives exist and are installed.
+Without this, the LLM would only nominate the tool it plans to use (e.g. `sips`), creating information asymmetry that steers future invocations toward that tool even when better alternatives exist and are installed. Nominating the full set (e.g. `sips`, `convert`, `pngquant`, `optipng`, `cwebp`) gives balanced visibility.
 
-By nominating all reasonable candidates — `sips`, `convert`, `pngquant`, `optipng`, `cwebp` — the future probe results are balanced. The LLM sees which of these are actually installed and can make an informed choice every time.
+### Storage
 
-This instruction must appear in two places: as a schema comment on `watchlist_additions` (guiding structured output) and in the system prompt instruction text (guiding behavior). Eval examples should reinforce it — probes that nominate a broad set of tools for the domain, not just one.
+`~/.wrap/tool-watchlist.json` — flat JSON array of `{tool, added}` entries. The `added` date (ISO 8601 day) is updated on each re-nomination, making it useful for future pruning (tools not nominated recently are candidates for removal). File is created on first watchlist addition, not on init. Tool names are validated against `VALID_TOOL_NAME` to prevent command injection.
 
-### Storage Format
-
-`~/.wrap/tool-watchlist.json`:
-
-```json
-[
-  {"tool": "sips", "added": "2026-03-21"},
-  {"tool": "convert", "added": "2026-03-21"},
-  {"tool": "magick", "added": "2026-03-21"},
-  {"tool": "mogrify", "added": "2026-03-21"},
-  {"tool": "pngquant", "added": "2026-03-21"},
-  {"tool": "duckdb", "added": "2026-04-15"},
-  {"tool": "xsv", "added": "2026-04-15"}
-]
-```
-
-Each entry has a `tool` name and an `added` date (ISO 8601 date, not datetime — day granularity is sufficient). Deduplication on write — adding a tool that's already in the list is a no-op (the original `added` date is preserved). The file is created on first watchlist addition, not on init.
-
-The `added` date enables future pruning — tools added long ago that were never nominated again and never found available are candidates for removal. Combined with the `tools_available`/`tools_unavailable` and `watchlist_additions` fields in the log (see `specs/logging.md`), this gives a complete picture of each tool's usefulness over time.
-
-**Validation:** tool names must match `/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/` (alphanumeric, dots, hyphens, underscores — matching valid binary names). Anything else is silently dropped. This prevents command injection since tool names are interpolated into the `which` shell command.
-
-Keeping this separate from memory (`memory.json`) is intentional:
-- Memory facts are scoped text shown to the LLM as context. Watchlist entries are tool names fed to `which`.
-- Memory facts are filtered by CWD scope. Watchlist tools are always checked globally — a tool installed on the system is available regardless of CWD.
-- Separate storage makes it easy to inspect, reset, or trim the watchlist without touching memory.
-
-### Merge Logic in `probeTools()`
-
-```
-probeTools():
-  tools = [...PROBED_TOOLS, ...loadWatchlist()]
-  deduplicate tools
-  run `which <all tools> 2>&1`
-  split output into available (with paths) / unavailable (names only)
-```
-
-The split into available/unavailable happens in `probeTools()` — it returns structured data (not a raw string) so `formatContext` can render the two sections separately.
-
-### Prompt Context Formatting
-
-Currently, tools not found by `which` are listed inline as `<tool> not found`. With the watchlist potentially growing the list, a more token-efficient format:
-
-**Available tools** — listed with full paths (as today):
-```
-## Detected tools
-/opt/homebrew/bin/brew
-/usr/bin/git
-/usr/bin/sips
-/opt/homebrew/bin/ffmpeg
-```
-
-**Unavailable tools** — grouped in a single line:
-```
-## Unavailable tools
-apt, dnf, pacman, yum, convert, magick, mogrify, pngquant
-```
-
-This saves tokens compared to one `<tool> not found` line per missing tool, and the format is equally clear to the LLM.
-
-### Schema Change
-
-Add `watchlist_additions` to the response schema:
-
-```typescript
-watchlist_additions: z
-  .array(z.string())
-  .nullable()
-  .optional()
-  // Tool names to add to the persistent watchlist.
-  // Checked via `which` on every future invocation.
-  // When probing for tool availability, include ALL well-known tools
-  // for this task on this OS — not just the one you plan to use.
-  // This gives balanced visibility into what's installed.
-```
-
-This field can accompany any response type (probe, command, answer), though in practice it will almost always appear on probes. Example: the LLM returns a command using `sips` but also nominates the broader set of image tools for future awareness.
+Separate from memory intentionally: watchlist entries are tool names fed to `which` (always global), not scoped text shown to the LLM.
 
 ### Lifecycle
 
-- **Creation:** first time the LLM returns `watchlist_additions` with at least one new tool.
-- **Growth:** subsequent LLM responses with `watchlist_additions`. Deduped on write.
-- **No shrinkage (v1):** tools are never removed automatically. A user can manually edit `tool-watchlist.json` to trim it. Future pruning can use log data: tools added long ago that were never nominated again by the LLM (no `watchlist_additions` referencing them) and never found available (`tools_unavailable` in every invocation) are safe to remove. See `specs/logging.md`.
-- **Scale:** even at 150+ tools, a single `which` call completes in well under 50ms. Token cost is ~1 short line per tool. No practical ceiling for v1.
+- **Creation:** first `watchlist_additions` with at least one new tool.
+- **Growth:** subsequent responses with `watchlist_additions`. Re-nominations update the date.
+- **No shrinkage (v1):** manual editing only. Future pruning can use the `added` date.
+- **Scale:** even 150+ tools complete `which` in well under 50ms. No practical ceiling.
 
-### Example: Full Flow
+### Probe Content vs. Watchlist Additions
 
-User's first image-related request:
+These serve different purposes and are often not the same list:
+
+- **Probe content** is **tactical** — checks only what the LLM needs *right now* to answer the specific question. "Convert GIF to PNG" only needs `which sips convert magick`.
+- **`watchlist_additions`** is **strategic** — nominates the full domain of tools the user might need in the future. "Convert GIF to PNG" suggests the user works with images, so nominate the whole image toolkit: `sips`, `convert`, `magick`, `mogrify`, `pngquant`, `optipng`, `cwebp`, `gifsicle`.
+
+| Request | Probe (tactical) | Watchlist (strategic) |
+|---------|-----------------|----------------------|
+| "convert gif to png" | `which sips convert magick` | sips, convert, magick, mogrify, pngquant, optipng, cwebp, gifsicle |
+| "compress this video" | `which ffmpeg handbrake` | ffmpeg, ffprobe, handbrake, x264, x265, av1an |
+| "query this sqlite db" | `which sqlite3` | sqlite3, duckdb, csvkit, xsv, miller |
+
+The `## Detected tools` section is computed once at startup and does **not** update mid-invocation. Within the same invocation, the LLM learns from its own probe output (conversation turns). On the next invocation, the watchlist kicks in and the LLM sees the updated tools without probing.
+
+### Example Flow
+
+This illustrates the full flow once LLM probes are implemented (see LLM Probes section below). Today, the watchlist storage and `watchlist_additions` persistence work — but the probe command itself won't execute until the multi-round query loop is built.
 
 ```
 $ w convert all gifs in this dir to pngs
 ```
 
-**Round 1 — LLM returns a probe** (no image tools in detected tools yet):
+**Round 1** — No image tools in `## Detected tools`. LLM returns a tactical probe for conversion tools, plus a strategic watchlist nomination for the whole image domain:
 ```json
 {
   "type": "probe",
-  "content": "which sips convert magick mogrify pngquant optipng cwebp",
-  "watchlist_additions": ["sips", "convert", "magick", "mogrify", "pngquant", "optipng", "cwebp"],
+  "content": "which sips convert magick",
+  "watchlist_additions": ["sips", "convert", "magick", "mogrify", "pngquant", "optipng", "cwebp", "gifsicle"],
   "risk_level": "low",
   "explanation": "Checking available image conversion tools"
 }
 ```
 
-Wrap writes the seven tools (with today's date) to `tool-watchlist.json`, runs the probe, feeds output back.
+Wrap saves all eight tools to `tool-watchlist.json`, then runs `which sips convert magick`. The probe output (e.g. `/usr/bin/sips`) is fed back as a conversation turn.
 
-**Round 2 — LLM sees probe results** (`sips` found, rest unavailable):
+**Round 2** — LLM sees probe output showing `sips` is available. Returns:
 ```json
 {
   "type": "command",
@@ -269,12 +178,7 @@ Wrap writes the seven tools (with today's date) to `tool-watchlist.json`, runs t
 }
 ```
 
-**Weeks later, unrelated request:**
-```
-$ w count lines in all python files
-```
-
-The `which` probe now checks default tools + `sips, convert, magick, mogrify, pngquant, optipng, cwebp`. The LLM sees `sips` in `## Detected tools` and `convert, magick, mogrify, pngquant, optipng, cwebp` in `## Unavailable tools`. This costs zero probe rounds. If the user later installs ImageMagick, `convert` and `magick` will appear in detected tools on the next run — the LLM notices immediately.
+**Weeks later, any request** — `probeTools()` checks defaults + the eight image tools. The LLM sees `sips` in `## Detected tools` and the rest in `## Unavailable tools`. Zero probe rounds needed. If the user later installs `pngquant`, it appears in detected tools on the next run — the LLM can use it for PNG optimization without ever probing.
 
 ---
 
