@@ -106,3 +106,7 @@ try {
     out({ ok: false, error: "provider_error", message: String(error) });
   }
 }
+
+// AI SDK HTTP clients keep connections alive, preventing Bun from exiting.
+// Force exit after output is written so the Python subprocess doesn't hang.
+process.exit(0);
