@@ -40,7 +40,7 @@ with open(CONSTANTS_PATH) as _f:
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
 
-def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None):
+def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None, extra_messages=None, last_round=False):
     """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
     payload_dict = {
         "mode": mode,
@@ -55,6 +55,10 @@ def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped
     }
     if cwd_files is not None:
         payload_dict["cwdFiles"] = cwd_files
+    if extra_messages is not None:
+        payload_dict["extraMessages"] = extra_messages
+    if last_round:
+        payload_dict["lastRound"] = True
     payload = json.dumps(payload_dict)
     try:
         result = subprocess.run(
@@ -127,6 +131,14 @@ def make_signature(schema_text: str):
             desc="Listing of files in the current working directory (by mtime)",
             default="",
         )
+        extra_messages: str = dspy.InputField(
+            desc="Prior conversation turns (probe responses + outputs) for multi-round eval",
+            default="",
+        )
+        last_round: str = dspy.InputField(
+            desc="Whether this is the last available round (LLM must not probe)",
+            default="",
+        )
         natural_language_query: str = dspy.InputField(
             desc="The user's natural language request"
         )
@@ -153,6 +165,8 @@ class WrapPredictor(dspy.Module):
         ]
 
         cwd_files = kwargs.get("cwd_files")
+        extra_messages = kwargs.get("extra_messages")
+        last_round = kwargs.get("last_round", False)
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -163,6 +177,8 @@ class WrapPredictor(dspy.Module):
             piped=kwargs.get("piped", False),
             query=kwargs["natural_language_query"],
             cwd_files=cwd_files,
+            extra_messages=extra_messages,
+            last_round=last_round,
         )
 
         # response_json as JSON string: DSPy signature declares it as str,
@@ -182,7 +198,11 @@ _trial_scores: dict[tuple, list] = {}
 def _example_key(ex):
     # Include assertions hash to distinguish duplicate queries with different expectations
     assertions_hash = hashlib.md5(json.dumps(ex.assertions, sort_keys=True).encode()).hexdigest()[:8]
-    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), assertions_hash)
+    extra_msg_hash = ""
+    em = getattr(ex, "extra_messages", None)
+    if em:
+        extra_msg_hash = hashlib.md5(json.dumps(em, sort_keys=True).encode()).hexdigest()[:8]
+    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), extra_msg_hash, assertions_hash)
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
@@ -235,9 +255,11 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
                 cwd=ex.get("cwd", DEFAULT_CWD),
                 piped=ex.get("piped", False),
                 cwd_files=ex.get("cwd_files"),
+                extra_messages=ex.get("extra_messages"),
+                last_round=ex.get("last_round", False),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
-            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "natural_language_query")
+            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "extra_messages", "last_round", "natural_language_query")
         )
     return dspy_examples
 

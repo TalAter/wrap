@@ -54,6 +54,21 @@ const promptInput = buildPrompt(
   input.query,
 );
 
+// Multi-turn: append extra messages (e.g. probe response + output) after the initial prompt
+if (input.extraMessages) {
+  for (const msg of input.extraMessages) {
+    promptInput.messages.push({ role: msg.role, content: msg.content });
+  }
+}
+
+// Last round: append the "do not probe" instruction as a separate user message
+if (input.lastRound) {
+  promptInput.messages.push({
+    role: "user",
+    content: promptConstants.lastRoundInstruction,
+  });
+}
+
 if (input.mode === "assemble") {
   out({ ok: true, promptInput });
   process.exit(0);

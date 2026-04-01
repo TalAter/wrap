@@ -89,6 +89,53 @@ describe("bridge — assemble mode", () => {
     expect(last.content).toContain("## User's request\nlist files");
   });
 
+  test("lastRound appends instruction as separate user message", async () => {
+    const result = await bridgeResult({ ...baseInput, mode: "assemble", lastRound: true });
+    const msgs = result.promptInput.messages;
+    const lastMsg = msgs.at(-1);
+    expect(lastMsg.role).toBe("user");
+    expect(lastMsg.content).toContain("do not probe");
+    // Instruction is separate from the user request
+    const requestMsg = msgs.at(-2);
+    expect(requestMsg.content).toContain("list files");
+    expect(requestMsg.content).not.toContain("do not probe");
+  });
+
+  test("extraMessages appends conversation turns after initial prompt", async () => {
+    const result = await bridgeResult({
+      ...baseInput,
+      mode: "assemble",
+      extraMessages: [
+        { role: "assistant", content: '{"type":"probe","content":"which sips"}' },
+        { role: "user", content: "## Probe output\n/usr/bin/sips" },
+      ],
+    });
+    const msgs = result.promptInput.messages;
+    const lastMsg = msgs.at(-1);
+    expect(lastMsg.role).toBe("user");
+    expect(lastMsg.content).toContain("Probe output");
+    const assistantMsg = msgs.at(-2);
+    expect(assistantMsg.role).toBe("assistant");
+    expect(assistantMsg.content).toContain("probe");
+  });
+
+  test("extraMessages + lastRound: instruction comes after conversation", async () => {
+    const result = await bridgeResult({
+      ...baseInput,
+      mode: "assemble",
+      extraMessages: [
+        { role: "assistant", content: '{"type":"probe"}' },
+        { role: "user", content: "## Probe output\nresult" },
+      ],
+      lastRound: true,
+    });
+    const msgs = result.promptInput.messages;
+    // Last message: last-round instruction
+    expect(msgs.at(-1).content).toContain("do not probe");
+    // Second to last: probe output
+    expect(msgs.at(-2).content).toContain("Probe output");
+  });
+
   test("few-shot examples become user/assistant pairs with separator", async () => {
     const input = {
       ...baseInput,
