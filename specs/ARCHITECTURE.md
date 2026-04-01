@@ -44,23 +44,33 @@ When piped input is implemented (see `specs/piped-input.md`), `readPipedInput()`
 
 ## The Query Loop
 
-Currently single-shot: one LLM call, optional round retry, then execute or print. The full multi-round loop (probes, error retries, unified round counter) is designed but not yet implemented — see `specs/SPEC.md` sections 6-7 for the target behavior.
+Multi-round loop in `src/core/query.ts`. Assembles context once, then loops up to `maxRounds` times. Each iteration: call LLM → route by response type.
 
-**Current flow** (in `src/core/query.ts`):
-1. Assemble context (system prompt + few-shot + memory + tools + user prompt)
-2. Call LLM → get structured `CommandResponse`
-3. On structured output error → round retry once with failed output appended
-4. Handle memory updates (write immediately, notify user)
-5. Route by response type: answer → stdout, probe → error (not yet supported), command → execute if low-risk
+**Flow per round:**
+1. If last round → inject "do not probe" instruction
+2. Call LLM (with round retry on structured output parse failure)
+3. If non-low-risk probe → retry once within the round, refuse if still non-low
+4. Handle memory updates (write to disk immediately, notify user on stderr)
+5. Handle watchlist additions
+6. Route: answer → stdout, probe → execute + capture + append to conversation, command → execute if low-risk
 
-### Loop Rules (Design — for when the multi-round loop is implemented)
+### Loop Rules
 
 | Rule | Rationale |
 |---|---|
-| Unified counter for probes + error-fix rounds | One budget prevents runaway loops regardless of response type. |
-| Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Updates both disk and in-memory state so the next LLM call in the same loop sees it. |
-| User-edited commands don't get auto-fix | The user took manual control — don't second-guess with LLM auto-fix. |
-| Multi-turn conversation context | Probes/errors become conversation turns, giving the LLM full history for each subsequent call. |
+| Unified counter for probes + error-fix rounds | One budget (`maxRounds`, configurable, default 5) prevents runaway loops regardless of response type. |
+| Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Writes to disk; context is not rebuilt per round (the LLM already knows what it discovered). |
+| Multi-turn conversation context | Probes become assistant/user turn pairs, giving the LLM full history for each subsequent call. |
+| Last-round constraint | "Do not probe" instruction injected on the final round. No budget info sent on earlier rounds — avoids polluting every request. |
+| User-edited commands don't get auto-fix | The user took manual control — don't second-guess with LLM auto-fix. (Not yet implemented.) |
+
+### Error-Fix Rounds (Design — not yet implemented)
+
+When a command fails with an infrastructure-level error (command not found, syntax error, wrong flags — not application-level failures like 404s), the error output (stderr) is fed back to the LLM as a conversation turn for auto-fix. This shares the same loop and round budget as probes.
+
+The LLM decides the fix strategy: most tools include usage help in their error messages (`grep: unrecognized option` prints valid flags), so the error alone is often enough. For cryptic errors, the LLM can spend a probe round on `<tool> --help` or `tldr <tool>` (if installed — known from the tool probe). Wrap doesn't auto-enrich errors with help output; the LLM makes that cost/benefit decision within the round budget.
+
+See `specs/SPEC.md` §6 for the full error-handling design (auto-fix scope, command-not-found memory updates, informational vs fixable errors).
 
 ---
 

@@ -6,9 +6,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Core Query Loop
 
-- [ ] Multi-round loop — probes, round retries, and error-fix rounds within unified round counter (`maxRounds`)
-- [ ] Multi-turn conversation context — probe results and errors as conversation turns passed to LLM
-- [ ] Define MAX_ROUNDS exhaustion behavior (show accumulated errors? last error? summary?)
 - [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
 
 ## Input & Invocation
@@ -50,11 +47,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Discovery & Probes (see specs/discovery.md)
 
-- [ ] Multi-round probe loop — LLM returns `type: "probe"`, Wrap executes silently, feeds result back
-- [ ] Subtle stderr indicator during probes (e.g., `🔍 Checking shell type...`)
-- [ ] Probe results as conversation turns (multi-turn context for subsequent LLM calls)
-- [ ] On last round, append "do not probe" instruction to LLM prompt
-- [ ] Few-shot examples showing probe flows (via DSPy eval examples)
 - [ ] Future: parse package.json scripts / Makefile targets into CWD context summary
 
 ## Error Handling & Auto-Fix
@@ -71,18 +63,14 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Memory System
 
-- [ ] Write memory from LLM `memory_updates` during probe loop (currently only in single-shot flow)
 - [ ] Lazy probing — on-demand discovery via agent loop probe commands (gets smarter over time)
-- [ ] Eval example: no memory for CWD — LLM probes or uses global facts only (other memory eval scenarios already covered in `eval/examples/seed.jsonl`)
 
 ## Logging (see specs/logging.md for architecture)
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
-- [ ] Multi-round logging — probe rounds accumulate in the same entry
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
 - [ ] Wire `piped_input` field from stdin (see `specs/piped-input.md`)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
-- [ ] `max_rounds` outcome type (blocked on multi-round query loop)
 - [ ] `expires` field + retention pruning (future)
 - [ ] Document in help/README that logs contain full LLM exchanges
 

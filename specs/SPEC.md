@@ -540,8 +540,9 @@ Currently only `provider` is implemented. Future settings shown below for refere
   // Safety (NOT YET IMPLEMENTED — see specs/safety.md)
   "defaultMode": "smart", // "smart" | "yolo" | "confirm-all"
 
-  // LLM round budget (NOT YET IMPLEMENTED)
+  // LLM round budget (IMPLEMENTED — maxRounds. showRetryAttempts not yet implemented)
   "maxRounds": 5,
+  "maxProbeOutputChars": 200000, // ~200KB cap on probe output fed to LLM
   "showRetryAttempts": true,
 
   // Threads (NOT YET IMPLEMENTED)

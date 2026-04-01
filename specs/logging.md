@@ -64,7 +64,7 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
 | `rounds` | array | Array of rounds (see below) |
-| `outcome` | string | `"success"` \| `"error"` \| `"refused"` \| `"cancelled"` (future) \| `"max_rounds"` (future) |
+| `outcome` | string | `"success"` \| `"error"` \| `"refused"` \| `"cancelled"` (future) \| `"max_rounds"` |
 
 ### Round fields
 
@@ -114,13 +114,13 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 {"id":"c3d4e5f6-...","timestamp":"2026-03-21T14:32:00.789Z","version":"0.1.0","prompt":"show disk usage","cwd":"/Users/tal","provider":{"type":"claude-code"},"prompt_hash":"e3b0c44...","rounds":[{"provider_error":"claude: command not found","llm_ms":12}],"outcome":"error"}
 ```
 
-### Multi-round invocation (future: probe + command)
+### Multi-round invocation (probe + command)
 
 ```json
 {"id":"x9y8z7w6-...","timestamp":"2026-03-21T14:33:00.000Z","version":"0.1.0","prompt":"add alias to shell config","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum","docker","kubectl","python3","tldr","fd","bat","eza","xclip","xsel","wl-copy","wl-paste"],"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"echo $SHELL","risk_level":"low"},"execution":{"command":"echo $SHELL","exit_code":0,"shell":"/bin/zsh"},"llm_ms":400,"exec_ms":5},{"parsed":{"type":"command","content":"echo \"alias ll='ls -la'\" >> ~/.zshrc","risk_level":"medium"},"llm_ms":500}],"outcome":"success"}
 ```
 
-### Watchlist growth (future: probe with watchlist_additions)
+### Watchlist growth (probe with watchlist_additions)
 
 ```json
 {"id":"d4e5f6g7-...","timestamp":"2026-03-21T14:34:00.000Z","version":"0.1.0","prompt":"convert all gifs to pngs","cwd":"/Users/tal/images","tools_available":["brew","git","sips"],"tools_unavailable":["convert","magick"],"provider":{"type":"anthropic","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"which sips convert magick mogrify pngquant optipng cwebp","risk_level":"low","watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"]},"watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"],"execution":{"command":"which sips convert magick mogrify pngquant optipng cwebp","exit_code":1,"shell":"/bin/zsh"},"llm_ms":600,"exec_ms":4},{"parsed":{"type":"command","content":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","risk_level":"low"},"execution":{"command":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","exit_code":0,"shell":"/bin/zsh"},"llm_ms":450,"exec_ms":120}],"outcome":"success"}
@@ -138,11 +138,11 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 | LLM returns malformed JSON / structured output failure | Yes — `provider_error` captures the failure | `"error"` |
 | Provider subprocess crashes | Yes — `provider_error` captures the failure | `"error"` |
 | Non-low risk command (confirmation needed) | Yes | `"refused"` |
-| Probe (not yet supported) | Yes | `"refused"` |
+| Probe round | Yes — as a round in the same entry, with `execution` capturing the probe command | |
+| Round budget exhausted (all probes) | Yes | `"max_rounds"` |
 | Provider initialization fails (e.g., unknown type) | No | — |
 | No args / help screen | No | — |
 | Config errors | No | — |
-| Probe round (future) | Yes — as a round in the same entry | |
 | Round retry (future) | Yes — nested in `round.retry`, not a separate round | |
 
 ---
@@ -208,11 +208,10 @@ All logging writes to the filesystem only. No logging output goes to stdout or s
 
 ## TODO
 
-- [ ] `tools_available` / `tools_unavailable` fields — `probeTools()` needs to return structured data (not a raw string) so both the prompt formatter and the logger can consume it
+- [ ] `tools_available` / `tools_unavailable` fields — `probeTools()` already returns structured data, just needs wiring to the log entry
 - [ ] `watchlist_additions` round field — pass through from parsed LLM response
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes to test the round retry path)
 - [ ] `piped_input` field — thread through from `readPipedInput` to both log entry and `assembleCommandPrompt` (see `specs/piped-input.md`)
 - [ ] `cancelled` outcome (requires signal handling)
-- [ ] `max_rounds` outcome (requires probe/retry loop)
 - [ ] `expires` field + retention pruning
 - [ ] Document in help/README that logs contain full LLM exchanges

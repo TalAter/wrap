@@ -235,7 +235,7 @@ $ cat huge.log | w explain the error on line 12570000
 # LLM returns: { type: "answer", content: "That error means..." }
 ```
 
-**Not implemented in this feature.** Probes require the multi-round loop (SPEC.md sections 6-7) which doesn't exist yet. The piped input design accounts for this — `pipe_stdin` works on probes in the schema, and the buffer persists across rounds. When the multi-round loop lands, probe + pipe_stdin works without changes to the piped input implementation.
+**Not implemented in this feature.** The multi-round probe loop exists, but piped input is not yet built. The piped input design accounts for probes — `pipe_stdin` works on probes in the schema, and the buffer persists across rounds. When piped input lands, probe + pipe_stdin works without changes to the probe implementation.
 
 **Note:** Very large files (multi-GB) require the deferred temp-file optimization (see Reading & Buffering) since the current string-in-memory approach has practical limits (a 10GB file would require ~20GB of heap due to JS UTF-16 string encoding).
 
