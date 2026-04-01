@@ -13,6 +13,9 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Input & Invocation
 
+- [ ] Modifier extraction — `extractModifiers(argv)` phase before `parseInput()` (see `specs/verbose.md`)
+- [ ] `--verbose` flag + `verbose` config key (see `specs/verbose.md`)
+- [ ] Verbose module — `src/core/verbose.ts` with `initVerbose()`/`verbose()` (see `specs/verbose.md`)
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
