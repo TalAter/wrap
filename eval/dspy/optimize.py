@@ -64,10 +64,10 @@ def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped
         result = subprocess.run(
             ["bun", "run", BRIDGE_PATH],
             input=payload, capture_output=True, text=True,
-            timeout=120,
+            timeout=300,
         )
     except subprocess.TimeoutExpired:
-        print("Bridge call timed out (120s)", file=sys.stderr)
+        print("Bridge call timed out (300s)", file=sys.stderr)
         return None
     if result.returncode != 0:
         print(f"Bridge error: {result.stderr}", file=sys.stderr)
@@ -297,14 +297,12 @@ def extract_demos(optimized) -> list[dict]:
     for i, demo in enumerate(predict_demos):
         # DSPy stores demos as Example objects or dicts
         if isinstance(demo, dict):
-            keys = list(demo.keys())
             inp = demo.get("natural_language_query", "")
             out = demo.get("response_json", "")
         else:
-            keys = list(demo.keys()) if hasattr(demo, "keys") else dir(demo)
             inp = getattr(demo, "natural_language_query", "")
             out = getattr(demo, "response_json", "")
-        print(f"  Demo {i}: keys={keys}, has_input={bool(inp)}, has_output={bool(out)}")
+        print(f"  Demo {i}: has_input={bool(inp)}, has_output={bool(out)}")
         if inp and out:
             demos.append({"input": inp, "output": out})
     return demos
@@ -411,7 +409,7 @@ def save_eval_results(
         _trial_scores.items(),
         key=lambda x: sum(s for s, _ in x[1]) / len(x[1]),
     ):
-        query, cwd, piped, _hash = key
+        query, cwd, piped, _cwd_files, _extra_msg_hash, _assertions_hash = key
         total = len(entries)
         perfect = sum(1 for s, _ in entries if s >= 1.0)
         avg = sum(s for s, _ in entries) / total
