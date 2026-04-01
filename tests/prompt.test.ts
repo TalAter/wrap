@@ -20,6 +20,8 @@ describe("PROMPT_HASH", () => {
       ["SECTION_SYSTEM_FACTS", constants.sectionSystemFacts],
       ["SECTION_FACTS_ABOUT", constants.sectionFactsAbout],
       ["SECTION_DETECTED_TOOLS", constants.sectionDetectedTools],
+      ["SECTION_UNAVAILABLE_TOOLS", constants.sectionUnavailableTools],
+      ["SECTION_CWD_FILES", constants.sectionCwdFiles],
       ["SECTION_USER_REQUEST", constants.sectionUserRequest],
       ["CWD_PREFIX", constants.cwdPrefix],
       ["PIPED_OUTPUT_INSTRUCTION", constants.pipedOutputInstruction],
