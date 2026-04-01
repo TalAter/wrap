@@ -43,6 +43,8 @@ export async function main() {
         providerConfig: config.provider,
         tools,
         cwdFiles,
+        maxRounds: config.maxRounds,
+        maxProbeOutputChars: config.maxProbeOutputChars,
       }),
     );
   } catch (e) {

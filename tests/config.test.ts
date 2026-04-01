@@ -3,7 +3,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import configSchema from "../src/config/config.schema.json";
-import { DEFAULT_MAX_ROUNDS, loadConfig } from "../src/config/config.ts";
+import {
+  DEFAULT_MAX_PROBE_OUTPUT_CHARS,
+  DEFAULT_MAX_ROUNDS,
+  loadConfig,
+} from "../src/config/config.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-test-"));
@@ -197,6 +201,34 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("maxProbeOutputChars", () => {
+    test("reads from config file", () => {
+      const dir = tempDir();
+      writeFileSync(
+        join(dir, "config.jsonc"),
+        JSON.stringify({ provider: { type: "test" }, maxProbeOutputChars: 50000 }),
+      );
+      const config = loadConfig({ WRAP_HOME: dir });
+      expect(config.maxProbeOutputChars).toBe(50000);
+    });
+
+    test("reads from WRAP_CONFIG", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" }, maxProbeOutputChars: 100000 }),
+      });
+      expect(config.maxProbeOutputChars).toBe(100000);
+    });
+
+    test("undefined when not set", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      });
+      expect(config.maxProbeOutputChars).toBeUndefined();
+    });
+  });
+
   describe("JSON Schema", () => {
     test("config.jsonc with $schema property parses correctly", () => {
       const dir = tempDir();
@@ -222,6 +254,13 @@ describe("loadConfig", () => {
       expect(mr.type).toBe("integer");
       expect(mr.default).toBe(DEFAULT_MAX_ROUNDS);
       expect(mr.minimum).toBe(1);
+    });
+
+    test("configSchema includes maxProbeOutputChars with default 200000", () => {
+      const mp = configSchema.properties.maxProbeOutputChars;
+      expect(mp.type).toBe("integer");
+      expect(mp.default).toBe(DEFAULT_MAX_PROBE_OUTPUT_CHARS);
+      expect(mp.minimum).toBe(1000);
     });
   });
 });

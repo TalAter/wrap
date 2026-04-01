@@ -179,15 +179,133 @@ describe("wrap", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  test("probe: errors with not-yet-supported message", async () => {
-    const { exitCode, stdout, stderr } = await wrapMock("check shell", {
-      type: "probe",
-      content: "echo $SHELL",
-      risk_level: "low",
-    });
+  test("probe → command: executes probe then runs final command", async () => {
+    const { exitCode, stdout } = await wrapMock("find image tools", [
+      {
+        type: "probe",
+        content: "echo found-sips",
+        risk_level: "low",
+        explanation: "Checking image tools",
+      },
+      { type: "command", content: "echo converted", risk_level: "low" },
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("converted\n");
+    expect(stdout).not.toContain("found-sips");
+  });
+
+  test("probe: shows discovery indicator on stderr", async () => {
+    const { stderr } = await wrapMock("find tools", [
+      {
+        type: "probe",
+        content: "echo test",
+        risk_level: "low",
+        explanation: "Checking available tools",
+      },
+      { type: "command", content: "echo done", risk_level: "low" },
+    ]);
+    expect(stderr).toContain("🔍");
+    expect(stderr).toContain("Checking available tools");
+  });
+
+  test("probe → answer: returns answer after probe", async () => {
+    const { exitCode, stdout } = await wrapMock("what shell am I using", [
+      { type: "probe", content: "echo /bin/zsh", risk_level: "low", explanation: "Checking shell" },
+      { type: "answer", content: "You're using zsh", risk_level: "low" },
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("You're using zsh\n");
+  });
+
+  test("probe: multiple probes before final command", async () => {
+    const { exitCode, stdout, stderr } = await wrapMock("convert images", [
+      {
+        type: "probe",
+        content: "echo /usr/bin/sips",
+        risk_level: "low",
+        explanation: "Checking sips",
+      },
+      {
+        type: "probe",
+        content: "echo png-support",
+        risk_level: "low",
+        explanation: "Checking PNG support",
+      },
+      { type: "command", content: "echo converted", risk_level: "low" },
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("converted\n");
+    expect(stderr).toContain("Checking sips");
+    expect(stderr).toContain("Checking PNG support");
+  });
+
+  test("probe: budget exhaustion after all rounds are probes", async () => {
+    const { exitCode, stdout, stderr } = await wrapMock(
+      "check tools",
+      [
+        { type: "probe", content: "echo probe1", risk_level: "low" },
+        { type: "probe", content: "echo probe2", risk_level: "low" },
+      ],
+      { maxRounds: 2 },
+    );
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toContain("not yet supported");
+    expect(stderr).toContain("rounds");
+  });
+
+  test("probe: memory updates from probes are saved", async () => {
+    const { exitCode, wrapHome } = await wrapMock("find tools", [
+      {
+        type: "probe",
+        content: "echo test",
+        risk_level: "low",
+        memory_updates: [{ fact: "sips is available", scope: "/" }],
+        memory_updates_message: "Noted: sips available",
+      },
+      { type: "command", content: "echo done", risk_level: "low" },
+    ]);
+    expect(exitCode).toBe(0);
+    const memPath = join(wrapHome, "memory.json");
+    const memory = JSON.parse(readFileSync(memPath, "utf-8"));
+    expect(memory["/"]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fact: "sips is available" })]),
+    );
+  });
+
+  test("probe: failed probe (non-zero exit) still feeds back to LLM", async () => {
+    const { exitCode, stdout, stderr } = await wrapMock("check tools", [
+      {
+        type: "probe",
+        content: "echo probe-ran >&2; exit 42",
+        risk_level: "low",
+        explanation: "Checking tool",
+      },
+      { type: "command", content: "echo done", risk_level: "low" },
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("done\n");
+    expect(stderr).toContain("🔍");
+  });
+
+  test("probe: non-low risk probe triggers retry", async () => {
+    const { exitCode, stdout } = await wrapMock("delete tables", [
+      // First response: high-risk probe (triggers risk-level retry)
+      { type: "probe", content: "psql -c 'DROP TABLE'", risk_level: "high" },
+      // Retry response: corrected to a command
+      { type: "command", content: "echo corrected", risk_level: "low" },
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("corrected\n");
+  });
+
+  test("maxRounds=1: command succeeds on single-round budget", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "list files",
+      [{ type: "command", content: "echo done", risk_level: "low" }],
+      { maxRounds: 1 },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("done\n");
   });
 
   test("e2e: first run inits memory, then query succeeds", async () => {

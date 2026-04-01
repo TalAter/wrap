@@ -38,7 +38,7 @@ export type LogEntry = {
   provider: ProviderConfig;
   prompt_hash: string;
   rounds: Round[];
-  outcome: "success" | "error" | "refused";
+  outcome: "success" | "error" | "refused" | "max_rounds";
 };
 
 export function createLogEntry(params: {

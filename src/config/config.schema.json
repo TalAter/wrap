@@ -12,6 +12,12 @@
       "minimum": 1,
       "default": 5
     },
+    "maxProbeOutputChars": {
+      "type": "integer",
+      "description": "Maximum characters of probe command output sent to the LLM. Longer output is truncated. Default: 200000 (~200KB).",
+      "minimum": 1000,
+      "default": 200000
+    },
     "provider": {
       "description": "LLM provider configuration",
       "oneOf": [

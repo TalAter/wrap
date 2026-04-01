@@ -34,13 +34,22 @@ function seedMemory(wrapHome: string) {
   writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
 }
 
-export async function wrapMock(prompt: string, response: object) {
+export async function wrapMock(
+  prompt: string,
+  response: object | object[],
+  config?: Record<string, unknown>,
+) {
   const wrapHome = tmpHome();
   seedMemory(wrapHome);
-  const config = JSON.stringify({ provider: { type: "test" } });
-  return wrap(prompt, {
+  const fullConfig = JSON.stringify({ provider: { type: "test" }, ...config });
+  const env: Record<string, string> = {
     WRAP_HOME: wrapHome,
-    WRAP_CONFIG: config,
-    WRAP_TEST_RESPONSE: JSON.stringify(response),
-  });
+    WRAP_CONFIG: fullConfig,
+  };
+  if (Array.isArray(response)) {
+    env.WRAP_TEST_RESPONSES = JSON.stringify(response);
+  } else {
+    env.WRAP_TEST_RESPONSE = JSON.stringify(response);
+  }
+  return wrap(prompt, env);
 }

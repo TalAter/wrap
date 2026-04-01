@@ -7,9 +7,11 @@ import type { ProviderConfig } from "../llm/types.ts";
 export type Config = {
   provider?: ProviderConfig;
   maxRounds?: number;
+  maxProbeOutputChars?: number;
 };
 
 export const DEFAULT_MAX_ROUNDS = 5;
+export const DEFAULT_MAX_PROBE_OUTPUT_CHARS = 200_000;
 
 const CONFIG_FILENAME = "config.jsonc";
 
