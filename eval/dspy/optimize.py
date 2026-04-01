@@ -489,6 +489,8 @@ def main():
     by_type: dict[str, list] = {}
     for ex in dspy_examples:
         t = ex.assertions.get("type", "command")
+        if isinstance(t, list):
+            t = tuple(t)
         by_type.setdefault(t, []).append(ex)
 
     trainset, valset = [], []
