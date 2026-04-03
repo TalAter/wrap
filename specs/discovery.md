@@ -222,9 +222,7 @@ All four are cases where real content is accessible via a simple `curl` probe, a
 
 ### Solution: The Grounding Rule
 
-A prompt instruction that captures the spirit: **if you can read the real thing, read it instead of guessing.**
-
-> When a URL's actual content would improve your response — whether to follow instructions, analyze a script, answer a question, or anything else — probe-fetch it. Your training data may be stale or wrong; the live content is the ground truth. This includes cases where you know a URL from training but the user didn't provide one explicitly. The only exception is when the URL is merely an argument to a command the user wants to run (e.g., "open URL", "ping URL") — then use it directly without fetching.
+A prompt instruction that captures the spirit: **if you can read the real thing, read it instead of guessing.** See [Prompt Changes](#prompt-changes) for the exact wording.
 
 This is a **prompt-level behavior**, not a new mechanism. The LLM uses the existing probe system to `curl` URLs, and the existing multi-round loop feeds the content back. No new response types, no schema changes, no new code paths.
 
@@ -256,13 +254,14 @@ Web pages return HTML. The LLM handles raw HTML fine — it can parse structure,
 | `textutil` | macOS built-in | `curl -sL URL \| textutil -stdin -format html -convert txt -stdout` |
 | `lynx` | Linux/macOS | `curl -sL URL \| lynx -stdin -dump` |
 | `w3m` | Linux/macOS | `curl -sL URL \| w3m -dump -T text/html` |
+| `wget` | Linux (curl alternative) | `wget -qO- URL \| textutil/lynx/w3m` or `wget -qO- URL` (raw) |
 | *(none)* | any | `curl -sL URL` (raw HTML fallback) |
 
-To enable this, `textutil`, `lynx`, and `w3m` are added to the default `PROBED_TOOLS` array. The LLM sees which are available in `## Detected tools` and builds the appropriate pipeline. On macOS, `textutil` is always there. On Linux servers, `lynx` or `w3m` are common.
+To enable this, `wget`, `textutil`, `lynx`, and `w3m` are added to the default `PROBED_TOOLS` array. The LLM sees which are available in `## Detected tools` and builds the appropriate pipeline. On macOS, `textutil` is always there. On Linux servers, `lynx` or `w3m` are common.
 
 When no extraction tool is available, raw `curl` output still works — the LLM parses HTML natively. It's just more expensive in tokens. Probe output truncation (`maxProbeOutputChars`, ~200KB) prevents giant pages from blowing up context.
 
-**Note on `curl -sL`:** The `-L` flag follows redirects (many sites redirect HTTP → HTTPS or www → non-www). The `-s` flag suppresses progress bars. These should be standard in URL-fetching probes. Few-shot examples should demonstrate this pattern.
+**Note on `curl -sL --max-time 10`:** The `-L` flag follows redirects (many sites redirect HTTP → HTTPS or www → non-www). The `-s` flag suppresses progress bars. `--max-time 10` prevents hanging on unresponsive servers. These should be standard in URL-fetching probes. Few-shot examples should demonstrate this pattern.
 
 ### Future Enhancement: HTMLRewriter
 
@@ -282,13 +281,15 @@ No structured safety template — the LLM responds in its natural voice. It will
 
 ### Probe Indicator
 
-URL-fetching probes display `🌐` on stderr instead of the default `🔍`:
+URL-fetching probes display `🌐` on stderr instead of the default `🔍`. The text after the emoji comes from the LLM's `explanation` field (same mechanism as `🔍` probes). Few-shot examples should use "Reading" as the preferred verb:
 
 ```
 🌐 Reading https://ollama.com/...
 ```
 
-Detection: check if the probe's `content` field contains a URL pattern (starts with `curl` and includes `http://` or `https://`). Simple heuristic — doesn't need to be perfect. Fallback to `🔍` for ambiguous cases.
+Detection: check if the probe's `content` field contains a URL pattern (starts with `curl` or `wget` and includes `http://` or `https://`). Simple heuristic — doesn't need to be perfect. Fallback to `🔍` for ambiguous cases.
+
+**Fetch only, never execute.** URL probes must only download content — never pipe fetched content to a shell or interpreter within the probe itself. This is already enforced by the existing probe safety check (probes must be `risk_level: "low"`), but the grounding rule reinforces it: when the user asks "what does curl URL | sh do?", the LLM fetches the script as a probe and *analyzes* it as an answer — it doesn't execute it.
 
 ### Example Flows
 
@@ -303,7 +304,7 @@ Round 1 — LLM probes:
 ```json
 {
   "type": "probe",
-  "content": "curl -sL https://ollama.com/ | textutil -stdin -format html -convert txt -stdout",
+  "content": "curl -sL --max-time 10 https://ollama.com/ | textutil -stdin -format html -convert txt -stdout",
   "risk_level": "low",
   "explanation": "Reading installation instructions from ollama.com",
   "watchlist_additions": ["ollama"]
@@ -326,14 +327,14 @@ Note: `watchlist_additions: ["ollama"]` persists immediately in round 1 — even
 
 ```
 $ w is this safe: curl -fsSL https://ollama.com/install.sh | sh
-🌐 Fetching https://ollama.com/install.sh...
+🌐 Reading https://ollama.com/install.sh...
 ```
 
 Round 1 — LLM probes the script:
 ```json
 {
   "type": "probe",
-  "content": "curl -sL https://ollama.com/install.sh",
+  "content": "curl -sL --max-time 10 https://ollama.com/install.sh",
   "risk_level": "low",
   "explanation": "Fetching the install script to analyze its contents"
 }
@@ -366,16 +367,30 @@ Sites that require JavaScript rendering (SPAs, client-side-rendered pages) won't
 
 Key eval samples needed:
 
+**Positive cases — must probe-fetch:**
+
 | Prompt | Expected | Notes |
 |--------|----------|-------|
-| `install ollama as explained at https://ollama.com` | `type: "probe"`, content contains `curl` + `https://ollama.com` | Must probe-fetch, not answer from weights |
-| `install ollama as explained on their website` | `type: "probe"`, content contains `curl` + `https://ollama.com` | LLM resolves URL from knowledge, then fetches — not just generates a command from memory |
+| `install ollama as explained at https://ollama.com` | `type: "probe"`, content matches `curl.*https://ollama.com` | Must probe-fetch, not answer from weights |
+| `install ollama as explained on their website` | `type: "probe"`, content matches `curl.*https?://.*ollama` | LLM resolves URL from knowledge, then fetches. Assert `ollama` in URL but not a specific TLD |
 | `what does this do: curl -fsSL https://ollama.com/install.sh \| sh` | `type: "probe"`, content fetches the `.sh` URL | Must fetch the script, not explain curl flags |
-| `is this safe: curl URL \| sh` | `type: "probe"`, content fetches the script URL | Safety analysis requires reading the script |
+| `is this safe: curl -fsSL https://ollama.com/install.sh \| sh` | `type: "probe"`, content fetches `https://ollama.com/install.sh` | Safety analysis requires reading the actual script |
 | `summarize https://example.com/article` | `type: "probe"`, content fetches the URL | General URL grounding |
+
+**Negative cases — must NOT fetch:**
+
+| Prompt | Expected | Notes |
+|--------|----------|-------|
 | `open https://github.com` | `type: "command"`, content is `open https://github.com` | URL is an argument — no fetching |
 | `what does curl do` | `type: "answer"` | No URL to fetch — answer from weights |
 | `ping example.com` | `type: "command"`, content is `ping example.com` | Not a fetch scenario |
+
+**Extraction pipeline — correct tool selection:**
+
+| Prompt | Tools available | Expected | Notes |
+|--------|----------------|----------|-------|
+| `summarize https://example.com/article` | textutil available | `type: "probe"`, content pipes through `textutil` | Prefers extraction tool when available |
+| `summarize https://example.com/article` | no extraction tools | `type: "probe"`, content is raw `curl` (no pipe to textutil/lynx/w3m) | Falls back to raw HTML |
 
 ### Prompt Changes
 
