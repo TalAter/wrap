@@ -1,10 +1,12 @@
 # TUI Approach
 
-## Decision: Ink (lazy-loaded) + existing chrome utilities
+## Decision: Ink 5+ (lazy-loaded) + existing chrome utilities
 
 We use **Ink** (React for CLI) as our TUI framework for all interactive UI. Non-interactive output continues to use Wrap's existing `chrome()` / `chromeRaw()` utilities in `src/core/output.ts`, which write to stderr.
 
 Ink is lazy-loaded via `await import("ink")` so it only adds cost when interactive UI is actually needed. Most Wrap invocations (low-risk commands) never load Ink.
+
+**Requires Ink 5+** — earlier versions have WASM/compilation issues with `bun build --compile`.
 
 ## Three output tiers
 
@@ -48,19 +50,21 @@ Bun supports opening `/dev/tty` as a file/stream. Bun also supports `process.std
 
 Before rendering any interactive prompt, flush/discard any buffered terminal input. This prevents a stray Enter keypress (pressed while the user was waiting for the LLM response) from accidentally confirming a dangerous command. This is critical for safety.
 
-### 4. Clean teardown
+### 4. Cursor restore
+
+Bun has a known bug where the cursor disappears after an Ink app exits on macOS (bun#26642). Wrap must explicitly restore cursor visibility (`\x1B[?25h`) on Ink unmount and in signal handlers (SIGINT, SIGTERM). This is cheap insurance even after the bug is fixed.
+
+### 5. Clean teardown
 
 Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child process (the confirmed command), Ink must be fully unmounted: no alternate screen, no cursor artifacts, no lingering raw mode. The terminal must be back to normal before the child process runs.
 
-## Compatibility notes from research
+## Bun compatibility
 
-**Bun + Ink works in production.** Anthropic's Claude Code CLI ships as a Bun-compiled binary using Ink + React for its TUI. This is the strongest existence proof.
+**Bun + Ink works in production.** Anthropic's Claude Code CLI ships as a Bun-compiled binary using Ink + React for its TUI (they use a custom fork with heavier modifications, but vanilla Ink 5+ works for Wrap's needs).
 
-**Yoga layout (Ink's flexbox engine):** Historically used native bindings (`yoga-layout-prebuilt`). Newer versions ship as pure WASM (`yoga-wasm-web`, `yoga-layout` v3+), which should survive `bun build --compile`. Verify the installed version uses WASM, not native binaries. If `bun build --compile` fails with yoga-related errors, this is the likely culprit — switch to the WASM package.
+**Yoga layout (Ink's flexbox engine):** Ink 5+ depends on `yoga-layout` 3.2.x, which ships as base64-encoded WASM embedded in a JS module. No native bindings. Confirmed working with `bun build --compile` (bun#6567, fixed June 2025).
 
-**`useInput` quirks:** There are documented issues with Ink's `useInput` in some Bun versions (Ink issue #6862). If key capture doesn't work, the workaround is reading from the tty stream directly and dispatching events manually. Claude Code presumably solved this already, so their approach may be worth studying if issues arise.
-
-**`process.stdin` buffering on macOS:** Bun issue #18239 documents different stdin buffering behavior on macOS. Opening `/dev/tty` explicitly (as described above) sidesteps this entirely.
+**`useInput` + Bun (bun#6862, still open):** Ink's `useInput` hook doesn't work reliably with Bun because Bun doesn't handle `process.stdin` the way Ink expects. **Workaround:** use Ink's `useStdin` hook with `setRawMode: true` for input capture instead of relying on `useInput` directly. This is the standard pattern until the Bun issue is fixed.
 
 ## Where Ink gets used
 
@@ -71,6 +75,20 @@ Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child proce
 **Interactive mode** — `w` with no args. Multiline text editor with Enter to submit, Shift+Enter for newline. Most complex Ink usage. See `specs/interactive-mode.md`.
 
 **Error recovery** — if a confirmed command fails, prompting "Retry? Edit? Explain?" This is a simpler variant of the confirmation panel.
+
+### Ink + chromeRaw coordination
+
+While Ink is mounted, it owns stderr rendering. `chrome()` and `chromeRaw()` must NOT write to stderr concurrently — Ink manages its own screen region and uncoordinated writes corrupt the display. Any output that needs to appear while Ink is active (memory update notifications, verbose lines, probe indicators during a follow-up LLM call) must go through Ink components, not `chromeRaw()`.
+
+In practice this is unlikely in the initial implementation — Ink mounts after the LLM responds, shows the confirmation panel, and unmounts before anything else runs. It becomes relevant when describe/follow-up trigger LLM calls while the panel is active (see phasing below).
+
+### Phasing: describe and follow-up
+
+The full confirmation panel has async states: pressing `[D]escribe` or submitting a `[F]ollow-up` triggers an LLM call while the TUI is active. Phase this:
+
+**Phase 1:** Unmount Ink before the LLM call. Let existing chrome (spinners, probe indicators) handle the wait. Re-mount Ink with the updated panel when the LLM responds.
+
+**Phase 2:** Keep Ink mounted during LLM calls. Loading/spinner state as an Ink component. All chrome routed through Ink while mounted.
 
 ## Where Ink is NOT used
 
@@ -84,9 +102,9 @@ Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child proce
 
 ## Bundle size and startup
 
-Ink + React + Yoga adds roughly ~2.5MB to the compiled binary. This is acceptable given Wrap already bundles the AI SDK, provider libraries, and Zod. The lazy-load pattern means init costs are only paid when interactive UI is needed. Low-risk command execution (the common path) never imports Ink.
+Ink + React + Yoga adds ~1MB to the compiled binary (measured). The lazy-load pattern means init costs are only paid when interactive UI is needed. Low-risk command execution (the common path) never imports Ink.
 
-React initialization adds roughly 50-100ms. This happens after the LLM response arrives (which takes 500-2000ms), so the user never perceives it.
+React initialization adds roughly 50-100ms. For the confirmation panel this happens after the LLM response arrives (500-2000ms), so the user never perceives it. For interactive mode (`w` with no args) Ink is the first thing rendered — 100ms is below perception threshold for cold-start.
 
 ## Useful companion libraries
 
