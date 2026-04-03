@@ -22,6 +22,7 @@ export const CommandResponseSchema = z.object({
   explanation: z.string().nullable().optional(),
   // Reusable facts learned about the user's environment.
   // These are saved and given to you in future requests.
+  // Only record facts already true — never facts that assume the command in this response will succeed.
   memory_updates: z
     .array(
       z.object({
@@ -42,8 +43,10 @@ export const CommandResponseSchema = z.object({
   // Tool names to add to the persistent watchlist.
   // Checked on every future invocation.
   // When probing for tool availability, include ALL well-known tools
-  // for this task on this OS — not just the one you plan to use.
+  // for this task on this OS to be added to the watchlist — not just the one you plan to use.
   // This gives balanced visibility into what's installed.
+  // When returning a command that installs a tool, use watchlist_additions instead of
+  // memory_updates to note that tool and others in the category.
   watchlist_additions: z.array(z.string()).nullable().optional(),
 });
 // SCHEMA_END

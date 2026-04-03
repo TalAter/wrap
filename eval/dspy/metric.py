@@ -19,6 +19,7 @@ WEIGHTS = {
     "memory_updates_message_pattern": 1.0,
     "watchlist_additions_pattern": 1.0,
     "watchlist_additions_min_count": 1.0,
+    "no_memory_updates": 2.0,
 }
 
 
@@ -117,6 +118,13 @@ def score(response: dict, assertions: dict) -> float:
                 )
             ),
         ))
+
+    # memory_updates must be empty (null, missing, or [])
+    if "no_memory_updates" in assertions and assertions["no_memory_updates"]:
+        updates = response.get("memory_updates") or []
+        if not isinstance(updates, list):
+            updates = []
+        checks.append(("no_memory_updates", len(updates) == 0))
 
     # watchlist_additions tools must match pattern
     if "watchlist_additions_pattern" in assertions:
