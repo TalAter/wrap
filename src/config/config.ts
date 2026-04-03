@@ -8,6 +8,7 @@ export type Config = {
   provider?: ProviderConfig;
   maxRounds?: number;
   maxProbeOutputChars?: number;
+  verbose?: boolean;
 };
 
 export const DEFAULT_MAX_ROUNDS = 5;

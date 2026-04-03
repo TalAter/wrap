@@ -1,19 +1,21 @@
 import { loadConfig } from "./config/config.ts";
 import { getWrapHome } from "./core/home.ts";
-import { parseInput } from "./core/input.ts";
+import { parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { runQuery } from "./core/query.ts";
-import { listCwdFiles } from "./discovery/cwd-files.ts";
+import { initVerbose, verbose } from "./core/verbose.ts";
+import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { loadWatchlist } from "./discovery/watchlist.ts";
 import { initProvider } from "./llm/index.ts";
+import { providerLabel } from "./llm/types.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 
 export async function main() {
   try {
-    const input = parseInput(process.argv);
+    const { modifiers, input } = parseArgs(process.argv);
 
     if (input.type === "none" || input.type === "flag") {
       const flag = input.type === "flag" ? input.flag : "--help";
@@ -23,6 +25,8 @@ export async function main() {
     }
 
     const config = loadConfig();
+    initVerbose(modifiers.verbose || config.verbose === true);
+    verbose(`Config loaded (${config.provider?.type ?? "no provider"})`);
 
     if (!config.provider) {
       chrome("Config error: no provider configured.");
@@ -30,12 +34,25 @@ export async function main() {
     }
 
     const provider = initProvider(config.provider);
+    verbose(`Provider initialized (${providerLabel(config.provider)})`);
+
     const wrapHome = getWrapHome();
     const watchlist = loadWatchlist(wrapHome);
     const tools = probeTools(watchlist.map((e) => e.tool));
+    if (tools) {
+      verbose(
+        `Tools: ${tools.available.length}/${tools.available.length + tools.unavailable.length} available`,
+      );
+    }
+
     const memory = await ensureMemory(provider, wrapHome);
+
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
     const cwdFiles = await listCwdFiles(cwd);
+    if (cwdFiles) {
+      verbose(`CWD: ${countCwdFiles(cwdFiles)} files listed`);
+    }
+
     process.exit(
       await runQuery(input.prompt, provider, {
         memory,

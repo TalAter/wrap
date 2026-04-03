@@ -18,6 +18,11 @@
       "minimum": 1000,
       "default": 200000
     },
+    "verbose": {
+      "type": "boolean",
+      "description": "Enable verbose mode. Surfaces internal pipeline steps on stderr.",
+      "default": false
+    },
     "provider": {
       "description": "LLM provider configuration",
       "oneOf": [

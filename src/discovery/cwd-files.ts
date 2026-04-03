@@ -6,6 +6,11 @@ const NEWEST_COUNT = 30;
 
 type Entry = { name: string; isDir: boolean; mtimeMs: number };
 
+/** Count actual file entries, excluding omission markers and summary lines. */
+export function countCwdFiles(cwdFiles: string): number {
+  return cwdFiles.split("\n").filter((l) => !l.startsWith("...") && !l.startsWith("(")).length;
+}
+
 /** List CWD files sorted by mtime. Returns oldest 20 + newest 30 if >50 entries. */
 export async function listCwdFiles(cwd: string): Promise<string | undefined> {
   let names: string[];

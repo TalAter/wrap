@@ -1,6 +1,6 @@
 # Verbose Mode
 
-> **Status:** Not started
+> **Status:** Implemented
 > **Date:** 2026-03-31
 
 ## Purpose

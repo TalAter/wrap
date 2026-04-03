@@ -25,3 +25,9 @@ export type AISDKProviderConfig = {
 };
 
 export type ProviderConfig = TestProviderConfig | ClaudeCodeProviderConfig | AISDKProviderConfig;
+
+/** Human-readable label for a provider config (model name or provider type). */
+export function providerLabel(config: ProviderConfig): string {
+  if ("model" in config && config.model) return config.model;
+  return config.type;
+}

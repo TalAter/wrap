@@ -3,11 +3,12 @@ import { join } from "node:path";
 import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
+import { verbose } from "../core/verbose.ts";
 import { runProbes } from "../discovery/init-probes.ts";
 import type { Provider } from "../llm/types.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
 
-import type { Fact, Memory } from "./types.ts";
+import { countFacts, type Fact, type Memory } from "./types.ts";
 
 const MEMORY_FILE = "memory.json";
 
@@ -92,16 +93,24 @@ export function parseInitResponse(response: string): Fact[] {
 /** Load existing memory or initialize by probing the system and asking the LLM. */
 export async function ensureMemory(provider: Provider, wrapHome: string): Promise<Memory> {
   const existing = loadMemory(wrapHome);
-  if (Object.keys(existing).length > 0) return existing;
+  if (Object.keys(existing).length > 0) {
+    const total = countFacts(existing);
+    const globalCount = (existing["/"] ?? []).length;
+    verbose(`Memory: ${total} facts (${globalCount} global, ${total - globalCount} scoped)`);
+    return existing;
+  }
 
   chrome("✨ Learning about your system...");
 
+  verbose("Init: probing OS and shell...");
   const probeOutput = runProbes();
+  verbose("Init: calling LLM to extract system facts...");
   const response = await provider.runPrompt({
     system: INIT_SYSTEM_PROMPT,
     messages: [{ role: "user", content: probeOutput }],
   });
   const facts = parseInitResponse(response as string);
+  verbose(`Init: ${facts.length} facts extracted`);
   const memory: Memory = { "/": facts };
 
   saveMemory(wrapHome, memory);

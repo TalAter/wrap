@@ -5,7 +5,12 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
-import type { PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
+import {
+  type PromptInput,
+  type Provider,
+  type ProviderConfig,
+  providerLabel,
+} from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendFacts } from "../memory/memory.ts";
@@ -15,6 +20,7 @@ import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
+import { verbose, verboseHighlight } from "./verbose.ts";
 
 export function isStructuredOutputError(e: unknown): boolean {
   return (
@@ -41,6 +47,7 @@ export async function callWithRetry(
     return await runCommandPrompt(provider, input);
   } catch (e) {
     if (!isStructuredOutputError(e)) throw e;
+    verbose("LLM parse error, retrying...");
     return runCommandPrompt(provider, {
       system: input.system,
       messages: [
@@ -58,6 +65,7 @@ export async function callWithRetry(
 function handleMemoryUpdates(response: CommandResponse, wrapHome: string, cwd: string): void {
   if (!response.memory_updates?.length) return;
   appendFacts(wrapHome, response.memory_updates, cwd);
+  verbose(`Memory updated: ${response.memory_updates.length} facts`);
   if (response.memory_updates_message) {
     const scopes = response.memory_updates
       .map((u) => resolvePath(u.scope, cwd))
@@ -65,6 +73,20 @@ function handleMemoryUpdates(response: CommandResponse, wrapHome: string, cwd: s
     const deepest = scopes.sort((a, b) => b.length - a.length)[0];
     const prefix = deepest ? `🧠 (${prettyPath(deepest)}) ` : "🧠 ";
     chrome(`${prefix}${response.memory_updates_message}`);
+  }
+}
+
+function verboseResponse(response: CommandResponse): void {
+  switch (response.type) {
+    case "command":
+      verboseHighlight(`LLM responded (command, ${response.risk_level}): `, response.content);
+      break;
+    case "answer":
+      verbose(`LLM responded (answer, ${response.content.length} chars)`);
+      break;
+    case "probe":
+      verboseHighlight("LLM responded (probe): ", response.content);
+      break;
   }
 }
 
@@ -104,18 +126,26 @@ export async function runQuery(
       piped: !process.stdout.isTTY,
     });
 
+    const model = providerLabel(options.providerConfig);
+
     for (let roundNum = 1; roundNum <= maxRounds; roundNum++) {
       const round: Round = {};
       const isLastRound = roundNum === maxRounds;
 
+      if (roundNum > 1) {
+        verbose(`Round ${roundNum}/${maxRounds}`);
+      }
+
       // On last round, instruct LLM not to probe
       if (isLastRound) {
+        verbose("Final round: must return command or answer");
         input.messages.push({
           role: "user",
           content: promptConstants.lastRoundInstruction,
         });
       }
 
+      verbose(`Calling ${model}...`);
       const llmStart = performance.now();
       let response: CommandResponse;
       try {
@@ -136,7 +166,9 @@ export async function runQuery(
           });
         }
       } catch (e) {
-        round.provider_error = e instanceof Error ? e.message : String(e);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        verbose(`LLM error: ${errMsg}`);
+        round.provider_error = errMsg;
         round.llm_ms = Math.round(performance.now() - llmStart);
         addRound(entry, round);
         throw e;
@@ -144,10 +176,13 @@ export async function runQuery(
       round.llm_ms = Math.round(performance.now() - llmStart);
       round.parsed = response;
 
+      verboseResponse(response);
+
       handleMemoryUpdates(response, wrapHome, options.cwd);
 
       if (response.watchlist_additions?.length) {
         addToWatchlist(wrapHome, response.watchlist_additions);
+        verbose(`Watchlist: added ${response.watchlist_additions.join(", ")}`);
       }
 
       if (!response.content.trim()) {
@@ -186,6 +221,7 @@ export async function runQuery(
         chrome(`🔍 ${response.explanation || response.content}`);
 
         const shell = process.env.SHELL || "sh";
+        verbose(`Probe: ${response.content}`);
         const execStart = performance.now();
         const proc = Bun.spawn([shell, "-c", response.content], {
           stdout: "pipe",
@@ -198,6 +234,7 @@ export async function runQuery(
         ]);
         round.exec_ms = Math.round(performance.now() - execStart);
         round.execution = { command: response.content, exit_code: probeExit, shell };
+        verbose(`Probe exited (${probeExit})`);
 
         let probeOutput = stdoutText;
         if (stderrText.trim()) {
@@ -233,6 +270,7 @@ export async function runQuery(
         return 1;
       }
       const shell = process.env.SHELL || "sh";
+      verbose("Executing command...");
       const execStart = performance.now();
       const proc = Bun.spawn([shell, "-c", response.content], {
         stdout: "inherit",
@@ -242,6 +280,7 @@ export async function runQuery(
       const exitCode = await proc.exited;
       round.exec_ms = Math.round(performance.now() - execStart);
       round.execution = { command: response.content, exit_code: exitCode, shell };
+      verbose(`Command exited (${exitCode})`);
       entry.outcome = exitCode === 0 ? "success" : "error";
       addRound(entry, round);
       return exitCode;

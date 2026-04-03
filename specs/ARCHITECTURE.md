@@ -7,7 +7,9 @@
 ## Top-Level Flow
 
 ```
-parseInput(argv)
+extractModifiers(argv)  ──→ { modifiers, remaining }
+       │
+parseInput(remaining)
        │
        ├─ readPipedInput()  ──→ reads stdin if piped, returns string | null  [NOT YET IMPLEMENTED]
        │
@@ -16,6 +18,8 @@ parseInput(argv)
        ├─ no args? ──→ dispatch --help (exit)  [will change: no args + pipe → piped input becomes prompt]
        │
        ├─ loadConfig()  ──→ loads config from file + env
+       │
+       ├─ initVerbose()  ──→ enables verbose if flag or config
        │
        ├─ initProvider()  ──→ factory: config → Provider
        │
@@ -93,6 +97,7 @@ src/
     output.ts                 isTTY(), hasJq(), chrome() (stderr output)
     home.ts                   getWrapHome() — resolves ~/.wrap or WRAP_HOME
     ansi.ts                   ANSI color/style utilities
+    verbose.ts                Verbose mode: initVerbose() + verbose()
 
   config/
     config.ts                 Config loading + merging (file + env var)

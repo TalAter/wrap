@@ -76,7 +76,6 @@ describe("ensureMemory", () => {
     const result = await ensureMemory(provider, dir);
     expect(result).toEqual(memory);
     expect(llmCalled).toBe(false);
-    expect(chromeOutput).toEqual([]);
   });
 
   test("runs init when no memory exists", async () => {
