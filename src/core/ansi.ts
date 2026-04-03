@@ -3,6 +3,9 @@ type Color = [number, number, number];
 const ESC = "\x1b[";
 const RESET = `${ESC}0m`;
 
+export const SHOW_CURSOR = `${ESC}?25h`;
+export const HIDE_CURSOR = `${ESC}?25l`;
+
 export function bold(text: string): string {
   return `${ESC}1m${text}${RESET}`;
 }

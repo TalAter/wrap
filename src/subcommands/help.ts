@@ -1,4 +1,4 @@
-import { bold, dim, fg, gradient } from "../core/ansi.ts";
+import { bold, dim, fg, gradient, SHOW_CURSOR } from "../core/ansi.ts";
 import { chrome, chromeRaw, isTTY } from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
@@ -87,7 +87,7 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   // Write full output first so all content is visible immediately
   process.stdout.write(styled);
 
-  const showCursor = () => chromeRaw("\x1b[?25h");
+  const showCursor = () => chromeRaw(SHOW_CURSOR);
   const onSigint = () => {
     showCursor();
     // During sleep, cursor is at artEnd — move to bottom before exiting

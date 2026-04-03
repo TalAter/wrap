@@ -279,10 +279,17 @@ export async function runQuery(
 
       // type === "command"
       if (response.risk_level !== "low") {
-        chrome(`Command requires confirmation (not yet supported): ${response.content}`);
-        entry.outcome = "refused";
-        addRound(entry, round);
-        return 1;
+        const { confirmCommand } = await import("../tui/render.ts");
+        const decision = await confirmCommand(
+          response.content,
+          response.risk_level,
+          response.explanation ?? undefined,
+        );
+        if (decision !== "run") {
+          entry.outcome = decision === "blocked" ? "blocked" : "cancelled";
+          addRound(entry, round);
+          return 1;
+        }
       }
       const shell = process.env.SHELL || "sh";
       verbose("Executing command...");

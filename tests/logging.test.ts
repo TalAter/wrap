@@ -381,14 +381,14 @@ describe("logging integration", () => {
     expect(entry.version.length).toBeGreaterThan(0);
   });
 
-  test("non-low risk command logs with outcome 'refused'", async () => {
+  test("non-low risk command logs with outcome 'blocked' (no TTY)", async () => {
     const result = await wrapMock("delete everything", {
       type: "command",
       content: "rm -rf /",
       risk_level: "high",
     });
     const entry = readLog(result.wrapHome);
-    expect(entry.outcome).toBe("refused");
+    expect(entry.outcome).toBe("blocked");
     expect(entry.rounds[0].parsed.content).toBe("rm -rf /");
     expect(entry.rounds[0].execution).toBeUndefined();
   });

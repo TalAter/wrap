@@ -5,8 +5,8 @@
   "version": "0.1.0",
   "scripts": {
     "start": "bun run src/index.ts",
-    "build:watch": "bun build src/index.ts --compile --outfile wrap --watch",
-    "build": "bun build src/index.ts --compile --outfile wrap",
+    "build:watch": "bun build src/index.ts --compile --outfile wrap --external react-devtools-core --watch",
+    "build": "bun build src/index.ts --compile --outfile wrap --external react-devtools-core",
     "test": "bun test",
     "lint": "bunx biome check . --write --error-on-warnings",
     "format": "bunx biome format . --write",
@@ -15,13 +15,17 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "ink-testing-library": "^4.0.0"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",
     "@ai-sdk/openai": "^3.0.48",
     "ai": "^6.0.137",
+    "ink": "^6.8.0",
     "jsonc-parser": "^3.3.1",
+    "react": "^19.2.4",
     "zod": "^4.3.6"
   }
 }
