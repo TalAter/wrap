@@ -230,9 +230,9 @@ When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr �
 | **Medium** | `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `q` = cancel | Low friction — a single keypress to confirm |
 | **High** | `y` + `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `q`/`Enter` = cancel | Requires deliberate opt-in. Default action is cancel. |
 
-**`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the TUI panel. The user can then proceed with the other keybindings.
+**`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the TUI panel. The user can then proceed with the other keybindings. **Does not consume a round** — it's a user-initiated side-channel request, not part of the command-generation loop.
 
-**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the TUI updates with the new generated command. The user can follow up multiple times before executing or cancelling. This is only available in the confirmation TUI (medium/high risk commands) — for low-risk commands that auto-execute, the user can continue via `wyada` in a new invocation.
+**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the TUI updates with the new generated command. The user can follow up multiple times before executing or cancelling. **Resets the round counter** — it's effectively a new query with fresh intent, so it gets a fresh round budget. This is only available in the confirmation TUI (medium/high risk commands) — for low-risk commands that auto-execute, the user can continue via `wyada` in a new invocation.
 
 **Input buffer flush:** Before rendering the confirmation prompt, flush/discard any buffered terminal input. This prevents a stray `Enter` (pressed while waiting for the LLM response) from accidentally confirming a dangerous command. The prompt only accepts input after it is fully displayed.
 
@@ -318,6 +318,7 @@ Note: `command not found: foo` (without `./`) means `foo` is not in `$PATH` anyw
 - Error-fix rounds and probe rounds share a **unified counter** (see ARCHITECTURE.md — Loop Rules). One budget for all rounds, configurable via `maxRounds`.
 - **Default:** 5 rounds total (probes + error-fix attempts), show each attempt (command + error)
 - After max rounds exhausted, show final error and stop
+- **Rounds only tick for autonomous LLM calls** — probes and auto-fix retries that happen without user intervention. User-initiated actions (Describe, Follow-up) don't consume rounds or reset the budget. See ARCHITECTURE.md — Loop Rules for details.
 
 ---
 
