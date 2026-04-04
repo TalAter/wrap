@@ -64,7 +64,7 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
 | `rounds` | array | Array of rounds (see below) |
-| `outcome` | string | `"success"` \| `"error"` \| `"refused"` \| `"cancelled"` (future) \| `"max_rounds"` |
+| `outcome` | string | `"success"` \| `"error"` \| `"blocked"` \| `"cancelled"` \| `"max_rounds"` |
 
 ### Round fields
 
@@ -137,7 +137,8 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 | LLM returns answer | Yes | `"success"` |
 | LLM returns malformed JSON / structured output failure | Yes — `provider_error` captures the failure | `"error"` |
 | Provider subprocess crashes | Yes — `provider_error` captures the failure | `"error"` |
-| Non-low risk command (confirmation needed) | Yes | `"refused"` |
+| Non-low risk command, no TTY | Yes | `"blocked"` |
+| Non-low risk command, user cancels | Yes | `"cancelled"` |
 | Probe round | Yes — as a round in the same entry, with `execution` capturing the probe command | |
 | Round budget exhausted (all probes) | Yes | `"max_rounds"` |
 | Provider initialization fails (e.g., unknown type) | No | — |
