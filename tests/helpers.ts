@@ -7,7 +7,7 @@ export function tmpHome(): string {
   return mkdtempSync(join(tmpdir(), "wrap-test-"));
 }
 
-export async function wrap(input?: string, env?: Record<string, string>) {
+export async function wrap(input?: string, env?: Record<string, string>, stdin?: string) {
   const args = input ? input.split(" ") : [];
   // Always isolate from the real ~/.wrap/ config
   const isolatedEnv = {
@@ -18,6 +18,7 @@ export async function wrap(input?: string, env?: Record<string, string>) {
   const proc = Bun.spawn(["bun", "run", "src/index.ts", ...args], {
     stdout: "pipe",
     stderr: "pipe",
+    stdin: stdin !== undefined ? new Blob([stdin]) : "inherit",
     env: isolatedEnv,
   });
   const exitCode = await proc.exited;
@@ -38,6 +39,7 @@ export async function wrapMock(
   prompt: string,
   response: object | object[],
   config?: Record<string, unknown>,
+  stdin?: string,
 ) {
   const wrapHome = tmpHome();
   seedMemory(wrapHome);
@@ -51,5 +53,5 @@ export async function wrapMock(
   } else {
     env.WRAP_TEST_RESPONSE = JSON.stringify(response);
   }
-  return wrap(prompt, env);
+  return wrap(prompt, env, stdin);
 }
