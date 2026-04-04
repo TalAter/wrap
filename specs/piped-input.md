@@ -44,12 +44,12 @@ Read the full piped content into a string in memory: `await Bun.stdin.text()`. N
 
 ## Truncation
 
-When piped input exceeds `maxPipedTokens` (configurable, default 50,000 tokens estimated at ~4 chars/token = ~200KB), Wrap truncates what it sends to the LLM but keeps the full buffer in memory for re-piping. The check: `pipedInput.length > maxPipedTokens * 4`. When truncating, slice to the first `maxPipedTokens * 4` characters.
+When piped input exceeds `maxPipedInputChars` (configurable, default 200,000 characters = ~200KB), Wrap truncates what it sends to the LLM but keeps the full buffer in memory for re-piping. The check: `pipedInput.length > maxPipedInputChars`. When truncating, slice to the first `maxPipedInputChars` characters. Uses the same chars-based approach as `maxProbeOutputChars`.
 
 **What the LLM sees:**
 
 ```
-## Piped input (truncated — showing first ~200KB of 12MB total)
+## Piped input (truncated — showing first 200000 of 12000000 chars)
 
 [first ~200KB of content]
 ```
@@ -64,7 +64,7 @@ The truncation note tells the LLM the content is incomplete and how large the fu
 
 ```jsonc
 {
-  "maxPipedTokens": 50000  // ~200KB at 4 chars/token. Above this, piped input is truncated before sending to LLM.
+  "maxPipedInputChars": 200000  // ~200KB. Above this, piped input is truncated before sending to LLM. Same unit as maxProbeOutputChars.
 }
 ```
 
@@ -326,3 +326,57 @@ $ cat huge.log | w explain the error on line 12570000
 # Round 1: LLM probes with sed -n '12570000p' + pipe_stdin
 # Round 2: LLM explains the extracted line
 ```
+
+---
+
+## Implementation Plan
+
+### Step 1: Test helpers + `readPipedInput()`
+- Extend `wrap()` and `wrapMock()` to accept `stdin` option (default: no stdin, preserving `isTTY` for existing tests)
+- Write `readPipedInput()` in `src/core/piped-input.ts` — detects `!process.stdin.isTTY`, reads `Bun.stdin.text()`, returns `null` for empty/whitespace
+- Tests: detection, reading, empty handling
+- **Files:** `tests/helpers.ts`, `src/core/piped-input.ts`, `tests/piped-input.test.ts`
+
+### Step 2: Config — `maxPipedInputChars`
+- Add `maxPipedInputChars` to config schema, type, and defaults (chars-based, like `maxProbeOutputChars`)
+- Default: 200,000 chars (~200KB)
+- **Files:** `src/config/config.schema.json`, `src/config/config.ts`
+
+### Step 3: Prompt assembly — inject piped input into context
+- Add `## Piped input` section as first section in `formatContext()` (before system facts), with truncation note when exceeding `maxPipedInputChars`
+- Add `pipedInput` and `maxPipedInputChars` params to `FormatContextParams`
+- Skip `## User's request` section when prompt is empty (pipe-only mode)
+- Add section header / truncation constants to `prompt.constants.json`
+- Update `assembleCommandPrompt()` to pass through `pipedInput`
+- Update eval bridge to accept and pass `pipedInput`
+- **Files:** `src/llm/format-context.ts`, `src/llm/context.ts`, `src/llm/build-prompt.ts`, `src/prompt.constants.json`, `eval/bridge.ts`, tests
+- **Depends on:** Step 2
+
+### Step 4: System prompt — piped input section
+- Add permanent `## Piped input` instruction to system prompt explaining `pipe_stdin` behavior
+- **Files:** `src/prompt.constants.json` (or `src/prompt.optimized.json`)
+
+### Step 5: `pipe_stdin` in response schema
+- Add `pipe_stdin: z.boolean().optional()` to `CommandResponseSchema`
+- **Files:** `src/command-response.schema.ts`
+
+### Step 6: Wire into `main()` + `runQuery()` + command execution
+- Call `readPipedInput()` in `main()` after `parseArgs`, before dispatch
+- When `input.type === "none"` + pipe present → proceed to query (don't dispatch `--help`)
+- Pass `pipedInput` through to `runQuery()` → `assembleCommandPrompt()` → `createLogEntry()`
+- When `pipe_stdin: true` + piped input present: use `stdin: new Blob([pipedInput])` for commands and probes
+- Log piped input truncated to 1,000 chars
+- **Files:** `src/main.ts`, `src/core/query.ts`, `src/logging/entry.ts`
+- **Depends on:** Steps 1, 3, 5
+
+### Step 7: E2E tests
+- Piped input + CLI args, pipe-only (no args), empty pipe, large input truncation, `pipe_stdin: true/false`, piped content not parsed as flags
+- **Depends on:** Steps 1–6
+
+### Step 8: Eval samples + coverage verification
+- Add eval samples for piped input scenarios (pipe + args, pipe-only, truncated pipe, `pipe_stdin` usage)
+- Review existing samples for needed updates
+- Verify test coverage
+
+### Step 9: Compact the spec
+- Mark implemented sections, remove build instructions, keep architecture/design choices

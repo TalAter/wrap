@@ -16,15 +16,8 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
-- [ ] Piped input — see `specs/piped-input.md` for full design. Key tasks:
-  - [ ] `readPipedInput()` — detect `!process.stdin.isTTY`, read with `Bun.stdin.text()`, ignore empty
-  - [ ] Wire piped input through main → runQuery → assembleCommandPrompt → log entry
-  - [ ] Truncation at `maxPipedTokens` with note to LLM about total size
-  - [ ] `pipe_stdin` response schema field + re-pipe to spawned command via `Bun.spawn({ stdin: new Blob([...]) })`
-  - [ ] `maxPipedTokens` config key (default 50,000)
-  - [ ] System prompt section for piped input behavior
-  - [ ] No-args + pipe: piped content becomes prompt (bypass --help dispatch)
-  - [ ] Large input: currently truncates silently; replace with TUI confirmation when confirmation is built
+- [ ] Piped input — see `specs/piped-input.md` for full design and implementation plan
+  - [ ] `readPipedInput()`, config (`maxPipedInputChars`), prompt assembly, `pipe_stdin` schema field, wiring through main → query → execution, eval samples
 
 ## Execution & Safety (see specs/safety.md)
 
@@ -75,7 +68,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
-- [ ] Wire `piped_input` field from stdin (see `specs/piped-input.md`)
+- [ ] Wire `piped_input` log field from stdin (part of piped input feature, see `specs/piped-input.md`)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
 - [ ] `expires` field + retention pruning (future)
 - [ ] Document in help/README that logs contain full LLM exchanges
