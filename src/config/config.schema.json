@@ -18,6 +18,12 @@
       "minimum": 1000,
       "default": 200000
     },
+    "maxPipedInputChars": {
+      "type": "integer",
+      "description": "Maximum characters of piped stdin sent to the LLM. Longer input is truncated but the full content is still available for re-piping to commands. Default: 200000 (~200KB).",
+      "minimum": 1000,
+      "default": 200000
+    },
     "verbose": {
       "type": "boolean",
       "description": "Enable verbose mode. Surfaces internal pipeline steps on stderr.",

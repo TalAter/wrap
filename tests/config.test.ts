@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import configSchema from "../src/config/config.schema.json";
 import {
+  DEFAULT_MAX_PIPED_INPUT_CHARS,
   DEFAULT_MAX_PROBE_OUTPUT_CHARS,
   DEFAULT_MAX_ROUNDS,
   loadConfig,
@@ -261,6 +262,41 @@ describe("loadConfig", () => {
       expect(mp.type).toBe("integer");
       expect(mp.default).toBe(DEFAULT_MAX_PROBE_OUTPUT_CHARS);
       expect(mp.minimum).toBe(1000);
+    });
+
+    test("configSchema includes maxPipedInputChars with default 200000", () => {
+      const mp = configSchema.properties.maxPipedInputChars;
+      expect(mp.type).toBe("integer");
+      expect(mp.default).toBe(DEFAULT_MAX_PIPED_INPUT_CHARS);
+      expect(mp.minimum).toBe(1000);
+    });
+  });
+
+  describe("maxPipedInputChars", () => {
+    test("reads from config file", () => {
+      const dir = tempDir();
+      writeFileSync(
+        join(dir, "config.jsonc"),
+        JSON.stringify({ provider: { type: "test" }, maxPipedInputChars: 50000 }),
+      );
+      const config = loadConfig({ WRAP_HOME: dir });
+      expect(config.maxPipedInputChars).toBe(50000);
+    });
+
+    test("reads from WRAP_CONFIG", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" }, maxPipedInputChars: 100000 }),
+      });
+      expect(config.maxPipedInputChars).toBe(100000);
+    });
+
+    test("undefined when not set", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      });
+      expect(config.maxPipedInputChars).toBeUndefined();
     });
   });
 });

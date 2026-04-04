@@ -8,11 +8,13 @@ export type Config = {
   provider?: ProviderConfig;
   maxRounds?: number;
   maxProbeOutputChars?: number;
+  maxPipedInputChars?: number;
   verbose?: boolean;
 };
 
 export const DEFAULT_MAX_ROUNDS = 5;
 export const DEFAULT_MAX_PROBE_OUTPUT_CHARS = 200_000;
+export const DEFAULT_MAX_PIPED_INPUT_CHARS = 200_000;
 
 const CONFIG_FILENAME = "config.jsonc";
 
