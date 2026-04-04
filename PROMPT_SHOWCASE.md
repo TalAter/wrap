@@ -44,3 +44,27 @@ answer → "That error is a connection pool exhaustion — the app opened 500+ D
 One prompt. The LLM figured out it couldn't answer from the preview, used a surgical probe to extract the exact line, then explained it. The user never left the terminal, never opened the file, never scrolled to line 12 million.
 
 Shows: piped input, smart probe strategy, LLM reasoning about its own limitations, surgical precision on huge files.
+
+---
+
+### Git week → changelog
+
+```
+$ w summarize git commits from this week and add to the top of CHANGELOG.md
+```
+
+The LLM doesn't know what happened this week — so it probes:
+
+```
+probe → git log --since="1 week ago" --oneline
+```
+
+Gets back a list of commits. Now it knows what changed. It also needs to know what's already in the changelog:
+
+```
+probe → head -20 CHANGELOG.md
+```
+
+With both pieces of context, it generates a single command that prepends a new dated section with a human-readable summary to the top of the file.
+
+Shows: multi-step probe chain, reading repo state, generating content from context, real-world dev workflow automation.
