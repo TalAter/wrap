@@ -42,7 +42,9 @@ export function buildPrompt(
   if (contextString) {
     userParts.push(contextString);
   }
-  userParts.push(`${config.sectionUserRequest}\n${query}`);
+  if (query) {
+    userParts.push(`${config.sectionUserRequest}\n${query}`);
+  }
 
   messages.push({ role: "user", content: userParts.join("\n\n") });
 

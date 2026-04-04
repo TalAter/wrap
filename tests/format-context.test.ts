@@ -258,4 +258,61 @@ describe("formatContext", () => {
     const cwdIdx = result.indexOf("Working directory");
     expect(cwdFilesIdx).toBeLessThan(cwdIdx);
   });
+
+  describe("piped input", () => {
+    test("includes piped input section when pipedInput is provided", () => {
+      const result = formatContext(makeParams({ pipedInput: "some log content" }));
+      expect(result).toContain("## Piped input");
+      expect(result).toContain("some log content");
+    });
+
+    test("piped input is the first section (before memory facts)", () => {
+      const result = formatContext(
+        makeParams({
+          pipedInput: "log data",
+          memory: { "/": [{ fact: "macOS" }] },
+        }),
+      );
+      const pipedIdx = result.indexOf("## Piped input");
+      const factsIdx = result.indexOf("## System facts");
+      expect(pipedIdx).toBeLessThan(factsIdx);
+    });
+
+    test("no piped input section when pipedInput is undefined", () => {
+      const result = formatContext(makeParams());
+      expect(result).not.toContain("## Piped input");
+    });
+
+    test("truncates when exceeding maxPipedInputChars", () => {
+      const longContent = "x".repeat(500);
+      const result = formatContext(
+        makeParams({ pipedInput: longContent, maxPipedInputChars: 200 }),
+      );
+      expect(result).toContain("x".repeat(200));
+      expect(result).not.toContain("x".repeat(201));
+    });
+
+    test("truncation note shows correct character counts", () => {
+      const longContent = "x".repeat(500);
+      const result = formatContext(
+        makeParams({ pipedInput: longContent, maxPipedInputChars: 200 }),
+      );
+      expect(result).toContain("## Piped input (truncated — showing first 200 of 500 chars)");
+    });
+
+    test("no truncation note when under limit", () => {
+      const result = formatContext(
+        makeParams({ pipedInput: "short content", maxPipedInputChars: 200000 }),
+      );
+      expect(result).toContain("## Piped input\n");
+      expect(result).not.toContain("truncated");
+    });
+
+    test("no truncation when maxPipedInputChars is not set", () => {
+      const longContent = "x".repeat(500);
+      const result = formatContext(makeParams({ pipedInput: longContent }));
+      expect(result).toContain(longContent);
+      expect(result).not.toContain("truncated");
+    });
+  });
 });

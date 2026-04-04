@@ -4,6 +4,7 @@
   "sectionDetectedTools": "## Detected tools",
   "sectionUnavailableTools": "## Unavailable tools",
   "sectionCwdFiles": "## Files in CWD",
+  "sectionPipedInput": "## Piped input",
   "sectionUserRequest": "## User's request",
   "cwdPrefix": "- Working directory (cwd):",
   "fewShotSeparator": "Now handle the following request.",

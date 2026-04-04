@@ -7,12 +7,15 @@ export type FormatContextParams = {
   cwdFiles?: string;
   cwd: string;
   piped?: boolean;
+  pipedInput?: string;
+  maxPipedInputChars?: number;
   constants: {
     sectionSystemFacts: string;
     sectionFactsAbout: string;
     sectionDetectedTools: string;
     sectionUnavailableTools: string;
     sectionCwdFiles: string;
+    sectionPipedInput: string;
     cwdPrefix: string;
     pipedOutputInstruction: string;
   };
@@ -20,8 +23,17 @@ export type FormatContextParams = {
 
 /** Build the context string from memory, tools, piped flag, and cwd. Pure function. */
 export function formatContext(params: FormatContextParams): string {
-  const { memory, tools, cwdFiles, cwd, piped, constants } = params;
+  const { memory, tools, cwdFiles, cwd, piped, pipedInput, maxPipedInputChars, constants } = params;
   const sections: string[] = [];
+
+  if (pipedInput) {
+    const truncate = maxPipedInputChars != null && pipedInput.length > maxPipedInputChars;
+    const header = truncate
+      ? `${constants.sectionPipedInput} (truncated — showing first ${maxPipedInputChars} of ${pipedInput.length} chars)`
+      : constants.sectionPipedInput;
+    const content = truncate ? pipedInput.slice(0, maxPipedInputChars) : pipedInput;
+    sections.push(`${header}\n${content}`);
+  }
 
   const cwdSlash = cwd.endsWith("/") ? cwd : `${cwd}/`;
   for (const scope of Object.keys(memory)) {

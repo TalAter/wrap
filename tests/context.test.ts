@@ -269,6 +269,39 @@ describe("tools output in prompt", () => {
   });
 });
 
+describe("piped input in prompt", () => {
+  test("pipedInput shows up in final user message", () => {
+    const content = lastMessage(makeContext({ pipedInput: "error log content here" }));
+    expect(content).toContain("## Piped input");
+    expect(content).toContain("error log content here");
+  });
+
+  test("pipedInput appears before memory facts", () => {
+    const content = lastMessage(
+      makeContext({
+        pipedInput: "log data",
+        memory: { "/": [{ fact: "macOS" }] },
+      }),
+    );
+    const pipedIdx = content.indexOf("## Piped input");
+    const factsIdx = content.indexOf("## System facts");
+    expect(pipedIdx).toBeLessThan(factsIdx);
+  });
+
+  test("user request section omitted when prompt is empty", () => {
+    const content = lastMessage(makeContext({ prompt: "", pipedInput: "piped content" }));
+    expect(content).not.toContain("## User's request");
+    expect(content).toContain("## Piped input");
+    expect(content).toContain("piped content");
+  });
+
+  test("user request section present when prompt is non-empty with piped input", () => {
+    const content = lastMessage(makeContext({ prompt: "explain this", pipedInput: "error log" }));
+    expect(content).toContain("## User's request\nexplain this");
+    expect(content).toContain("## Piped input");
+  });
+});
+
 describe("piped-mode prompt", () => {
   test("piped: true appends piped-mode instruction to user message", () => {
     const content = lastMessage(makeContext({ piped: true }));

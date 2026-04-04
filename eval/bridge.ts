@@ -35,6 +35,8 @@ const contextString = formatContext({
   cwdFiles: input.cwdFiles,
   cwd: input.cwd,
   piped: input.piped,
+  pipedInput: input.pipedInput,
+  maxPipedInputChars: input.maxPipedInputChars,
   constants: promptConstants,
 });
 

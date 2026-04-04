@@ -17,13 +17,15 @@ export type QueryContext = {
 };
 
 /** Assemble a PromptInput for a command prompt call. */
-export function assembleCommandPrompt(ctx: QueryContext): PromptInput {
+export function assembleCommandPrompt(ctx: QueryContext, maxPipedInputChars?: number): PromptInput {
   const contextString = formatContext({
     memory: ctx.memory,
     tools: ctx.tools,
     cwdFiles: ctx.cwdFiles,
     cwd: ctx.cwd,
     piped: ctx.piped,
+    pipedInput: ctx.pipedInput,
+    maxPipedInputChars,
     constants: promptConstants,
   });
 
