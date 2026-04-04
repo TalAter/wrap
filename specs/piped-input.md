@@ -44,7 +44,11 @@ Read the full piped content into a string in memory: `await Bun.stdin.text()`. N
 
 ## Truncation
 
-When piped input exceeds `maxPipedInputChars` (configurable, default 200,000 characters = ~200KB), Wrap truncates what it sends to the LLM but keeps the full buffer in memory for re-piping. The check: `pipedInput.length > maxPipedInputChars`. When truncating, slice to the first `maxPipedInputChars` characters. Uses the same chars-based approach as `maxProbeOutputChars`.
+When piped input exceeds `maxPipedInputChars` (configurable, default 200,000 characters = ~200KB), Wrap truncates what it sends to the LLM but keeps the full buffer in memory for re-piping. Uses the same chars-based approach as `maxProbeOutputChars`.
+
+### Line-aware truncation
+
+Both piped input and probe output truncation use a shared pure utility: `truncateToLine(text, maxChars)`. Instead of slicing at an arbitrary character offset (which can cut mid-word, mid-filename, or mid-token — confusing the LLM), it finds the last newline (`\n`) at or before `maxChars` and cuts there. If no newline exists within the limit (e.g., minified JSON, one giant line), it falls back to a hard character cut. This keeps truncated output clean in the common case (logs, diffs, code, CSVs, command output are all line-oriented) and degrades gracefully for edge cases. The function lives in `src/core/truncate.ts` and is independently testable.
 
 **What the LLM sees:**
 

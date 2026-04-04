@@ -7,6 +7,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Core Query Loop
 
 - [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
+- [ ] `truncateToLine()` utility — line-aware truncation for LLM context (see `specs/piped-input.md` § Truncation). Replace naive `slice()` in probe output truncation (`query.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
 
 ## Input & Invocation
 
