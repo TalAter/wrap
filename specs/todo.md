@@ -28,7 +28,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
 - [ ] Confirmation TUI — bordered panel with syntax-highlighted command, risk indicator, explanation
-- [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, Enter=cancel)
+- [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, bare Enter highlights hint)
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[F]ollow-up` option — text input for natural language refinement
 - [ ] `[C]opy` option — copy command to clipboard

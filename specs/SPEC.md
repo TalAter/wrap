@@ -227,8 +227,12 @@ When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr �
 
 | Risk | Keybindings | Rationale |
 |------|-------------|-----------|
-| **Medium** | `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `q` = cancel | Low friction — a single keypress to confirm |
-| **High** | `y` + `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `q`/`Enter` = cancel | Requires deliberate opt-in. Default action is cancel. |
+| **Medium** | `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `c` = copy, `Esc` = cancel | Low friction — a single keypress to confirm |
+| **High** | `y` + `Enter` = run, `e` = edit, `d` = describe, `f` = follow-up, `c` = copy, `Esc` = cancel | Requires deliberate opt-in |
+
+`q` is an alias for `Esc` (quit convention from vim/less/man).
+
+**High-risk Enter behavior:** Pressing `Enter` alone on a high-risk command does not cancel or run — it highlights the `y + Enter` hint to teach the interaction. The user must type `y` then `Enter` to confirm. This prevents both accidental execution (if Enter ran it) and confusion (if Enter cancelled it).
 
 **`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the TUI panel. The user can then proceed with the other keybindings. **Does not consume a round** — it's a user-initiated side-channel request, not part of the command-generation loop.
 
@@ -646,7 +650,7 @@ $ w find all typescript files modified today
 $ w delete everything here
 🔮 rm -rf *
   ⚠ High risk · This will delete everything in the current directory and any of its subdirectories
-  [y+Enter] Run  [e] Edit  [d] Describe  [f] Follow-up  [Enter/q] Cancel
+  [y+Enter] Run  [e] Edit  [d] Describe  [f] Follow-up  [c] Copy  [Esc] Cancel
 ```
 
 ### A.3 Yolo Mode
@@ -689,7 +693,7 @@ $ w add an alias for ll to my shell config
 🧠 Noted: you use zsh, config at ~/.zshrc
 🔮 echo "alias ll='ls -la'" >> ~/.zshrc
   Medium risk · Appends to your shell config file
-  [Enter] Run  [e] Edit  [d] Describe  [f] Follow-up  [q] Cancel
+  [Enter] Run  [e] Edit  [d] Describe  [f] Follow-up  [c] Copy  [Esc] Cancel
 ```
 
 ### A.7 Auto-Fix on Error (Command Not Found)
