@@ -133,7 +133,7 @@ The confirmation panel uses a **synthwave gradient** border that shifts hue base
 
 **Keybindings (both risk levels):**
 - `y` = run the command
-- `n` or `Esc` = cancel
+- `n`, `q`, or `Esc` = cancel
 - `d` = describe (LLM explanation)
 - `e` = edit (editable command field)
 - `f` = follow-up (text input for refinement)
