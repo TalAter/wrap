@@ -106,6 +106,39 @@ Ink + React + Yoga adds ~1MB to the compiled binary (measured). The lazy-load pa
 
 React initialization adds roughly 50-100ms. For the confirmation panel this happens after the LLM response arrives (500-2000ms), so the user never perceives it. For interactive mode (`w` with no args) Ink is the first thing rendered — 100ms is below perception threshold for cold-start.
 
+## Confirmation panel visual design
+
+The confirmation panel uses a **synthwave gradient** border that shifts hue based on risk level. See `specs/confirm-style.sh` for the exact ANSI reference rendering (run `bash specs/confirm-style.sh` to preview).
+
+**Layout:**
+- Rounded corners (`╭╮╰╯`), thin lines (`─│`). No heavy border (Unicode has no heavy rounded corners).
+- Left-aligned, content-fitted width. Long commands wrap within the box.
+- Gradient flows from bright accent (top-left corner) → dim neutral (bottom-right). Both the top edge and left edge carry the gradient; right edge and bottom are dim neutral.
+- Command displayed on a **tinted background** strip (subtle code-block feel, ~`rgb(35,35,50)`).
+- Explanation text below command, slightly dimmer than body text.
+- **No separator line** between command area and action bar — just breathing room (blank lines).
+- **Risk badge** pill embedded in the top-right border: `─── ⚠ medium ──╮`. Pill has a tinted background matching the risk color.
+
+**Risk-level color palettes:**
+- **Medium:** pink→purple synthwave. Border starts `rgb(255,100,200)`, fades through purple to `rgb(60,60,100)`. Badge: amber text `rgb(255,200,80)` on dark warm bg `rgb(80,60,30)`.
+- **High:** red→purple synthwave. Border starts `rgb(255,60,80)`, fades through magenta/purple to `rgb(60,60,100)`. Badge: red text `rgb(255,100,100)` on dark red bg `rgb(80,25,25)`.
+
+**Syntax highlighting** for the command: command names in warm orange, flags in cyan/blue, strings/values in pink. Use a shell highlighting library (`cli-highlight` or similar) or hand-color based on simple token rules.
+
+**Action bar:**
+- Format: `Run command?  Yes  No  │  Describe  Edit  Follow-up  Copy`
+- Y/N are the primary actions, separated from secondary actions (D/E/F/C) by a dim vertical bar `│`.
+- Shortcut keys are the **first letter** of each word, styled: **bold + underlined + accent color**. Y/N keys use a warmer accent `rgb(245,200,100)`, secondary keys use a cooler `rgb(170,170,195)`. The rest of each word is dim `rgb(115,115,140)`.
+- Same Y/N keybinding for both medium and high risk (simplified from the original tiered Enter/y+Enter scheme).
+
+**Keybindings (both risk levels):**
+- `y` = run the command
+- `n` or `Esc` = cancel
+- `d` = describe (LLM explanation)
+- `e` = edit (editable command field)
+- `f` = follow-up (text input for refinement)
+- `c` = copy to clipboard
+
 ## Useful companion libraries
 
 - **Syntax highlighting** for shell commands in the confirmation panel: `highlight.js` or `cli-highlight`
