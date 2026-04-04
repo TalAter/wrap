@@ -1,6 +1,6 @@
 # Interactive Mode
 
-**Status:** Future (blocked by TUI library selection)
+**Status:** Future (TUI library selected: Ink — see `specs/tui-approach.md`)
 **Date:** 2026-03-26
 
 ## Overview

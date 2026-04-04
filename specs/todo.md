@@ -27,14 +27,12 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Nonce delimiters for untrusted prompt sections
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
-- [ ] Confirmation TUI — bordered panel with syntax-highlighted command, risk indicator, explanation
-- [ ] Tiered confirmation keybindings (medium: Enter=run; high: y+Enter=run, bare Enter highlights hint)
+- [ ] Confirmation TUI styling — bordered panel, syntax-highlighted command, risk indicator
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[F]ollow-up` option — text input for natural language refinement
 - [ ] `[C]opy` option — copy command to clipboard
 - [ ] Edit mode — editable command field in confirmation TUI
 - [ ] Input buffer flush before rendering confirmation prompt
-- [ ] No-TTY detection — fail early with clear stderr message if `/dev/tty` unavailable
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 

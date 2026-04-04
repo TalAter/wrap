@@ -68,7 +68,7 @@ Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child proce
 
 ## Where Ink gets used
 
-**Confirmation panel** — when the LLM generates a medium or high-risk command. See `SPEC.md` for full keybinding spec and risk tiers. This is the most urgent need; medium/high-risk commands are currently refused (see `src/core/query.ts` lines 228-234).
+**Confirmation panel** — when the LLM generates a medium or high-risk command. See `SPEC.md` for full keybinding spec and risk tiers. Basic panel implemented: renders command, risk level, explanation, tiered keybindings (medium: Enter=run; high: y+Enter=run). Falls back gracefully when no TTY is available.
 
 **Config wizard** — first-run setup and `w config`. Provider selection (radio/select), API key entry (masked text input), model selection. Standard form UI. Ink has component libraries for these: `ink-select-input`, `ink-text-input`.
 
