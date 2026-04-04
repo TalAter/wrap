@@ -161,7 +161,7 @@ Single-key bindings, same for both risk levels. This replaces the tiered keybind
 - **`src/tui/confirm.tsx`** — `ConfirmPanel` component (layout, state, input), `ActionBar` component
 - **`src/tui/border.ts`** — `gradientTopBorder()`, `gradientBottomBorder()`, gradient color interpolation, risk palettes
 - **`src/tui/render.ts`** — existing orchestration, minor type updates for new keybinding actions
-- **`src/core/ansi.ts`** — unchanged, already has `fg()`, `gradient()`, `bold()`, `dim()`, `stripAnsi()`
+- **`src/core/ansi.ts`** — export the existing `interpolate()` function and `Color` type (currently private). No new helpers needed — `underline()`, `bg()`, etc. are handled by Ink's `<Text>` props inside the component.
 
 ## Dependencies
 
