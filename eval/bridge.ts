@@ -48,6 +48,7 @@ const promptInput = buildPrompt(
     memoryRecencyInstruction: promptConstants.memoryRecencyInstruction,
     toolsScopeInstruction: promptConstants.toolsScopeInstruction,
     voiceInstructions: promptConstants.voiceInstructions,
+    pipedInputInstruction: input.pipedInput ? promptConstants.pipedInputInstruction : undefined,
     fewShotExamples: input.fewShotExamples,
     fewShotSeparator: promptConstants.fewShotSeparator,
     sectionUserRequest: promptConstants.sectionUserRequest,

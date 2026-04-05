@@ -155,4 +155,25 @@ describe("CommandResponseSchema", () => {
     const input = { type: "command", content: "ls", risk_level: "low", watchlist_additions: [] };
     expect(CommandResponseSchema.parse(input).watchlist_additions).toEqual([]);
   });
+
+  test("parses response with pipe_stdin true", () => {
+    const input = {
+      type: "command",
+      content: "wc -l",
+      risk_level: "low",
+      pipe_stdin: true,
+    };
+    const result = CommandResponseSchema.parse(input);
+    expect(result.pipe_stdin).toBe(true);
+  });
+
+  test("allows pipe_stdin to be omitted", () => {
+    const input = { type: "command", content: "ls", risk_level: "low" };
+    expect(CommandResponseSchema.parse(input).pipe_stdin).toBeUndefined();
+  });
+
+  test("allows pipe_stdin false", () => {
+    const input = { type: "command", content: "ls", risk_level: "low", pipe_stdin: false };
+    expect(CommandResponseSchema.parse(input).pipe_stdin).toBe(false);
+  });
 });

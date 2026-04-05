@@ -333,6 +333,8 @@ def build_prompt_hash_manifest(
         ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
         ["CWD_PREFIX", CONSTANTS["cwdPrefix"]],
         ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
+        ["SECTION_PIPED_INPUT", CONSTANTS["sectionPipedInput"]],
+        ["PIPED_INPUT_INSTRUCTION", CONSTANTS["pipedInputInstruction"]],
         ["FEW_SHOT_EXAMPLES", demos or []],
     ]
 

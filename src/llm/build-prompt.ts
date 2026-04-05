@@ -7,6 +7,7 @@ export type PromptConfig = {
   memoryRecencyInstruction: string;
   toolsScopeInstruction: string;
   voiceInstructions: string;
+  pipedInputInstruction?: string;
   fewShotExamples: ReadonlyArray<{ readonly input: string; readonly output: string }>;
   fewShotSeparator: string;
   sectionUserRequest: string;
@@ -24,6 +25,9 @@ export function buildPrompt(
     config.toolsScopeInstruction,
     config.voiceInstructions,
   ];
+  if (config.pipedInputInstruction) {
+    systemParts.push(config.pipedInputInstruction);
+  }
   if (config.schemaText) {
     systemParts.push(`${config.schemaInstruction}\n${config.schemaText}`);
   }

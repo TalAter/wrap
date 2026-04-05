@@ -37,6 +37,7 @@ export function assembleCommandPrompt(ctx: QueryContext, maxPipedInputChars?: nu
       memoryRecencyInstruction: promptConstants.memoryRecencyInstruction,
       toolsScopeInstruction: promptConstants.toolsScopeInstruction,
       voiceInstructions: promptConstants.voiceInstructions,
+      pipedInputInstruction: ctx.pipedInput ? promptConstants.pipedInputInstruction : undefined,
       fewShotExamples: promptOptimized.fewShotExamples,
       fewShotSeparator: promptConstants.fewShotSeparator,
       sectionUserRequest: promptConstants.sectionUserRequest,

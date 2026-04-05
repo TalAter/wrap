@@ -25,6 +25,8 @@ describe("PROMPT_HASH", () => {
       ["SECTION_USER_REQUEST", constants.sectionUserRequest],
       ["CWD_PREFIX", constants.cwdPrefix],
       ["PIPED_OUTPUT_INSTRUCTION", constants.pipedOutputInstruction],
+      ["SECTION_PIPED_INPUT", constants.sectionPipedInput],
+      ["PIPED_INPUT_INSTRUCTION", constants.pipedInputInstruction],
       ["FEW_SHOT_EXAMPLES", optimized.fewShotExamples],
     ];
     const input = JSON.stringify(manifest);

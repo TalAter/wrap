@@ -229,6 +229,16 @@ describe("scoped memory in prompt", () => {
     const result = assembleCommandPrompt(makeContext());
     expect(result.system).toContain("dry wit");
   });
+
+  test("piped input instruction in system prompt when pipedInput present", () => {
+    const result = assembleCommandPrompt(makeContext({ pipedInput: "some data" }));
+    expect(result.system).toContain("Piped input serves as");
+  });
+
+  test("no piped input instruction in system prompt when no pipedInput", () => {
+    const result = assembleCommandPrompt(makeContext());
+    expect(result.system).not.toContain("Piped input serves as");
+  });
 });
 
 describe("tools output in prompt", () => {
