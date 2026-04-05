@@ -371,3 +371,125 @@ describe("wrap", () => {
     expect(stderr).toMatch(/🧠 \(.*\) Noted: zsh and bun/);
   });
 });
+
+describe("piped input", () => {
+  test("pipe + CLI args: LLM receives both piped content and prompt", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "explain this",
+      { type: "answer", content: "It's an error log", risk_level: "low" },
+      undefined,
+      "ERROR: connection refused",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("It's an error log\n");
+  });
+
+  test("pipe only (no args): proceeds to query, not --help", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "",
+      { type: "answer", content: "42 lines", risk_level: "low" },
+      undefined,
+      "line1\nline2\nline3",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("42 lines\n");
+  });
+
+  test("empty pipe: treated as no piped input, shows help", async () => {
+    const { exitCode, stdout } = await wrap(undefined, undefined, "");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Usage:");
+  });
+
+  test("whitespace-only pipe: treated as no piped input, shows help", async () => {
+    const { exitCode, stdout } = await wrap(undefined, undefined, "   \n\t  ");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Usage:");
+  });
+
+  test("pipe_stdin: true — command receives piped content on stdin", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "count lines",
+      { type: "command", content: "wc -l", risk_level: "low", pipe_stdin: true },
+      undefined,
+      "line1\nline2\nline3\n",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("3");
+  });
+
+  test("pipe_stdin: false — command does not receive piped content", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "list files",
+      { type: "command", content: "echo hello", risk_level: "low", pipe_stdin: false },
+      undefined,
+      "this should not be piped",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("hello\n");
+  });
+
+  test("pipe_stdin: true on probe — probe receives piped content", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "count lines",
+      [
+        { type: "probe", content: "wc -l", risk_level: "low", pipe_stdin: true },
+        { type: "answer", content: "3 lines", risk_level: "low" },
+      ],
+      undefined,
+      "a\nb\nc\n",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("3 lines\n");
+  });
+
+  test("piped content not parsed as flags", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "explain this",
+      { type: "answer", content: "That's a version flag", risk_level: "low" },
+      undefined,
+      "--version",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("That's a version flag\n");
+    // Should NOT have triggered --version subcommand
+    expect(stdout).not.toContain("wrap v");
+  });
+
+  test("piped input logged in entry", async () => {
+    const { wrapHome } = await wrapMock(
+      "explain",
+      { type: "answer", content: "ok", risk_level: "low" },
+      undefined,
+      "log data here",
+    );
+    const logPath = join(wrapHome, "logs", "wrap.jsonl");
+    const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
+    expect(entry.piped_input).toBe("log data here");
+  });
+
+  test("large piped input truncated in log", async () => {
+    const largeInput = "x".repeat(5000);
+    const { wrapHome } = await wrapMock(
+      "explain",
+      { type: "answer", content: "ok", risk_level: "low" },
+      undefined,
+      largeInput,
+    );
+    const logPath = join(wrapHome, "logs", "wrap.jsonl");
+    const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
+    expect(entry.piped_input).toContain("[…truncated, 5000 chars total]");
+    expect(entry.piped_input.length).toBeLessThan(5000);
+  });
+
+  test("no piped input: log omits piped_input field", async () => {
+    const { wrapHome } = await wrapMock("hello", {
+      type: "answer",
+      content: "ok",
+      risk_level: "low",
+    });
+    const logPath = join(wrapHome, "logs", "wrap.jsonl");
+    const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
+    expect("piped_input" in entry).toBe(false);
+  });
+});
