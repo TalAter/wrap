@@ -17,12 +17,13 @@ import { dispatch } from "./subcommands/dispatch.ts";
 export async function main() {
   try {
     const { modifiers, input } = parseArgs(process.argv);
-    const pipedInput = await readPipedInput();
 
     if (input.type === "flag") {
       await dispatch(input.flag, input.args);
       return;
     }
+
+    const pipedInput = await readPipedInput();
 
     if (input.type === "none" && !pipedInput) {
       await dispatch("--help", []);
@@ -67,7 +68,7 @@ export async function main() {
         providerConfig: config.provider,
         tools,
         cwdFiles,
-        pipedInput: pipedInput ?? undefined,
+        pipedInput,
         maxRounds: config.maxRounds,
         maxProbeOutputChars: config.maxProbeOutputChars,
         maxPipedInputChars: config.maxPipedInputChars,

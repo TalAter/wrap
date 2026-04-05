@@ -10,10 +10,12 @@ const defaultStdin: StdinSource = {
   read: () => Bun.stdin.text(),
 };
 
-/** Read piped stdin content. Returns null when stdin is a TTY or content is empty. */
-export async function readPipedInput(stdin: StdinSource = defaultStdin): Promise<string | null> {
-  if (stdin.isTTY) return null;
+/** Read piped stdin content. Returns undefined when stdin is a TTY or content is empty. */
+export async function readPipedInput(
+  stdin: StdinSource = defaultStdin,
+): Promise<string | undefined> {
+  if (stdin.isTTY) return undefined;
   const content = await stdin.read();
-  if (!content.trim()) return null;
+  if (!/\S/.test(content)) return undefined;
   return content;
 }

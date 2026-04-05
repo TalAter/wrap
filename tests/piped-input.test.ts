@@ -7,7 +7,7 @@ describe("readPipedInput", () => {
       isTTY: true,
       read: () => Promise.resolve("should not be read"),
     });
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
   });
 
   test("returns content when stdin is piped", async () => {
@@ -23,7 +23,7 @@ describe("readPipedInput", () => {
       isTTY: undefined,
       read: () => Promise.resolve(""),
     });
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
   });
 
   test("returns null when piped content is whitespace-only", async () => {
@@ -31,7 +31,7 @@ describe("readPipedInput", () => {
       isTTY: undefined,
       read: () => Promise.resolve("   \n\t  \n  "),
     });
-    expect(result).toBeNull();
+    expect(result).toBeUndefined();
   });
 
   test("reads when isTTY is false (not just undefined)", async () => {
