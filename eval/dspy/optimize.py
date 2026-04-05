@@ -40,7 +40,7 @@ with open(CONSTANTS_PATH) as _f:
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
 
-def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None, extra_messages=None, last_round=False):
+def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None, extra_messages=None, last_round=False, piped_input=None):
     """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
     payload_dict = {
         "mode": mode,
@@ -59,6 +59,8 @@ def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped
         payload_dict["extraMessages"] = extra_messages
     if last_round:
         payload_dict["lastRound"] = True
+    if piped_input is not None:
+        payload_dict["pipedInput"] = piped_input
     payload = json.dumps(payload_dict)
     try:
         result = subprocess.run(
@@ -139,6 +141,10 @@ def make_signature(schema_text: str):
             desc="Whether this is the last available round (LLM must not probe)",
             default="",
         )
+        piped_input: str = dspy.InputField(
+            desc="Content piped to stdin (e.g. from cat file | w explain this)",
+            default="",
+        )
         natural_language_query: str = dspy.InputField(
             desc="The user's natural language request"
         )
@@ -167,6 +173,7 @@ class WrapPredictor(dspy.Module):
         cwd_files = kwargs.get("cwd_files")
         extra_messages = kwargs.get("extra_messages")
         last_round = kwargs.get("last_round", False)
+        piped_input = kwargs.get("piped_input")
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -179,6 +186,7 @@ class WrapPredictor(dspy.Module):
             cwd_files=cwd_files,
             extra_messages=extra_messages,
             last_round=last_round,
+            piped_input=piped_input if piped_input else None,
         )
 
         # response_json as JSON string: DSPy signature declares it as str,
@@ -202,7 +210,7 @@ def _example_key(ex):
     em = getattr(ex, "extra_messages", None)
     if em:
         extra_msg_hash = hashlib.md5(json.dumps(em, sort_keys=True).encode()).hexdigest()[:8]
-    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), extra_msg_hash, assertions_hash)
+    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), extra_msg_hash, assertions_hash, getattr(ex, "piped_input", None))
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
@@ -257,9 +265,10 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
                 cwd_files=ex.get("cwd_files"),
                 extra_messages=ex.get("extra_messages"),
                 last_round=ex.get("last_round", False),
+                piped_input=ex.get("pipedInput"),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
-            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "extra_messages", "last_round", "natural_language_query")
+            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "extra_messages", "last_round", "piped_input", "natural_language_query")
         )
     return dspy_examples
 
@@ -370,6 +379,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
     results = []
     for ex in examples:
         cwd_files = getattr(ex, "cwd_files", None)
+        piped_input = getattr(ex, "piped_input", None)
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -380,6 +390,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
             piped=ex.piped,
             query=ex.natural_language_query,
             cwd_files=cwd_files,
+            piped_input=piped_input if piped_input else None,
         )
         s = 0.0 if error_type else score(response, ex.assertions)
         results.append({
