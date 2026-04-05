@@ -5,8 +5,8 @@
   "version": "0.1.0",
   "scripts": {
     "start": "bun run src/index.ts",
-    "build:watch": "bun build src/index.ts --compile --outfile wrap --external react-devtools-core --watch",
-    "build": "bun build src/index.ts --compile --outfile wrap --external react-devtools-core",
+    "build:watch": "watchexec -w src bun run build.ts",
+    "build": "bun run build.ts",
     "test": "bun test",
     "lint": "bunx biome check . --write --error-on-warnings",
     "format": "bunx biome format . --write",
