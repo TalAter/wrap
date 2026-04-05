@@ -61,7 +61,11 @@ export function createLogEntry(params: {
     outcome: "error",
   };
   if (params.pipedInput !== undefined) {
-    entry.piped_input = params.pipedInput;
+    const LOG_PIPED_INPUT_MAX = 1000;
+    entry.piped_input =
+      params.pipedInput.length > LOG_PIPED_INPUT_MAX
+        ? `${params.pipedInput.slice(0, LOG_PIPED_INPUT_MAX)}\n[…truncated, ${params.pipedInput.length} chars total]`
+        : params.pipedInput;
   }
   if (params.memory && Object.keys(params.memory).length > 0) {
     entry.memory = params.memory;

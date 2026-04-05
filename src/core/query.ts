@@ -1,6 +1,10 @@
 import { NoObjectGeneratedError } from "ai";
 import type { CommandResponse } from "../command-response.schema.ts";
-import { DEFAULT_MAX_PROBE_OUTPUT_CHARS, DEFAULT_MAX_ROUNDS } from "../config/config.ts";
+import {
+  DEFAULT_MAX_PIPED_INPUT_CHARS,
+  DEFAULT_MAX_PROBE_OUTPUT_CHARS,
+  DEFAULT_MAX_ROUNDS,
+} from "../config/config.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
@@ -100,31 +104,39 @@ export async function runQuery(
     providerConfig: ProviderConfig;
     tools?: ToolProbeResult | null;
     cwdFiles?: string;
+    pipedInput?: string;
     maxRounds?: number;
     maxProbeOutputChars?: number;
+    maxPipedInputChars?: number;
   },
 ): Promise<number> {
   const wrapHome = getWrapHome();
   const maxRounds = options.maxRounds ?? DEFAULT_MAX_ROUNDS;
   const maxProbeOutput = options.maxProbeOutputChars ?? DEFAULT_MAX_PROBE_OUTPUT_CHARS;
+  const maxPipedInput = options.maxPipedInputChars ?? DEFAULT_MAX_PIPED_INPUT_CHARS;
   const memory = options.memory ?? {};
   const entry = createLogEntry({
     prompt,
     cwd: options.cwd,
+    pipedInput: options.pipedInput,
     memory,
     provider: options.providerConfig,
     promptHash: PROMPT_HASH,
   });
 
   try {
-    const input = assembleCommandPrompt({
-      prompt,
-      cwd: options.cwd,
-      memory,
-      tools: options.tools,
-      cwdFiles: options.cwdFiles,
-      piped: !process.stdout.isTTY,
-    });
+    const input = assembleCommandPrompt(
+      {
+        prompt,
+        cwd: options.cwd,
+        memory,
+        tools: options.tools,
+        cwdFiles: options.cwdFiles,
+        pipedInput: options.pipedInput,
+        piped: !process.stdout.isTTY,
+      },
+      maxPipedInput,
+    );
 
     const model = providerLabel(options.providerConfig);
 
@@ -223,9 +235,11 @@ export async function runQuery(
         const shell = process.env.SHELL || "sh";
         verbose(`Probe: ${response.content}`);
         const execStart = performance.now();
+        const pipeStdin = response.pipe_stdin && options.pipedInput;
         const proc = Bun.spawn([shell, "-c", response.content], {
           stdout: "pipe",
           stderr: "pipe",
+          stdin: pipeStdin ? new Blob([options.pipedInput as string]) : undefined,
         });
         const [probeExit, stdoutText, stderrText] = await Promise.all([
           proc.exited,
@@ -272,10 +286,11 @@ export async function runQuery(
       const shell = process.env.SHELL || "sh";
       verbose("Executing command...");
       const execStart = performance.now();
+      const pipeStdin = response.pipe_stdin && options.pipedInput;
       const proc = Bun.spawn([shell, "-c", response.content], {
         stdout: "inherit",
         stderr: "inherit",
-        stdin: "inherit",
+        stdin: pipeStdin ? new Blob([options.pipedInput as string]) : "inherit",
       });
       const exitCode = await proc.exited;
       round.exec_ms = Math.round(performance.now() - execStart);

@@ -49,6 +49,20 @@ describe("createLogEntry", () => {
     expect(entry.piped_input).toBe("hello world");
   });
 
+  test("truncates piped_input to 1000 chars in log", () => {
+    const long = "x".repeat(5000);
+    const entry = createLogEntry({ ...defaults, pipedInput: long });
+    expect(entry.piped_input).toHaveLength(1000 + "\n[…truncated, 5000 chars total]".length);
+    expect(entry.piped_input).toStartWith("x".repeat(1000));
+    expect(entry.piped_input).toEndWith("[…truncated, 5000 chars total]");
+  });
+
+  test("does not truncate piped_input at exactly 1000 chars", () => {
+    const exact = "x".repeat(1000);
+    const entry = createLogEntry({ ...defaults, pipedInput: exact });
+    expect(entry.piped_input).toBe(exact);
+  });
+
   test("omits piped_input when not provided", () => {
     const entry = createLogEntry(defaults);
     expect("piped_input" in entry).toBe(false);

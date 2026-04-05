@@ -3,6 +3,7 @@ import { getWrapHome } from "./core/home.ts";
 import { parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
+import { readPipedInput } from "./core/piped-input.ts";
 import { runQuery } from "./core/query.ts";
 import { initVerbose, verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
@@ -16,13 +17,19 @@ import { dispatch } from "./subcommands/dispatch.ts";
 export async function main() {
   try {
     const { modifiers, input } = parseArgs(process.argv);
+    const pipedInput = await readPipedInput();
 
-    if (input.type === "none" || input.type === "flag") {
-      const flag = input.type === "flag" ? input.flag : "--help";
-      const args = input.type === "flag" ? input.args : [];
-      await dispatch(flag, args);
+    if (input.type === "flag") {
+      await dispatch(input.flag, input.args);
       return;
     }
+
+    if (input.type === "none" && !pipedInput) {
+      await dispatch("--help", []);
+      return;
+    }
+
+    const prompt = input.type === "prompt" ? input.prompt : "";
 
     const config = loadConfig();
     initVerbose(modifiers.verbose || config.verbose === true);
@@ -54,14 +61,16 @@ export async function main() {
     }
 
     process.exit(
-      await runQuery(input.prompt, provider, {
+      await runQuery(prompt, provider, {
         memory,
         cwd,
         providerConfig: config.provider,
         tools,
         cwdFiles,
+        pipedInput: pipedInput ?? undefined,
         maxRounds: config.maxRounds,
         maxProbeOutputChars: config.maxProbeOutputChars,
+        maxPipedInputChars: config.maxPipedInputChars,
       }),
     );
   } catch (e) {
