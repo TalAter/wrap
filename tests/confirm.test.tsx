@@ -3,6 +3,17 @@ import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import { ConfirmPanel } from "../src/tui/confirm.tsx";
 
+function extractPanelLines(frame: string): string[] {
+  const lines = stripAnsi(frame).split("\n");
+  const topIndex = lines.findIndex((line) => line.includes("╭"));
+  if (topIndex === -1) return [];
+
+  const bottomIndex = lines.findIndex((line, i) => i > topIndex && line.includes("╰"));
+  if (bottomIndex === -1) return [];
+
+  return lines.slice(topIndex, bottomIndex + 1).map((line) => line.trimStart());
+}
+
 describe("ConfirmPanel", () => {
   test("renders command text", () => {
     const { lastFrame } = render(
@@ -86,9 +97,8 @@ describe("ConfirmPanel", () => {
     const without = render(
       <ConfirmPanel command="rm file" riskLevel="medium" onChoice={() => {}} />,
     );
-    const linesWith = withExplanation.lastFrame()?.split("\n").length ?? 0;
-    const linesWithout = without.lastFrame()?.split("\n").length ?? 0;
-    expect(linesWithout).toBeLessThan(linesWith);
+    expect(stripAnsi(withExplanation.lastFrame() ?? "")).toContain("info");
+    expect(stripAnsi(without.lastFrame() ?? "")).not.toContain("info");
   });
 
   test("keeps side borders aligned when explanation wraps", async () => {
@@ -101,10 +111,99 @@ describe("ConfirmPanel", () => {
       />,
     );
     await new Promise((r) => setTimeout(r, 10));
-    const lines = stripAnsi(lastFrame() ?? "").split("\n");
-    const interior = lines.slice(1, -1);
+    const panel = extractPanelLines(lastFrame() ?? "");
+    const interior = panel.slice(1, -1);
     expect(interior.length).toBeGreaterThan(0);
+    expect(
+      interior.every((line) => line === "" || (line.startsWith("│") && line.endsWith("│"))),
+    ).toBe(true);
+  });
+
+  test("reflows on terminal resize without waiting for keyboard input", async () => {
+    const app = render(
+      <ConfirmPanel
+        command="rm /Users/tal/mysite/wrap/CLAUDE.md"
+        riskLevel="high"
+        explanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
+        onChoice={() => {}}
+      />,
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+    const before = stripAnsi(app.lastFrame() ?? "");
+    const beforePanel = extractPanelLines(before);
+
+    Object.defineProperty(app.stdout, "columns", {
+      value: 72,
+      configurable: true,
+    });
+    app.stdout.emit("resize");
+
+    await new Promise((r) => setTimeout(r, 10));
+    const after = stripAnsi(app.lastFrame() ?? "");
+    const afterPanel = extractPanelLines(after);
+    const interior = afterPanel.slice(1, -1);
+
+    expect(after).not.toBe(before);
+    expect(afterPanel.length).toBeGreaterThan(0);
+    expect(afterPanel[0]?.length).toBeLessThan(beforePanel[0]?.length ?? 0);
     expect(interior.every((line) => line.startsWith("│") && line.endsWith("│"))).toBe(true);
+  });
+
+  test("keeps top border corners visible on narrow terminals", async () => {
+    const app = render(
+      <ConfirmPanel
+        command="rm /Users/tal/mysite/wrap/CLAUDE.md"
+        riskLevel="high"
+        explanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
+        onChoice={() => {}}
+      />,
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    Object.defineProperty(app.stdout, "columns", { value: 50, configurable: true });
+    app.stdout.emit("resize");
+
+    await new Promise((r) => setTimeout(r, 20));
+    const after = stripAnsi(app.lastFrame() ?? "");
+    const panel = extractPanelLines(after);
+    const topLine = panel[0] ?? "";
+
+    expect(topLine.startsWith("╭")).toBe(true);
+    expect(topLine.endsWith("╮")).toBe(true);
+    expect(topLine.length).toBeLessThanOrEqual(50);
+  });
+
+  test("uses the latest width after rapid resize bursts", async () => {
+    const app = render(
+      <ConfirmPanel
+        command="rm /Users/tal/mysite/wrap/CLAUDE.md"
+        riskLevel="high"
+        explanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
+        onChoice={() => {}}
+      />,
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    Object.defineProperty(app.stdout, "columns", { value: 88, configurable: true });
+    app.stdout.emit("resize");
+    Object.defineProperty(app.stdout, "columns", { value: 68, configurable: true });
+    app.stdout.emit("resize");
+    Object.defineProperty(app.stdout, "columns", { value: 76, configurable: true });
+    app.stdout.emit("resize");
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    const after = stripAnsi(app.lastFrame() ?? "");
+    const panel = extractPanelLines(after);
+    const topLine = panel[0] ?? "";
+
+    expect(topLine.startsWith("╭")).toBe(true);
+    expect(topLine.endsWith("╮")).toBe(true);
+    expect(topLine.length).toBeLessThanOrEqual(72);
+    expect(after).toContain("⚠ high");
   });
 });
 

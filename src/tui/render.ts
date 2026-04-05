@@ -1,4 +1,4 @@
-import { SHOW_CURSOR } from "../core/ansi.ts";
+import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, SHOW_CURSOR } from "../core/ansi.ts";
 import { chrome, chromeRaw } from "../core/output.ts";
 
 export type ConfirmResult = "run" | "cancel" | "blocked";
@@ -28,22 +28,26 @@ export async function confirmCommand(
 
   let result: ConfirmResult = "cancel";
 
-  const app = render(
-    createElement(ConfirmPanel, {
-      command,
-      riskLevel,
-      explanation,
-      onChoice: (choice: ConfirmResult) => {
-        result = choice;
-      },
-    }),
-    { stdout: process.stderr, patchConsole: false },
-  );
+  try {
+    // Isolate TUI rendering in alternate screen so resize redraw artifacts never corrupt main scrollback.
+    chromeRaw(ENTER_ALT_SCREEN);
 
-  await app.waitUntilExit();
+    const app = render(
+      createElement(ConfirmPanel, {
+        command,
+        riskLevel,
+        explanation,
+        onChoice: (choice: ConfirmResult) => {
+          result = choice;
+        },
+      }),
+      { stdout: process.stderr, patchConsole: false },
+    );
 
-  // Restore cursor visibility (bun#26642 workaround)
-  chromeRaw(SHOW_CURSOR);
+    await app.waitUntilExit();
+  } finally {
+    chromeRaw(`${EXIT_ALT_SCREEN}${SHOW_CURSOR}`);
+  }
 
   return result;
 }

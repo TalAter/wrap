@@ -30,6 +30,7 @@ const BADGE = {
 };
 
 export type BorderSegment = {
+  key: string;
   text: string;
   color?: string;
   backgroundColor?: string;
@@ -70,16 +71,17 @@ export function topBorderSegments(
     const color = interpolateGradient(i, totalWidth, riskLevel);
 
     if (i === 0) {
-      segments.push({ text: "╭", color });
+      segments.push({ key: `top-${i}`, text: "╭", color });
       i += 1;
     } else if (i === totalWidth - 1) {
-      segments.push({ text: "╮", color });
+      segments.push({ key: `top-${i}`, text: "╮", color });
       i += 1;
     } else if (i === badgeStart - 1 || i === badgeStart + badgeVisualWidth) {
-      segments.push({ text: " ", color });
+      segments.push({ key: `top-${i}`, text: " ", color });
       i += 1;
     } else if (i === badgeStart) {
       segments.push({
+        key: `top-${i}`,
         text: badgeText,
         color: colorHex(BADGE[riskLevel].fg),
         backgroundColor: colorHex(BADGE[riskLevel].bg),
@@ -87,7 +89,7 @@ export function topBorderSegments(
       });
       i += badgeVisualWidth;
     } else {
-      segments.push({ text: "─", color });
+      segments.push({ key: `top-${i}`, text: "─", color });
       i += 1;
     }
   }
@@ -99,12 +101,12 @@ export function bottomBorderSegments(totalWidth: number): BorderSegment[] {
   const color = colorHex(DIM_COLOR);
 
   if (totalWidth <= 1) {
-    return [{ text: "╰", color }];
+    return [{ key: "bottom-left", text: "╰", color }];
   }
 
   return [
-    { text: "╰", color },
-    { text: "─".repeat(Math.max(0, totalWidth - 2)), color },
-    { text: "╯", color },
+    { key: "bottom-left", text: "╰", color },
+    { key: "bottom-mid", text: "─".repeat(Math.max(0, totalWidth - 2)), color },
+    { key: "bottom-right", text: "╯", color },
   ];
 }

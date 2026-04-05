@@ -68,7 +68,9 @@ describe("topBorderSegments", () => {
   });
 
   test("renders badge as a styled segment", () => {
-    const badge = topBorderSegments(60, "medium").find((segment) => segment.text.includes("medium"));
+    const badge = topBorderSegments(60, "medium").find((segment) =>
+      segment.text.includes("medium"),
+    );
     expect(badge).toBeDefined();
     expect(badge?.backgroundColor).toBe("#503c1e");
     expect(badge?.bold).toBe(true);

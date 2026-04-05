@@ -1,9 +1,9 @@
-import { Box, measureElement, type DOMElement, Text, useApp, useInput, useStdout } from "ink";
-import { useEffect, useRef, useState } from "react";
+import { Box, type DOMElement, measureElement, Text, useApp, useInput, useStdout } from "ink";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
 import {
-  bottomBorderSegments,
   type BorderSegment,
+  bottomBorderSegments,
   interpolateGradient,
   topBorderSegments,
 } from "./border.ts";
@@ -18,21 +18,22 @@ type ConfirmPanelProps = {
 const ACTION_LABELS = ["Yes", "No", "Describe", "Edit", "Follow-up", "Copy"] as const;
 const ACTION_BAR_WIDTH = 57;
 const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
+const PANEL_MARGIN = 4;
+const MIN_TOTAL_WIDTH = 5;
 
 export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: ConfirmPanelProps) {
   const { exit } = useApp();
-  // Ink owns the render stream; size from that stream rather than process.stderr directly.
-  const { stdout } = useStdout();
+  const { columns: termCols, rows: termRows } = useRenderSize();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Width calculation
-  const termCols = stdout.columns || 80;
   const natural = Math.max(
     stringWidth(command),
     explanation ? stringWidth(explanation) : 0,
     MIN_INNER_WIDTH,
   );
-  const totalWidth = Math.min(natural + 4, termCols - 4);
+  const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - PANEL_MARGIN);
+  const totalWidth = Math.min(natural + 4, maxWidth);
   const innerWidth = totalWidth - 4;
 
   // Height: calculate from content (avoids measureElement feedback loops with Ink layout)
@@ -51,7 +52,7 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
     setBorderCount(initialBorderCount);
   }, [initialBorderCount]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = middleRef.current;
     if (!node) return;
     // The side borders must match Ink's actual wrapped layout, not our estimate above.
@@ -59,7 +60,15 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
     if (height > 0 && height !== borderCount) {
       setBorderCount(height);
     }
-  }, [borderCount, command, explanation, innerWidth]);
+  });
+
+  const leftBorderLines = Array.from({ length: borderCount }, (_, index) => ({
+    key: `left-${index}`,
+    color: interpolateGradient(index, borderCount, riskLevel),
+  }));
+  const rightBorderLines = Array.from({ length: borderCount }, (_, index) => ({
+    key: `right-${index}`,
+  }));
 
   useInput((input, key) => {
     if (input === "y") {
@@ -96,53 +105,82 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
   const cmdPadded = ` ${command}`.padEnd(innerWidth);
 
   return (
-    <Box flexDirection="column" width={totalWidth}>
-      <BorderLine segments={topBorderSegments(totalWidth, riskLevel)} />
+    <Box width={termCols} height={termRows} justifyContent="center" alignItems="center">
+      <Box flexDirection="column" width={totalWidth}>
+        <BorderLine segments={topBorderSegments(totalWidth, riskLevel)} />
 
-      <Box flexDirection="row" alignItems="flex-start">
-        <Box flexDirection="column" width={2}>
-          {Array.from({ length: borderCount }, (_, i) => (
-            <Text key={`left-${i}`} color={interpolateGradient(i, borderCount, riskLevel)}>
-              {"│ "}
-            </Text>
-          ))}
+        <Box flexDirection="row" alignItems="flex-start">
+          <Box flexDirection="column" width={2}>
+            {leftBorderLines.map((line) => (
+              <Text key={line.key} color={line.color}>
+                {"│ "}
+              </Text>
+            ))}
+          </Box>
+
+          <Box
+            ref={middleRef}
+            flexDirection="column"
+            width={innerWidth}
+            paddingTop={1}
+            paddingBottom={1}
+          >
+            <Text backgroundColor="#232332">{cmdPadded}</Text>
+            {explanation && (
+              <Text color="#87879b">
+                {"  "}
+                {explanation}
+              </Text>
+            )}
+            <Text> </Text>
+            <Text> </Text>
+            <ActionBar selectedIndex={selectedIndex} />
+          </Box>
+
+          <Box flexDirection="column" width={2}>
+            {rightBorderLines.map((line) => (
+              <Text key={line.key} color="#3c3c64">
+                {" │"}
+              </Text>
+            ))}
+          </Box>
         </Box>
 
-        <Box ref={middleRef} flexDirection="column" width={innerWidth}>
-          <Text> </Text>
-          <Text backgroundColor="#232332">{cmdPadded}</Text>
-          {explanation && (
-            <Text color="#87879b">
-              {"  "}
-              {explanation}
-            </Text>
-          )}
-          <Text> </Text>
-          <Text> </Text>
-          <ActionBar selectedIndex={selectedIndex} />
-          <Text> </Text>
-        </Box>
-
-        <Box flexDirection="column" width={2}>
-          {Array.from({ length: borderCount }, (_, i) => (
-            <Text key={`right-${i}`} color="#3c3c64">
-              {" │"}
-            </Text>
-          ))}
-        </Box>
+        <BorderLine segments={bottomBorderSegments(totalWidth)} />
       </Box>
-
-      <BorderLine segments={bottomBorderSegments(totalWidth)} />
     </Box>
   );
+}
+
+function useRenderSize(): { columns: number; rows: number } {
+  // Ink owns the render stream; rerender on resize from that stream.
+  const { stdout } = useStdout();
+  const fallbackColumns = 80;
+  const fallbackRows = 24;
+  const snapshot = useSyncExternalStore(
+    (onChange) => {
+      stdout.on("resize", onChange);
+
+      return () => {
+        stdout.off("resize", onChange);
+      };
+    },
+    () => `${stdout.columns || fallbackColumns}:${stdout.rows || fallbackRows}`,
+    () => `${fallbackColumns}:${fallbackRows}`,
+  );
+
+  const [columnsText, rowsText] = snapshot.split(":");
+  const columns = Number(columnsText ?? fallbackColumns);
+  const rows = Number(rowsText ?? fallbackRows);
+  return { columns, rows };
 }
 
 function BorderLine({ segments }: { segments: BorderSegment[] }) {
   return (
     <Text>
-      {segments.map((segment, i) => (
+      {segments.map((segment) => (
         <Text
-          key={`${i}-${segment.text}`}
+          key={segment.key}
           color={segment.color}
           backgroundColor={segment.backgroundColor}
           bold={segment.bold}
