@@ -235,11 +235,12 @@ export async function runQuery(
         const shell = process.env.SHELL || "sh";
         verbose(`Probe: ${response.content}`);
         const execStart = performance.now();
-        const pipeStdin = response.pipe_stdin && options.pipedInput;
+        const stdinBlob =
+          response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
         const proc = Bun.spawn([shell, "-c", response.content], {
           stdout: "pipe",
           stderr: "pipe",
-          stdin: pipeStdin ? new Blob([options.pipedInput as string]) : undefined,
+          stdin: stdinBlob,
         });
         const [probeExit, stdoutText, stderrText] = await Promise.all([
           proc.exited,
@@ -286,11 +287,12 @@ export async function runQuery(
       const shell = process.env.SHELL || "sh";
       verbose("Executing command...");
       const execStart = performance.now();
-      const pipeStdin = response.pipe_stdin && options.pipedInput;
+      const stdinBlob =
+        response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
       const proc = Bun.spawn([shell, "-c", response.content], {
         stdout: "inherit",
         stderr: "inherit",
-        stdin: pipeStdin ? new Blob([options.pipedInput as string]) : "inherit",
+        stdin: stdinBlob ?? "inherit",
       });
       const exitCode = await proc.exited;
       round.exec_ms = Math.round(performance.now() - execStart);
