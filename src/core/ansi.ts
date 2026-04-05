@@ -1,4 +1,4 @@
-type Color = [number, number, number];
+export type Color = [number, number, number];
 
 const ESC = "\x1b[";
 const RESET = `${ESC}0m`;
@@ -27,7 +27,7 @@ function lerp(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
 }
 
-function interpolate(stops: Color[], t: number): Color {
+export function interpolate(stops: Color[], t: number): Color {
   if (stops.length === 1) return stops[0] as Color;
   const segments = stops.length - 1;
   const seg = Math.min(Math.floor(t * segments), segments - 1);
