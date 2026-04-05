@@ -17,14 +17,13 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
-- [ ] Piped input — see `specs/piped-input.md` for full design and implementation plan
-  - [ ] `readPipedInput()`, config (`maxPipedInputChars`), prompt assembly, `pipe_stdin` schema field, wiring through main → query → execution, eval samples
+- [x] Piped input — see `specs/piped-input.md` for architecture
 
 ## Execution & Safety (see specs/safety.md)
 
 - [ ] Local safety rule engine — pattern list, `classifyLocal()`, integration in `query.ts` (see `specs/safety.md`)
 - [ ] Adversarial eval samples — indirect phrasing, obfuscated commands, social engineering
-- [ ] Piped injection eval samples (gated on `pipedInput` bridge support)
+- [ ] Piped injection eval samples (`pipedInput` bridge support now available)
 - [ ] Nonce delimiters for untrusted prompt sections
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
@@ -69,7 +68,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
-- [ ] Wire `piped_input` log field from stdin (part of piped input feature, see `specs/piped-input.md`)
+- [x] Wire `piped_input` log field from stdin (part of piped input feature)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
 - [ ] `expires` field + retention pruning (future)
 - [ ] Document in help/README that logs contain full LLM exchanges
@@ -104,7 +103,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Log-to-eval script — a script in `eval/` that parses `~/.wrap/logs/wrap.jsonl`, deduces feedback signals (exit codes, round retries, repeated prompts), identifies failure patterns and improvable scenarios, and outputs eval examples in `seed.jsonl` format for optimization.
 - [ ] LLM-as-judge for context-sensitive eval samples (see eval spec)
-- [ ] Evaluate conditional prompt sections. For example, piped input instructions (~150 tokens) are always in the system prompt even when unused. Consider a tested pattern for context-dependent prompt assembly that works with DSPy optimization. Applies to any future context-specific prompt sections too.
+- [ ] Evaluate conditional prompt sections. Piped input instruction is already conditional (only included when piped input present). Consider extending this pattern to other context-specific sections. Test that DSPy optimization handles conditional sections correctly.
 
 ## Build & Distribution
 
