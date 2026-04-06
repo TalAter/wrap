@@ -25,60 +25,36 @@ async function wrapVerbose(
 }
 
 describe("verbose e2e", () => {
-  test("--verbose shows config loaded line", async () => {
-    const { stderr } = await wrapVerbose("hello", {
+  test("--verbose answer: shows all standard lines and passes output", async () => {
+    const { exitCode, stdout, stderr } = await wrapVerbose("hello", {
       type: "answer",
       content: "world",
       risk_level: "low",
     });
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("world\n");
     expect(stderr).toContain("Config loaded (test)");
-  });
-
-  test("--verbose shows provider initialized", async () => {
-    const { stderr } = await wrapVerbose("hello", {
-      type: "answer",
-      content: "world",
-      risk_level: "low",
-    });
     expect(stderr).toContain("Provider initialized");
-  });
-
-  test("--verbose shows tools line", async () => {
-    const { stderr } = await wrapVerbose("hello", {
-      type: "answer",
-      content: "world",
-      risk_level: "low",
-    });
-    expect(stderr).toContain("Tools:");
     expect(stderr).toMatch(/Tools: \d+\/\d+ available/);
-  });
-
-  test("--verbose shows memory line", async () => {
-    const { stderr } = await wrapVerbose("hello", {
-      type: "answer",
-      content: "world",
-      risk_level: "low",
-    });
-    expect(stderr).toContain("Memory:");
     expect(stderr).toMatch(/Memory: \d+ facts/);
-  });
-
-  test("--verbose shows LLM call and response for answer", async () => {
-    const { stderr } = await wrapVerbose("hello", {
-      type: "answer",
-      content: "world",
-      risk_level: "low",
-    });
     expect(stderr).toContain("Calling test...");
     expect(stderr).toContain("LLM responded (answer, 5 chars)");
+    // All verbose lines have elapsed timestamps
+    const verboseLines = stderr.split("\n").filter((l) => l.includes("»"));
+    expect(verboseLines.length).toBeGreaterThan(0);
+    for (const line of verboseLines) {
+      expect(line).toMatch(/\[\+\d+\.\d{2}s\]/);
+    }
   });
 
-  test("--verbose shows LLM response for command", async () => {
-    const { stderr } = await wrapVerbose("list files", {
+  test("--verbose command: shows response, execution, and passes output", async () => {
+    const { exitCode, stdout, stderr } = await wrapVerbose("list files", {
       type: "command",
       content: "echo hello",
       risk_level: "low",
     });
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("hello\n");
     expect(stderr).toContain("LLM responded (command, low):");
     expect(stderr).toContain("echo hello");
     expect(stderr).toContain("Executing command...");
@@ -100,20 +76,6 @@ describe("verbose e2e", () => {
     expect(stderr).toContain("Probe: echo sips");
     expect(stderr).toContain("Probe exited (0)");
     expect(stderr).toContain("Round 2/");
-  });
-
-  test("--verbose shows elapsed timestamps", async () => {
-    const { stderr } = await wrapVerbose("hello", {
-      type: "answer",
-      content: "world",
-      risk_level: "low",
-    });
-    // All verbose lines should have [+N.NNs] timestamps
-    const verboseLines = stderr.split("\n").filter((l) => l.includes("»"));
-    expect(verboseLines.length).toBeGreaterThan(0);
-    for (const line of verboseLines) {
-      expect(line).toMatch(/\[\+\d+\.\d{2}s\]/);
-    }
   });
 
   test("--verbose with memory updates shows update line", async () => {
@@ -181,26 +143,6 @@ describe("verbose e2e", () => {
       risk_level: "low",
     });
     expect(stderr).toContain("Command exited (42)");
-  });
-
-  test("--verbose answer still goes to stdout", async () => {
-    const { exitCode, stdout } = await wrapVerbose("hello", {
-      type: "answer",
-      content: "the answer",
-      risk_level: "low",
-    });
-    expect(exitCode).toBe(0);
-    expect(stdout).toBe("the answer\n");
-  });
-
-  test("--verbose command output still goes to stdout", async () => {
-    const { exitCode, stdout } = await wrapVerbose("list", {
-      type: "command",
-      content: "echo hello",
-      risk_level: "low",
-    });
-    expect(exitCode).toBe(0);
-    expect(stdout).toBe("hello\n");
   });
 
   test("--verbose shows init sub-steps on first run", async () => {

@@ -61,37 +61,21 @@ describe("wrap", () => {
     expect(stderr).toBe("");
   });
 
-  test("errors when content is empty string (answer)", async () => {
-    const { exitCode, stdout, stderr } = await wrapMock("hello", {
-      type: "answer",
-      content: "",
-      risk_level: "low",
-    });
-    expect(exitCode).toBe(1);
-    expect(stdout).toBe("");
-    expect(stderr).toContain("empty response");
-  });
-
-  test("errors when content is empty string (command)", async () => {
-    const { exitCode, stdout, stderr } = await wrapMock("hello", {
-      type: "command",
-      content: "",
-      risk_level: "low",
-    });
-    expect(exitCode).toBe(1);
-    expect(stdout).toBe("");
-    expect(stderr).toContain("empty response");
-  });
-
-  test("errors when content is whitespace-only", async () => {
-    const { exitCode, stdout, stderr } = await wrapMock("hello", {
-      type: "answer",
-      content: "   ",
-      risk_level: "low",
-    });
-    expect(exitCode).toBe(1);
-    expect(stdout).toBe("");
-    expect(stderr).toContain("empty response");
+  test("errors on empty or whitespace content", async () => {
+    const [emptyAnswer, emptyCommand, whitespace] = await Promise.all([
+      wrapMock("hello", { type: "answer", content: "", risk_level: "low" }),
+      wrapMock("hello", { type: "command", content: "", risk_level: "low" }),
+      wrapMock("hello", { type: "answer", content: "   ", risk_level: "low" }),
+    ]);
+    expect(emptyAnswer.exitCode).toBe(1);
+    expect(emptyAnswer.stdout).toBe("");
+    expect(emptyAnswer.stderr).toContain("empty response");
+    expect(emptyCommand.exitCode).toBe(1);
+    expect(emptyCommand.stdout).toBe("");
+    expect(emptyCommand.stderr).toContain("empty response");
+    expect(whitespace.exitCode).toBe(1);
+    expect(whitespace.stdout).toBe("");
+    expect(whitespace.stderr).toContain("empty response");
   });
 
   test("errors on invalid JSON from LLM", async () => {
@@ -338,47 +322,43 @@ describe("wrap", () => {
     expect(memory["/"][0]).toHaveProperty("fact");
   });
 
-  test("memory_updates: global facts show plain prefix", async () => {
-    const { exitCode, stderr } = await wrapMock("list files", {
-      type: "command",
-      content: "echo hi",
-      risk_level: "low",
-      memory_updates: [{ fact: "Uses zsh", scope: "/" }],
-      memory_updates_message: "Noted: you use zsh",
-    });
-    expect(exitCode).toBe(0);
-    expect(stderr).toContain("🧠 Noted: you use zsh");
-    // Should NOT have a directory prefix for global-only facts
-    expect(stderr).not.toMatch(/🧠 \(/);
-  });
-
-  test("memory_updates: non-global facts show directory prefix", async () => {
-    const { exitCode, stderr } = await wrapMock("list files", {
-      type: "command",
-      content: "echo hi",
-      risk_level: "low",
-      memory_updates: [{ fact: "Uses bun", scope: "/tmp" }],
-      memory_updates_message: "Noted: uses bun",
-    });
-    expect(exitCode).toBe(0);
-    // Should have a directory prefix for non-global facts
-    expect(stderr).toMatch(/🧠 \(.*\) Noted: uses bun/);
-  });
-
-  test("memory_updates: mixed scopes show deepest directory prefix", async () => {
-    const { exitCode, stderr } = await wrapMock("list files", {
-      type: "command",
-      content: "echo hi",
-      risk_level: "low",
-      memory_updates: [
-        { fact: "Uses zsh", scope: "/" },
-        { fact: "Uses bun", scope: "/tmp" },
-      ],
-      memory_updates_message: "Noted: zsh and bun",
-    });
-    expect(exitCode).toBe(0);
-    // Should show the deepest non-global scope
-    expect(stderr).toMatch(/🧠 \(.*\) Noted: zsh and bun/);
+  test("memory_updates: display prefix based on scope", async () => {
+    const [globalScope, nonGlobal, mixed] = await Promise.all([
+      wrapMock("list files", {
+        type: "command",
+        content: "echo hi",
+        risk_level: "low",
+        memory_updates: [{ fact: "Uses zsh", scope: "/" }],
+        memory_updates_message: "Noted: you use zsh",
+      }),
+      wrapMock("list files", {
+        type: "command",
+        content: "echo hi",
+        risk_level: "low",
+        memory_updates: [{ fact: "Uses bun", scope: "/tmp" }],
+        memory_updates_message: "Noted: uses bun",
+      }),
+      wrapMock("list files", {
+        type: "command",
+        content: "echo hi",
+        risk_level: "low",
+        memory_updates: [
+          { fact: "Uses zsh", scope: "/" },
+          { fact: "Uses bun", scope: "/tmp" },
+        ],
+        memory_updates_message: "Noted: zsh and bun",
+      }),
+    ]);
+    // Global-only: plain prefix, no directory
+    expect(globalScope.exitCode).toBe(0);
+    expect(globalScope.stderr).toContain("🧠 Noted: you use zsh");
+    expect(globalScope.stderr).not.toMatch(/🧠 \(/);
+    // Non-global: shows directory prefix
+    expect(nonGlobal.exitCode).toBe(0);
+    expect(nonGlobal.stderr).toMatch(/🧠 \(.*\) Noted: uses bun/);
+    // Mixed: shows deepest non-global scope
+    expect(mixed.exitCode).toBe(0);
+    expect(mixed.stderr).toMatch(/🧠 \(.*\) Noted: zsh and bun/);
   });
 });
 

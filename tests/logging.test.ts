@@ -310,7 +310,7 @@ function seedMemoryIn(home: string) {
 }
 
 describe("logging integration", () => {
-  test("successful command logs with outcome 'success' and execution", async () => {
+  test("successful command: outcome, execution, and timing", async () => {
     const result = await wrapMock("list files", {
       type: "command",
       content: "echo hello",
@@ -324,9 +324,12 @@ describe("logging integration", () => {
     expect(entry.rounds[0].execution.command).toBe("echo hello");
     expect(entry.rounds[0].execution.exit_code).toBe(0);
     expect(entry.rounds[0].execution.shell).toBe(process.env.SHELL || "sh");
+    // Timing
+    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
+    expect(entry.rounds[0].exec_ms).toBeGreaterThanOrEqual(0);
   });
 
-  test("answer logs with outcome 'success' and no execution", async () => {
+  test("successful answer: outcome, fields, timing, no execution", async () => {
     const result = await wrapMock("what is 2+2", {
       type: "answer",
       content: "4",
@@ -336,6 +339,22 @@ describe("logging integration", () => {
     expect(entry.outcome).toBe("success");
     expect(entry.rounds[0].parsed.type).toBe("answer");
     expect(entry.rounds[0].execution).toBeUndefined();
+    // Invocation-level fields
+    expect(entry.id).toMatch(/^[0-9a-f]{8}-/);
+    expect(entry.timestamp).toBeDefined();
+    expect(entry.prompt).toBe("what is 2+2");
+    expect(entry.cwd).toBeDefined();
+    expect(entry.provider).toEqual({ type: "test" });
+    expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(typeof entry.version).toBe("string");
+    expect(entry.version.length).toBeGreaterThan(0);
+    // Timing: llm_ms present, exec_ms absent
+    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
+    expect(typeof entry.rounds[0].llm_ms).toBe("number");
+    expect("exec_ms" in entry.rounds[0]).toBe(false);
+    // Successful parse omits raw_response
+    expect(entry.rounds[0].parsed).toBeDefined();
+    expect("raw_response" in entry.rounds[0]).toBe(false);
   });
 
   test("empty content logs with outcome 'error'", async () => {
@@ -362,23 +381,6 @@ describe("logging integration", () => {
     expect(entry.outcome).toBe("error");
     expect(entry.rounds).toHaveLength(1);
     expect(entry.rounds[0].provider_error).toBeDefined();
-  });
-
-  test("log entry has invocation-level fields", async () => {
-    const result = await wrapMock("test prompt", {
-      type: "answer",
-      content: "ok",
-      risk_level: "low",
-    });
-    const entry = readLog(result.wrapHome);
-    expect(entry.id).toMatch(/^[0-9a-f]{8}-/);
-    expect(entry.timestamp).toBeDefined();
-    expect(entry.prompt).toBe("test prompt");
-    expect(entry.cwd).toBeDefined();
-    expect(entry.provider).toEqual({ type: "test" });
-    expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(typeof entry.version).toBe("string");
-    expect(entry.version.length).toBeGreaterThan(0);
   });
 
   test("non-low risk command logs with outcome 'blocked' (no TTY)", async () => {
@@ -412,48 +414,5 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.memory).toEqual({ "/": [{ fact: "test" }] });
-  });
-
-  test("round includes llm_ms timing", async () => {
-    const result = await wrapMock("test", {
-      type: "answer",
-      content: "ok",
-      risk_level: "low",
-    });
-    const entry = readLog(result.wrapHome);
-    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
-    expect(typeof entry.rounds[0].llm_ms).toBe("number");
-  });
-
-  test("command round includes exec_ms timing", async () => {
-    const result = await wrapMock("test", {
-      type: "command",
-      content: "echo hi",
-      risk_level: "low",
-    });
-    const entry = readLog(result.wrapHome);
-    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
-    expect(entry.rounds[0].exec_ms).toBeGreaterThanOrEqual(0);
-  });
-
-  test("answer round omits exec_ms", async () => {
-    const result = await wrapMock("test", {
-      type: "answer",
-      content: "ok",
-      risk_level: "low",
-    });
-    const entry = readLog(result.wrapHome);
-    expect("exec_ms" in entry.rounds[0]).toBe(false);
-  });
-
-  test("successful parse omits raw_response from round", async () => {
-    const result = await wrapMock("test", {
-      type: "answer",
-      content: "ok",
-      risk_level: "low",
-    });
-    const entry = readLog(result.wrapHome);
-    expect(entry.rounds[0].parsed).toBeDefined();
-    expect("raw_response" in entry.rounds[0]).toBe(false);
   });
 });
