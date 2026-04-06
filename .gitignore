@@ -50,3 +50,6 @@ eval/results/*.json
 
 # Private notes
 PRIVATE.md
+
+# Context docs (generated, not source of truth)
+specs/context/
