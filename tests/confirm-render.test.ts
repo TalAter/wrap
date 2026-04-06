@@ -5,6 +5,7 @@ describe("confirmCommand", () => {
     // In test subprocess, stderr is piped (not a TTY), so TUI can't render
     const { confirmCommand } = await import("../src/tui/render.ts");
     const result = await confirmCommand("rm -rf /", "high");
-    expect(result).toBe("blocked");
+    expect(result.result).toBe("blocked");
+    expect(result.command).toBe("rm -rf /");
   });
 });

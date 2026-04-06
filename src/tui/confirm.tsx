@@ -12,7 +12,7 @@ type ConfirmPanelProps = {
   command: string;
   riskLevel: "medium" | "high";
   explanation?: string;
-  onChoice: (choice: "run" | "cancel") => void;
+  onChoice: (choice: "run" | "cancel", command: string) => void;
 };
 
 const ACTION_ITEMS = [
@@ -32,6 +32,8 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
   const { exit } = useApp();
   const { columns: termCols, rows: termRows } = useRenderSize();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(command);
 
   // Width calculation
   const natural = Math.max(
@@ -77,39 +79,67 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
     key: `right-${index}`,
   }));
 
-  useInput((input, key) => {
-    if (input === "y") {
-      onChoice("run");
-      exit();
-      return;
-    }
-    if (input === "n" || input === "q" || key.escape) {
-      onChoice("cancel");
-      exit();
-      return;
-    }
-    if (key.leftArrow) {
-      setSelectedIndex((i) => Math.max(0, i - 1));
-      return;
-    }
-    if (key.rightArrow) {
-      setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1));
-      return;
-    }
-    if (key.return) {
-      const label = ACTION_ITEMS[selectedIndex]?.label;
-      if (label === "Yes") {
-        onChoice("run");
-        exit();
-      } else if (label === "No") {
-        onChoice("cancel");
-        exit();
+  useInput(
+    (_input, key) => {
+      if (key.escape) {
+        setEditing(false);
+        setDraft(command);
       }
-      // Describe, Edit, Follow-up, Copy — no-op in phase 1
-    }
-  });
+    },
+    { isActive: editing },
+  );
 
-  const cmdPadded = ` ${command}`.padEnd(innerWidth);
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        onChoice("cancel", command);
+        exit();
+        return;
+      }
+      if (input === "e") {
+        setEditing(true);
+        return;
+      }
+      if (input === "y") {
+        onChoice("run", command);
+        exit();
+        return;
+      }
+      if (input === "n" || input === "q") {
+        onChoice("cancel", command);
+        exit();
+        return;
+      }
+      if (key.leftArrow) {
+        setSelectedIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1));
+        return;
+      }
+      if (key.return) {
+        const label = ACTION_ITEMS[selectedIndex]?.label;
+        if (label === "Yes") {
+          onChoice("run", command);
+          exit();
+        } else if (label === "No") {
+          onChoice("cancel", command);
+          exit();
+        } else if (label === "Edit") {
+          setEditing(true);
+        }
+        // Describe, Follow-up, Copy — no-op in phase 1
+      }
+    },
+    { isActive: !editing },
+  );
+
+  const handleEditSubmit = (value: string) => {
+    if (value.trim() === "") return;
+    onChoice("run", value);
+    exit();
+  };
 
   return (
     <Box width={termCols} height={termRows} justifyContent="center" alignItems="center">
@@ -132,7 +162,16 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
             paddingTop={1}
             paddingBottom={1}
           >
-            <Text backgroundColor="#232332">{cmdPadded}</Text>
+            {editing ? (
+              <CommandInput
+                value={draft}
+                onChange={setDraft}
+                onSubmit={handleEditSubmit}
+                width={innerWidth}
+              />
+            ) : (
+              <Text backgroundColor="#232332">{` ${command}`.padEnd(innerWidth)}</Text>
+            )}
             {explanation && (
               <>
                 <Text> </Text>
@@ -143,7 +182,7 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
             )}
             <Text> </Text>
             <Text> </Text>
-            <ActionBar selectedIndex={selectedIndex} />
+            {editing ? <EditHint /> : <ActionBar selectedIndex={selectedIndex} />}
           </Box>
 
           <Box flexDirection="column" width={2}>
@@ -197,6 +236,118 @@ function BorderLine({ segments }: { segments: BorderSegment[] }) {
           {segment.text}
         </Text>
       ))}
+    </Text>
+  );
+}
+
+const WORD_CHAR = /\w/;
+
+function wordBoundaryLeft(text: string, pos: number): number {
+  if (pos <= 0) return 0;
+  let i = pos - 1;
+  while (i > 0 && !WORD_CHAR.test(text.charAt(i - 1))) i--;
+  while (i > 0 && WORD_CHAR.test(text.charAt(i - 1))) i--;
+  return i;
+}
+
+function wordBoundaryRight(text: string, pos: number): number {
+  if (pos >= text.length) return text.length;
+  let i = pos;
+  while (i < text.length && WORD_CHAR.test(text.charAt(i))) i++;
+  while (i < text.length && !WORD_CHAR.test(text.charAt(i))) i++;
+  return i;
+}
+
+function CommandInput({
+  value,
+  onChange,
+  onSubmit,
+  width,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (value: string) => void;
+  width: number;
+}) {
+  const [cursor, setCursor] = useState(value.length);
+
+  useInput((input, key) => {
+    if (key.return) {
+      onSubmit(value);
+      return;
+    }
+    if ((key.backspace || key.delete) && key.meta) {
+      if (cursor > 0) {
+        const to = wordBoundaryLeft(value, cursor);
+        onChange(value.slice(0, to) + value.slice(cursor));
+        setCursor(to);
+      }
+      return;
+    }
+    if (input === "u" && key.ctrl) {
+      if (cursor > 0) {
+        onChange(value.slice(cursor));
+        setCursor(0);
+      }
+      return;
+    }
+    if (key.backspace || key.delete) {
+      if (cursor > 0) {
+        onChange(value.slice(0, cursor - 1) + value.slice(cursor));
+        setCursor((c) => c - 1);
+      }
+      return;
+    }
+    if (key.leftArrow || (input === "b" && key.meta)) {
+      setCursor(key.meta ? wordBoundaryLeft(value, cursor) : Math.max(0, cursor - 1));
+      return;
+    }
+    if (key.rightArrow || (input === "f" && key.meta)) {
+      setCursor(key.meta ? wordBoundaryRight(value, cursor) : Math.min(value.length, cursor + 1));
+      return;
+    }
+    if (input === "a" && key.ctrl) {
+      setCursor(0);
+      return;
+    }
+    if (input === "e" && key.ctrl) {
+      setCursor(value.length);
+      return;
+    }
+    if (input && !key.ctrl && !key.meta && !key.escape) {
+      onChange(value.slice(0, cursor) + input + value.slice(cursor));
+      setCursor((c) => c + input.length);
+    }
+  });
+
+  const before = value.slice(0, cursor);
+  const cursorChar = value[cursor] ?? " ";
+  const after = value.slice(cursor + 1);
+
+  return (
+    <Box width={width} paddingX={1} backgroundColor="#232332">
+      <Text>
+        {before}
+        <Text inverse>{cursorChar}</Text>
+        {after}
+      </Text>
+    </Box>
+  );
+}
+
+function EditHint() {
+  return (
+    <Text>
+      <Text color="#d2d2e1">{"   "}</Text>
+      <Text bold color="#f5c864">
+        {"⏎"}
+      </Text>
+      <Text color="#73738c">{" to run"}</Text>
+      <Text color="#414150">{"  │  "}</Text>
+      <Text bold color="#aaaac3">
+        {"Esc"}
+      </Text>
+      <Text color="#73738c">{" to discard changes"}</Text>
     </Text>
   );
 }

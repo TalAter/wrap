@@ -255,13 +255,12 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
     expect(result).toBe("cancel");
   });
 
-  test("d/e/f/c are no-ops (ignored in phase 1)", () => {
+  test("d/f/c are no-ops (ignored in phase 1)", () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
       <ConfirmPanel command="rm file" riskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("d");
-    stdin.write("e");
     stdin.write("f");
     stdin.write("c");
     expect(result).toBeUndefined();
@@ -298,5 +297,298 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
     await new Promise((r) => setTimeout(r, 50));
     stdin.write("\r");
     expect(result).toBe("run");
+  });
+
+  test("y passes original command to onChoice", () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel command="rm file" riskLevel="medium" onChoice={(_c, c) => (cmd = c)} />,
+    );
+    stdin.write("y");
+    expect(cmd).toBe("rm file");
+  });
+});
+
+describe("ConfirmPanel — edit mode", () => {
+  test("e enters edit mode and shows run hint", async () => {
+    const { stdin, lastFrame } = render(
+      <ConfirmPanel command="rm file" riskLevel="medium" onChoice={() => {}} />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("⏎ to run");
+  });
+
+  test("edit mode shows the command text", async () => {
+    const { stdin, lastFrame } = render(
+      <ConfirmPanel command="rm file" riskLevel="medium" onChoice={() => {}} />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(lastFrame()).toContain("rm file");
+  });
+
+  test("in edit mode y/n/q do not trigger actions", async () => {
+    let result: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel command="rm file" riskLevel="medium" onChoice={(c) => (result = c)} />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("y");
+    stdin.write("n");
+    stdin.write("q");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(result).toBeUndefined();
+  });
+
+  test("Enter in edit mode runs the command", async () => {
+    let result: string | undefined;
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm file"
+        riskLevel="medium"
+        onChoice={(c, command) => {
+          result = c;
+          cmd = command;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(result).toBe("run");
+    expect(cmd).toBe("rm file");
+  });
+
+  test("Esc in edit mode returns to normal mode", async () => {
+    let result: string | undefined;
+    const { stdin, lastFrame } = render(
+      <ConfirmPanel command="rm file" riskLevel="medium" onChoice={(c) => (result = c)} />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stripAnsi(lastFrame() ?? "")).toContain("⏎ to run");
+
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 100));
+    // Should be back to normal — Esc did not cancel the panel
+    expect(result).toBeUndefined();
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("Run command?");
+  });
+
+  test("after discarding edits, y runs original command", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm file"
+        riskLevel="medium"
+        onChoice={(_c, command) => {
+          cmd = command;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write(" --force");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 100));
+    stdin.write("y");
+    expect(cmd).toBe("rm file");
+  });
+
+  test("empty command cannot be submitted", async () => {
+    let result: string | undefined;
+    const { stdin, lastFrame } = render(
+      <ConfirmPanel command="x" riskLevel="medium" onChoice={(c) => (result = c)} />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\b"); // backspace to clear "x"
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(result).toBeUndefined();
+    expect(lastFrame()).toBeDefined();
+  });
+
+  test("edited command is passed to onChoice on Enter", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm file"
+        riskLevel="medium"
+        onChoice={(_c, command) => {
+          cmd = command;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    // Append " --force" to the command
+    stdin.write(" --force");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm file --force");
+  });
+
+  test("action bar Edit button enters edit mode", async () => {
+    const { stdin, lastFrame } = render(
+      <ConfirmPanel command="rm file" riskLevel="medium" onChoice={() => {}} />,
+    );
+    // Arrow right to Edit: No(0) → Yes(1) → Describe(2) → Edit(3)
+    stdin.write("\x1b[C");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[C");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[C");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("⏎ to run");
+  });
+
+  test("Option+Left jumps to previous word boundary", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    // Option+Left: jump back one word from end
+    stdin.write("\x1b\x1b[D");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("X");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm /tmp/Xfile");
+  });
+
+  test("Option+Right jumps to next word boundary", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    // Ctrl+A to go to start, then Option+Right to jump forward
+    stdin.write("\x01");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b\x1b[C");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("X");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm /Xtmp/file");
+  });
+
+  test("Ctrl+A moves cursor to start", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x01"); // Ctrl+A
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("X");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("Xrm file");
+  });
+
+  test("Ctrl+E moves cursor to end", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x01"); // Ctrl+A to start
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x05"); // Ctrl+E to end
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("X");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm fileX");
+  });
+
+  test("Ctrl+U deletes to start of line", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    // Option+Left to jump back one word ("file" → before "file")
+    stdin.write("\x1b\x1b[D");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x15"); // Ctrl+U
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("file");
+  });
+
+  test("Option+Backspace deletes word left", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b\x7f"); // Option+Delete (meta+delete)
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm /tmp/");
   });
 });

@@ -285,11 +285,12 @@ export async function runQuery(
           response.risk_level,
           response.explanation ?? undefined,
         );
-        if (decision !== "run") {
-          entry.outcome = decision === "blocked" ? "blocked" : "cancelled";
+        if (decision.result !== "run") {
+          entry.outcome = decision.result === "blocked" ? "blocked" : "cancelled";
           addRound(entry, round);
           return 1;
         }
+        response.content = decision.command;
       }
       const shell = process.env.SHELL || "sh";
       verbose("Executing command...");
