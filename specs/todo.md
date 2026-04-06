@@ -27,6 +27,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Nonce delimiters for untrusted prompt sections
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
+- [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
 - [ ] Confirmation TUI styling — bordered panel, syntax-highlighted command, risk indicator
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[F]ollow-up` option — text input for natural language refinement
