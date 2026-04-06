@@ -28,6 +28,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
 - [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
+- [ ] Show context indicators in confirmation panel — piped input, probe results, etc. (user has no visibility into what informed the command)
 - [ ] Confirmation TUI styling — bordered panel, syntax-highlighted command, risk indicator
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[F]ollow-up` option — text input for natural language refinement
