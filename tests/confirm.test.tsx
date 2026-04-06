@@ -27,7 +27,7 @@ describe("ConfirmPanel", () => {
       <ConfirmPanel command="chmod 777 ." riskLevel="medium" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
-    expect(frame).toContain("⚠ medium");
+    expect(frame).toContain("⚠ medium risk");
   });
 
   test("renders high risk badge", () => {
@@ -35,7 +35,7 @@ describe("ConfirmPanel", () => {
       <ConfirmPanel command="rm -rf /" riskLevel="high" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
-    expect(frame).toContain("⚠ high");
+    expect(frame).toContain("⚠ high risk");
   });
 
   test("shows explanation when provided", () => {
@@ -203,7 +203,7 @@ describe("ConfirmPanel", () => {
     expect(topLine.startsWith("╭")).toBe(true);
     expect(topLine.endsWith("╮")).toBe(true);
     expect(topLine.length).toBeLessThanOrEqual(72);
-    expect(after).toContain("⚠ high");
+    expect(after).toContain("⚠ high risk");
   });
 });
 

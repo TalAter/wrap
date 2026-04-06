@@ -61,7 +61,7 @@ export function topBorderSegments(
   riskLevel: "medium" | "high",
 ): BorderSegment[] {
   // This stays custom instead of Ink's built-in border so we can style each glyph and embed the risk badge in the border itself.
-  const badgeText = ` ⚠ ${riskLevel} `;
+  const badgeText = ` ⚠ ${riskLevel} risk `;
   const badgeVisualWidth = stringWidth(badgeText);
   // Badge position: totalWidth - badgeVisualWidth - 3 (space + ─ + ╮)
   const badgeStart = totalWidth - badgeVisualWidth - 3;
