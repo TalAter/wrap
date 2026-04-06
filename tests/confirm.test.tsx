@@ -279,24 +279,24 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
     expect(lastFrame()).toContain("rm file");
   });
 
-  test("Enter activates selected action (default: Yes = run)", () => {
+  test("Enter activates selected action (default: No = cancel)", () => {
     let result: string | undefined;
     const { stdin } = render(
       <ConfirmPanel command="rm file" riskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("\r");
-    expect(result).toBe("run");
+    expect(result).toBe("cancel");
   });
 
-  test("arrow right then Enter activates No = cancel", async () => {
+  test("arrow right then Enter activates Yes = run", async () => {
     let result: string | undefined;
     const { stdin } = render(
       <ConfirmPanel command="rm file" riskLevel="medium" onChoice={(c) => (result = c)} />,
     );
-    // Move right to "No" — wait for React re-render before pressing Enter
+    // Move right to "Yes" — wait for React re-render before pressing Enter
     stdin.write("\x1b[C");
     await new Promise((r) => setTimeout(r, 50));
     stdin.write("\r");
-    expect(result).toBe("cancel");
+    expect(result).toBe("run");
   });
 });

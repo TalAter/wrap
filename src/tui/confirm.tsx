@@ -15,8 +15,15 @@ type ConfirmPanelProps = {
   onChoice: (choice: "run" | "cancel") => void;
 };
 
-const ACTION_LABELS = ["Yes", "No", "Describe", "Edit", "Follow-up", "Copy"] as const;
-const ACTION_BAR_WIDTH = 57;
+const ACTION_ITEMS = [
+  { label: "No", primary: true },
+  { label: "Yes", primary: true },
+  { label: "Describe", primary: false },
+  { label: "Edit", primary: false },
+  { label: "Follow-up", primary: false },
+  { label: "Copy", primary: false },
+] as const;
+const ACTION_BAR_WIDTH = 61;
 const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
 const PANEL_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
@@ -41,10 +48,10 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
     innerWidth > 0 ? Math.max(1, Math.ceil(stringWidth(` ${command}`) / innerWidth)) : 1;
   const explLines =
     explanation && innerWidth > 0
-      ? Math.max(1, Math.ceil(stringWidth(`  ${explanation}`) / innerWidth))
+      ? Math.max(1, Math.ceil(stringWidth(explanation) / Math.max(1, innerWidth - 1)))
       : 0;
   // First-pass estimate only. Wrapped content can change the real height after Ink layout runs.
-  const initialBorderCount = 1 + cmdLines + explLines + 1 + 1 + 1 + 1;
+  const initialBorderCount = 1 + cmdLines + (explLines > 0 ? 1 : 0) + explLines + 1 + 1 + 1 + 1;
   const [borderCount, setBorderCount] = useState(initialBorderCount);
   const middleRef = useRef<DOMElement>(null);
 
@@ -86,15 +93,15 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
       return;
     }
     if (key.rightArrow) {
-      setSelectedIndex((i) => Math.min(ACTION_LABELS.length - 1, i + 1));
+      setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1));
       return;
     }
     if (key.return) {
-      const action = ACTION_LABELS[selectedIndex];
-      if (action === "Yes") {
+      const label = ACTION_ITEMS[selectedIndex]?.label;
+      if (label === "Yes") {
         onChoice("run");
         exit();
-      } else if (action === "No") {
+      } else if (label === "No") {
         onChoice("cancel");
         exit();
       }
@@ -127,10 +134,12 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
           >
             <Text backgroundColor="#232332">{cmdPadded}</Text>
             {explanation && (
-              <Text color="#87879b">
-                {"  "}
-                {explanation}
-              </Text>
+              <>
+                <Text> </Text>
+                <Box paddingLeft={1}>
+                  <Text color="#87879b">{explanation}</Text>
+                </Box>
+              </>
             )}
             <Text> </Text>
             <Text> </Text>
@@ -193,30 +202,33 @@ function BorderLine({ segments }: { segments: BorderSegment[] }) {
 }
 
 function ActionBar({ selectedIndex }: { selectedIndex: number }) {
-  const items = [
-    { label: "Yes", primary: true },
-    { label: "No", primary: true },
-    { label: "Describe", primary: false },
-    { label: "Edit", primary: false },
-    { label: "Follow-up", primary: false },
-    { label: "Copy", primary: false },
-  ];
-
   return (
     <Text>
-      <Text color="#d2d2e1">{"   Run command?  "}</Text>
-      {items.map((item, i) => {
-        const accent = item.primary ? "#f5c864" : "#aaaac3";
+      <Text color="#d2d2e1">{"   Run command? "}</Text>
+      {ACTION_ITEMS.map((item, i) => {
         const isSelected = i === selectedIndex;
-        const dimColor = isSelected ? "#b0b0c8" : "#73738c";
+        const accent = item.primary
+          ? isSelected
+            ? "#ffdc78"
+            : "#f5c864"
+          : isSelected
+            ? "#c8c8e0"
+            : "#aaaac3";
+        const dimColor = isSelected ? "#ebe6fa" : "#73738c";
+        const bg = isSelected ? "#372d50" : undefined;
 
         return (
           <Text key={item.label}>
-            {i === 2 ? <Text color="#414150">{"  │  "}</Text> : i > 0 ? <Text>{"  "}</Text> : null}
-            <Text bold underline color={accent}>
-              {item.label[0]}
+            {i === 2 ? <Text color="#414150">{" │ "}</Text> : null}
+            <Text backgroundColor={bg}>
+              {" "}
+              <Text bold underline color={accent}>
+                {item.label[0]}
+              </Text>
+              <Text color={dimColor} bold={isSelected}>
+                {item.label.slice(1)}
+              </Text>{" "}
             </Text>
-            <Text color={dimColor}>{item.label.slice(1)}</Text>
           </Text>
         );
       })}
