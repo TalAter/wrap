@@ -18,7 +18,7 @@ export async function wrap(input?: string, env?: Record<string, string>, stdin?:
   const proc = Bun.spawn(["bun", "run", "src/index.ts", ...args], {
     stdout: "pipe",
     stderr: "pipe",
-    stdin: stdin !== undefined ? new Blob([stdin]) : "inherit",
+    stdin: new Blob([stdin ?? ""]),
     env: isolatedEnv,
   });
   const exitCode = await proc.exited;
