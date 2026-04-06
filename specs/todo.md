@@ -31,6 +31,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[F]ollow-up` option — text input for natural language refinement
 - [ ] `[C]opy` option — copy command to clipboard
+- [ ] Responsive action bar — shrink/abbreviate action buttons when panel is narrow to avoid sprawling layout
 - [ ] Edit mode — editable command field in confirmation TUI
 - [ ] Input buffer flush before rendering confirmation prompt
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
