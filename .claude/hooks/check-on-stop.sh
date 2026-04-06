@@ -38,9 +38,9 @@ TSC_RC=$(mktemp)
 TEST_RC=$(mktemp)
 trap 'rm -f "$LINT_FILE" "$TSC_FILE" "$TEST_FILE" "$LINT_RC" "$TSC_RC" "$TEST_RC"' EXIT
 
-(bun run lint >"$LINT_FILE" 2>&1; echo $? >"$LINT_RC") &
-(bunx tsc --noEmit >"$TSC_FILE" 2>&1; echo $? >"$TSC_RC") &
-(bun test >"$TEST_FILE" 2>&1; echo $? >"$TEST_RC") &
+(bun run lint >"$LINT_FILE" 2>&1; echo $? >"$LINT_RC") </dev/null &
+(bunx tsc --noEmit >"$TSC_FILE" 2>&1; echo $? >"$TSC_RC") </dev/null &
+(bun test >"$TEST_FILE" 2>&1; echo $? >"$TEST_RC") </dev/null &
 wait
 
 # --- Collect errors ---
