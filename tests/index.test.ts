@@ -115,6 +115,16 @@ describe("wrap", () => {
     expect(stderr.trim().length).toBeGreaterThan(0);
   });
 
+  test("command: runs in interactive shell so aliases resolve", async () => {
+    const { exitCode, stdout } = await wrapMock("check shell", {
+      type: "command",
+      content: 'echo "$-"',
+      risk_level: "low",
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toContain("i");
+  });
+
   test("command low: executes and passes stdout through", async () => {
     const { exitCode, stdout } = await wrapMock("list files", {
       type: "command",

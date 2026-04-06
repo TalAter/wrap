@@ -237,7 +237,7 @@ export async function runQuery(
         const execStart = performance.now();
         const stdinBlob =
           response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-        const proc = Bun.spawn([shell, "-c", response.content], {
+        const proc = Bun.spawn([shell, "-ic", response.content], {
           stdout: "pipe",
           stderr: "pipe",
           stdin: stdinBlob,
@@ -297,7 +297,7 @@ export async function runQuery(
       const execStart = performance.now();
       const stdinBlob =
         response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-      const proc = Bun.spawn([shell, "-c", response.content], {
+      const proc = Bun.spawn([shell, "-ic", response.content], {
         stdout: "inherit",
         stderr: "inherit",
         stdin: stdinBlob ?? "inherit",
