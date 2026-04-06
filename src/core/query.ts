@@ -237,7 +237,7 @@ export async function runQuery(
         const execStart = performance.now();
         const stdinBlob =
           response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-        const proc = Bun.spawn([shell, "-ic", response.content], {
+        const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
           stdout: "pipe",
           stderr: "pipe",
           stdin: stdinBlob,
@@ -297,7 +297,12 @@ export async function runQuery(
       const execStart = performance.now();
       const stdinBlob =
         response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-      const proc = Bun.spawn([shell, "-ic", response.content], {
+      // +m disables monitor mode (job control) so the spawned interactive
+      // shell doesn't call tcsetpgrp() to seize the foreground process group.
+      // Without this, the shell takes foreground and never restores it; any
+      // later tcsetattr (e.g. Bun's exit cleanup after Ink's setRawMode)
+      // sends SIGTTOU to the whole process group, suspending the parent.
+      const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
         stdout: "inherit",
         stderr: "inherit",
         stdin: stdinBlob ?? "inherit",
