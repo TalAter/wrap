@@ -10,7 +10,7 @@ Follow this cycle for every implementation change.
 2. **Run `bun test`** — confirm the new tests fail. If they pass, those tests aren't testing new behavior or aren't narrow enough; fix it.
 3. **Write minimal implementation** — just enough to make the tests pass.
 4. **Run `bun test`** — all tests must pass. Fix code, not tests.
-5. **Run `bun run check`** — lint + tests clean.
+5. **Run `bun run check`** — lint + typecheck + tests clean.
 
 ## Rules
 
