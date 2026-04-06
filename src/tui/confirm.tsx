@@ -7,6 +7,7 @@ import {
   interpolateGradient,
   topBorderSegments,
 } from "./border.ts";
+import { Cursor } from "./cursor.ts";
 
 type ConfirmPanelProps = {
   command: string;
@@ -240,23 +241,19 @@ function BorderLine({ segments }: { segments: BorderSegment[] }) {
   );
 }
 
-const WORD_CHAR = /\w/;
+type KeyHandler = (c: Cursor) => Cursor;
 
-function wordBoundaryLeft(text: string, pos: number): number {
-  if (pos <= 0) return 0;
-  let i = pos - 1;
-  while (i > 0 && !WORD_CHAR.test(text.charAt(i - 1))) i--;
-  while (i > 0 && WORD_CHAR.test(text.charAt(i - 1))) i--;
-  return i;
-}
+const ctrlKeys = new Map<string, KeyHandler>([
+  ["a", (c) => c.home()],
+  ["e", (c) => c.end()],
+  ["u", (c) => c.killToHome()],
+  ["k", (c) => c.killToEnd()],
+]);
 
-function wordBoundaryRight(text: string, pos: number): number {
-  if (pos >= text.length) return text.length;
-  let i = pos;
-  while (i < text.length && WORD_CHAR.test(text.charAt(i))) i++;
-  while (i < text.length && !WORD_CHAR.test(text.charAt(i))) i++;
-  return i;
-}
+const metaKeys = new Map<string, KeyHandler>([
+  ["b", (c) => c.wordLeft()],
+  ["f", (c) => c.wordRight()],
+]);
 
 function CommandInput({
   value,
@@ -269,67 +266,64 @@ function CommandInput({
   onSubmit: (value: string) => void;
   width: number;
 }) {
-  const [cursor, setCursor] = useState(value.length);
+  const [cursor, setCursor] = useState(() => new Cursor(value, value.length));
+  const killRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    setCursor((prev) => (prev.text === value ? prev : new Cursor(value, value.length)));
+  }, [value]);
+
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
+
+  const apply = (next: Cursor) => {
+    if (next.killed !== undefined) killRef.current = next.killed;
+    setCursor(next);
+    if (next.text !== cursorRef.current.text) onChange(next.text);
+  };
 
   useInput((input, key) => {
     if (key.return) {
-      onSubmit(value);
+      onSubmit(cursor.text);
       return;
     }
     if ((key.backspace || key.delete) && key.meta) {
-      if (cursor > 0) {
-        const to = wordBoundaryLeft(value, cursor);
-        onChange(value.slice(0, to) + value.slice(cursor));
-        setCursor(to);
-      }
-      return;
-    }
-    if (input === "u" && key.ctrl) {
-      if (cursor > 0) {
-        onChange(value.slice(cursor));
-        setCursor(0);
-      }
+      apply(cursor.deleteWord());
       return;
     }
     if (key.backspace || key.delete) {
-      if (cursor > 0) {
-        onChange(value.slice(0, cursor - 1) + value.slice(cursor));
-        setCursor((c) => c - 1);
-      }
+      apply(cursor.backspace());
       return;
     }
-    if (key.leftArrow || (input === "b" && key.meta)) {
-      setCursor(key.meta ? wordBoundaryLeft(value, cursor) : Math.max(0, cursor - 1));
+    if (key.leftArrow) {
+      apply(key.meta ? cursor.wordLeft() : cursor.left());
       return;
     }
-    if (key.rightArrow || (input === "f" && key.meta)) {
-      setCursor(key.meta ? wordBoundaryRight(value, cursor) : Math.min(value.length, cursor + 1));
+    if (key.rightArrow) {
+      apply(key.meta ? cursor.wordRight() : cursor.right());
       return;
     }
-    if (input === "a" && key.ctrl) {
-      setCursor(0);
+    if (key.ctrl) {
+      const handler = input === "y" ? () => cursor.yank(killRef.current) : ctrlKeys.get(input);
+      if (handler) apply(handler(cursor));
       return;
     }
-    if (input === "e" && key.ctrl) {
-      setCursor(value.length);
+    if (key.meta) {
+      const handler = metaKeys.get(input);
+      if (handler) apply(handler(cursor));
       return;
     }
-    if (input && !key.ctrl && !key.meta && !key.escape) {
-      onChange(value.slice(0, cursor) + input + value.slice(cursor));
-      setCursor((c) => c + input.length);
+    if (input && !key.escape) {
+      apply(cursor.insert(input));
     }
   });
-
-  const before = value.slice(0, cursor);
-  const cursorChar = value[cursor] ?? " ";
-  const after = value.slice(cursor + 1);
 
   return (
     <Box width={width} paddingX={1} backgroundColor="#232332">
       <Text>
-        {before}
-        <Text inverse>{cursorChar}</Text>
-        {after}
+        {cursor.beforeCursor}
+        <Text inverse>{cursor.charAtCursor}</Text>
+        {cursor.afterCursor}
       </Text>
     </Box>
   );

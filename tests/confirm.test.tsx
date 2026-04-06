@@ -478,7 +478,7 @@ describe("ConfirmPanel — edit mode", () => {
     expect(cmd).toBe("rm /tmp/Xfile");
   });
 
-  test("Option+Right jumps to next word boundary", async () => {
+  test("Option+Right jumps to end of current word", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
       <ConfirmPanel
@@ -491,7 +491,7 @@ describe("ConfirmPanel — edit mode", () => {
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
-    // Ctrl+A to go to start, then Option+Right to jump forward
+    // Ctrl+A to go to start, then Option+Right lands at end of "rm"
     stdin.write("\x01");
     await new Promise((r) => setTimeout(r, 50));
     stdin.write("\x1b\x1b[C");
@@ -500,7 +500,7 @@ describe("ConfirmPanel — edit mode", () => {
     await new Promise((r) => setTimeout(r, 50));
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 50));
-    expect(cmd).toBe("rm /Xtmp/file");
+    expect(cmd).toBe("rmX /tmp/file");
   });
 
   test("Ctrl+A moves cursor to start", async () => {
@@ -570,6 +570,82 @@ describe("ConfirmPanel — edit mode", () => {
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 50));
     expect(cmd).toBe("file");
+  });
+
+  test("Ctrl+K deletes to end of line", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    // Ctrl+A to start, Option+Right lands at end of "rm" (offset 2), Ctrl+K kills rest
+    stdin.write("\x01");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b\x1b[C"); // Option+Right to end of "rm"
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x0b"); // Ctrl+K
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm");
+  });
+
+  test("Ctrl+Y yanks last killed text", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    // Kill to end from end of "rm"
+    stdin.write("\x01"); // Ctrl+A
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b\x1b[C"); // Option+Right to end of "rm"
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x0b"); // Ctrl+K — kills " /tmp/file"
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x19"); // Ctrl+Y — yank it back
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("rm /tmp/file");
+  });
+
+  test("Ctrl+U killed text can be yanked with Ctrl+Y", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x15"); // Ctrl+U — kills "rm /tmp/file"
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("echo ");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x19"); // Ctrl+Y — yank "rm /tmp/file"
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("echo rm /tmp/file");
   });
 
   test("Option+Backspace deletes word left", async () => {
