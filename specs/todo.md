@@ -33,6 +33,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] `[C]opy` option — copy command to clipboard
 - [ ] Responsive action bar — shrink/abbreviate action buttons when panel is narrow to avoid sprawling layout
 - [ ] Edit mode — editable command field in confirmation TUI
+- [ ] Arrow key shortcuts in confirmation panel — Up enters edit mode, Down exits (same as Esc)
 - [ ] Input buffer flush before rendering confirmation prompt
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
