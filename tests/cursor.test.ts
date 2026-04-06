@@ -112,6 +112,28 @@ describe("Cursor — backspace", () => {
   });
 });
 
+describe("Cursor — delete (forward)", () => {
+  test("deletes char after cursor", () => {
+    const c = new Cursor("hello", 2).delete();
+    expect(c.text).toBe("helo");
+    expect(c.offset).toBe(2);
+  });
+
+  test("no-op at end", () => {
+    const c = new Cursor("hello", 5).delete();
+    expect(c.text).toBe("hello");
+    expect(c.offset).toBe(5);
+  });
+
+  test("deletes multi-codepoint emoji", () => {
+    const emoji = "👨‍👩‍👧";
+    const text = `a${emoji}b`;
+    const c = new Cursor(text, 1).delete();
+    expect(c.text).toBe("ab");
+    expect(c.offset).toBe(1);
+  });
+});
+
 describe("Cursor — word movement", () => {
   test("wordRight jumps to end of current word", () => {
     // Readline M-f: lands at end of "hello"

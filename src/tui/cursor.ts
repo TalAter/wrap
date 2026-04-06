@@ -56,6 +56,13 @@ export class Cursor {
     return new Cursor(text, prev);
   }
 
+  delete(): Cursor {
+    if (this.offset >= this.text.length) return this;
+    const next = nextGrapheme(this.text, this.offset);
+    const text = this.text.slice(0, this.offset) + this.text.slice(next);
+    return new Cursor(text, this.offset);
+  }
+
   deleteWord(): Cursor {
     if (this.offset <= 0) return this;
     const to = wordBoundaryLeft(this.text, this.offset);

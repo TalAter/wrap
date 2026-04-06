@@ -1,4 +1,13 @@
-import { Box, type DOMElement, measureElement, Text, useApp, useInput, useStdout } from "ink";
+import {
+  Box,
+  type DOMElement,
+  measureElement,
+  Text,
+  useApp,
+  useInput,
+  useStdin,
+  useStdout,
+} from "ink";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
 import {
@@ -282,6 +291,20 @@ function CommandInput({
     if (next.text !== cursorRef.current.text) onChange(next.text);
   };
 
+  // Ink maps both Mac backspace (\x7f) and forward delete (\x1b[3~) to
+  // key.delete. Track the raw sequence so we can distinguish them.
+  const isForwardDelete = useRef(false);
+  const { internal_eventEmitter } = useStdin();
+  useEffect(() => {
+    const onRaw = (data: string) => {
+      isForwardDelete.current = data === "\x1b[3~";
+    };
+    internal_eventEmitter?.on("input", onRaw);
+    return () => {
+      internal_eventEmitter?.off("input", onRaw);
+    };
+  }, [internal_eventEmitter]);
+
   useInput((input, key) => {
     if (key.return) {
       onSubmit(cursor.text);
@@ -289,6 +312,11 @@ function CommandInput({
     }
     if ((key.backspace || key.delete) && key.meta) {
       apply(cursor.deleteWord());
+      return;
+    }
+    if (key.delete && isForwardDelete.current) {
+      isForwardDelete.current = false;
+      apply(cursor.delete());
       return;
     }
     if (key.backspace || key.delete) {

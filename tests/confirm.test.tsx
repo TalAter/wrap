@@ -648,6 +648,32 @@ describe("ConfirmPanel — edit mode", () => {
     expect(cmd).toBe("echo rm /tmp/file");
   });
 
+  test("Fn+Delete (forward delete) deletes char after cursor", async () => {
+    let cmd: string | undefined;
+    const { stdin } = render(
+      <ConfirmPanel
+        command="rm /tmp/file"
+        riskLevel="medium"
+        onChoice={(_c, c) => {
+          cmd = c;
+        }}
+      />,
+    );
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x01"); // Ctrl+A — move to start
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b[3~"); // Forward delete (Fn+Delete on Mac)
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b[3~"); // Delete another
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b[3~"); // Delete another
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cmd).toBe("/tmp/file");
+  });
+
   test("Option+Backspace deletes word left", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
