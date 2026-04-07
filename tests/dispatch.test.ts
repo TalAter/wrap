@@ -1,31 +1,19 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { dispatch } from "../src/subcommands/dispatch.ts";
+import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
 // We test dispatch by importing it and temporarily mutating the registry.
 // This avoids needing real subcommands for unit tests.
 import { subcommands } from "../src/subcommands/registry.ts";
 import type { Subcommand } from "../src/subcommands/types.ts";
 
-// Capture stderr + process.exit for assertions
-let stderrOutput = "";
-const originalStderrWrite = process.stderr.write;
 const originalExit = process.exit;
-
-function captureStderr() {
-  stderrOutput = "";
-  process.stderr.write = (chunk: string | Uint8Array) => {
-    stderrOutput += String(chunk);
-    return true;
-  };
-}
-
-function restoreStderr() {
-  process.stderr.write = originalStderrWrite;
-}
+let stderr: MockStderr | null = null;
 
 afterEach(() => {
   subcommands.length = 0;
-  restoreStderr();
+  stderr?.restore();
+  stderr = null;
   process.exit = originalExit;
 });
 
@@ -69,13 +57,13 @@ describe("dispatch", () => {
   });
 
   test("errors on unknown flag", async () => {
-    captureStderr();
+    stderr = mockStderr();
     let exitCode: number | undefined;
     process.exit = ((code: number) => {
       exitCode = code;
     }) as never;
     await dispatch("--nope", []);
     expect(exitCode).toBe(1);
-    expect(stderrOutput).toContain("Unknown flag: --nope");
+    expect(stderr.text).toContain("Unknown flag: --nope");
   });
 });

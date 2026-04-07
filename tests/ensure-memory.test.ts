@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Provider } from "../src/llm/types.ts";
 import { ensureMemory, parseInitResponse } from "../src/memory/memory.ts";
+import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-ensure-memory-test-"));
@@ -45,19 +46,14 @@ describe("parseInitResponse", () => {
 });
 
 describe("ensureMemory", () => {
-  const originalStderrWrite = process.stderr.write;
-  let chromeOutput: string[];
+  let stderr: MockStderr;
 
   beforeEach(() => {
-    chromeOutput = [];
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      chromeOutput.push(String(chunk));
-      return true;
-    };
+    stderr = mockStderr();
   });
 
   afterEach(() => {
-    process.stderr.write = originalStderrWrite;
+    stderr.restore();
   });
 
   test("loads existing memory without calling LLM", async () => {
@@ -86,7 +82,7 @@ describe("ensureMemory", () => {
     expect(result).toEqual({
       "/": [{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }],
     });
-    const output = chromeOutput.join("");
+    const output = stderr.text;
     expect(output).toContain("Learning about your system");
     expect(output).toContain("Detected");
   });
@@ -119,8 +115,8 @@ describe("ensureMemory", () => {
     };
 
     expect(ensureMemory(provider, dir)).rejects.toThrow("network error");
-    expect(chromeOutput.join("")).toContain("Learning about your system");
-    expect(chromeOutput.join("")).not.toContain("Detected");
+    expect(stderr.text).toContain("Learning about your system");
+    expect(stderr.text).not.toContain("Detected");
   });
 
   test("passes probe output as user message to LLM", async () => {

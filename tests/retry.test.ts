@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
 import { extractFailedText, fetchesUrl, isStructuredOutputError } from "../src/core/query.ts";
 import { SPINNER_TEXT } from "../src/core/spinner.ts";
+import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
 const STUB_USAGE: LanguageModelUsage = {
   inputTokens: undefined,
@@ -107,25 +108,20 @@ describe("extractFailedText", () => {
 
 describe("round retry in runQuery", () => {
   const originalConsoleLog = console.log;
-  const originalStderrWrite = process.stderr.write;
   let stdoutOutput: string[];
-  let stderrOutput: string[];
+  let stderr: MockStderr;
 
   beforeEach(() => {
     stdoutOutput = [];
-    stderrOutput = [];
     console.log = (...args: unknown[]) => {
       stdoutOutput.push(args.map(String).join(" "));
     };
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrOutput.push(String(chunk));
-      return true;
-    };
+    stderr = mockStderr();
   });
 
   afterEach(() => {
     console.log = originalConsoleLog;
-    process.stderr.write = originalStderrWrite;
+    stderr.restore();
   });
 
   test("retries on structured output error and succeeds", async () => {
@@ -189,26 +185,16 @@ describe("round retry in runQuery", () => {
 
 describe("chrome spinner around LLM call", () => {
   const originalConsoleLog = console.log;
-  const originalStderrWrite = process.stderr.write;
-  const originalIsTTY = process.stderr.isTTY;
-  let stderrOutput: string[];
+  let stderr: MockStderr | null = null;
 
   beforeEach(() => {
-    stderrOutput = [];
     console.log = () => {};
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrOutput.push(String(chunk));
-      return true;
-    };
   });
 
   afterEach(() => {
     console.log = originalConsoleLog;
-    process.stderr.write = originalStderrWrite;
-    Object.defineProperty(process.stderr, "isTTY", {
-      value: originalIsTTY,
-      configurable: true,
-    });
+    stderr?.restore();
+    stderr = null;
   });
 
   test("renders 'thinking...' spinner when stderr is a TTY", async () => {
@@ -219,10 +205,7 @@ describe("chrome spinner around LLM call", () => {
     const { resetVerbose } = await import("../src/core/verbose.ts");
 
     resetVerbose();
-    Object.defineProperty(process.stderr, "isTTY", {
-      value: true,
-      configurable: true,
-    });
+    stderr = mockStderr({ isTTY: true });
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
@@ -236,11 +219,10 @@ describe("chrome spinner around LLM call", () => {
       providerConfig: { type: "test" },
     });
 
-    const all = stderrOutput.join("");
-    expect(all).toContain(SPINNER_TEXT);
+    expect(stderr.text).toContain(SPINNER_TEXT);
     // The cursor is hidden during the spinner and restored after.
-    expect(all).toContain("\x1b[?25l"); // HIDE_CURSOR
-    expect(all).toContain("\x1b[?25h"); // SHOW_CURSOR
+    expect(stderr.text).toContain("\x1b[?25l"); // HIDE_CURSOR
+    expect(stderr.text).toContain("\x1b[?25h"); // SHOW_CURSOR
   });
 
   test("does not render the spinner when stderr is not a TTY", async () => {
@@ -251,10 +233,7 @@ describe("chrome spinner around LLM call", () => {
     const { resetVerbose } = await import("../src/core/verbose.ts");
 
     resetVerbose();
-    Object.defineProperty(process.stderr, "isTTY", {
-      value: false,
-      configurable: true,
-    });
+    stderr = mockStderr({ isTTY: false });
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
@@ -268,7 +247,6 @@ describe("chrome spinner around LLM call", () => {
       providerConfig: { type: "test" },
     });
 
-    const all = stderrOutput.join("");
-    expect(all).not.toContain(SPINNER_TEXT);
+    expect(stderr.text).not.toContain(SPINNER_TEXT);
   });
 });

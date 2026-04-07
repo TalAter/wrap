@@ -8,6 +8,7 @@ import {
   SPINNER_TEXT,
   startChromeSpinner,
 } from "../src/core/spinner.ts";
+import { mockStderr } from "./helpers/mock-stderr.ts";
 
 describe("SPINNER_FRAMES", () => {
   test("has frames", () => {
@@ -30,100 +31,74 @@ describe("SPINNER_INTERVAL", () => {
 });
 
 describe("startChromeSpinner", () => {
-  async function captureStderr<T>(fn: (writes: string[]) => T | Promise<T>): Promise<T> {
-    const writes: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    // Force the TTY branch on inside startChromeSpinner; process.stderr in
-    // tests has no isTTY (false) so without this the spinner would no-op.
-    const originalIsTTY = process.stderr.isTTY;
-    Object.defineProperty(process.stderr, "isTTY", {
-      value: true,
-      configurable: true,
-    });
-    process.stderr.write = ((s: string) => {
-      writes.push(s);
-      return true;
-    }) as typeof process.stderr.write;
+  test("writes the text and a frame to stderr", () => {
+    const stderr = mockStderr({ isTTY: true });
     try {
-      return await fn(writes);
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      expect(stderr.lines.some((w) => w.includes(SPINNER_TEXT))).toBe(true);
+      expect(
+        stderr.lines.some((w) => SPINNER_FRAMES.some((f) => w.includes(f.trim()))),
+      ).toBe(true);
+      stop();
     } finally {
-      process.stderr.write = original;
-      Object.defineProperty(process.stderr, "isTTY", {
-        value: originalIsTTY,
-        configurable: true,
-      });
+      stderr.restore();
     }
-  }
-
-  test("writes the text and a frame to stderr", async () => {
-    await captureStderr(async (writes) => {
-      const stop = startChromeSpinner(SPINNER_TEXT);
-      expect(writes.some((w) => w.includes(SPINNER_TEXT))).toBe(true);
-      expect(writes.some((w) => SPINNER_FRAMES.some((f) => w.includes(f.trim())))).toBe(true);
-      stop();
-    });
   });
 
-  test("hides the cursor on start and restores it on stop", async () => {
-    await captureStderr(async (writes) => {
+  test("hides the cursor on start and restores it on stop", () => {
+    const stderr = mockStderr({ isTTY: true });
+    try {
       const stop = startChromeSpinner(SPINNER_TEXT);
-      expect(writes.some((w) => w.includes(HIDE_CURSOR))).toBe(true);
+      expect(stderr.text).toContain(HIDE_CURSOR);
       stop();
-      expect(writes.some((w) => w.includes(SHOW_CURSOR))).toBe(true);
-    });
+      expect(stderr.text).toContain(SHOW_CURSOR);
+    } finally {
+      stderr.restore();
+    }
   });
 
-  test("stop clears the line so the spinner disappears", async () => {
-    await captureStderr(async (writes) => {
+  test("stop clears the line so the spinner disappears", () => {
+    const stderr = mockStderr({ isTTY: true });
+    try {
       const stop = startChromeSpinner(SPINNER_TEXT);
       stop();
       // Last write must contain a CR + erase-in-line so the spinner row
       // is empty when subsequent stderr output lands.
-      const tail = writes[writes.length - 1] ?? "";
+      const tail = stderr.lines[stderr.lines.length - 1] ?? "";
       expect(tail).toContain("\r");
       expect(tail).toContain("\x1b[2K");
-    });
+    } finally {
+      stderr.restore();
+    }
   });
 
   test("advances frames on the configured interval", async () => {
-    await captureStderr(async (writes) => {
+    const stderr = mockStderr({ isTTY: true });
+    try {
       const stop = startChromeSpinner(SPINNER_TEXT);
       await new Promise((r) => setTimeout(r, SPINNER_INTERVAL * 3 + 30));
       stop();
       // Should have observed at least 2 different frames during the window.
       const seen = new Set<string>();
-      for (const w of writes) {
+      for (const w of stderr.lines) {
         for (const f of SPINNER_FRAMES) {
           if (w.includes(f.trim())) seen.add(f);
         }
       }
       expect(seen.size).toBeGreaterThanOrEqual(2);
-    });
+    } finally {
+      stderr.restore();
+    }
   });
 
   test("no-op when stderr is not a TTY", () => {
-    // Don't use captureStderr — we want isTTY=false.
-    const originalIsTTY = process.stderr.isTTY;
-    Object.defineProperty(process.stderr, "isTTY", {
-      value: false,
-      configurable: true,
-    });
-    const writes: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    process.stderr.write = ((s: string) => {
-      writes.push(s);
-      return true;
-    }) as typeof process.stderr.write;
+    const stderr = mockStderr({ isTTY: false });
     try {
       const stop = startChromeSpinner(SPINNER_TEXT);
       stop();
-      expect(writes).toHaveLength(0);
+      expect(stderr.lines).toHaveLength(0);
     } finally {
-      process.stderr.write = original;
-      Object.defineProperty(process.stderr, "isTTY", {
-        value: originalIsTTY,
-        configurable: true,
-      });
+      stderr.restore();
     }
   });
 });

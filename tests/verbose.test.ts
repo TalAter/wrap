@@ -1,15 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { initVerbose, resetVerbose, verbose } from "../src/core/verbose.ts";
+import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
-const originalStderrWrite = process.stderr.write;
-let captured = "";
-
+let stderr: MockStderr | null = null;
 function captureStderr() {
-  captured = "";
-  process.stderr.write = (chunk: string | Uint8Array) => {
-    captured += String(chunk);
-    return true;
-  };
+  stderr = mockStderr();
 }
 
 beforeEach(() => {
@@ -17,28 +12,29 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.stderr.write = originalStderrWrite;
+  stderr?.restore();
+  stderr = null;
 });
 
 describe("verbose module", () => {
   test("verbose is a no-op when not initialized", () => {
     captureStderr();
     verbose("should not appear");
-    expect(captured).toBe("");
+    expect(stderr!.text).toBe("");
   });
 
   test("verbose is a no-op when initialized with enabled=false", () => {
     initVerbose(false);
     captureStderr();
     verbose("should not appear");
-    expect(captured).toBe("");
+    expect(stderr!.text).toBe("");
   });
 
   test("verbose emits to stderr when enabled", () => {
     initVerbose(true);
     captureStderr();
     verbose("Config loaded (anthropic)");
-    expect(captured).toContain("Config loaded (anthropic)");
+    expect(stderr!.text).toContain("Config loaded (anthropic)");
   });
 
   test("verbose line starts with guillemet prefix", () => {
@@ -46,9 +42,9 @@ describe("verbose module", () => {
     captureStderr();
     verbose("test message");
     // Dim ANSI wraps the line, but guillemet is the first visible char
-    expect(captured).toContain("»");
+    expect(stderr!.text).toContain("»");
     // Guillemet comes right after the dim escape
-    expect(captured).toContain("\x1b[2m»");
+    expect(stderr!.text).toContain("\x1b[2m»");
   });
 
   test("verbose line includes elapsed time in brackets", () => {
@@ -56,21 +52,21 @@ describe("verbose module", () => {
     captureStderr();
     verbose("test message");
     // Format: » [+0.00s] message
-    expect(captured).toMatch(/» \[\+\d+\.\d{2}s\]/);
+    expect(stderr!.text).toMatch(/» \[\+\d+\.\d{2}s\]/);
   });
 
   test("verbose line includes the message text", () => {
     initVerbose(true);
     captureStderr();
     verbose("Tools: 28/34 available");
-    expect(captured).toContain("Tools: 28/34 available");
+    expect(stderr!.text).toContain("Tools: 28/34 available");
   });
 
   test("verbose line ends with newline", () => {
     initVerbose(true);
     captureStderr();
     verbose("test");
-    expect(captured).toMatch(/\n$/);
+    expect(stderr!.text).toMatch(/\n$/);
   });
 
   test("verbose line is wrapped in dim ANSI", () => {
@@ -78,7 +74,7 @@ describe("verbose module", () => {
     captureStderr();
     verbose("dim text");
     // Dim = ESC[2m ... ESC[0m
-    expect(captured).toContain("\x1b[2m");
+    expect(stderr!.text).toContain("\x1b[2m");
   });
 
   test("initVerbose can only be called once", () => {
@@ -92,7 +88,7 @@ describe("verbose module", () => {
     verbose("first");
     await new Promise((r) => setTimeout(r, 50));
     verbose("second");
-    const lines = captured.trim().split("\n");
+    const lines = stderr!.text.trim().split("\n");
     const parseElapsed = (line: string) => {
       const match = line.match(/\[\+(\d+\.\d+)s\]/);
       return match?.[1] ? Number.parseFloat(match[1]) : 0;
