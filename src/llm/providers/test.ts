@@ -1,5 +1,12 @@
 import type { Provider } from "../types.ts";
 
+/** True when one of the test-provider env vars is set, regardless of value. */
+export function isTestProviderSelected(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.WRAP_TEST_RESPONSE !== undefined || env.WRAP_TEST_RESPONSES !== undefined;
+}
+
 export function testProvider(): Provider {
   let callIndex = 0;
   return {

@@ -31,3 +31,23 @@ export function providerLabel(config: ProviderConfig): string {
   if ("model" in config && config.model) return config.model;
   return config.type;
 }
+
+/** Multi-provider config — see specs/multi-provider-config.md. */
+export type ProviderEntry = {
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+};
+
+export type Config = {
+  providers?: Record<string, ProviderEntry>;
+  defaultProvider?: string;
+};
+
+/** Final state used by `initProvider` after override resolution. */
+export type ResolvedProvider = {
+  name: string;
+  model: string;
+  apiKey?: string;
+  baseURL?: string;
+};
