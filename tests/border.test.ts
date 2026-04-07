@@ -130,3 +130,54 @@ describe("bottomBorderSegments", () => {
     expect(border.every((segment) => segment.color === "#3c3c64")).toBe(true);
   });
 });
+
+describe("bottomBorderSegments with status", () => {
+  test("renders status text embedded in left side", () => {
+    const border = bottomBorderSegments(60, "⢎ Reticulating splines...");
+    expect(plainText(border)).toContain("⢎ Reticulating splines...");
+  });
+
+  test("starts with ╰─ and ends with ╯", () => {
+    const border = bottomBorderSegments(60, "⢎ Loading");
+    const visual = plainText(border);
+    expect(visual).toMatch(/^╰─/);
+    expect(visual).toMatch(/╯$/);
+  });
+
+  test("visual width matches requested width", () => {
+    const border = bottomBorderSegments(60, "⢎ Loading");
+    expect(stringWidth(plainText(border))).toBe(60);
+  });
+
+  test("uses dim color throughout", () => {
+    const border = bottomBorderSegments(60, "⢎ Loading");
+    expect(border.every((segment) => segment.color === "#3c3c64")).toBe(true);
+  });
+
+  test("width stays constant across different status lengths", () => {
+    const short = bottomBorderSegments(60, "⢎ Hi");
+    const long = bottomBorderSegments(60, "⢎ Reticulating splines...");
+    expect(stringWidth(plainText(short))).toBe(60);
+    expect(stringWidth(plainText(long))).toBe(60);
+  });
+
+  test("truncates status with ellipsis when it does not fit at full length", () => {
+    // 24 cells leaves room for "⢎ Reticulati…" (13 cells) plus padding (5+1=6)
+    const border = bottomBorderSegments(20, "⢎ Reticulating splines...");
+    const visual = plainText(border);
+    expect(stringWidth(visual)).toBe(20);
+    expect(visual).toContain("…");
+    expect(visual).toMatch(/^╰─/);
+    expect(visual).toMatch(/╯$/);
+    // The first piece of the status survives
+    expect(visual).toContain("⢎ ");
+  });
+
+  test("falls back to plain border when even one ellipsis cannot fit", () => {
+    // totalWidth too small for any status content — render unadorned border.
+    const border = bottomBorderSegments(7, "⢎ Reticulating splines...");
+    expect(stringWidth(plainText(border))).toBe(7);
+    expect(plainText(border)).not.toContain("…");
+    expect(plainText(border)).not.toContain("Reticulating");
+  });
+});

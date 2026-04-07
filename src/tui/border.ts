@@ -108,11 +108,41 @@ export function topBorderSegments(totalWidth: number, riskLevel: RiskLevel): Bor
   return segments;
 }
 
-export function bottomBorderSegments(totalWidth: number): BorderSegment[] {
+// Truncate to a target visual width (cell count), appending an ellipsis when
+// the original is too wide. Returns null when even a 1-char ellipsis cannot fit.
+function truncateToWidth(text: string, maxWidth: number): string | null {
+  if (stringWidth(text) <= maxWidth) return text;
+  if (maxWidth < 2) return null; // need at least 1 visible char + ellipsis
+  let cut = text;
+  while (cut.length > 0 && stringWidth(cut) + 1 > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  return cut.length > 0 ? `${cut}…` : null;
+}
+
+export function bottomBorderSegments(totalWidth: number, status?: string): BorderSegment[] {
   const color = colorHex(DIM_COLOR);
 
   if (totalWidth <= 1) {
     return [{ key: "bottom-left", text: "╰", color }];
+  }
+
+  // Layout when status fits: ╰─ <status> ─...─╯
+  // Padding (corners + 2 spaces + 1 leading dash) takes 5 cells, so the status
+  // needs at least 1 trailing dash to keep the right corner from collapsing.
+  // The middle segment carries all whitespace inside one Text node so Ink
+  // can't strip spaces at segment boundaries.
+  if (status) {
+    const maxStatusWidth = totalWidth - 6;
+    const fitted = truncateToWidth(status, maxStatusWidth);
+    if (fitted) {
+      const trailingDashes = totalWidth - 5 - stringWidth(fitted);
+      return [
+        { key: "bottom-left", text: "╰", color },
+        { key: "bottom-mid", text: `─ ${fitted} ${"─".repeat(trailingDashes)}`, color },
+        { key: "bottom-right", text: "╯", color },
+      ];
+    }
   }
 
   return [
