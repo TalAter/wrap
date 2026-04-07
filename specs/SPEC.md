@@ -330,7 +330,7 @@ Note: `command not found: foo` (without `./`) means `foo` is not in `$PATH` anyw
 
 > **See `specs/discovery.md`** for full architecture: init probes, runtime tool probes, tool watchlist, CWD context, and LLM probes.
 
-Wrap learns about its environment through four mechanisms: init probes on first run (baseline OS/shell knowledge), a runtime tool probe on every startup (~5ms `which` call), CWD files on every request (immediate project awareness), and LLM probes during the query loop (on-demand discovery). LLM probes count toward the unified round budget (`maxRounds`); discovered facts flow into scoped memory so the same question is never probed twice.
+Wrap learns about its environment through four mechanisms: init probes on first run (baseline OS/shell knowledge), a runtime tool probe on every startup (~5ms `which` call), CWD files on every request (immediate project awareness), and LLM probes during the query loop (on-demand discovery). LLM probes count toward the unified round budget (`maxRounds`); discovered facts flow into scoped memory so the same question is never probed twice. LLM probes also fetch URL content when the user's request mentions a URL whose live page would ground the response — see `specs/discovery.md` § Web Reading.
 
 The **tool watchlist** (`tool-watchlist.json`) extends the runtime tool probe over time. LLM responses can nominate tools via `watchlist_additions`; these are checked via `which` on every future invocation. See `specs/discovery.md` for details.
 
