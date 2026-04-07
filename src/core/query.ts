@@ -80,8 +80,10 @@ function handleMemoryUpdates(response: CommandResponse, wrapHome: string, cwd: s
       .map((u) => resolvePath(u.scope, cwd))
       .filter((s): s is string => s !== null && s !== "/");
     const deepest = scopes.sort((a, b) => b.length - a.length)[0];
-    const prefix = deepest ? `🧠 (${prettyPath(deepest)}) ` : "🧠 ";
-    chrome(`${prefix}${response.memory_updates_message}`);
+    const text = deepest
+      ? `(${prettyPath(deepest)}) ${response.memory_updates_message}`
+      : response.memory_updates_message;
+    chrome(text, "🧠");
   }
 }
 
@@ -236,7 +238,7 @@ export async function runQuery(
         }
 
         const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
-        chrome(`${probeIcon} ${response.explanation || response.content}`);
+        chrome(response.explanation || response.content, probeIcon);
 
         const shell = process.env.SHELL || "sh";
         verbose(`Probe: ${response.content}`);

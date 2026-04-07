@@ -100,7 +100,7 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
     return existing;
   }
 
-  chrome("✨ Learning about your system...");
+  chrome("Learning about your system...", "✨");
 
   verbose("Init: probing OS and shell...");
   const probeOutput = runProbes();
@@ -115,7 +115,7 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
 
   saveMemory(wrapHome, memory);
 
-  chrome("🧠 Detected OS and shell");
+  chrome("Detected OS and shell", "🧠");
 
   return memory;
 }

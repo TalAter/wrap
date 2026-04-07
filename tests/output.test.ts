@@ -28,6 +28,19 @@ describe("chrome", () => {
     chrome("line");
     expect(captured).toBe("line\n");
   });
+
+  test("two-arg form prefixes the icon", () => {
+    captureStderr();
+    chrome("Probing the database", "🔍");
+    expect(captured).toBe("🔍 Probing the database\n");
+  });
+
+  test("omitting icon yields no leading space", () => {
+    captureStderr();
+    chrome("plain");
+    expect(captured).toBe("plain\n");
+    expect(captured.startsWith(" ")).toBe(false);
+  });
 });
 
 describe("chromeRaw", () => {

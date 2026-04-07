@@ -1,4 +1,5 @@
 import { dim } from "./ansi.ts";
+import { writeLine } from "./output-sink.ts";
 
 let enabled = false;
 let initialized = false;
@@ -20,7 +21,7 @@ function prefix(): string {
 /** Emit a verbose line to stderr if enabled; no-op if disabled. */
 export function verbose(msg: string): void {
   if (!enabled) return;
-  process.stderr.write(`${prefix()}${dim(msg)}\n`);
+  writeLine(`${prefix()}${dim(msg)}\n`);
 }
 
 /**
@@ -29,7 +30,7 @@ export function verbose(msg: string): void {
  */
 export function verboseHighlight(msg: string, highlight: string): void {
   if (!enabled) return;
-  process.stderr.write(`${prefix()}${dim(msg)}${highlight}\n`);
+  writeLine(`${prefix()}${dim(msg)}${highlight}\n`);
 }
 
 /** Reset state — for tests only. */
