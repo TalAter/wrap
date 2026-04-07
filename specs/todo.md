@@ -42,12 +42,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Discovery & Probes (see specs/discovery.md)
 
-- [ ] Web reading — prompt grounding rule + eval samples (see discovery.md § Web Reading)
-  - [ ] Add grounding rule to system prompt instruction (`prompt.optimized.json`)
-  - [ ] Update `probe` type schema comment to mention URL fetching (`command-response.schema.ts`)
-  - [ ] Add `textutil`, `lynx`, `w3m`, `wget` to `PROBED_TOOLS` (`init-probes.ts`)
-  - [ ] `🌐` indicator for URL-fetching probes (`query.ts`)
-  - [ ] Eval samples: probe-correctness for URL-reading scenarios (`seed.jsonl`)
 - [ ] Future: parse package.json scripts / Makefile targets into CWD context summary
 
 ## Error Handling & Auto-Fix

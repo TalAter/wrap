@@ -200,14 +200,7 @@ Probes and error-fix rounds share a unified `maxRounds` budget. The LLM should b
 
 ## Web Reading
 
-> **Status:** Not implemented.
->
-> **Implementation touches:**
-> - Prompt instruction: add grounding rule to `prompt.optimized.json` instruction text
-> - Schema comment: note URL-fetching probes in the `probe` type description (`command-response.schema.ts`)
-> - Tool probe defaults: add `textutil`, `lynx`, `w3m`, `wget` to `PROBED_TOOLS` (`init-probes.ts`)
-> - Probe indicator: detect URL-fetching probes and show `🌐` instead of `🔍` on stderr (`query.ts`)
-> - Eval: add probe-correctness samples for URL-reading scenarios (`seed.jsonl`)
+> **Status:** Implemented. URL-fetch detection (`isUrlProbe`) and 🌐 indicator in `src/core/query.ts`. Tool defaults (`wget`, `textutil`, `lynx`, `w3m`) in `src/discovery/init-probes.ts`. Grounding rule in `src/prompt.optimized.json` instruction (mirrored in the DSPy seed at `eval/dspy/optimize.py`). Schema comment in `src/command-response.schema.ts`. Eval samples in `eval/examples/seed.jsonl`.
 
 ### Problem
 
@@ -281,11 +274,7 @@ No structured safety template — the LLM responds in its natural voice. It will
 
 ### Probe Indicator
 
-URL-fetching probes display `🌐` on stderr instead of the default `🔍`. The text after the emoji comes from the LLM's `explanation` field (same mechanism as `🔍` probes). Few-shot examples should use "Reading" as the preferred verb:
-
-```
-🌐 Reading https://ollama.com/...
-```
+URL-fetching probes display `🌐` on stderr instead of the default `🔍`. The text after the emoji comes from the LLM's `explanation` field (same mechanism as `🔍` probes) and is free-form — Wrap doesn't enforce phrasing.
 
 Detection: check if the probe's `content` field contains a URL pattern (starts with `curl` or `wget` and includes `http://` or `https://`). Simple heuristic — doesn't need to be perfect. Fallback to `🔍` for ambiguous cases.
 
