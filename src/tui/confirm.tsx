@@ -10,9 +10,9 @@ import {
 import { TextInput } from "./text-input.tsx";
 
 type ConfirmPanelProps = {
-  command: string;
-  riskLevel: "medium" | "high";
-  explanation?: string;
+  initialCommand: string;
+  initialRiskLevel: "medium" | "high";
+  initialExplanation?: string;
   onChoice: (choice: "run" | "cancel", command: string) => void;
 };
 
@@ -29,12 +29,22 @@ const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
 const PANEL_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
 
-export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: ConfirmPanelProps) {
+export function ConfirmPanel({
+  initialCommand,
+  initialRiskLevel,
+  initialExplanation,
+  onChoice,
+}: ConfirmPanelProps) {
   const { exit } = useApp();
   const { columns: termCols, rows: termRows } = useRenderSize();
+  // Held as state so the follow-up flow can swap command/risk/explanation
+  // in place without remounting the dialog (which would flicker the alt screen).
+  const [command] = useState(initialCommand);
+  const [riskLevel] = useState(initialRiskLevel);
+  const [explanation] = useState(initialExplanation);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(command);
+  const [draft, setDraft] = useState(initialCommand);
 
   // Width calculation
   const natural = Math.max(

@@ -36,9 +36,9 @@ export async function confirmCommand(
 
     const app = render(
       createElement(ConfirmPanel, {
-        command,
-        riskLevel,
-        explanation,
+        initialCommand: command,
+        initialRiskLevel: riskLevel,
+        initialExplanation: explanation,
         onChoice: (c: ConfirmChoice, cmd: string) => {
           choice = c;
           resultCommand = cmd;
