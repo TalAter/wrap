@@ -67,10 +67,6 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
   const [borderCount, setBorderCount] = useState(initialBorderCount);
   const middleRef = useRef<DOMElement>(null);
 
-  useEffect(() => {
-    setBorderCount(initialBorderCount);
-  }, [initialBorderCount]);
-
   useLayoutEffect(() => {
     const node = middleRef.current;
     if (!node) return;

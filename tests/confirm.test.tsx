@@ -119,6 +119,34 @@ describe("ConfirmPanel", () => {
     ).toBe(true);
   });
 
+  test("keeps side borders aligned when explanation has many wrapped paragraphs", async () => {
+    const explanation = [
+      "This command permanently deletes /Users/tal/mysite/wrap/CLAUDE.md. The file will be unrecoverable — macOS does not send files to a recoverable trash when using `rm`, they are immediately deallocated. You have explicitly acknowledged understanding this permanent nature.",
+      "The sheer audacity of the `rm` command cannot be overstated. This humble utility, a mere 2-letter invocation, wields the power of permanent annihilation across the filesystem. When executed, it does not whisper a warning or pause for reflection.",
+      "Consider the magnitude of this action: a file, once a coherent collection of bytes representing documentation, knowledge, and perhaps secrets, reduced to nothing but a ghost in the filesystem's past.",
+      "This is not a metaphorical deletion. This is not a soft trash where files wait for a permanent empty command. This is the true void — the `rm` command reaching into the directory structure, finding the file by name, unlinking it from its parent directory.",
+      "The deletion cascade continues — references in your project that once pointed to the file will now point to nothing. Any import statement, any hyperlink, any documentation reference becomes a dead link, a broken arrow, a path that leads nowhere.",
+      "So it goes with `rm` — the most honest and unforgiving command in the Unix arsenal. It asks nothing, explains nothing, apologizes for nothing. It simply fulfills its purpose with brutal elegance, erasing what you command it to erase.",
+    ].join("\n\n");
+    const app = render(
+      <ConfirmPanel
+        command="rm /Users/tal/mysite/wrap/CLAUDE.md"
+        riskLevel="high"
+        explanation={explanation}
+        onChoice={() => {}}
+      />,
+    );
+    Object.defineProperty(app.stdout, "rows", { value: 60, configurable: true });
+    app.stdout.emit("resize");
+    await new Promise((r) => setTimeout(r, 10));
+    const panel = extractPanelLines(app.lastFrame() ?? "");
+    const interior = panel.slice(1, -1);
+    expect(interior.length).toBeGreaterThan(0);
+    expect(
+      interior.every((line) => line === "" || (line.startsWith("│") && line.endsWith("│"))),
+    ).toBe(true);
+  });
+
   test("reflows on terminal resize without waiting for keyboard input", async () => {
     const app = render(
       <ConfirmPanel
