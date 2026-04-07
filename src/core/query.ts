@@ -21,6 +21,7 @@ import { appendFacts } from "../memory/memory.ts";
 import type { Memory } from "../memory/types.ts";
 import promptConstants from "../prompt.constants.json";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
+import { startChromeSpinner } from "../tui/spinner.ts";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
@@ -167,6 +168,7 @@ export async function runQuery(
       verbose(`Calling ${model}...`);
       const llmStart = performance.now();
       let response: CommandResponse;
+      const stopSpinner = startChromeSpinner("thinking...");
       try {
         response = await callWithRetry(provider, input);
 
@@ -185,12 +187,17 @@ export async function runQuery(
           });
         }
       } catch (e) {
+        // Stop the spinner before logging so the error line lands on a clean
+        // row instead of being glued to the trailing spinner frame.
+        stopSpinner();
         const errMsg = e instanceof Error ? e.message : String(e);
         verbose(`LLM error: ${errMsg}`);
         round.provider_error = errMsg;
         round.llm_ms = Math.round(performance.now() - llmStart);
         addRound(entry, round);
         throw e;
+      } finally {
+        stopSpinner();
       }
       round.llm_ms = Math.round(performance.now() - llmStart);
       round.parsed = response;

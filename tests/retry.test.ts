@@ -185,3 +185,89 @@ describe("round retry in runQuery", () => {
     expect(callCount).toBe(1);
   });
 });
+
+describe("chrome spinner around LLM call", () => {
+  const originalConsoleLog = console.log;
+  const originalStderrWrite = process.stderr.write;
+  const originalIsTTY = process.stderr.isTTY;
+  let stderrOutput: string[];
+
+  beforeEach(() => {
+    stderrOutput = [];
+    console.log = () => {};
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrOutput.push(String(chunk));
+      return true;
+    };
+  });
+
+  afterEach(() => {
+    console.log = originalConsoleLog;
+    process.stderr.write = originalStderrWrite;
+    Object.defineProperty(process.stderr, "isTTY", {
+      value: originalIsTTY,
+      configurable: true,
+    });
+  });
+
+  test("renders 'thinking...' spinner when stderr is a TTY", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { runQuery } = await import("../src/core/query.ts");
+    const { resetVerbose } = await import("../src/core/verbose.ts");
+
+    resetVerbose();
+    Object.defineProperty(process.stderr, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+
+    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
+    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
+
+    const provider = {
+      runPrompt: async () => ({ type: "answer", content: "ok", risk_level: "low" }),
+    };
+
+    await runQuery("test", provider, {
+      cwd: "/tmp",
+      providerConfig: { type: "test" },
+    });
+
+    const all = stderrOutput.join("");
+    expect(all).toContain("thinking...");
+    // The cursor is hidden during the spinner and restored after.
+    expect(all).toContain("\x1b[?25l"); // HIDE_CURSOR
+    expect(all).toContain("\x1b[?25h"); // SHOW_CURSOR
+  });
+
+  test("does not render the spinner when stderr is not a TTY", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { runQuery } = await import("../src/core/query.ts");
+    const { resetVerbose } = await import("../src/core/verbose.ts");
+
+    resetVerbose();
+    Object.defineProperty(process.stderr, "isTTY", {
+      value: false,
+      configurable: true,
+    });
+
+    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
+    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
+
+    const provider = {
+      runPrompt: async () => ({ type: "answer", content: "ok", risk_level: "low" }),
+    };
+
+    await runQuery("test", provider, {
+      cwd: "/tmp",
+      providerConfig: { type: "test" },
+    });
+
+    const all = stderrOutput.join("");
+    expect(all).not.toContain("thinking...");
+  });
+});
