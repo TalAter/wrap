@@ -67,6 +67,13 @@ describe("PROBED_TOOLS", () => {
     expect(PROBED_TOOLS).toContain("bun");
     expect(PROBED_TOOLS).toContain("curl");
   });
+
+  test("includes web reading tools (curl alternative + HTML extractors)", () => {
+    expect(PROBED_TOOLS).toContain("wget");
+    expect(PROBED_TOOLS).toContain("textutil");
+    expect(PROBED_TOOLS).toContain("lynx");
+    expect(PROBED_TOOLS).toContain("w3m");
+  });
 });
 
 describe("probeTools", () => {

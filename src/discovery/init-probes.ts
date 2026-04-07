@@ -36,12 +36,17 @@ export const PROBED_TOOLS: readonly string[] = [
   "node",
   "bun",
   "curl",
+  "wget",
   "jq",
   "tldr",
   "rg",
   "fd",
   "bat",
   "eza",
+  // Text extraction (HTML → plain text, used for web reading probes)
+  "textutil",
+  "lynx",
+  "w3m",
   // Clipboard
   "pbcopy",
   "pbpaste",
