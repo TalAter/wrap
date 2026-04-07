@@ -9,6 +9,37 @@ export const SPINNER_INTERVAL = 80; // ms
 /** Default label for the chrome spinner shown around LLM calls. */
 export const SPINNER_TEXT = "thinking...";
 
+// One-time crash guard: if the process exits while a spinner is running
+// (Ctrl-C, uncaught throw, anything that bypasses the stop() finally), the
+// terminal is left with `HIDE_CURSOR` still in effect — invisible cursor
+// until the user runs `tput cnorm`. We register process listeners on first
+// spinner start that unconditionally write `SHOW_CURSOR` on the way out.
+let exitGuardInstalled = false;
+function ensureExitGuard(): void {
+  if (exitGuardInstalled) return;
+  exitGuardInstalled = true;
+  const restore = () => {
+    if (process.stderr.isTTY) process.stderr.write(SHOW_CURSOR);
+  };
+  process.on("exit", restore);
+  // Signals don't fire `exit` until the default handler runs, and the default
+  // handler exits with the signal's conventional code. Re-emit the signal
+  // after restoring the cursor so the user's shell sees the right exit code.
+  process.on("SIGINT", () => {
+    restore();
+    process.exit(130);
+  });
+  process.on("SIGTERM", () => {
+    restore();
+    process.exit(143);
+  });
+}
+
+/** Reset the exit-guard install flag — for tests only. */
+export function resetExitGuard(): void {
+  exitGuardInstalled = false;
+}
+
 /**
  * Stderr spinner used outside of Ink. Writes `\r` + frame + " " + text on
  * every tick (no newline) so the line is overwritten in place. Hides the
@@ -18,10 +49,15 @@ export const SPINNER_TEXT = "thinking...";
  * `stop` is idempotent — query.ts calls it from a catch block (to clear the
  * row before logging an error) and again from the surrounding finally.
  *
+ * On first call, installs a one-time process exit/SIGINT/SIGTERM listener
+ * that restores the cursor if the process dies before stop() runs.
+ *
  * No-op when stderr is not a TTY — keeps `\r` garbage out of redirected logs.
  */
 export function startChromeSpinner(text: string): () => void {
   if (!process.stderr.isTTY) return () => {};
+
+  ensureExitGuard();
 
   let index = 0;
   let stopped = false;

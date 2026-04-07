@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
 import { HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
 import {
+  resetExitGuard,
   SPINNER_FRAMES,
   SPINNER_INTERVAL,
   SPINNER_TEXT,
@@ -124,5 +125,89 @@ describe("startChromeSpinner", () => {
         configurable: true,
       });
     }
+  });
+});
+
+describe("cursor leak guard", () => {
+  function withGuardCapture<T>(fn: (ctx: {
+    exitListeners: Array<() => void>;
+    sigintListeners: Array<() => void>;
+    sigtermListeners: Array<() => void>;
+    writes: string[];
+  }) => T): T {
+    // Reset module state so the install runs on the first call inside the
+    // test, with our process.on mock in place.
+    resetExitGuard();
+    const originalIsTTY = process.stderr.isTTY;
+    const originalOn = process.on.bind(process);
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    Object.defineProperty(process.stderr, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    const exitListeners: Array<() => void> = [];
+    const sigintListeners: Array<() => void> = [];
+    const sigtermListeners: Array<() => void> = [];
+    process.on = ((event: string, listener: () => void) => {
+      if (event === "exit") exitListeners.push(listener);
+      else if (event === "SIGINT") sigintListeners.push(listener);
+      else if (event === "SIGTERM") sigtermListeners.push(listener);
+      return process;
+    }) as typeof process.on;
+    const writes: string[] = [];
+    process.stderr.write = ((s: string) => {
+      writes.push(s);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      return fn({ exitListeners, sigintListeners, sigtermListeners, writes });
+    } finally {
+      process.on = originalOn;
+      process.stderr.write = originalWrite;
+      Object.defineProperty(process.stderr, "isTTY", {
+        value: originalIsTTY,
+        configurable: true,
+      });
+    }
+  }
+
+  test("the registered exit handler restores the cursor", () => {
+    withGuardCapture(({ exitListeners, writes }) => {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      try {
+        expect(exitListeners.length).toBeGreaterThanOrEqual(1);
+        writes.length = 0;
+        // Simulate process exit while the spinner is still running.
+        for (const listener of exitListeners) listener();
+        expect(writes.some((w) => w.includes(SHOW_CURSOR))).toBe(true);
+      } finally {
+        stop();
+      }
+    });
+  });
+
+  test("installs the exit handler exactly once across multiple spinner runs", () => {
+    withGuardCapture(({ exitListeners }) => {
+      const startCount = exitListeners.length;
+      const stop1 = startChromeSpinner(SPINNER_TEXT);
+      stop1();
+      const stop2 = startChromeSpinner(SPINNER_TEXT);
+      stop2();
+      const stop3 = startChromeSpinner(SPINNER_TEXT);
+      stop3();
+      expect(exitListeners.length - startCount).toBe(1);
+    });
+  });
+
+  test("registers SIGINT and SIGTERM handlers alongside exit", () => {
+    withGuardCapture(({ sigintListeners, sigtermListeners }) => {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      try {
+        expect(sigintListeners.length).toBeGreaterThanOrEqual(1);
+        expect(sigtermListeners.length).toBeGreaterThanOrEqual(1);
+      } finally {
+        stop();
+      }
+    });
   });
 });
