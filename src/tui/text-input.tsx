@@ -2,7 +2,7 @@ import { Box, Text, useInput, useStdin } from "ink";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Cursor } from "./cursor.ts";
 
-export const INPUT_BG = "#232332";
+const INPUT_BG = "#232332";
 const PLACEHOLDER_COLOR = "#73738c";
 
 function InputFrame({ children }: { children: ReactNode }) {

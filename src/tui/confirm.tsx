@@ -7,7 +7,7 @@ import {
   interpolateGradient,
   topBorderSegments,
 } from "./border.ts";
-import { INPUT_BG, TextInput } from "./text-input.tsx";
+import { TextInput } from "./text-input.tsx";
 
 type ConfirmPanelProps = {
   command: string;
@@ -166,7 +166,7 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
             {editing ? (
               <TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} />
             ) : (
-              <Text backgroundColor={INPUT_BG}>{` ${command}`.padEnd(innerWidth)}</Text>
+              <TextInput value={command} readOnly />
             )}
             {explanation && (
               <>
