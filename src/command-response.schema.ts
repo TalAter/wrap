@@ -55,5 +55,6 @@ export const CommandResponseSchema = z.object({
 // SCHEMA_END
 
 export type CommandResponse = z.infer<typeof CommandResponseSchema>;
+export type RiskLevel = CommandResponse["risk_level"];
 
 export const CommandResponseJsonSchema = z.toJSONSchema(CommandResponseSchema);

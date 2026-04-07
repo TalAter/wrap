@@ -1,6 +1,7 @@
 import { Box, type DOMElement, measureElement, Text, useApp, useInput, useStdout } from "ink";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
+import type { RiskLevel } from "../command-response.schema.ts";
 import {
   type BorderSegment,
   bottomBorderSegments,
@@ -11,7 +12,7 @@ import { TextInput } from "./text-input.tsx";
 
 type ConfirmPanelProps = {
   initialCommand: string;
-  initialRiskLevel: "medium" | "high";
+  initialRiskLevel: RiskLevel;
   initialExplanation?: string;
   onChoice: (choice: "run" | "cancel", command: string) => void;
 };

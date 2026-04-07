@@ -1,3 +1,4 @@
+import type { RiskLevel } from "../command-response.schema.ts";
 import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, SHOW_CURSOR } from "../core/ansi.ts";
 import { chrome, chromeRaw } from "../core/output.ts";
 
@@ -5,13 +6,13 @@ export type ConfirmChoice = "run" | "cancel";
 export type ConfirmResult = { result: ConfirmChoice | "blocked"; command: string };
 
 /**
- * Show a confirmation panel for a medium/high-risk command.
+ * Show a confirmation panel for a command.
  * Returns "run" if confirmed, "cancel" if the user declines,
  * or "blocked" if no TTY is available to show the panel.
  */
 export async function confirmCommand(
   command: string,
-  riskLevel: "medium" | "high",
+  riskLevel: RiskLevel,
   explanation?: string,
 ): Promise<ConfirmResult> {
   if (!process.stderr.isTTY) {

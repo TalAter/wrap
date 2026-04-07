@@ -1,33 +1,51 @@
 import stringWidth from "string-width";
+import type { RiskLevel } from "../command-response.schema.ts";
 import { type Color, interpolate } from "../core/ansi.ts";
 
-// Medium risk: pink → purple → dim
-const MEDIUM_STOPS: Color[] = [
-  [255, 100, 200],
-  [220, 100, 225],
-  [160, 100, 250],
-  [100, 100, 220],
-  [70, 80, 150],
-  [60, 60, 100],
-];
+type Badge = { fg: Color; bg: Color; icon: string; label: string };
 
-// High risk: red → purple → dim
-const HIGH_STOPS: Color[] = [
-  [255, 60, 80],
-  [230, 65, 130],
-  [185, 75, 190],
-  [125, 85, 210],
-  [80, 80, 155],
-  [60, 60, 100],
-];
+// Each risk level owns its gradient stops and its badge styling. Co-located so
+// tuning a level's look only touches one place.
+const RISK: Record<RiskLevel, { stops: Color[]; badge: Badge }> = {
+  // Low risk: teal → blue → dim
+  low: {
+    stops: [
+      [80, 220, 200],
+      [70, 190, 195],
+      [65, 160, 180],
+      [60, 130, 160],
+      [60, 95, 130],
+      [60, 60, 100],
+    ],
+    badge: { fg: [120, 230, 160], bg: [25, 70, 40], icon: "✔", label: "low risk" },
+  },
+  // Medium risk: pink → purple → dim
+  medium: {
+    stops: [
+      [255, 100, 200],
+      [220, 100, 225],
+      [160, 100, 250],
+      [100, 100, 220],
+      [70, 80, 150],
+      [60, 60, 100],
+    ],
+    badge: { fg: [255, 200, 80], bg: [80, 60, 30], icon: "⚠", label: "medium risk" },
+  },
+  // High risk: red → purple → dim
+  high: {
+    stops: [
+      [255, 60, 80],
+      [230, 65, 130],
+      [185, 75, 190],
+      [125, 85, 210],
+      [80, 80, 155],
+      [60, 60, 100],
+    ],
+    badge: { fg: [255, 100, 100], bg: [80, 25, 25], icon: "⚠", label: "high risk" },
+  },
+};
 
 const DIM_COLOR: Color = [60, 60, 100];
-
-// Badge colors per risk level
-const BADGE = {
-  medium: { fg: [255, 200, 80] as Color, bg: [80, 60, 30] as Color },
-  high: { fg: [255, 100, 100] as Color, bg: [80, 25, 25] as Color },
-};
 
 export type BorderSegment = {
   key: string;
@@ -45,23 +63,16 @@ function colorHex([r, g, b]: Color): string {
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
 
-export function interpolateGradient(
-  index: number,
-  total: number,
-  riskLevel: "medium" | "high",
-): string {
+export function interpolateGradient(index: number, total: number, riskLevel: RiskLevel): string {
   const t = total > 1 ? index / (total - 1) : 0;
-  const stops = riskLevel === "medium" ? MEDIUM_STOPS : HIGH_STOPS;
-  const [r, g, b] = interpolate(stops, t);
+  const [r, g, b] = interpolate(RISK[riskLevel].stops, t);
   return colorHex([r, g, b]);
 }
 
-export function topBorderSegments(
-  totalWidth: number,
-  riskLevel: "medium" | "high",
-): BorderSegment[] {
+export function topBorderSegments(totalWidth: number, riskLevel: RiskLevel): BorderSegment[] {
   // This stays custom instead of Ink's built-in border so we can style each glyph and embed the risk badge in the border itself.
-  const badgeText = ` ⚠ ${riskLevel} risk `;
+  const { badge } = RISK[riskLevel];
+  const badgeText = ` ${badge.icon} ${badge.label} `;
   const badgeVisualWidth = stringWidth(badgeText);
   // Badge position: totalWidth - badgeVisualWidth - 3 (space + ─ + ╮)
   const badgeStart = totalWidth - badgeVisualWidth - 3;
@@ -83,8 +94,8 @@ export function topBorderSegments(
       segments.push({
         key: `top-${i}`,
         text: badgeText,
-        color: colorHex(BADGE[riskLevel].fg),
-        backgroundColor: colorHex(BADGE[riskLevel].bg),
+        color: colorHex(badge.fg),
+        backgroundColor: colorHex(badge.bg),
         bold: true,
       });
       i += badgeVisualWidth;
