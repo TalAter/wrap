@@ -125,25 +125,42 @@ The follow-up text is preserved across the composing-followup ↔ processing-fol
 
 ## TextInput component
 
-Extract `CommandInput` into a generic `TextInput` in `src/tui/text-input.tsx`. Same cursor, keybindings, and rendering logic. Used by both editing-command and composing-followup modes.
+Extract `CommandInput` into a generic `TextInput` in `src/tui/text-input.tsx`. Same cursor, keybindings, and rendering logic. Used by editing-command, composing-followup, AND processing-followup states. The visual is identical across all three — only the interaction mode differs.
 
 ```tsx
-type TextInputProps = {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: (value: string) => void;
-  width: number;
-  placeholder?: string;     // shown when value is empty, dim color
-  readOnly?: boolean;       // no cursor, no input handling — used in processing-followup state
-};
+type TextInputProps =
+  | {
+      readOnly?: false;
+      value: string;
+      width: number;
+      onChange: (value: string) => void;
+      onSubmit: (value: string) => void;
+      placeholder?: string;     // shown when value is empty, dim color
+    }
+  | {
+      readOnly: true;
+      value: string;
+      width: number;
+      // no handlers — component is display-only
+    };
 ```
 
-- Full-width dark background (`#232332`) — set on the containing `<Box>` inside the component itself. Background is part of the component, not the parent.
-- Placeholder rendered in dim color (`#73738c`) when value is empty (cursor is implicitly at position 0 in this case).
-- All existing keybindings from `CommandInput` carry over (Ctrl-A/E/U/K/W/Y, word movement, etc.)
+A discriminated union makes it impossible to pass no-op handlers for the readOnly case. Editable callers get the normal prop shape; readOnly callers don't supply handlers at all.
+
+- Full-width dark background (`#232332`) — set on the containing `<Box>` inside the component. Background is part of the component, not the parent. Lift `INPUT_BG` into a module constant so changes apply to all three states at once.
+- Placeholder rendered in dim color (`#73738c`) when `value === ""` and not `readOnly`: cursor block followed by dim placeholder text (looks like `█actually...`).
+- All existing keybindings from `CommandInput` carry over (Ctrl-A/E/U/K/W/Y, word movement, etc.).
 - `Cursor` class unchanged.
-- When `readOnly`, the component renders the value as plain text inside the same dark strip, no cursor block, no `useInput` registration. Used in the processing-followup state to display the in-flight follow-up text without allowing edits.
+- **Editable vs readOnly branching.** Both modes render the same `<Box width paddingX={1} backgroundColor={INPUT_BG}>` wrapper. Inside:
+  - **Editable:** `useInput` registers keypress handling, the cursor state tracks offset, rendering splits text into before-cursor / inverse-char-at-cursor / after-cursor.
+  - **readOnly:** `useInput` is NOT registered (no wasted hook subscription). Render a plain `<Text>{value}</Text>` — no cursor block, no split.
 - `Esc` is NOT handled inside `TextInput`. The parent registers a separate `useInput({ isActive: <state matches> })` block to handle it (mirrors the existing `confirm.tsx:84-91` pattern).
+
+### Why readOnly (not a separate component)
+
+Visual parity is the primary goal: the processing-followup field should look pixel-identical to the composing-followup field, just frozen. A shared component with a mode flag guarantees that. Any future styling change (border, padding, overflow, cursor appearance) propagates to both states automatically. Splitting into two components would require remembering to update both.
+
+The readOnly branch is ~3 lines of JSX inside TextInput — trivial conditional, not enough complexity to justify a separate component.
 
 ### Usage in confirm.tsx
 
@@ -156,8 +173,7 @@ type TextInputProps = {
   width={innerWidth} placeholder="actually..." />
 
 // processing-followup state:
-<TextInput value={followupText} onChange={() => {}} onSubmit={() => {}}
-  width={innerWidth} readOnly />
+<TextInput value={followupText} width={innerWidth} readOnly />
 ```
 
 In composing-followup / processing-followup states, the layout is: command strip → explanation → TextInput → hint. The TextInput appears just above the action bar slot.
@@ -572,6 +588,105 @@ Add a new section after `### Output`:
 | `specs/SPEC.md` | Glossary: move Follow-up entry into new TUI section, add dialog/action bar/risk badge/text input/dialog state/border status/state-name entries. |
 | `specs/tui-approach.md` | Remove or update the `### Phasing: describe and follow-up` section (this spec implements Phase 2 — keep Ink mounted, route stderr through the sink). |
 | `specs/confirm-panel-impl.md` | Strike the "deferred to phase 2" items that this spec implements (input buffer flush, keeping Ink mounted). |
+
+## Implementation plan
+
+The work breaks into 10 steps. Each step is standalone: the repo builds, lints, and tests pass at the end of each, and the resulting state is releasable. Steps 1-6 are preparatory refactors with no user-visible change. Steps 7-10 add the follow-up feature on top, each one adding a small vertical slice of behavior.
+
+### Step 1 — Extract TextInput component
+
+- Move `CommandInput` out of `confirm.tsx` into `src/tui/text-input.tsx` as `TextInput`.
+- Add `placeholder` and `readOnly` props (unused for now, but fully implemented).
+- Background (`#232332`) moves into the component itself.
+- `confirm.tsx` imports and uses `TextInput` with the same props it used for `CommandInput`.
+- Tests: add placeholder rendering test, readOnly test. Existing editing-mode tests still pass unchanged.
+- **No user-visible change.**
+
+### Step 2 — Lift ConfirmPanel props to local state
+
+- Rename `ConfirmPanelProps` fields to `initialCommand`, `initialRiskLevel`, `initialExplanation`.
+- Inside the component, `useState` initialized from each.
+- All existing reads of `command`/`riskLevel`/`explanation` now read from state.
+- Setters exist but aren't called yet.
+- `render.ts` updates prop names.
+- Tests still pass unchanged.
+- **No user-visible change.**
+
+### Step 3 — Shared stderr sink + two-arg chrome
+
+- New `src/core/stderr-sink.ts`: `subscribeStderr(fn)` + internal `stderrWrite(line, kind)`.
+- `chrome()` gains optional `icon` argument: `chrome(text: string, icon?: string)`.
+- Both `chrome()` and `verbose()` route through `stderrWrite`.
+- Update `query.ts` probe callsite (`chrome(text, "🔍")`) and memory callsite (`chrome(message, "🧠")`) to use the two-arg form.
+- Without a subscriber, messages go straight to stderr (identical behavior).
+- Tests: sink buffering, flush order, kind filtering, chrome formatting with/without icon.
+- **No user-visible change.**
+
+### Step 4 — Low-risk gradient + BADGE table
+
+- Add `LOW_STOPS` to `src/tui/border.ts`.
+- Refactor hardcoded ` ⚠ ${riskLevel} risk ` in `topBorderSegments` to read from a `BADGE` table keyed by risk level, with `{ fg, bg, icon, label }` per level.
+- Widen `interpolateGradient` and `topBorderSegments` to accept `"low" | "medium" | "high"`.
+- Widen `ConfirmPanelProps.riskLevel` (and the local state from step 2).
+- `confirmCommand()` type widens to `"low" | "medium" | "high"`; all callers still pass `"medium" | "high"` (low-risk commands still auto-execute and don't trigger the dialog).
+- Verify `⚠` and `✔` have consistent `string-width` — add a unit test that asserts it.
+- Tests: low-risk gradient rendering, low-risk badge construction, width consistency.
+- **No user-visible change** (low-risk path isn't reachable yet).
+
+### Step 5 — bottomBorderSegments status + spinner module
+
+- Add `status?: string` parameter to `bottomBorderSegments(totalWidth, status?)`. When absent, behaves exactly as today. When present, renders spinner-frame + space + status text embedded in the bottom-left, with the rest filled by `─`, all in the existing dim border color.
+- New `src/tui/spinner.ts`: `SPINNER_FRAMES`, `SPINNER_INTERVAL`, `useSpinner(active: boolean)` hook, `startChromeSpinner(text)` function.
+- Neither the hook nor the function is used by existing code yet.
+- Tests: bottom border with status text renders correctly at varying widths, spinner interval timing, `useSpinner` cleans up on `active=false`.
+- **No user-visible change.**
+
+### Step 6 — Extract runRoundsUntilFinal from query.ts
+
+- Pull the `for` loop in `runQuery` (`src/core/query.ts:143-312`) into a standalone function `runRoundsUntilFinal(provider, input, state, entry, options)`.
+- Function returns `{ type: "command", response } | { type: "answer", content } | { type: "exhausted" } | { type: "aborted" }`.
+- `LoopState = { budgetRemaining: number; roundNum: number }` is a mutable object shared between caller and function.
+- Probes still execute inside the function. Command execution stays in `runQuery` (the function only loops until it has a final-form response).
+- `runQuery` becomes: create state, call `runRoundsUntilFinal`, handle each variant.
+- `AbortSignal` is threaded through `options` and checked at the top of each iteration.
+- Same log entries, same outcomes, same exit codes. All existing tests pass unchanged.
+- **No user-visible change** (biggest refactor in the plan — worth its own commit).
+
+### Step 7 — Dialog state machine + composing/processing UI
+
+- Add `DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup"` to `confirm.tsx`.
+- Replace the existing ad-hoc `editing` boolean with the state machine.
+- Add composing-followup: `f` key (or Enter on Follow-up action) transitions in. TextInput with `placeholder="actually..."`. `⏎` transitions to processing-followup. `Esc` returns to confirming (discarding text).
+- Add processing-followup: TextInput `readOnly`, spinner in bottom border via `useSpinner(true)`. `Esc` aborts via `AbortController` and returns to composing-followup (text preserved).
+- Widen `confirmCommand` API: `onFollowup: FollowupHandler` is a new REQUIRED parameter. Define `FollowupResult` and widen `ConfirmResult` with `answer`/`exhausted`/`error` variants.
+- Panel calls `onFollowup(text, signal)` on submit. On `{ type: "command" }` result, it calls `setCommand/setRiskLevel/setExplanation` and transitions back to confirming. On other results, it unmounts and passes the result up.
+- Flush pending stdin on every state transition (`tui-approach.md` safety feature).
+- `query.ts` provides a minimal stub `onFollowup` that immediately returns `{ type: "exhausted" }`. This keeps the integration compilable but no-op. Tests use a fake handler to drive the state machine.
+- Tests: all four states render correctly, transitions fire on the right keys, AbortController fires on Esc in processing, stub handler integration.
+- **User-visible change:** `f` now opens a follow-up input. Submitting it immediately returns "Could not resolve the request..." (the exhausted stub). The feature is UI-complete but not functional end-to-end. This is an acceptable committable state because the UI can be exercised in tests and manual QA.
+
+### Step 8 — Real follow-up LLM call
+
+- Replace the stub `onFollowup` in `query.ts` with the real closure: append `{ role: "assistant", content: JSON.stringify(currentResponse) }` and `{ role: "user", content: text }` to `input.messages`, reset `state.budgetRemaining = maxRounds` (leave `state.roundNum` alone), call `runRoundsUntilFinal`, translate its result into a `FollowupResult`. Remember the new command in `currentResponse` so the next follow-up sees the right history.
+- Handle all new `ConfirmResult` variants in `runQuery`: `answer` → print to stdout and return 0, `exhausted` → print max-rounds error and return 1, `error` → re-throw.
+- Tests: end-to-end follow-up round (injected test provider), chained follow-ups, abort mid-flight via `AbortSignal`, answer-after-followup, exhausted-after-followup.
+- **User-visible change:** follow-up works end-to-end for command results. Chain multiple follow-ups. Esc cancels the in-flight LLM call. Probes during follow-up are NOT visible yet — they run silently (chrome messages still buffered but not forwarded to the dialog).
+
+### Step 9 — Live border status during follow-up
+
+- `render.ts` subscribes the stderr sink before mounting Ink, unsubscribes AFTER `EXIT_ALT_SCREEN` (ordering is load-bearing — see §"Stderr message routing").
+- The subscriber forwards `kind: "chrome"` messages to a React setter on the panel. The panel holds `borderStatus` state that's displayed in the bottom border during processing-followup (falling back to "Reticulating splines..." when no message has arrived yet).
+- Messages buffered during the dialog lifetime flush to stderr on unsubscribe so the scrollback has history after the dialog closes.
+- Tests: probe during follow-up shows in border status, multiple chrome messages update the status in order, buffered messages flush to stderr after unmount, message ordering preserved across chrome/verbose interleave.
+- **User-visible change:** probes and memory updates during follow-up now show in the border status as they happen. After the dialog closes, the full history is in the scrollback.
+
+### Step 10 — Log follow-up text on rounds
+
+- Add optional `followup_text?: string` to the `Round` type in `src/logging/entry.ts`.
+- Thread a `followupText?: string` option into `runRoundsUntilFinal`. The first round it produces sets `round.followup_text = options.followupText`; subsequent rounds in the same call do not.
+- The follow-up closure in `query.ts` passes the user's text through this option.
+- Tests: JSONL log entry contains `followup_text` on the first round of a follow-up sequence, absent on subsequent probe rounds within the same follow-up.
+- **No user-visible change** (unless inspecting log files). Groundwork for `w --followup`.
 
 ## Not in scope
 
