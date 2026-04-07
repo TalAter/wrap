@@ -78,17 +78,9 @@ Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child proce
 
 ### Ink + chromeRaw coordination
 
-While Ink is mounted, it owns stderr rendering. `chrome()` and `chromeRaw()` must NOT write to stderr concurrently — Ink manages its own screen region and uncoordinated writes corrupt the display. Any output that needs to appear while Ink is active (memory update notifications, verbose lines, probe indicators during a follow-up LLM call) must go through Ink components, not `chromeRaw()`.
+While Ink is mounted, it owns stderr rendering. `chrome()` and `chromeRaw()` must NOT write to stderr concurrently — Ink manages its own screen region and uncoordinated writes corrupt the display.
 
-In practice this is unlikely in the initial implementation — Ink mounts after the LLM responds, shows the confirmation panel, and unmounts before anything else runs. It becomes relevant when describe/follow-up trigger LLM calls while the panel is active (see phasing below).
-
-### Phasing: describe and follow-up
-
-The full confirmation panel has async states: pressing `[D]escribe` or submitting a `[F]ollow-up` triggers an LLM call while the TUI is active. Phase this:
-
-**Phase 1:** Unmount Ink before the LLM call. Let existing chrome (spinners, probe indicators) handle the wait. Re-mount Ink with the updated panel when the LLM responds.
-
-**Phase 2:** Keep Ink mounted during LLM calls. Loading/spinner state as an Ink component. All chrome routed through Ink while mounted.
+For async dialog states (describe, follow-up) that trigger LLM calls while Ink is mounted, both `chrome()` and `verbose()` route through a shared stderr sink that buffers messages and forwards them to a dialog listener. On dialog unmount the buffer is flushed to stderr (after `EXIT_ALT_SCREEN`). See `specs/follow-up.md` §"Stderr message routing".
 
 ## Where Ink is NOT used
 

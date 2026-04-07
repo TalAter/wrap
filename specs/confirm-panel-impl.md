@@ -172,7 +172,5 @@ Single-key bindings, same for both risk levels. This replaces the tiered keybind
 ## Deferred to phase 2
 
 - Syntax highlighting for commands (shell tokenizer)
-- `d`/`e`/`f`/`c` handler implementations
-- Keeping Ink mounted during LLM calls (describe/follow-up)
-- Input buffer flush before rendering (safety feature from `tui-approach.md`)
+- `d`/`c` handler implementations (`e` is implemented; `f` is implemented in `specs/follow-up.md`)
 - Responsive action bar — shrink button labels or abbreviate when panel width is narrow (currently they wrap, which looks sprawling)

@@ -76,7 +76,6 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 |------|-----------|
 | **Mode** | How you invoke Wrap (default, yolo, force-cmd, force-answer, confirm-all) |
 | **Response type** | What the LLM responds with: command, probe, or answer |
-| **Follow-up** | TUI action: invoked when the user chooses not to invoke a command and refine it via text input |
 | **Continuation** | Resuming a previous conversation thread in a new invocation |
 | **Subcommand** | CLI sub-action accessed via flag (--log, --help, --version) |
 
@@ -94,6 +93,22 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 | **Chrome** | Wrap's own UI elements (stderr/tty): spinners, confirmations, errors, memory update messages |
 | **Output** | Useful result on stdout: command output or answer text |
 | **Auto-execute** | Running a low-risk command without confirmation |
+
+### TUI
+
+| Term | Definition |
+|------|-----------|
+| **Dialog** | Interactive Ink TUI rendered in alt-screen on stderr. Used for command confirmation, follow-up refinement, and future flows (describe, error recovery). 3-column layout: gradient border, content area, dim border. |
+| **Action bar** | Navigable row of actions at the bottom of the dialog: Yes, No, Describe, Edit, Follow-up, Copy. Letter shortcut keys (`y/n/d/e/f/c`) plus arrow navigation. |
+| **Risk badge** | Risk level pill embedded in the top-right of the dialog's top border (e.g., `⚠ medium risk`, `✔ low risk`). |
+| **Text input** | Inline editable text field with cursor management. Used for command editing and follow-up composition. Supports placeholder and read-only modes. |
+| **Dialog state** | One of: confirming, editing-command, composing-followup, processing-followup. Determines available keys, what renders in the action bar slot, and the border status. Each state transition flushes pending stdin. |
+| **Border status** | Animated indicator embedded in the bottom-left of the dialog's border. Shows spinner + status text during async operations (LLM calls, probes). |
+| **Follow-up** | Dialog action: user types a refinement (e.g., "actually, skip node_modules"), the LLM returns an updated command, the dialog updates in place. Triggered by `f` or the Follow-up action bar item. Resets the round budget but keeps round numbering sequential. |
+| **Confirming** | Default dialog state: command is shown, action bar is navigable, user decides whether to run, edit, follow-up, etc. |
+| **Editing-command** | Dialog state where the user is editing the command text in place. |
+| **Composing-followup** | Dialog state where the user is typing follow-up text into a text input. |
+| **Processing-followup** | Dialog state while a follow-up LLM call is in flight. The follow-up text is displayed read-only and the spinner runs in the bottom border. |
 
 ### Logging & eval pipeline
 
