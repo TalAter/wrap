@@ -59,19 +59,24 @@ export function startChromeSpinner(text: string): () => void {
 
   ensureExitGuard();
 
+  // Precompute the full per-frame string once. `text` is fixed for the
+  // lifetime of the spinner, so the per-tick render is one array lookup
+  // and one syscall — no template-literal allocation.
+  const lines = SPINNER_FRAMES.map((f) => `\r${f} ${text}`);
   let index = 0;
   let stopped = false;
-  const renderFrame = (): string => {
-    const frame = SPINNER_FRAMES[index] as string;
-    index = (index + 1) % SPINNER_FRAMES.length;
-    return `\r${frame} ${text}`;
+  const tick = () => {
+    const line = lines[index] as string;
+    index = (index + 1) % lines.length;
+    chromeRaw(line);
   };
   // Combine the cursor-hide + first frame into a single write so the spinner
   // appears in one syscall instead of two.
-  chromeRaw(`${HIDE_CURSOR}${renderFrame()}`);
+  chromeRaw(`${HIDE_CURSOR}${lines[0] as string}`);
+  index = 1 % lines.length;
   const handle = setInterval(() => {
     if (stopped) return;
-    chromeRaw(renderFrame());
+    tick();
   }, SPINNER_INTERVAL);
   return () => {
     if (stopped) return;
