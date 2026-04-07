@@ -1,13 +1,4 @@
-import {
-  Box,
-  type DOMElement,
-  measureElement,
-  Text,
-  useApp,
-  useInput,
-  useStdin,
-  useStdout,
-} from "ink";
+import { Box, type DOMElement, measureElement, Text, useApp, useInput, useStdout } from "ink";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
 import {
@@ -16,7 +7,7 @@ import {
   interpolateGradient,
   topBorderSegments,
 } from "./border.ts";
-import { Cursor } from "./cursor.ts";
+import { INPUT_BG, TextInput } from "./text-input.tsx";
 
 type ConfirmPanelProps = {
   command: string;
@@ -173,14 +164,9 @@ export function ConfirmPanel({ command, riskLevel, explanation, onChoice }: Conf
             paddingBottom={1}
           >
             {editing ? (
-              <CommandInput
-                value={draft}
-                onChange={setDraft}
-                onSubmit={handleEditSubmit}
-                width={innerWidth}
-              />
+              <TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} />
             ) : (
-              <Text backgroundColor="#232332">{` ${command}`.padEnd(innerWidth)}</Text>
+              <Text backgroundColor={INPUT_BG}>{` ${command}`.padEnd(innerWidth)}</Text>
             )}
             {explanation && (
               <>
@@ -247,113 +233,6 @@ function BorderLine({ segments }: { segments: BorderSegment[] }) {
         </Text>
       ))}
     </Text>
-  );
-}
-
-type KeyHandler = (c: Cursor) => Cursor;
-
-const ctrlKeys = new Map<string, KeyHandler>([
-  ["a", (c) => c.home()],
-  ["e", (c) => c.end()],
-  ["u", (c) => c.killToHome()],
-  ["k", (c) => c.killToEnd()],
-]);
-
-const metaKeys = new Map<string, KeyHandler>([
-  ["b", (c) => c.wordLeft()],
-  ["f", (c) => c.wordRight()],
-]);
-
-function CommandInput({
-  value,
-  onChange,
-  onSubmit,
-  width,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: (value: string) => void;
-  width: number;
-}) {
-  const [cursor, setCursor] = useState(() => new Cursor(value, value.length));
-  const killRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    setCursor((prev) => (prev.text === value ? prev : new Cursor(value, value.length)));
-  }, [value]);
-
-  const cursorRef = useRef(cursor);
-  cursorRef.current = cursor;
-
-  const apply = (next: Cursor) => {
-    if (next.killed !== undefined) killRef.current = next.killed;
-    setCursor(next);
-    if (next.text !== cursorRef.current.text) onChange(next.text);
-  };
-
-  // Ink maps both Mac backspace (\x7f) and forward delete (\x1b[3~) to
-  // key.delete. Track the raw sequence so we can distinguish them.
-  const isForwardDelete = useRef(false);
-  const { internal_eventEmitter } = useStdin();
-  useEffect(() => {
-    const onRaw = (data: string) => {
-      isForwardDelete.current = data === "\x1b[3~";
-    };
-    internal_eventEmitter?.on("input", onRaw);
-    return () => {
-      internal_eventEmitter?.off("input", onRaw);
-    };
-  }, [internal_eventEmitter]);
-
-  useInput((input, key) => {
-    if (key.return) {
-      onSubmit(cursor.text);
-      return;
-    }
-    if ((key.backspace || key.delete) && key.meta) {
-      apply(cursor.deleteWord());
-      return;
-    }
-    if (key.delete && isForwardDelete.current) {
-      isForwardDelete.current = false;
-      apply(cursor.delete());
-      return;
-    }
-    if (key.backspace || key.delete) {
-      apply(cursor.backspace());
-      return;
-    }
-    if (key.leftArrow) {
-      apply(key.meta ? cursor.wordLeft() : cursor.left());
-      return;
-    }
-    if (key.rightArrow) {
-      apply(key.meta ? cursor.wordRight() : cursor.right());
-      return;
-    }
-    if (key.ctrl) {
-      const handler = input === "y" ? () => cursor.yank(killRef.current) : ctrlKeys.get(input);
-      if (handler) apply(handler(cursor));
-      return;
-    }
-    if (key.meta) {
-      const handler = metaKeys.get(input);
-      if (handler) apply(handler(cursor));
-      return;
-    }
-    if (input && !key.escape) {
-      apply(cursor.insert(input));
-    }
-  });
-
-  return (
-    <Box width={width} paddingX={1} backgroundColor="#232332">
-      <Text>
-        {cursor.beforeCursor}
-        <Text inverse>{cursor.charAtCursor}</Text>
-        {cursor.afterCursor}
-      </Text>
-    </Box>
   );
 }
 
