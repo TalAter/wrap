@@ -75,6 +75,8 @@ Prompt data lives in two shared JSON files. **`src/prompt.constants.json`** cont
 
 ## Config
 
+> **Superseded by `specs/multi-provider-config.md` (not yet implemented).** The single-`provider` block described below will be replaced with a `providers` map + `defaultProvider`, with `model` stored per-entry. The `type` discriminant goes away — provider name becomes the discriminant. The "Adding a new AI SDK provider" note above and the `initProvider(config)` description below are also stale.
+
 One config shape for all AI SDK providers — `type` discriminant determines which SDK factory to use:
 
 ```jsonc
