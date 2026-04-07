@@ -202,6 +202,21 @@ describe("wrap", () => {
     expect(stderr).toContain("Checking available tools");
   });
 
+  test("probe: shows web indicator on stderr for URL-fetching probes", async () => {
+    const { stderr } = await wrapMock("read the page", [
+      {
+        type: "probe",
+        content: "curl -sL https://example.com",
+        risk_level: "low",
+        explanation: "Reading example.com",
+      },
+      { type: "answer", content: "Done.", risk_level: "low" },
+    ]);
+    expect(stderr).toContain("🌐");
+    expect(stderr).not.toContain("🔍");
+    expect(stderr).toContain("Reading example.com");
+  });
+
   test("probe → answer: returns answer after probe", async () => {
     const { exitCode, stdout } = await wrapMock("what shell am I using", [
       { type: "probe", content: "echo /bin/zsh", risk_level: "low", explanation: "Checking shell" },

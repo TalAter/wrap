@@ -39,6 +39,11 @@ export function extractFailedText(e: unknown): string {
   return "";
 }
 
+// Pick 🌐 over 🔍 for URL-fetching probes.
+export function fetchesUrl(content: string): boolean {
+  return /^\s*(curl|wget)\b[^\n]*https?:\/\//.test(content);
+}
+
 /**
  * Call the LLM; on a structured-output parse failure, retry once with the
  * broken output appended so the model can self-correct.
@@ -230,7 +235,8 @@ export async function runQuery(
           break;
         }
 
-        chrome(`🔍 ${response.explanation || response.content}`);
+        const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
+        chrome(`${probeIcon} ${response.explanation || response.content}`);
 
         const shell = process.env.SHELL || "sh";
         verbose(`Probe: ${response.content}`);

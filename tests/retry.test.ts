@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
-import { extractFailedText, isStructuredOutputError } from "../src/core/query.ts";
+import { extractFailedText, fetchesUrl, isStructuredOutputError } from "../src/core/query.ts";
 
 const STUB_USAGE: LanguageModelUsage = {
   inputTokens: undefined,
@@ -43,6 +43,48 @@ describe("isStructuredOutputError", () => {
   test("rejects non-errors", () => {
     expect(isStructuredOutputError("string")).toBe(false);
     expect(isStructuredOutputError(null)).toBe(false);
+  });
+});
+
+describe("fetchesUrl", () => {
+  test("detects bare curl with https URL", () => {
+    expect(fetchesUrl("curl -sL https://example.com")).toBe(true);
+  });
+
+  test("detects curl with http URL", () => {
+    expect(fetchesUrl("curl http://example.com")).toBe(true);
+  });
+
+  test("detects wget with URL", () => {
+    expect(fetchesUrl("wget -qO- https://example.com")).toBe(true);
+  });
+
+  test("detects curl piped through textutil", () => {
+    expect(
+      fetchesUrl(
+        "curl -sL --max-time 10 https://ollama.com/ | textutil -stdin -format html -convert txt -stdout",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not flag which probes", () => {
+    expect(fetchesUrl("which sips convert magick")).toBe(false);
+  });
+
+  test("does not flag cat probes", () => {
+    expect(fetchesUrl("cat package.json")).toBe(false);
+  });
+
+  test("does not flag curl without a URL (e.g. --version)", () => {
+    expect(fetchesUrl("curl --version")).toBe(false);
+  });
+
+  test("does not flag commands that merely mention a URL", () => {
+    expect(fetchesUrl("echo https://example.com")).toBe(false);
+  });
+
+  test("ignores leading whitespace", () => {
+    expect(fetchesUrl("  curl -sL https://example.com")).toBe(true);
   });
 });
 
