@@ -1,6 +1,6 @@
 import { loadConfig } from "./config/config.ts";
 import { getWrapHome } from "./core/home.ts";
-import { parseArgs } from "./core/input.ts";
+import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
@@ -14,9 +14,14 @@ import { providerLabel } from "./llm/types.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 
+const MODIFIER_SPECS: readonly ModifierSpec[] = [
+  { name: "verbose", flags: ["--verbose"], takesValue: false },
+  { name: "modelOverride", flags: ["--model", "--provider"], takesValue: true },
+];
+
 export async function main() {
   try {
-    const { modifiers, input } = parseArgs(process.argv);
+    const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
     if (input.type === "flag") {
       await dispatch(input.flag, input.args);
@@ -33,7 +38,7 @@ export async function main() {
     const prompt = input.type === "prompt" ? input.prompt : "";
 
     const config = loadConfig();
-    initVerbose(modifiers.verbose || config.verbose === true);
+    initVerbose(modifiers.flags.has("verbose") || config.verbose === true);
     verbose(`Config loaded (${config.provider?.type ?? "no provider"})`);
 
     if (!config.provider) {
