@@ -125,75 +125,23 @@ The follow-up text is preserved across the composing-followup ↔ processing-fol
 
 ## TextInput component
 
-Extract `CommandInput` into a generic `TextInput` in `src/tui/text-input.tsx`. Same cursor, keybindings, and rendering logic. Used by editing-command, composing-followup, AND processing-followup states. The visual is identical across all three — only the interaction mode differs.
+> **Status:** Implemented in `src/tui/text-input.tsx`. Currently consumed by editing-command and the read-only command display in confirming. Step 7 will also use it for composing-followup and processing-followup.
 
-```tsx
-type TextInputProps =
-  | {
-      readOnly?: false;
-      value: string;
-      width: number;
-      onChange: (value: string) => void;
-      onSubmit: (value: string) => void;
-      placeholder?: string;     // shown when value is empty, dim color
-    }
-  | {
-      readOnly: true;
-      value: string;
-      width: number;
-      // no handlers — component is display-only
-    };
-```
+A generic input component used by all four uses (read-only display in confirming, editable in editing-command, editable + placeholder in composing-followup, read-only in processing-followup). Visual parity across the four uses is the primary reason it's a single component with a `readOnly` mode rather than two components — any future styling change propagates everywhere.
 
-A discriminated union makes it impossible to pass no-op handlers for the readOnly case. Editable callers get the normal prop shape; readOnly callers don't supply handlers at all.
+The props are a discriminated union of editable vs readOnly. Editable callers pass `value`, `onChange`, `onSubmit`, optional `placeholder`. Read-only callers pass only `value`. The union makes it impossible to pass no-op handlers in the read-only case, and an inner `EditableTextInput` skips `useInput` registration entirely so read-only doesn't subscribe to keypresses.
 
-- Full-width dark background (`#232332`) — set on the containing `<Box>` inside the component. Background is part of the component, not the parent. Lift `INPUT_BG` into a module constant so changes apply to all three states at once.
-- Placeholder rendered in dim color (`#73738c`) when `value === ""` and not `readOnly`: cursor block followed by dim placeholder text (looks like `█actually...`).
-- All existing keybindings from `CommandInput` carry over (Ctrl-A/E/U/K/W/Y, word movement, etc.).
-- `Cursor` class unchanged.
-- **Editable vs readOnly branching.** Both modes render the same `<Box width paddingX={1} backgroundColor={INPUT_BG}>` wrapper. Inside:
-  - **Editable:** `useInput` registers keypress handling, the cursor state tracks offset, rendering splits text into before-cursor / inverse-char-at-cursor / after-cursor.
-  - **readOnly:** `useInput` is NOT registered (no wasted hook subscription). Render a plain `<Text>{value}</Text>` — no cursor block, no split.
-- `Esc` is NOT handled inside `TextInput`. The parent registers a separate `useInput({ isActive: <state matches> })` block to handle it (mirrors the existing `confirm.tsx:84-91` pattern).
+`Esc` is NOT handled inside `TextInput`. Each parent state registers its own `useInput({ isActive: ... })` block to handle escape transitions, mirroring the existing pattern in `confirm.tsx`.
 
-### Why readOnly (not a separate component)
+In composing-followup / processing-followup states (step 7), the layout will be: command strip → explanation → TextInput → hint, with the TextInput just above the action bar slot.
 
-Visual parity is the primary goal: the processing-followup field should look pixel-identical to the composing-followup field, just frozen. A shared component with a mode flag guarantees that. Any future styling change (border, padding, overflow, cursor appearance) propagates to both states automatically. Splitting into two components would require remembering to update both.
+## Lifting ConfirmPanel props to local state
 
-The readOnly branch is ~3 lines of JSX inside TextInput — trivial conditional, not enough complexity to justify a separate component.
+> **Status:** Implemented in `src/tui/confirm.tsx`. Setters exist as state but aren't called yet — step 7 wires them to the follow-up flow.
 
-### Usage in confirm.tsx
+`command`, `riskLevel`, and `explanation` are held as local `useState` seeded from `initialCommand`/`initialRiskLevel`/`initialExplanation` props. When the follow-up LLM call resolves, the panel will call `setCommand/setRiskLevel/setExplanation` to swap to the new command in place. React re-renders the dialog without remounting it, so the alt screen never flickers.
 
-```tsx
-// editing-command state:
-<TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} width={innerWidth} />
-
-// composing-followup state:
-<TextInput value={followupText} onChange={setFollowupText} onSubmit={handleFollowupSubmit}
-  width={innerWidth} placeholder="actually..." />
-
-// processing-followup state:
-<TextInput value={followupText} width={innerWidth} readOnly />
-```
-
-In composing-followup / processing-followup states, the layout is: command strip → explanation → TextInput → hint. The TextInput appears just above the action bar slot.
-
-## Lifting props to local state
-
-Currently `confirm.tsx` receives `command`, `riskLevel`, `explanation` as props. Because `confirmCommand` calls `render()` once with frozen props, the dialog can't update in place when the LLM returns a new command via follow-up.
-
-Convert the three props into `useState`:
-
-```tsx
-function ConfirmPanel({ initialCommand, initialRiskLevel, initialExplanation, ... }) {
-  const [command, setCommand] = useState(initialCommand);
-  const [riskLevel, setRiskLevel] = useState(initialRiskLevel);
-  const [explanation, setExplanation] = useState(initialExplanation);
-  // ...
-}
-```
-
-When the follow-up LLM call resolves, the processing-followup effect calls `setCommand`, `setRiskLevel`, `setExplanation` to swap to the new command. React re-renders the dialog in place. No alt-screen flicker.
+Re-rendering with new `initial*` props after mount does NOT overwrite the state — only the initial values are read. Verified by `tests/confirm.test.tsx`.
 
 ## Spinner
 
@@ -236,101 +184,37 @@ export function startChromeSpinner(text: string): () => void {
 
 Not used by follow-up directly — the dialog uses the React hook. Provided for future use (e.g., LLM wait indicator before the dialog opens, used by `runRoundsUntilCommand` outside of dialog mode).
 
-## Stderr message routing (chrome + verbose)
+## Output sink (chrome + verbose routing)
 
-During follow-up, the dialog is in alt-screen. Both `chrome()` (probe announcements, memory updates, errors) and `verbose()` (debug-level diagnostic lines) write to stderr — and stderr writes during alt-screen go to the alt buffer, where they're invisible AND lost on alt-screen exit. We need messages to:
-1. Appear inside the dialog's border status (live, during processing-followup) — chrome only, not verbose
-2. Appear in stderr scrollback after the dialog closes (history) — both chrome and verbose, in original order
+> **Status:** Implemented in `src/core/output-sink.ts`. Step 9 will wire the dialog as the consumer.
 
-### Shared stderr writer
+During follow-up, the dialog runs in alt-screen. Stderr writes during alt-screen go to the alt buffer and are discarded on exit. Without intervention, a probe firing while the dialog is up (`chrome("Reading package.json", "🔍")`) would silently vanish from history. The output sink solves both halves of the problem:
 
-Both `chrome()` and `verbose()` already write to stderr but do their own formatting. Refactor them to route through a single internal helper, `stderrWrite(formattedLine, kind)`, which owns the buffer and listener:
+1. **Live UI:** chrome lines appear inside the dialog's border status while it's mounted.
+2. **Scrollback:** all lines (chrome + verbose) are flushed to real stderr in original order when the dialog exits, so the user can scroll up and see what happened.
 
-```ts
-// src/core/stderr-sink.ts (new file)
+### How it works
 
-type Kind = "chrome" | "verbose";
-type Listener = (kind: Kind, msg: string) => void;
+`chrome()` and `verbose()` are thin formatters that route their output through `writeLine(line, chromeEvent?)`. With no interception active, `writeLine` writes straight to `process.stderr` — identical to the old behavior. While the dialog holds an interception via `interceptOutput(handler)`, every line is buffered for later replay, and chrome lines additionally fan out to the handler so the dialog can render them live.
 
-let listener: Listener | null = null;
-let buffer: Array<{ kind: Kind; line: string }> | null = null;
+`chrome(text, icon?)` takes the icon as a separate argument so the structured `ChromeEvent` (`{ text, icon? }`) reaches the dialog with the icon kept apart from the text — the dialog can style them independently. Stderr output is byte-identical to the old single-arg `chrome("🔍 text")` form.
 
-export function subscribeStderr(fn: Listener): () => void {
-  listener = fn;
-  buffer = [];
-  return () => {
-    listener = null;
-    const pending = buffer ?? [];
-    buffer = null;
-    // Caller must EXIT_ALT_SCREEN BEFORE invoking unsubscribe
-    // so these writes land in the main buffer.
-    for (const { line } of pending) process.stderr.write(line);
-  };
-}
+### Why one sink for both kinds
 
-export function stderrWrite(line: string, kind: Kind): void {
-  if (buffer !== null) {
-    buffer.push({ kind, line });
-    listener?.(kind, line);
-    return;
-  }
-  process.stderr.write(line);
-}
-```
+Order preservation. Chrome and verbose lines are interleaved in real time; separate buffers would reorder them on flush. A single buffer keeps the original interleave.
 
-`chrome()` and `verbose()` become thin wrappers:
+### Chrome vs verbose asymmetry
 
-```ts
-// src/core/output.ts
-export function chrome(text: string, icon?: string): void {
-  const line = `${icon ? `${icon} ` : ""}${text}\n`;
-  stderrWrite(line, "chrome");
-}
+Both kinds replay through the buffer on release. Only chrome lines reach the dialog handler — verbose is debug noise that would clutter the panel. The asymmetry is built into the API: verbose calls pass no `chromeEvent`.
 
-// src/core/verbose.ts
-export function verbose(msg: string): void {
-  if (!enabled) return;
-  stderrWrite(`${prefix()}${dim(msg)}\n`, "verbose");
-}
-```
+### Lifecycle ordering (load-bearing for step 9)
 
-### Why one buffer for both
+`interceptOutput()` is called AFTER `ENTER_ALT_SCREEN`; `release()` is called AFTER `EXIT_ALT_SCREEN`. The release ordering matters: the flushed lines must land in real scrollback, not in the alt buffer that's about to disappear. The full lifecycle is documented at the top of `output-sink.ts`.
 
-Order preservation. If verbose and chrome had separate buffers, flushing them on exit would reorder messages relative to how they were emitted. A single buffer keeps the original interleaving.
+### Safety properties
 
-### How the dialog consumes it
-
-`render.ts` subscribes when the dialog mounts and unsubscribes when it unmounts. The listener is forwarded to `ConfirmPanel` via React state (e.g., `useState` updated from a `useEffect` that registers the subscriber). The dialog only displays `kind: "chrome"` messages in the border status — `verbose` is buffered for replay but not surfaced in the dialog (it's debug-level and would clutter the UI).
-
-The unsubscribe MUST be called AFTER `EXIT_ALT_SCREEN`. Order in `render.ts`:
-
-```ts
-try {
-  chromeRaw(ENTER_ALT_SCREEN);
-  const unsubscribe = subscribeStderr(handlePanelMessage);
-  // ... mount Ink, await waitUntilExit ...
-  // After Ink unmounts:
-} finally {
-  chromeRaw(`${EXIT_ALT_SCREEN}${SHOW_CURSOR}`);
-  unsubscribe(); // flushes buffer to main stderr
-}
-```
-
-### Chrome icons
-
-Probe announcements currently look like `chrome("🔍 " + text)` (`query.ts:233`). The new two-arg form separates icon from text:
-
-```ts
-chrome(response.explanation || response.content, "🔍");
-```
-
-Stderr writes get `🔍 text\n`. The dialog listener receives just `text` (icon stripped at the formatting boundary).
-
-To make this work cleanly, the listener should be called with the raw text and kind, not the pre-formatted line. Update the `Listener` signature to `(kind: Kind, text: string, icon?: string) => void`. The dialog ignores `icon`; stderr fallback uses it for formatting.
-
-Refactor existing callsites:
-- `query.ts:233` (probe): `chrome(text, "🔍")`
-- `query.ts:79` (memory): `chrome(message, "🧠")` (and remove the per-call prefix building)
+- Double-intercept and double-release both throw — both indicate a programmer error that would silently lose history.
+- Handler exceptions are swallowed; the line is still buffered first so scrollback survives a buggy dialog handler.
 
 ## LLM integration
 
@@ -446,7 +330,7 @@ Notes:
 - The loop function does NOT execute commands. It returns when it has a final-form response. The caller (`runQuery`) handles execution.
 - `state` is mutated by both callers and is the source of truth for budget and round numbering.
 - `entry` and `addRound` are still owned by the loop function — each round is logged as it completes.
-- Probes are still executed inside the loop (they're part of "until final"). Their chrome output now flows through `subscribeStderr` to the dialog if it's mounted.
+- Probes are still executed inside the loop (they're part of "until final"). Their chrome output flows through the output sink to the dialog if it's intercepting (see "Output sink" section).
 - `AbortSignal` for cancellation: pass it through `runRoundsUntilFinal` and check it before each LLM call. On abort, return a sentinel like `{ type: "aborted" }` (add this variant) so the dialog knows to go back to composing-followup without treating it as exhausted.
 
 ## confirmCommand API
@@ -575,15 +459,15 @@ Add a new section after `### Output`:
 
 | File | Change |
 |------|--------|
-| `src/tui/text-input.tsx` | **New.** Generic TextInput extracted from CommandInput. Supports `placeholder` and `readOnly` props. |
+| `src/tui/text-input.tsx` | **Done.** Generic TextInput extracted from CommandInput; `placeholder` and `readOnly` modes. |
+| `src/core/output-sink.ts` | **Done.** `interceptOutput`/`release`/`writeLine` API; single buffer for both chrome and verbose. |
+| `src/core/output.ts` | **Done.** `chrome(text, icon?)` two-arg form, routes through output-sink. |
+| `src/core/verbose.ts` | **Done.** `verbose()`/`verboseHighlight()` route through output-sink. |
+| `src/tui/confirm.tsx` | **Partial.** State lifted from props (done). Still pending: 4-state machine, stub→real follow-up callback wiring, output-sink handler for border status. |
 | `src/tui/spinner.ts` | **New.** Frames + interval constants, `useSpinner(active)` hook, `startChromeSpinner()`. |
-| `src/core/stderr-sink.ts` | **New.** Single buffer + listener for both `chrome()` and `verbose()`. |
-| `src/tui/confirm.tsx` | Lift command/risk/explanation to local state. Add 4-state machine (confirming/editing-command/composing-followup/processing-followup). Use TextInput. Subscribe to stderr-sink for border status. Wire follow-up callback. |
 | `src/tui/border.ts` | Low-risk gradient + BADGE table with icon/label. `topBorderSegments` reads from BADGE. `bottomBorderSegments(totalWidth, status?)` accepts optional status text + spinner frame, both rendered in the existing dim border color. Risk type widens to `"low" \| "medium" \| "high"`. |
-| `src/tui/render.ts` | `confirmCommand()` widens API: `onFollowup` required, `ConfirmResult` widened with `answer/exhausted/error` variants. Subscribes/unsubscribes the stderr sink around the Ink lifecycle. Unsubscribe runs AFTER `EXIT_ALT_SCREEN`. |
-| `src/core/output.ts` | `chrome(text, icon?)` two-arg form. Routes through `stderr-sink`. |
-| `src/core/verbose.ts` | `verbose()` routes through `stderr-sink`. |
-| `src/core/query.ts` | Extract `runRoundsUntilFinal` from the inline loop. Provide `onFollowup` closure to `confirmCommand`. Handle new `ConfirmResult` variants. Update probe/memory chrome calls to two-arg form. |
+| `src/tui/render.ts` | `confirmCommand()` widens API: `onFollowup` required, `ConfirmResult` widened with `answer/exhausted/error` variants. Calls `interceptOutput` around the Ink lifecycle; `release()` runs AFTER `EXIT_ALT_SCREEN`. |
+| `src/core/query.ts` | Extract `runRoundsUntilFinal` from the inline loop. Provide `onFollowup` closure to `confirmCommand`. Handle new `ConfirmResult` variants. Probe/memory chrome calls already use two-arg form. |
 | `src/logging/entry.ts` | Add optional `followup_text` to `Round`. |
 | `specs/SPEC.md` | Glossary: move Follow-up entry into new TUI section, add dialog/action bar/risk badge/text input/dialog state/border status/state-name entries. |
 | `specs/tui-approach.md` | Remove or update the `### Phasing: describe and follow-up` section (this spec implements Phase 2 — keep Ink mounted, route stderr through the sink). |
@@ -593,34 +477,11 @@ Add a new section after `### Output`:
 
 The work breaks into 10 steps. Each step is standalone: the repo builds, lints, and tests pass at the end of each, and the resulting state is releasable. Steps 1-6 are preparatory refactors with no user-visible change. Steps 7-10 add the follow-up feature on top, each one adding a small vertical slice of behavior.
 
-### Step 1 — Extract TextInput component
+### Steps 1-3 — Done
 
-- Move `CommandInput` out of `confirm.tsx` into `src/tui/text-input.tsx` as `TextInput`.
-- Add `placeholder` and `readOnly` props (unused for now, but fully implemented).
-- Background (`#232332`) moves into the component itself.
-- `confirm.tsx` imports and uses `TextInput` with the same props it used for `CommandInput`.
-- Tests: add placeholder rendering test, readOnly test. Existing editing-mode tests still pass unchanged.
-- **No user-visible change.**
-
-### Step 2 — Lift ConfirmPanel props to local state
-
-- Rename `ConfirmPanelProps` fields to `initialCommand`, `initialRiskLevel`, `initialExplanation`.
-- Inside the component, `useState` initialized from each.
-- All existing reads of `command`/`riskLevel`/`explanation` now read from state.
-- Setters exist but aren't called yet.
-- `render.ts` updates prop names.
-- Tests still pass unchanged.
-- **No user-visible change.**
-
-### Step 3 — Shared stderr sink + two-arg chrome
-
-- New `src/core/stderr-sink.ts`: `subscribeStderr(fn)` + internal `stderrWrite(line, kind)`.
-- `chrome()` gains optional `icon` argument: `chrome(text: string, icon?: string)`.
-- Both `chrome()` and `verbose()` route through `stderrWrite`.
-- Update `query.ts` probe callsite (`chrome(text, "🔍")`) and memory callsite (`chrome(message, "🧠")`) to use the two-arg form.
-- Without a subscriber, messages go straight to stderr (identical behavior).
-- Tests: sink buffering, flush order, kind filtering, chrome formatting with/without icon.
-- **No user-visible change.**
+- **Step 1 — Extract TextInput component.** Generic `TextInput` in `src/tui/text-input.tsx` with editable + read-only modes (commits `03a4c65`, `c7f3f51`).
+- **Step 2 — Lift ConfirmPanel props to local state.** `initialCommand`/`initialRiskLevel`/`initialExplanation` props are read once into `useState` so the dialog can swap in place after a follow-up (commit `c77aa3b`).
+- **Step 3 — Output sink + two-arg chrome.** `src/core/output-sink.ts` with `interceptOutput`/`release`/`writeLine`; `chrome(text, icon?)` two-arg form; `verbose()` and `verboseHighlight()` route through the sink (commit `f6d6d89`). See "Output sink" section above for the design.
 
 ### Step 4 — Low-risk gradient + BADGE table
 
@@ -675,9 +536,9 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 
 ### Step 9 — Live border status during follow-up
 
-- `render.ts` subscribes the stderr sink before mounting Ink, unsubscribes AFTER `EXIT_ALT_SCREEN` (ordering is load-bearing — see §"Stderr message routing").
-- The subscriber forwards `kind: "chrome"` messages to a React setter on the panel. The panel holds `borderStatus` state that's displayed in the bottom border during processing-followup (falling back to "Reticulating splines..." when no message has arrived yet).
-- Messages buffered during the dialog lifetime flush to stderr on unsubscribe so the scrollback has history after the dialog closes.
+- `render.ts` calls `interceptOutput` before mounting Ink and `release()` AFTER `EXIT_ALT_SCREEN` (ordering is load-bearing — see §"Output sink").
+- The handler forwards `ChromeEvent`s to a React setter on the panel. The panel holds `borderStatus` state that's displayed in the bottom border during processing-followup (falling back to "Reticulating splines..." when no message has arrived yet).
+- Lines buffered during the dialog lifetime flush to stderr on `release()` so the scrollback has history after the dialog closes.
 - Tests: probe during follow-up shows in border status, multiple chrome messages update the status in order, buffered messages flush to stderr after unmount, message ordering preserved across chrome/verbose interleave.
 - **User-visible change:** probes and memory updates during follow-up now show in the border status as they happen. After the dialog closes, the full history is in the scrollback.
 
