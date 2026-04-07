@@ -11,13 +11,9 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Input & Invocation
 
-- [x] Modifier extraction — `extractModifiers(argv)` phase before `parseInput()` (see `specs/verbose.md`)
-- [x] `--verbose` flag + `verbose` config key (see `specs/verbose.md`)
-- [x] Verbose module — `src/core/verbose.ts` with `initVerbose()`/`verbose()` (see `specs/verbose.md`)
 - [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
-- [x] Piped input — see `specs/piped-input.md` for architecture
 
 ## Execution & Safety (see specs/safety.md)
 
@@ -64,7 +60,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
-- [x] Wire `piped_input` log field from stdin (part of piped input feature)
 - [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
 - [ ] `expires` field + retention pruning (future)
 - [ ] Document in help/README that logs contain full LLM exchanges
