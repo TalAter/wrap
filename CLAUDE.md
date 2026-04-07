@@ -23,6 +23,10 @@ All user-facing error messages must be clear, helpful, and non-technical. No sta
 All implementation follows TDD. Always write a failing test before writing code. No exceptions. See `.claude/skills/tdd.md` for the full workflow.
 Aim for maximum test coverage.
 
+## Editing prompts
+
+Wrap's LLM prompt is split across multiple files with a Python source of truth and a TS runtime mirror. Editing the wrong one silently breaks the optimizer or runtime. **Before changing any prompt text, read `.claude/skills/editing-prompts.md`.**
+
 ## Stop hook
 
 A stop hook runs `bun run lint` (biome --write + tsc) automatically when you finish. Don't run lint/format/tsc as a final check before stopping — they'll just run twice. Tests are **not** in the stop hook — run them yourself when needed, preferring targeted runs (`bun test tests/foo.test.ts`) over the full suite.
