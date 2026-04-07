@@ -68,3 +68,28 @@ probe → head -20 CHANGELOG.md
 With both pieces of context, it generates a single command that prepends a new dated section with a human-readable summary to the top of the file.
 
 Shows: multi-step probe chain, reading repo state, generating content from context, real-world dev workflow automation.
+
+---
+
+### Safer curl | sh
+
+```
+$ w can we run 'curl -fsSL https://ollama.com/install.sh | sh' in a more safe way? download the script, read it then if it's fine let's run it from the local file
+```
+
+The classic `curl | sh` install pattern is dangerous — you're piping unknown code straight into a shell. The user wants the safer version: fetch, inspect, then execute. Wrap probes for the script:
+
+```
+probe → curl -fsSL https://ollama.com/install.sh -o /tmp/ollama-install.sh
+probe → cat /tmp/ollama-install.sh
+```
+
+The LLM actually reads the script — checks what it does, looks for anything sketchy. If it passes the smell test, it generates the run command:
+
+```
+sh /tmp/ollama-install.sh
+```
+
+The user gets to confirm before anything runs. The script is on disk, inspectable, reproducible.
+
+Shows: security-aware workflow, LLM exercising judgment over fetched content, replacing a dangerous one-liner with a safer multi-step plan — all from one natural language sentence.
