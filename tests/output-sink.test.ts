@@ -1,24 +1,23 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { interceptOutput, resetOutputSink, writeLine } from "../src/core/output-sink.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
-let stderr: MockStderr | null = null;
-function captureStderr() {
+let stderr: MockStderr;
+
+beforeEach(() => {
   stderr = mockStderr();
-}
+});
 
 afterEach(() => {
-  stderr?.restore();
-  stderr = null;
+  stderr.restore();
   resetOutputSink();
 });
 
 describe("writeLine with no interception active", () => {
   test("writes line straight to stderr regardless of chrome event presence", () => {
-    captureStderr();
     writeLine("hello\n");
     writeLine("🔍 hi\n", { text: "hi", icon: "🔍" });
-    expect(stderr!.text).toBe("hello\n🔍 hi\n");
+    expect(stderr.text).toBe("hello\n🔍 hi\n");
   });
 });
 
@@ -28,9 +27,8 @@ describe("interceptOutput", () => {
     const release = interceptOutput((e) => {
       events.push({ text: e.text, icon: e.icon });
     });
-    captureStderr();
     writeLine("🔍 hi\n", { text: "hi", icon: "🔍" });
-    expect(stderr!.text).toBe("");
+    expect(stderr.text).toBe("");
     expect(events).toEqual([{ text: "hi", icon: "🔍" }]);
     release();
   });
@@ -42,9 +40,8 @@ describe("interceptOutput", () => {
     });
     writeLine("» verbose line\n");
     expect(calls).toBe(0);
-    captureStderr();
     release();
-    expect(stderr!.text).toBe("» verbose line\n");
+    expect(stderr.text).toBe("» verbose line\n");
   });
 
   test("release flushes pending lines to stderr in original order", () => {
@@ -52,17 +49,15 @@ describe("interceptOutput", () => {
     writeLine("a\n", { text: "a" });
     writeLine("» b\n");
     writeLine("🧠 c\n", { text: "c", icon: "🧠" });
-    captureStderr();
     release();
-    expect(stderr!.text).toBe("a\n» b\n🧠 c\n");
+    expect(stderr.text).toBe("a\n» b\n🧠 c\n");
   });
 
   test("writes after release go straight to stderr", () => {
     const release = interceptOutput(() => {});
     release();
-    captureStderr();
     writeLine("after\n", { text: "after" });
-    expect(stderr!.text).toBe("after\n");
+    expect(stderr.text).toBe("after\n");
   });
 
   test("handler is not called after release", () => {
@@ -71,10 +66,9 @@ describe("interceptOutput", () => {
       calls += 1;
     });
     release();
-    captureStderr();
     writeLine("post\n", { text: "post" });
     expect(calls).toBe(0);
-    expect(stderr!.text).toBe("post\n");
+    expect(stderr.text).toBe("post\n");
   });
 
   test("handler without icon receives undefined for that field", () => {
@@ -82,7 +76,6 @@ describe("interceptOutput", () => {
     const release = interceptOutput((e) => {
       receivedIcon = e.icon;
     });
-    captureStderr();
     writeLine("plain\n", { text: "plain" });
     expect(receivedIcon).toBeUndefined();
     release();
@@ -107,8 +100,7 @@ describe("interceptOutput", () => {
     expect(() => {
       writeLine("x\n", { text: "x" });
     }).not.toThrow();
-    captureStderr();
     release();
-    expect(stderr!.text).toBe("x\n");
+    expect(stderr.text).toBe("x\n");
   });
 });

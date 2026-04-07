@@ -36,9 +36,7 @@ describe("startChromeSpinner", () => {
     try {
       const stop = startChromeSpinner(SPINNER_TEXT);
       expect(stderr.lines.some((w) => w.includes(SPINNER_TEXT))).toBe(true);
-      expect(
-        stderr.lines.some((w) => SPINNER_FRAMES.some((f) => w.includes(f.trim()))),
-      ).toBe(true);
+      expect(stderr.lines.some((w) => SPINNER_FRAMES.some((f) => w.includes(f.trim())))).toBe(true);
       stop();
     } finally {
       stderr.restore();
@@ -104,12 +102,14 @@ describe("startChromeSpinner", () => {
 });
 
 describe("cursor leak guard", () => {
-  function withGuardCapture<T>(fn: (ctx: {
-    exitListeners: Array<() => void>;
-    sigintListeners: Array<() => void>;
-    sigtermListeners: Array<() => void>;
-    writes: string[];
-  }) => T): T {
+  function withGuardCapture<T>(
+    fn: (ctx: {
+      exitListeners: Array<() => void>;
+      sigintListeners: Array<() => void>;
+      sigtermListeners: Array<() => void>;
+      writes: string[];
+    }) => T,
+  ): T {
     // Reset module state so the install runs on the first call inside the
     // test, with our process.on mock in place.
     resetExitGuard();

@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { dispatch } from "../src/subcommands/dispatch.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
-
 // We test dispatch by importing it and temporarily mutating the registry.
 // This avoids needing real subcommands for unit tests.
 import { subcommands } from "../src/subcommands/registry.ts";
 import type { Subcommand } from "../src/subcommands/types.ts";
+import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
 const originalExit = process.exit;
 let stderr: MockStderr | null = null;
