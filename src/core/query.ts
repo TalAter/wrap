@@ -24,7 +24,7 @@ import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
-import { startChromeSpinner } from "./spinner.ts";
+import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
 
 export function isStructuredOutputError(e: unknown): boolean {
@@ -168,7 +168,7 @@ export async function runQuery(
       verbose(`Calling ${model}...`);
       const llmStart = performance.now();
       let response: CommandResponse;
-      const stopSpinner = startChromeSpinner("thinking...");
+      const stopSpinner = startChromeSpinner(SPINNER_TEXT);
       try {
         response = await callWithRetry(provider, input);
 

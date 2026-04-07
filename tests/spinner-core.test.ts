@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
 import { HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
-import { SPINNER_FRAMES, SPINNER_INTERVAL, startChromeSpinner } from "../src/core/spinner.ts";
+import {
+  SPINNER_FRAMES,
+  SPINNER_INTERVAL,
+  SPINNER_TEXT,
+  startChromeSpinner,
+} from "../src/core/spinner.ts";
 
 describe("SPINNER_FRAMES", () => {
   test("has frames", () => {
@@ -51,8 +56,8 @@ describe("startChromeSpinner", () => {
 
   test("writes the text and a frame to stderr", async () => {
     await captureStderr(async (writes) => {
-      const stop = startChromeSpinner("thinking...");
-      expect(writes.some((w) => w.includes("thinking..."))).toBe(true);
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      expect(writes.some((w) => w.includes(SPINNER_TEXT))).toBe(true);
       expect(writes.some((w) => SPINNER_FRAMES.some((f) => w.includes(f.trim())))).toBe(true);
       stop();
     });
@@ -60,7 +65,7 @@ describe("startChromeSpinner", () => {
 
   test("hides the cursor on start and restores it on stop", async () => {
     await captureStderr(async (writes) => {
-      const stop = startChromeSpinner("thinking...");
+      const stop = startChromeSpinner(SPINNER_TEXT);
       expect(writes.some((w) => w.includes(HIDE_CURSOR))).toBe(true);
       stop();
       expect(writes.some((w) => w.includes(SHOW_CURSOR))).toBe(true);
@@ -69,7 +74,7 @@ describe("startChromeSpinner", () => {
 
   test("stop clears the line so the spinner disappears", async () => {
     await captureStderr(async (writes) => {
-      const stop = startChromeSpinner("thinking...");
+      const stop = startChromeSpinner(SPINNER_TEXT);
       stop();
       // Last write must contain a CR + erase-in-line so the spinner row
       // is empty when subsequent stderr output lands.
@@ -81,7 +86,7 @@ describe("startChromeSpinner", () => {
 
   test("advances frames on the configured interval", async () => {
     await captureStderr(async (writes) => {
-      const stop = startChromeSpinner("thinking...");
+      const stop = startChromeSpinner(SPINNER_TEXT);
       await new Promise((r) => setTimeout(r, SPINNER_INTERVAL * 3 + 30));
       stop();
       // Should have observed at least 2 different frames during the window.
@@ -109,7 +114,7 @@ describe("startChromeSpinner", () => {
       return true;
     }) as typeof process.stderr.write;
     try {
-      const stop = startChromeSpinner("thinking...");
+      const stop = startChromeSpinner(SPINNER_TEXT);
       stop();
       expect(writes).toHaveLength(0);
     } finally {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
 import { extractFailedText, fetchesUrl, isStructuredOutputError } from "../src/core/query.ts";
+import { SPINNER_TEXT } from "../src/core/spinner.ts";
 
 const STUB_USAGE: LanguageModelUsage = {
   inputTokens: undefined,
@@ -236,7 +237,7 @@ describe("chrome spinner around LLM call", () => {
     });
 
     const all = stderrOutput.join("");
-    expect(all).toContain("thinking...");
+    expect(all).toContain(SPINNER_TEXT);
     // The cursor is hidden during the spinner and restored after.
     expect(all).toContain("\x1b[?25l"); // HIDE_CURSOR
     expect(all).toContain("\x1b[?25h"); // SHOW_CURSOR
@@ -268,6 +269,6 @@ describe("chrome spinner around LLM call", () => {
     });
 
     const all = stderrOutput.join("");
-    expect(all).not.toContain("thinking...");
+    expect(all).not.toContain(SPINNER_TEXT);
   });
 });

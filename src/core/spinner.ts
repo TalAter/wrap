@@ -6,6 +6,9 @@ import { chromeRaw } from "./output.ts";
 export const SPINNER_FRAMES = ["⢎ ", "⠎⠁", "⠊⠑", "⠈⠱", " ⡱", "⢀⡰", "⢄⡠", "⢆⡀"];
 export const SPINNER_INTERVAL = 80; // ms
 
+/** Default label for the chrome spinner shown around LLM calls. */
+export const SPINNER_TEXT = "thinking...";
+
 /**
  * Stderr spinner used outside of Ink. Writes `\r` + frame + " " + text on
  * every tick (no newline) so the line is overwritten in place. Hides the
