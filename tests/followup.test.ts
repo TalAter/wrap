@@ -6,48 +6,11 @@ import {
   REFUSED_PROBE_INSTRUCTION,
   stripStaleInstructions,
 } from "../src/core/query.ts";
-import type { ConversationMessage, PromptInput, Provider } from "../src/llm/types.ts";
-import { createLogEntry, type LogEntry, type Round } from "../src/logging/entry.ts";
+import type { ConversationMessage, Provider } from "../src/llm/types.ts";
+import type { Round } from "../src/logging/entry.ts";
 import promptConstants from "../src/prompt.constants.json";
+import { makeEntry, makeInput, makeOptions, makeProvider } from "./helpers/loop-fixtures.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
-
-function makeProvider(responses: CommandResponse[]): Provider {
-  let calls = 0;
-  return {
-    runPrompt: async () => {
-      const r = responses[calls];
-      calls += 1;
-      if (!r) throw new Error(`unexpected call ${calls}`);
-      return r;
-    },
-  };
-}
-
-function makeInput(extraMessages: ConversationMessage[] = []): PromptInput {
-  return {
-    system: "system",
-    messages: [{ role: "user", content: "test" }, ...extraMessages],
-  };
-}
-
-function makeEntry(): LogEntry {
-  return createLogEntry({
-    prompt: "test",
-    cwd: "/tmp",
-    provider: { type: "test" },
-    promptHash: "h",
-  });
-}
-
-function makeOptions() {
-  return {
-    cwd: "/tmp",
-    wrapHome: "/tmp",
-    maxRounds: 5,
-    maxProbeOutput: 10000,
-    pipedInput: undefined,
-  };
-}
 
 let stderr: MockStderr;
 
@@ -141,7 +104,7 @@ describe("createFollowupHandler", () => {
   }
 
   test("returns command FollowupResult and updates current for chained calls", async () => {
-    const provider = makeProvider([
+    const { provider } = makeProvider([
       { type: "command", content: "rm -i a", risk_level: "low" } as CommandResponse,
       { type: "command", content: "rm -v a", risk_level: "medium" } as CommandResponse,
     ]);
@@ -182,7 +145,7 @@ describe("createFollowupHandler", () => {
   });
 
   test("returns answer FollowupResult and leaves current unchanged", async () => {
-    const provider = makeProvider([
+    const { provider } = makeProvider([
       { type: "answer", content: "the answer", risk_level: "low" } as CommandResponse,
     ]);
     const input = makeInput();
@@ -212,7 +175,7 @@ describe("createFollowupHandler", () => {
 
   test("returns exhausted FollowupResult when budget runs out", async () => {
     const probe = { type: "probe", content: "true", risk_level: "low" } as CommandResponse;
-    const provider = makeProvider([probe, probe, probe, probe, probe]);
+    const { provider } = makeProvider([probe, probe, probe, probe, probe]);
     const input = makeInput();
     const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
     const entry = makeEntry();
@@ -283,7 +246,7 @@ describe("createFollowupHandler", () => {
   });
 
   test("returns aborted FollowupResult when signal is aborted before any LLM call", async () => {
-    const provider = makeProvider([]);
+    const { provider } = makeProvider([]);
     const input = makeInput();
     const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
     const entry = makeEntry();
@@ -308,7 +271,7 @@ describe("createFollowupHandler", () => {
 
   test("strips stale instructions before pushing follow-up turn", async () => {
     const input = makeInput([{ role: "user", content: promptConstants.lastRoundInstruction }]);
-    const provider = makeProvider([
+    const { provider } = makeProvider([
       { type: "command", content: "echo done", risk_level: "low" } as CommandResponse,
     ]);
     const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
@@ -333,7 +296,7 @@ describe("createFollowupHandler", () => {
 
   test("pushes assistant JSON of current.response before follow-up text", async () => {
     const input = makeInput();
-    const provider = makeProvider([
+    const { provider } = makeProvider([
       { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
     ]);
     const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
@@ -359,7 +322,7 @@ describe("createFollowupHandler", () => {
   });
 
   test("resets budgetRemaining to maxRounds before re-entering the loop", async () => {
-    const provider = makeProvider([
+    const { provider } = makeProvider([
       { type: "command", content: "echo ok", risk_level: "low" } as CommandResponse,
     ]);
     const input = makeInput();

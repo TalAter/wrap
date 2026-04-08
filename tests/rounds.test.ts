@@ -1,51 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
 import { type LoopState, runRoundsUntilFinal } from "../src/core/query.ts";
-import type { PromptInput, Provider } from "../src/llm/types.ts";
-import { createLogEntry, type LogEntry } from "../src/logging/entry.ts";
+import type { Provider } from "../src/llm/types.ts";
+import { makeEntry, makeInput, makeOptions, makeProvider } from "./helpers/loop-fixtures.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
-
-function makeProvider(responses: CommandResponse[]): { provider: Provider; calls: number } {
-  let calls = 0;
-  const provider: Provider = {
-    runPrompt: async () => {
-      const r = responses[calls];
-      calls += 1;
-      if (!r) throw new Error(`unexpected call ${calls}`);
-      return r;
-    },
-  };
-  return {
-    provider,
-    get calls() {
-      return calls;
-    },
-  };
-}
-
-function makeInput(): PromptInput {
-  return { system: "system", messages: [{ role: "user", content: "test" }] };
-}
-
-function makeEntry(): LogEntry {
-  return createLogEntry({
-    prompt: "test",
-    cwd: "/tmp",
-    provider: { type: "test" },
-    promptHash: "h",
-  });
-}
-
-function makeOptions(overrides: Partial<{ maxRounds: number }> = {}) {
-  return {
-    cwd: "/tmp",
-    wrapHome: "/tmp",
-    maxRounds: overrides.maxRounds ?? 5,
-    maxProbeOutput: 10000,
-    pipedInput: undefined,
-    model: "test",
-  };
-}
 
 let stderr: MockStderr;
 
