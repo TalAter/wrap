@@ -17,6 +17,8 @@ type DialogProps = {
   onChoice: (choice: "run" | "cancel", command: string) => void;
 };
 
+type DialogState = "confirming" | "editing-command";
+
 const ACTION_ITEMS = [
   { label: "No", primary: true },
   { label: "Yes", primary: true },
@@ -44,7 +46,7 @@ export function Dialog({
   const [riskLevel] = useState(initialRiskLevel);
   const [explanation] = useState(initialExplanation);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [editing, setEditing] = useState(false);
+  const [dialogState, setDialogState] = useState<DialogState>("confirming");
   const [draft, setDraft] = useState(initialCommand);
 
   // Width calculation
@@ -94,11 +96,11 @@ export function Dialog({
   useInput(
     (_input, key) => {
       if (key.escape) {
-        setEditing(false);
+        setDialogState("confirming");
         setDraft(command);
       }
     },
-    { isActive: editing },
+    { isActive: dialogState === "editing-command" },
   );
 
   useInput(
@@ -109,7 +111,7 @@ export function Dialog({
         return;
       }
       if (input === "e") {
-        setEditing(true);
+        setDialogState("editing-command");
         return;
       }
       if (input === "y") {
@@ -139,12 +141,12 @@ export function Dialog({
           onChoice("cancel", command);
           exit();
         } else if (label === "Edit") {
-          setEditing(true);
+          setDialogState("editing-command");
         }
         // Describe, Follow-up, Copy — no-op in phase 1
       }
     },
-    { isActive: !editing },
+    { isActive: dialogState === "confirming" },
   );
 
   const handleEditSubmit = (value: string) => {
@@ -174,7 +176,7 @@ export function Dialog({
             paddingTop={1}
             paddingBottom={1}
           >
-            {editing ? (
+            {dialogState === "editing-command" ? (
               <TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} />
             ) : (
               <TextInput value={command} readOnly />
@@ -189,7 +191,11 @@ export function Dialog({
             )}
             <Text> </Text>
             <Text> </Text>
-            {editing ? <EditHint /> : <ActionBar selectedIndex={selectedIndex} />}
+            {dialogState === "editing-command" ? (
+              <EditHint />
+            ) : (
+              <ActionBar selectedIndex={selectedIndex} />
+            )}
           </Box>
 
           <Box flexDirection="column" width={2}>
