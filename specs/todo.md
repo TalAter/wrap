@@ -39,6 +39,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Discovery & Probes (see specs/discovery.md)
 
 - [ ] Future: parse package.json scripts / Makefile targets into CWD context summary
+- [ ] Investigate whether probe rounds should be able to read stdin.
 
 ## Error Handling & Auto-Fix
 
