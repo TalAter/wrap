@@ -299,12 +299,10 @@ export async function runRoundsUntilFinal(
       continue;
     }
 
-    // Log the command round eagerly. Probe and answer rounds are already
-    // logged inline above. The caller mutates `round.exec_ms`/`round.execution`
-    // on the live array entry after running — `addRound` is just a push, so
-    // post-push mutation surfaces in the final JSONL flush. If runQuery throws
-    // between here and exec, the round still appears in the log with `parsed`
-    // set and `execution` undefined — more useful than dropping it entirely.
+    // Log the command round eagerly (matching probe/answer rounds). The
+    // caller mutates `exec_ms`/`execution` on the live array entry after
+    // running — `addRound` is just a push, so post-push mutation surfaces
+    // in the final JSONL flush.
     addRound(entry, round);
     return { type: "command", response, round };
   }
@@ -343,12 +341,11 @@ export function stripStaleInstructions(messages: PromptInput["messages"]): void 
 }
 
 /**
- * Mutable container for the "current" command + its round, shared between
- * runQuery and the follow-up closure. The closure updates these on each
- * successful follow-up command so chained follow-ups see the latest state
- * and runQuery can exec the swapped command. The round is always already
- * in `entry.rounds` (logged eagerly by `runRoundsUntilFinal`) — runQuery
- * mutates `exec_ms`/`execution` on it after exec.
+ * Live command + its already-logged round, shared by reference between
+ * runQuery and the follow-up closure. The closure mutates both on each
+ * successful refinement so chained follow-ups and the final exec see the
+ * latest state. The round is logged eagerly by `runRoundsUntilFinal`;
+ * runQuery only mutates `exec_ms`/`execution` on it after exec.
  */
 export type CurrentCommand = {
   response: CommandResponse;
@@ -365,12 +362,10 @@ export type FollowupHandlerDeps = {
 };
 
 /**
- * Build the follow-up handler the dialog calls when the user submits text.
- * Strips stale meta-instructions, pushes the prior assistant response + the
- * follow-up text, resets the round budget, and re-enters
- * `runRoundsUntilFinal` with the dialog's AbortSignal. On a successful
- * command result, mutates `current` so chained follow-ups and the eventual
- * exec see the swapped state.
+ * Build the follow-up handler the dialog calls on user submit. Re-enters
+ * `runRoundsUntilFinal` with the dialog's AbortSignal and mutates `current`
+ * on a successful command so chained follow-ups and the eventual exec see
+ * the swapped state.
  */
 export function createFollowupHandler(deps: FollowupHandlerDeps): FollowupHandler {
   const { provider, input, state, entry, options, current } = deps;
@@ -490,9 +485,7 @@ export async function runQuery(
       throw new Error("runRoundsUntilFinal returned 'aborted' but runQuery passed no signal");
     }
 
-    // type === "command". `current` holds the live command + its already-
-    // logged round; the follow-up closure mutates both on each successful
-    // refinement so the final exec runs against whatever the user accepted.
+    // type === "command".
     const current: CurrentCommand = { response: result.response, round: result.round };
     if (current.response.risk_level !== "low") {
       const { showDialog } = await import("../tui/render.ts");
@@ -539,8 +532,7 @@ export async function runQuery(
       mode: "inherit",
       stdinBlob,
     });
-    // Mutate exec details on the round in place — it's already in
-    // entry.rounds via eager logging, so the final flush picks them up.
+    // In-place mutation: the round is already in entry.rounds.
     current.round.exec_ms = exec.exec_ms;
     current.round.execution = {
       command: current.response.content,
