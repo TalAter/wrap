@@ -1,7 +1,8 @@
-import { isTestProviderSelected } from "./providers/test.ts";
-import type { Config, ResolvedProvider } from "./types.ts";
+import type { Config } from "../config/config.ts";
+import { KNOWN_PROVIDERS, validateProviderEntry } from "./providers/registry.ts";
+import { isTestProviderSelected, TEST_RESOLVED_PROVIDER } from "./providers/test.ts";
+import type { ResolvedProvider } from "./types.ts";
 
-const KNOWN_PROVIDERS = new Set(["anthropic", "openai", "ollama", "claude-code"]);
 const NO_LLM_ERROR = "Config error: no LLM configured. Edit ~/.wrap/config.jsonc.";
 
 /**
@@ -11,15 +12,17 @@ const NO_LLM_ERROR = "Config error: no LLM configured. Edit ~/.wrap/config.jsonc
  *
  * `override` is the raw value from `--model`/`--provider` or `WRAP_MODEL` —
  * caller picks one (CLI wins over env).
+ *
+ * `env` is consulted only for the test-sentinel short-circuit
+ * (`WRAP_TEST_RESPONSE` / `WRAP_TEST_RESPONSES`). Everything else flows from
+ * `config` and `override`.
  */
 export function resolveProvider(
   config: Config,
   override: string | undefined,
   env: Record<string, string | undefined> = process.env,
 ): ResolvedProvider {
-  if (isTestProviderSelected(env)) {
-    return { name: "test", model: "test" };
-  }
+  if (isTestProviderSelected(env)) return TEST_RESOLVED_PROVIDER;
 
   const providers = config.providers ?? {};
   const defaultProvider = config.defaultProvider;
@@ -50,10 +53,8 @@ export function resolveProvider(
         throw new Error(
           `Config error: model "${trimmed}" is configured for multiple providers; use provider:model.`,
         );
-      } else if (KNOWN_PROVIDERS.has(trimmed)) {
-        // Set providerName so the entry-missing check below produces the
-        // identical "not found in config" error.
-        providerName = trimmed;
+      } else if (trimmed in KNOWN_PROVIDERS) {
+        throw new Error(`Config error: provider "${trimmed}" not found in config.`);
       } else {
         providerName = defaultProvider;
         transientModel = trimmed;
@@ -75,17 +76,8 @@ export function resolveProvider(
   // Per-entry validation runs *before* the no-model check so a structurally
   // invalid entry (e.g. ollama without baseURL) reports the actionable error
   // even when other fields are also missing.
-  if (providerName === "ollama") {
-    if (!entry.baseURL) {
-      throw new Error('Config error: provider "ollama" requires baseURL.');
-    }
-  } else if (!KNOWN_PROVIDERS.has(providerName)) {
-    if (!entry.baseURL || !entry.apiKey || !entry.model) {
-      throw new Error(
-        `Config error: provider "${providerName}" requires baseURL, apiKey, and model.`,
-      );
-    }
-  }
+  const validationError = validateProviderEntry(providerName, entry);
+  if (validationError) throw new Error(validationError);
 
   const model = transientModel ?? entry.model;
   if (!model) fail(`Config error: provider "${providerName}" has no model set in config.`);

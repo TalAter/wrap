@@ -12,6 +12,7 @@ import { loadConfig } from "../src/config/config.ts";
 import { buildPrompt } from "../src/llm/build-prompt.ts";
 import { formatContext } from "../src/llm/format-context.ts";
 import { initProvider } from "../src/llm/index.ts";
+import { resolveProvider } from "../src/llm/resolve-provider.ts";
 import promptConstants from "../src/prompt.constants.json";
 
 function out(value: object): void {
@@ -79,11 +80,14 @@ if (input.mode === "assemble") {
 
 // Execute mode: call LLM once (no retry — malformed output is optimization signal)
 const config = loadConfig();
-if (!config.provider) {
-  console.error("Bridge error: no provider configured. Set WRAP_CONFIG.");
+let provider: ReturnType<typeof initProvider>;
+try {
+  const resolved = resolveProvider(config, process.env.WRAP_MODEL);
+  provider = initProvider(resolved);
+} catch (e) {
+  console.error(e instanceof Error ? e.message : String(e));
   process.exit(1);
 }
-const provider = initProvider(config.provider);
 
 try {
   const response = await provider.runPrompt(promptInput, CommandResponseSchema);

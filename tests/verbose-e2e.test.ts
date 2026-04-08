@@ -11,10 +11,9 @@ async function wrapVerbose(
 ) {
   const wrapHome = tmpHome();
   writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
-  const fullConfig = JSON.stringify({ provider: { type: "test" }, ...config });
   const env: Record<string, string> = {
     WRAP_HOME: wrapHome,
-    WRAP_CONFIG: fullConfig,
+    WRAP_CONFIG: JSON.stringify(config ?? {}),
   };
   if (Array.isArray(response)) {
     env.WRAP_TEST_RESPONSES = JSON.stringify(response);
@@ -33,11 +32,11 @@ describe("verbose e2e", () => {
     });
     expect(exitCode).toBe(0);
     expect(stdout).toBe("world\n");
-    expect(stderr).toContain("Config loaded (test)");
-    expect(stderr).toContain("Provider initialized");
+    expect(stderr).toContain("Config loaded (test / test)");
+    expect(stderr).toContain("Provider initialized (test / test)");
     expect(stderr).toMatch(/Tools: \d+\/\d+ available/);
     expect(stderr).toMatch(/Memory: \d+ facts/);
-    expect(stderr).toContain("Calling test...");
+    expect(stderr).toContain("Calling test / test...");
     expect(stderr).toContain("LLM responded (answer, 5 chars)");
     // All verbose lines have elapsed timestamps
     const verboseLines = stderr.split("\n").filter((l) => l.includes("»"));
@@ -122,18 +121,15 @@ describe("verbose e2e", () => {
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
     const { stderr } = await wrap("hello", {
       WRAP_HOME: wrapHome,
-      WRAP_CONFIG: JSON.stringify({
-        provider: { type: "test" },
-        verbose: true,
-      }),
+      WRAP_CONFIG: JSON.stringify({ verbose: true }),
       WRAP_TEST_RESPONSE: JSON.stringify({
         type: "answer",
         content: "world",
         risk_level: "low",
       }),
     });
-    expect(stderr).toContain("Config loaded (test)");
-    expect(stderr).toContain("Calling test...");
+    expect(stderr).toContain("Config loaded (test / test)");
+    expect(stderr).toContain("Calling test / test...");
   });
 
   test("--verbose shows command exit code for non-zero", async () => {
@@ -150,7 +146,7 @@ describe("verbose e2e", () => {
     // No memory.json — triggers init
     const { stderr } = await wrap("--verbose hello", {
       WRAP_HOME: wrapHome,
-      WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: JSON.stringify({
         type: "answer",
         content: "world",

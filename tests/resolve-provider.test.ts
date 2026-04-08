@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import type { Config } from "../src/config/config.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
-import type { Config } from "../src/llm/types.ts";
 
 const EMPTY_ENV: Record<string, string | undefined> = {};
 

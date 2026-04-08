@@ -38,7 +38,7 @@ const baseInput = {
 };
 
 const TEST_PROVIDER_ENV = {
-  WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+  WRAP_CONFIG: JSON.stringify({}),
 };
 
 describe("bridge — assemble mode", () => {

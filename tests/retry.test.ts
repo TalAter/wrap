@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
 import { extractFailedText, fetchesUrl, isStructuredOutputError } from "../src/core/query.ts";
+import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 
 const STUB_USAGE: LanguageModelUsage = {
   inputTokens: undefined,
@@ -150,7 +151,7 @@ describe("round retry in runQuery", () => {
 
     const exitCode = await runQuery("test", provider, {
       cwd: "/tmp",
-      providerConfig: { type: "test" },
+      resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
     expect(callCount).toBe(2);
     expect(exitCode).toBe(0);
@@ -177,7 +178,7 @@ describe("round retry in runQuery", () => {
     try {
       await runQuery("test", provider, {
         cwd: "/tmp",
-        providerConfig: { type: "test" },
+        resolvedProvider: TEST_RESOLVED_PROVIDER,
       });
     } catch {
       // expected

@@ -2,27 +2,29 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
 import { type ZodType, z } from "zod";
-import type { AISDKProviderConfig, Provider } from "../types.ts";
+import type { Provider, ResolvedProvider } from "../types.ts";
+import { getRegistration } from "./registry.ts";
 
-const DEFAULT_MODELS = {
-  anthropic: "claude-sonnet-4-latest",
-  openai: "gpt-4o-mini",
-};
-
-const MODEL_FACTORIES: Record<string, (config: AISDKProviderConfig) => LanguageModel> = {
-  anthropic: (c) =>
-    createAnthropic({ apiKey: resolveApiKey(c.apiKey), baseURL: c.baseURL })(
-      c.model ?? DEFAULT_MODELS.anthropic,
-    ),
-  // @ai-sdk/openai requires an API key even for local endpoints that don't need one.
-  // When a custom baseURL is set and no key is provided, use a placeholder so local
-  // models (Ollama, LM Studio, etc.) work without the user having to set a dummy key.
-  openai: (c) =>
-    createOpenAI({
-      apiKey: resolveApiKey(c.apiKey) ?? (c.baseURL ? "nokey" : undefined),
-      baseURL: c.baseURL,
-    })(c.model ?? DEFAULT_MODELS.openai),
-};
+/**
+ * Build a `LanguageModel` for the given resolved provider. The dispatch on
+ * `name` lives in `initProvider`; this file handles the SDK details for
+ * anthropic / openai / openai-compat (ollama + unknown providers).
+ */
+function buildModel(resolved: ResolvedProvider, isOpenAICompat: boolean): LanguageModel {
+  if (isOpenAICompat) {
+    // @ai-sdk/openai requires an API key even for local endpoints that don't need one.
+    // When a custom baseURL is set and no key is provided, use a placeholder so local
+    // models (Ollama, LM Studio, etc.) work without the user having to set a dummy key.
+    return createOpenAI({
+      apiKey: resolveApiKey(resolved.apiKey) ?? (resolved.baseURL ? "nokey" : undefined),
+      baseURL: resolved.baseURL,
+    })(resolved.model);
+  }
+  return createAnthropic({
+    apiKey: resolveApiKey(resolved.apiKey),
+    baseURL: resolved.baseURL,
+  })(resolved.model);
+}
 
 /**
  * OpenAI strict mode requires every property in `required`.
@@ -55,16 +57,17 @@ function addAllToRequired(node: Record<string, unknown>): void {
   }
 }
 
-export function aiSdkProvider(config: AISDKProviderConfig): Provider {
-  const factory = MODEL_FACTORIES[config.type];
-  if (!factory) throw new Error(`Config error: unsupported AI SDK provider "${config.type}".`);
-  const model = factory(config);
-  const useStrictSchema = config.type === "openai";
+export function aiSdkProvider(resolved: ResolvedProvider): Provider {
+  // Anthropic uses its own SDK; everything else (openai, ollama, unknown
+  // OpenAI-compat providers) flows through the OpenAI SDK factory and needs
+  // strict-schema mode for structured output.
+  const isOpenAICompat = getRegistration(resolved.name).kind === "openai-compat";
+  const model = buildModel(resolved, isOpenAICompat);
 
   return {
     runPrompt: async (input, schema?) => {
       if (schema) {
-        const outputSchema = useStrictSchema ? toOpenAIStrictSchema(schema) : schema;
+        const outputSchema = isOpenAICompat ? toOpenAIStrictSchema(schema) : schema;
         const result = await generateText({
           model,
           system: input.system,

@@ -43,10 +43,11 @@ export async function wrapMock(
 ) {
   const wrapHome = tmpHome();
   seedMemory(wrapHome);
-  const fullConfig = JSON.stringify({ provider: { type: "test" }, ...config });
+  // The test sentinel (WRAP_TEST_RESPONSE) short-circuits resolveProvider, so
+  // no providers map is needed in the config.
   const env: Record<string, string> = {
     WRAP_HOME: wrapHome,
-    WRAP_CONFIG: fullConfig,
+    WRAP_CONFIG: JSON.stringify(config ?? {}),
   };
   if (Array.isArray(response)) {
     env.WRAP_TEST_RESPONSES = JSON.stringify(response);

@@ -10,10 +10,10 @@ import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import {
+  formatProvider,
   type PromptInput,
   type Provider,
-  type ProviderConfig,
-  providerLabel,
+  type ResolvedProvider,
 } from "../llm/types.ts";
 import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
@@ -106,7 +106,7 @@ export async function runQuery(
   options: {
     memory?: Memory;
     cwd: string;
-    providerConfig: ProviderConfig;
+    resolvedProvider: ResolvedProvider;
     tools?: ToolProbeResult | null;
     cwdFiles?: string;
     pipedInput?: string;
@@ -125,7 +125,7 @@ export async function runQuery(
     cwd: options.cwd,
     pipedInput: options.pipedInput,
     memory,
-    provider: options.providerConfig,
+    provider: options.resolvedProvider,
     promptHash: PROMPT_HASH,
   });
 
@@ -143,7 +143,7 @@ export async function runQuery(
       maxPipedInput,
     );
 
-    const model = providerLabel(options.providerConfig);
+    const model = formatProvider(options.resolvedProvider);
 
     for (let roundNum = 1; roundNum <= maxRounds; roundNum++) {
       const round: Round = {};

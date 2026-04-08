@@ -13,37 +13,6 @@ export type Provider = {
   runPrompt(input: PromptInput, schema?: ZodType): Promise<unknown>;
 };
 
-export type TestProviderConfig = { type: "test" };
-
-export type ClaudeCodeProviderConfig = { type: "claude-code"; model?: string };
-
-export type AISDKProviderConfig = {
-  type: "anthropic" | "openai";
-  model?: string;
-  apiKey?: string;
-  baseURL?: string;
-};
-
-export type ProviderConfig = TestProviderConfig | ClaudeCodeProviderConfig | AISDKProviderConfig;
-
-/** Human-readable label for a provider config (model name or provider type). */
-export function providerLabel(config: ProviderConfig): string {
-  if ("model" in config && config.model) return config.model;
-  return config.type;
-}
-
-/** Multi-provider config — see specs/multi-provider-config.md. */
-export type ProviderEntry = {
-  apiKey?: string;
-  baseURL?: string;
-  model?: string;
-};
-
-export type Config = {
-  providers?: Record<string, ProviderEntry>;
-  defaultProvider?: string;
-};
-
 /** Final state used by `initProvider` after override resolution. */
 export type ResolvedProvider = {
   name: string;
@@ -51,3 +20,8 @@ export type ResolvedProvider = {
   apiKey?: string;
   baseURL?: string;
 };
+
+/** Display label for a resolved provider — used in verbose log lines and UI. */
+export function formatProvider(resolved: ResolvedProvider): string {
+  return `${resolved.name} / ${resolved.model}`;
+}

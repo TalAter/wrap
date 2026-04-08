@@ -29,74 +29,31 @@
       "description": "Enable verbose mode. Surfaces internal pipeline steps on stderr.",
       "default": false
     },
-    "provider": {
-      "description": "LLM provider configuration",
-      "oneOf": [
-        {
-          "type": "object",
-          "description": "Anthropic API provider via AI SDK",
-          "properties": {
-            "type": { "const": "anthropic" },
-            "model": {
-              "type": "string",
-              "description": "Model to use (default: claude-sonnet-4-latest)"
-            },
-            "apiKey": {
-              "type": "string",
-              "description": "API key. Use \"$ENV_VAR\" to read from environment. Omit to use ANTHROPIC_API_KEY."
-            },
-            "baseURL": {
-              "type": "string",
-              "description": "Custom API endpoint (for proxies, etc.)"
-            }
+    "providers": {
+      "type": "object",
+      "description": "Map of provider name → entry. Known names: anthropic, openai, ollama, claude-code. Any other key is treated as an OpenAI-compatible endpoint and requires baseURL, apiKey, and model.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "description": "API key. Use \"$ENV_VAR\" to read from environment. Omit for the SDK's default env var (e.g. ANTHROPIC_API_KEY)."
           },
-          "required": ["type"],
-          "additionalProperties": false
+          "baseURL": {
+            "type": "string",
+            "description": "Custom API endpoint (required for ollama and OpenAI-compatible providers)."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model identifier the provider should use."
+          }
         },
-        {
-          "type": "object",
-          "description": "OpenAI API provider via AI SDK",
-          "properties": {
-            "type": { "const": "openai" },
-            "model": {
-              "type": "string",
-              "description": "Model to use (default: gpt-4o-mini)"
-            },
-            "apiKey": {
-              "type": "string",
-              "description": "API key. Use \"$ENV_VAR\" to read from environment. Omit to use OPENAI_API_KEY."
-            },
-            "baseURL": {
-              "type": "string",
-              "description": "Custom API endpoint (for Ollama, proxies, etc.)"
-            }
-          },
-          "required": ["type"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "description": "Claude Code CLI provider",
-          "properties": {
-            "type": { "const": "claude-code" },
-            "model": {
-              "type": "string",
-              "description": "Model to use (e.g. sonnet, haiku, opus)"
-            }
-          },
-          "required": ["type"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "description": "Test provider — echoes input back (for development/testing)",
-          "properties": {
-            "type": { "const": "test" }
-          },
-          "required": ["type"],
-          "additionalProperties": false
-        }
-      ]
+        "additionalProperties": false
+      }
+    },
+    "defaultProvider": {
+      "type": "string",
+      "description": "Name of the entry in `providers` to use by default."
     }
   },
   "additionalProperties": false

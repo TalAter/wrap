@@ -26,7 +26,10 @@ describe("loadConfig", () => {
     });
 
     test("env override with undefined clears process.env value", () => {
-      process.env.WRAP_CONFIG = JSON.stringify({ provider: { type: "test" } });
+      process.env.WRAP_CONFIG = JSON.stringify({
+        providers: { anthropic: { model: "claude-haiku-4-5" } },
+        defaultProvider: "anthropic",
+      });
       const config = loadConfig({ WRAP_HOME: tempDir(), WRAP_CONFIG: undefined });
       expect(config).toEqual({});
     });
@@ -36,24 +39,27 @@ describe("loadConfig", () => {
       expect(config).toEqual({});
     });
 
-    test("reads provider from WRAP_CONFIG env var", () => {
-      const config = loadConfig({
-        WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
-      });
-      expect(config).toEqual({ provider: { type: "test" } });
-    });
-
-    test("reads provider-specific config fields", () => {
+    test("reads providers map from WRAP_CONFIG env var", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
         WRAP_CONFIG: JSON.stringify({
-          provider: { type: "claude-code", model: "opus" },
+          providers: { anthropic: { model: "claude-haiku-4-5" } },
+          defaultProvider: "anthropic",
         }),
       });
-      expect(config).toEqual({
-        provider: { type: "claude-code", model: "opus" },
+      expect(config.providers).toEqual({ anthropic: { model: "claude-haiku-4-5" } });
+      expect(config.defaultProvider).toBe("anthropic");
+    });
+
+    test("reads provider entry fields", () => {
+      const config = loadConfig({
+        WRAP_HOME: tempDir(),
+        WRAP_CONFIG: JSON.stringify({
+          providers: { "claude-code": { model: "opus" } },
+          defaultProvider: "claude-code",
+        }),
       });
+      expect(config.providers?.["claude-code"]).toEqual({ model: "opus" });
     });
 
     test("throws on malformed WRAP_CONFIG", () => {
@@ -66,9 +72,16 @@ describe("loadConfig", () => {
   describe("file-based config", () => {
     test("reads config from config.jsonc in WRAP_HOME", () => {
       const dir = tempDir();
-      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ provider: { type: "test" } }));
+      writeFileSync(
+        join(dir, "config.jsonc"),
+        JSON.stringify({
+          providers: { anthropic: { model: "claude-haiku-4-5" } },
+          defaultProvider: "anthropic",
+        }),
+      );
       const config = loadConfig({ WRAP_HOME: dir });
-      expect(config.provider).toEqual({ type: "test" });
+      expect(config.providers?.anthropic).toEqual({ model: "claude-haiku-4-5" });
+      expect(config.defaultProvider).toBe("anthropic");
     });
 
     test("returns empty config when config file doesn't exist", () => {
@@ -82,11 +95,12 @@ describe("loadConfig", () => {
         join(dir, "config.jsonc"),
         `{
   // LLM provider
-  "provider": { "type": "test" }
+  "providers": { "anthropic": { "model": "claude-haiku-4-5" } },
+  "defaultProvider": "anthropic"
 }`,
       );
       const config = loadConfig({ WRAP_HOME: dir });
-      expect(config.provider).toEqual({ type: "test" });
+      expect(config.providers?.anthropic?.model).toBe("claude-haiku-4-5");
     });
 
     test("handles trailing commas in JSONC", () => {
@@ -94,11 +108,12 @@ describe("loadConfig", () => {
       writeFileSync(
         join(dir, "config.jsonc"),
         `{
-  "provider": { "type": "test", },
+  "providers": { "anthropic": { "model": "haiku", }, },
+  "defaultProvider": "anthropic",
 }`,
       );
       const config = loadConfig({ WRAP_HOME: dir });
-      expect(config.provider).toEqual({ type: "test" });
+      expect(config.providers?.anthropic?.model).toBe("haiku");
     });
 
     test("throws on malformed config file", () => {
@@ -111,36 +126,43 @@ describe("loadConfig", () => {
   });
 
   describe("config merging (shallow)", () => {
-    test("WRAP_CONFIG replaces nested objects from file", () => {
+    test("WRAP_CONFIG replaces providers map from file", () => {
       const dir = tempDir();
       writeFileSync(
         join(dir, "config.jsonc"),
         JSON.stringify({
-          provider: { type: "claude-code", model: "haiku" },
+          providers: { anthropic: { model: "haiku" }, openai: { model: "gpt-4o" } },
+          defaultProvider: "anthropic",
         }),
       );
       const config = loadConfig({
         WRAP_HOME: dir,
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+        WRAP_CONFIG: JSON.stringify({
+          providers: { "claude-code": { model: "sonnet" } },
+        }),
       });
-      // env's provider replaces file's provider entirely
-      expect(config.provider).toEqual({ type: "test" });
+      // env's providers replaces file's providers entirely — anthropic and openai are gone
+      expect(config.providers).toEqual({ "claude-code": { model: "sonnet" } });
+      // defaultProvider from file is preserved (not in WRAP_CONFIG)
+      expect(config.defaultProvider).toBe("anthropic");
     });
 
-    test("nested objects are not deep merged", () => {
+    test("nested providers are not deep merged", () => {
       const dir = tempDir();
       writeFileSync(
         join(dir, "config.jsonc"),
         JSON.stringify({
-          provider: { type: "claude-code", model: "haiku" },
+          providers: { anthropic: { apiKey: "$KEY", model: "haiku" } },
         }),
       );
       const config = loadConfig({
         WRAP_HOME: dir,
-        // env provider has no model — file's model should NOT carry over
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "claude-code" } }),
+        // env providers map has no model — file's model should NOT carry over
+        WRAP_CONFIG: JSON.stringify({
+          providers: { anthropic: { apiKey: "$OTHER" } },
+        }),
       });
-      expect(config.provider).toEqual({ type: "claude-code" });
+      expect(config.providers).toEqual({ anthropic: { apiKey: "$OTHER" } });
     });
 
     test("file config used when no WRAP_CONFIG", () => {
@@ -148,11 +170,13 @@ describe("loadConfig", () => {
       writeFileSync(
         join(dir, "config.jsonc"),
         JSON.stringify({
-          provider: { type: "claude-code", model: "opus" },
+          providers: { "claude-code": { model: "opus" } },
+          defaultProvider: "claude-code",
         }),
       );
       const config = loadConfig({ WRAP_HOME: dir, WRAP_CONFIG: undefined });
-      expect(config.provider).toEqual({ type: "claude-code", model: "opus" });
+      expect(config.providers?.["claude-code"]?.model).toBe("opus");
+      expect(config.defaultProvider).toBe("claude-code");
     });
   });
 
@@ -177,10 +201,7 @@ describe("loadConfig", () => {
   describe("maxRounds", () => {
     test("reads maxRounds from config file", () => {
       const dir = tempDir();
-      writeFileSync(
-        join(dir, "config.jsonc"),
-        JSON.stringify({ provider: { type: "test" }, maxRounds: 3 }),
-      );
+      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxRounds: 3 }));
       const config = loadConfig({ WRAP_HOME: dir });
       expect(config.maxRounds).toBe(3);
     });
@@ -188,7 +209,7 @@ describe("loadConfig", () => {
     test("reads maxRounds from WRAP_CONFIG", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" }, maxRounds: 7 }),
+        WRAP_CONFIG: JSON.stringify({ maxRounds: 7 }),
       });
       expect(config.maxRounds).toBe(7);
     });
@@ -196,7 +217,7 @@ describe("loadConfig", () => {
     test("maxRounds is undefined when not set", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+        WRAP_CONFIG: JSON.stringify({}),
       });
       expect(config.maxRounds).toBeUndefined();
     });
@@ -205,10 +226,7 @@ describe("loadConfig", () => {
   describe("maxProbeOutputChars", () => {
     test("reads from config file", () => {
       const dir = tempDir();
-      writeFileSync(
-        join(dir, "config.jsonc"),
-        JSON.stringify({ provider: { type: "test" }, maxProbeOutputChars: 50000 }),
-      );
+      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxProbeOutputChars: 50000 }));
       const config = loadConfig({ WRAP_HOME: dir });
       expect(config.maxProbeOutputChars).toBe(50000);
     });
@@ -216,7 +234,7 @@ describe("loadConfig", () => {
     test("reads from WRAP_CONFIG", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" }, maxProbeOutputChars: 100000 }),
+        WRAP_CONFIG: JSON.stringify({ maxProbeOutputChars: 100000 }),
       });
       expect(config.maxProbeOutputChars).toBe(100000);
     });
@@ -224,7 +242,7 @@ describe("loadConfig", () => {
     test("undefined when not set", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+        WRAP_CONFIG: JSON.stringify({}),
       });
       expect(config.maxProbeOutputChars).toBeUndefined();
     });
@@ -237,17 +255,20 @@ describe("loadConfig", () => {
         join(dir, "config.jsonc"),
         `{
   "$schema": "./config.schema.json",
-  "provider": { "type": "test" }
+  "providers": { "anthropic": { "model": "haiku" } },
+  "defaultProvider": "anthropic"
 }`,
       );
       const config = loadConfig({ WRAP_HOME: dir });
-      expect(config.provider).toEqual({ type: "test" });
+      expect(config.providers?.anthropic?.model).toBe("haiku");
     });
 
-    test("exported configSchema is valid JSON Schema with oneOf provider", () => {
+    test("exported configSchema documents providers + defaultProvider", () => {
       expect(configSchema.$schema).toBe("http://json-schema.org/draft-07/schema#");
       expect(configSchema.type).toBe("object");
-      expect(configSchema.properties.provider.oneOf.length).toBeGreaterThan(0);
+      expect(configSchema.properties.providers.type).toBe("object");
+      expect(configSchema.properties.providers.additionalProperties.type).toBe("object");
+      expect(configSchema.properties.defaultProvider.type).toBe("string");
     });
 
     test("configSchema includes maxRounds with default 5", () => {
@@ -275,10 +296,7 @@ describe("loadConfig", () => {
   describe("maxPipedInputChars", () => {
     test("reads from config file", () => {
       const dir = tempDir();
-      writeFileSync(
-        join(dir, "config.jsonc"),
-        JSON.stringify({ provider: { type: "test" }, maxPipedInputChars: 50000 }),
-      );
+      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxPipedInputChars: 50000 }));
       const config = loadConfig({ WRAP_HOME: dir });
       expect(config.maxPipedInputChars).toBe(50000);
     });
@@ -286,7 +304,7 @@ describe("loadConfig", () => {
     test("reads from WRAP_CONFIG", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" }, maxPipedInputChars: 100000 }),
+        WRAP_CONFIG: JSON.stringify({ maxPipedInputChars: 100000 }),
       });
       expect(config.maxPipedInputChars).toBe(100000);
     });
@@ -294,7 +312,7 @@ describe("loadConfig", () => {
     test("undefined when not set", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+        WRAP_CONFIG: JSON.stringify({}),
       });
       expect(config.maxPipedInputChars).toBeUndefined();
     });

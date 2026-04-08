@@ -475,11 +475,13 @@ def main():
     # Set WRAP_CONFIG for the bridge subprocess — uses target model with
     # the same API key. The bridge reads this via loadConfig().
     os.environ["WRAP_CONFIG"] = json.dumps({
-        "provider": {
-            "type": "anthropic",
-            "model": target_model,
-            "apiKey": "$ANTHROPIC_API_KEY",
-        }
+        "providers": {
+            "anthropic": {
+                "model": target_model,
+                "apiKey": "$ANTHROPIC_API_KEY",
+            }
+        },
+        "defaultProvider": "anthropic",
     })
 
     print(f"Teacher model: {teacher_model}")
