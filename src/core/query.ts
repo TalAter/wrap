@@ -19,6 +19,7 @@ import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
+import { executeShellCommand } from "./shell.ts";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
 
@@ -251,31 +252,27 @@ export async function runRoundsUntilFinal(
       const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
       chrome(response.explanation || response.content, probeIcon);
 
-      const shell = process.env.SHELL || "sh";
       verbose(`Probe: ${response.content}`);
-      const execStart = performance.now();
       const stdinBlob =
         response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-      const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
-        stdout: "pipe",
-        stderr: "pipe",
-        stdin: stdinBlob,
+      const exec = await executeShellCommand(response.content, {
+        mode: "capture",
+        stdinBlob,
       });
-      const [probeExit, stdoutText, stderrText] = await Promise.all([
-        proc.exited,
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ]);
-      round.exec_ms = Math.round(performance.now() - execStart);
-      round.execution = { command: response.content, exit_code: probeExit, shell };
-      verbose(`Probe exited (${probeExit})`);
+      round.exec_ms = exec.exec_ms;
+      round.execution = {
+        command: response.content,
+        exit_code: exec.exitCode,
+        shell: exec.shell,
+      };
+      verbose(`Probe exited (${exec.exitCode})`);
 
-      let probeOutput = stdoutText;
-      if (stderrText.trim()) {
-        probeOutput += (probeOutput.trim() ? "\n" : "") + stderrText;
+      let probeOutput = exec.stdout;
+      if (exec.stderr.trim()) {
+        probeOutput += (probeOutput.trim() ? "\n" : "") + exec.stderr;
       }
-      if (probeExit !== 0) {
-        probeOutput += `\nExit code: ${probeExit}`;
+      if (exec.exitCode !== 0) {
+        probeOutput += `\nExit code: ${exec.exitCode}`;
       }
       if (probeOutput.length > options.maxProbeOutput) {
         const total = probeOutput.length;
@@ -394,28 +391,23 @@ export async function runQuery(
       }
       response.content = decision.command;
     }
-    const shell = process.env.SHELL || "sh";
     verbose("Executing command...");
-    const execStart = performance.now();
     const stdinBlob =
       response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-    // +m disables monitor mode (job control) so the spawned interactive
-    // shell doesn't call tcsetpgrp() to seize the foreground process group.
-    // Without this, the shell takes foreground and never restores it; any
-    // later tcsetattr (e.g. Bun's exit cleanup after Ink's setRawMode)
-    // sends SIGTTOU to the whole process group, suspending the parent.
-    const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: stdinBlob ?? "inherit",
+    const exec = await executeShellCommand(response.content, {
+      mode: "inherit",
+      stdinBlob,
     });
-    const exitCode = await proc.exited;
-    round.exec_ms = Math.round(performance.now() - execStart);
-    round.execution = { command: response.content, exit_code: exitCode, shell };
-    verbose(`Command exited (${exitCode})`);
-    entry.outcome = exitCode === 0 ? "success" : "error";
+    round.exec_ms = exec.exec_ms;
+    round.execution = {
+      command: response.content,
+      exit_code: exec.exitCode,
+      shell: exec.shell,
+    };
+    verbose(`Command exited (${exec.exitCode})`);
+    entry.outcome = exec.exitCode === 0 ? "success" : "error";
     addRound(entry, round);
-    return exitCode;
+    return exec.exitCode;
   } finally {
     try {
       appendLogEntry(wrapHome, entry);
