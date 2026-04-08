@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import stringWidth from "string-width";
 import type { RiskLevel } from "../command-response.schema.ts";
 import type { FollowupHandler, FollowupResult } from "../core/followup-types.ts";
+import type { SubscribeChrome } from "../core/output-sink.ts";
 import {
   type BorderSegment,
   bottomBorderSegments,
@@ -37,6 +38,7 @@ type DialogProps = {
   initialExplanation?: string;
   onResult: (result: DialogOutput) => void;
   onFollowup: FollowupHandler;
+  subscribeChrome?: SubscribeChrome;
 };
 
 type DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup";
@@ -68,12 +70,16 @@ const COMPOSE_HINTS = [
 ] as const;
 const PROCESS_HINTS = [{ combo: "Esc", label: "to abort" }] as const;
 
+/** Border status shown while a follow-up call is in flight before any chrome event arrives. */
+export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
+
 export function Dialog({
   initialCommand,
   initialRiskLevel,
   initialExplanation,
   onResult,
   onFollowup,
+  subscribeChrome,
 }: DialogProps) {
   const { exit } = useApp();
   const { columns: termCols, rows: termRows } = useRenderSize();
@@ -86,7 +92,23 @@ export function Dialog({
   const [dialogState, setDialogState] = useState<DialogState>("confirming");
   const [draft, setDraft] = useState(initialCommand);
   const [followupText, setFollowupText] = useState("");
+  const [borderStatus, setBorderStatus] = useState<string | undefined>(undefined);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Live chrome events from the output sink update the bottom border so
+  // probes/memory writes during a follow-up are visible. Gating the
+  // subscription on dialogState ensures zombie events from a still-emitting
+  // aborted call (Esc → composing → resubmit) cannot bleed into the next
+  // processing window: the listener is unsubscribed for the duration of
+  // the gap. Verbose lines are not delivered here (output-sink only fans
+  // out chrome lines).
+  useEffect(() => {
+    if (!subscribeChrome) return;
+    if (dialogState !== "processing-followup") return;
+    return subscribeChrome((event) => {
+      setBorderStatus(event.text);
+    });
+  }, [subscribeChrome, dialogState]);
 
   // After a follow-up command swap, the next entry into editing-command must
   // show the swapped-in command, not the pre-swap text. Resyncing draft on
@@ -250,6 +272,11 @@ export function Dialog({
 
   const handleFollowupSubmit = async (text: string) => {
     if (text.trim() === "") return;
+    // Batched with setDialogState so the first render in the new processing
+    // window shows the fallback, not stale chrome from the previous call's
+    // last probe (the listener-gating effect runs after commit, too late
+    // to prevent that initial render).
+    setBorderStatus(undefined);
     setDialogState("processing-followup");
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -285,7 +312,9 @@ export function Dialog({
 
   const spinnerFrame = useSpinner(dialogState === "processing-followup");
   const bottomStatus =
-    dialogState === "processing-followup" ? `${spinnerFrame ?? ""} Following up...` : undefined;
+    dialogState === "processing-followup"
+      ? `${spinnerFrame ?? ""} ${borderStatus ?? FOLLOWUP_FALLBACK_STATUS}`
+      : undefined;
 
   return (
     <Box width={termCols} height={termRows} justifyContent="center" alignItems="center">

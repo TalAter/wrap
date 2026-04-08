@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import type { FollowupHandler, FollowupResult } from "../src/core/followup-types.ts";
-import { Dialog, type DialogOutput } from "../src/tui/dialog.tsx";
+import type { ChromeEvent, SubscribeChrome } from "../src/core/output-sink.ts";
+import { Dialog, type DialogOutput, FOLLOWUP_FALLBACK_STATUS } from "../src/tui/dialog.tsx";
 
 const noopFollowup: FollowupHandler = async () => ({ type: "exhausted" });
 
@@ -1197,6 +1198,205 @@ describe("Dialog — follow-up processing", () => {
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("rm -i file");
     expect(frame).toContain("⏎ to run");
+  });
+});
+
+describe("Dialog — border status during processing-followup", () => {
+  function makeChromeBus(): {
+    subscribe: SubscribeChrome;
+    emit: (event: ChromeEvent) => void;
+    listenerCount: () => number;
+  } {
+    let listener: ((event: ChromeEvent) => void) | null = null;
+    return {
+      subscribe(l) {
+        listener = l;
+        return () => {
+          if (listener === l) listener = null;
+        };
+      },
+      emit(event) {
+        listener?.(event);
+      },
+      listenerCount: () => (listener ? 1 : 0),
+    };
+  }
+
+  async function enterProcessing(stdin: { write: (s: string) => void }, text = "hi") {
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write(text);
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  test("falls back to 'Reticulating splines...' when no chrome events have arrived", async () => {
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    await enterProcessing(stdin);
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain(FOLLOWUP_FALLBACK_STATUS);
+  });
+
+  test("chrome events update the bottom border status text", async () => {
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    await enterProcessing(stdin);
+    bus.emit({ text: "Reading package.json", icon: "🔍" });
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("Reading package.json");
+    expect(frame).not.toContain(FOLLOWUP_FALLBACK_STATUS);
+  });
+
+  test("subsequent chrome events replace the previous status", async () => {
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    await enterProcessing(stdin);
+    bus.emit({ text: "Reading package.json", icon: "🔍" });
+    await new Promise((r) => setTimeout(r, 20));
+    bus.emit({ text: "Checking memory", icon: "🧠" });
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("Checking memory");
+    expect(frame).not.toContain("Reading package.json");
+  });
+
+  test("border status resets to fallback on re-entering processing-followup", async () => {
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    // First follow-up: chrome event arrives, then resolves to a command.
+    await enterProcessing(stdin, "first");
+    bus.emit({ text: "Reading package.json", icon: "🔍" });
+    await new Promise((r) => setTimeout(r, 20));
+    followup.resolve({
+      type: "command",
+      command: "rm -i file",
+      riskLevel: "medium",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    // Now we're back in confirming. Press 'f' for second follow-up.
+    await enterProcessing(stdin, "second");
+    const frame = stripAnsi(lastFrame() ?? "");
+    // The new processing-followup must NOT show stale chrome from call 1.
+    expect(frame).toContain(FOLLOWUP_FALLBACK_STATUS);
+    expect(frame).not.toContain("Reading package.json");
+  });
+
+  test("zombie chrome from an aborted call cannot bleed into the next processing window", async () => {
+    // The earlier listener-gating effect tears down the subscription on
+    // Esc → composing, so events emitted by an aborted call (whose Promise
+    // hasn't observed the abort yet) silently no-op instead of stamping
+    // borderStatus that the next call would re-display.
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    await enterProcessing(stdin, "first");
+    // User presses Esc — abort fires; the LLM call is "aborted" but its
+    // promise is still pending so no result has been delivered yet.
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 50));
+    // Zombie chrome from the aborted call. With listener gating, this is
+    // a no-op; without it, borderStatus would be stamped with stale text.
+    bus.emit({ text: "stale-from-aborted-call", icon: "🔍" });
+    await new Promise((r) => setTimeout(r, 20));
+    // Resubmit follow-up #2.
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain(FOLLOWUP_FALLBACK_STATUS);
+    expect(frame).not.toContain("stale-from-aborted-call");
+  });
+
+  test("listener is only subscribed while in processing-followup", async () => {
+    // The listener gating prevents zombie chrome events from a still-emitting
+    // aborted call from bleeding into the next processing window. Outside
+    // processing-followup the slot is empty, so output-sink writes find no
+    // consumer and harmlessly buffer for the eventual replay flush.
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    // Initial confirming state — no subscription yet.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(bus.listenerCount()).toBe(0);
+    // Enter processing-followup → subscribed.
+    await enterProcessing(stdin);
+    expect(bus.listenerCount()).toBe(1);
+    // Esc → composing-followup → unsubscribed.
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(bus.listenerCount()).toBe(0);
+  });
+
+  test("subscribeChrome is unsubscribed when dialog unmounts mid-processing", async () => {
+    const followup = makeFollowupHandler();
+    const bus = makeChromeBus();
+    const { stdin, unmount } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+        subscribeChrome={bus.subscribe}
+      />,
+    );
+    await enterProcessing(stdin);
+    expect(bus.listenerCount()).toBe(1);
+    unmount();
+    expect(bus.listenerCount()).toBe(0);
   });
 });
 

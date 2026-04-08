@@ -31,6 +31,13 @@ export type ChromeEvent = {
 /** Receives chrome events while an interception is active. Verbose lines are NOT delivered here. */
 export type ChromeHandler = (event: ChromeEvent) => void;
 
+/**
+ * Register a single chrome-event listener. Returns an unsubscribe function.
+ * The shape `dialog.tsx` consumes via its `subscribeChrome` prop and
+ * `render.ts` provides as a thin wrapper around `interceptOutput`.
+ */
+export type SubscribeChrome = (listener: ChromeHandler) => () => void;
+
 type Interception = {
   handler: ChromeHandler;
   /** Pre-formatted lines (with icons / ANSI / trailing newlines) replayed on release. */
