@@ -128,9 +128,9 @@ Probe + `pipe_stdin` works now — the buffer persists across rounds. The LLM ca
 
 Deferred. When threads land, decide whether to store piped content in the thread.
 
-### Confirmation TUI
+### Dialog
 
-Piped input claims stdin, so confirmations must read from `/dev/tty`. For now, medium/high-risk commands are refused regardless.
+Piped input claims stdin, so the dialog must read from `/dev/tty`. For now, medium/high-risk commands are refused regardless.
 
 ### Answer formatting
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-describe("confirmCommand", () => {
+describe("showDialog", () => {
   const origIsTTY = process.stderr.isTTY;
 
   beforeAll(() => {
@@ -14,8 +14,8 @@ describe("confirmCommand", () => {
   });
 
   test("returns blocked when stderr is not a TTY", async () => {
-    const { confirmCommand } = await import("../src/tui/render.ts");
-    const result = await confirmCommand("rm -rf /", "high");
+    const { showDialog } = await import("../src/tui/render.ts");
+    const result = await showDialog("rm -rf /", "high");
     expect(result.result).toBe("blocked");
     expect(result.command).toBe("rm -rf /");
   });

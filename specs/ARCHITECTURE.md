@@ -146,7 +146,7 @@ Runtime data at `~/.wrap/` (overridable via `WRAP_HOME`):
 
 ## Mode
 
-Mode is a string (`"smart" | "yolo" | "force-cmd" | "force-answer" | "confirm-all"`) resolved from the invocation name or flags and passed to `runQuery`. **Not yet implemented** — all invocations currently behave as smart mode: low-risk commands auto-execute, medium/high-risk commands show a confirmation panel (Ink TUI on stderr).
+Mode is a string (`"smart" | "yolo" | "force-cmd" | "force-answer" | "confirm-all"`) resolved from the invocation name or flags and passed to `runQuery`. **Not yet implemented** — all invocations currently behave as smart mode: low-risk commands auto-execute, medium/high-risk commands show the dialog (Ink TUI on stderr).
 
 Mode affects:
 - **Confirmation**: yolo skips, confirm-all always shows, smart checks risk level

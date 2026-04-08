@@ -10,7 +10,7 @@ import {
 } from "./border.ts";
 import { TextInput } from "./text-input.tsx";
 
-type ConfirmPanelProps = {
+type DialogProps = {
   initialCommand: string;
   initialRiskLevel: RiskLevel;
   initialExplanation?: string;
@@ -27,15 +27,15 @@ const ACTION_ITEMS = [
 ] as const;
 const ACTION_BAR_WIDTH = 61;
 const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
-const PANEL_MARGIN = 4;
+const DIALOG_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
 
-export function ConfirmPanel({
+export function Dialog({
   initialCommand,
   initialRiskLevel,
   initialExplanation,
   onChoice,
-}: ConfirmPanelProps) {
+}: DialogProps) {
   const { exit } = useApp();
   const { columns: termCols, rows: termRows } = useRenderSize();
   // Held as state so the follow-up flow can swap command/risk/explanation
@@ -53,7 +53,7 @@ export function ConfirmPanel({
     explanation ? stringWidth(explanation) : 0,
     MIN_INNER_WIDTH,
   );
-  const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - PANEL_MARGIN);
+  const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - DIALOG_MARGIN);
   const totalWidth = Math.min(natural + 4, maxWidth);
   const innerWidth = totalWidth - 4;
 

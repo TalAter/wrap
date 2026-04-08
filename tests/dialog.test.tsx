@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { ConfirmPanel } from "../src/tui/confirm.tsx";
+import { Dialog } from "../src/tui/dialog.tsx";
 
-function extractPanelLines(frame: string): string[] {
+function extractDialogLines(frame: string): string[] {
   const lines = stripAnsi(frame).split("\n");
   const topIndex = lines.findIndex((line) => line.includes("╭"));
   if (topIndex === -1) return [];
@@ -14,33 +14,31 @@ function extractPanelLines(frame: string): string[] {
   return lines.slice(topIndex, bottomIndex + 1).map((line) => line.trimStart());
 }
 
-describe("ConfirmPanel", () => {
+describe("Dialog", () => {
   test("initial props are captured as state and ignored on re-render", () => {
     // The follow-up flow swaps command/risk/explanation in place without
-    // remounting. The panel holds them as local state seeded from initial*
+    // remounting. The dialog holds them as local state seeded from initial*
     // props — re-rendering with new props after mount must NOT overwrite it.
     const { lastFrame, rerender } = render(
-      <ConfirmPanel initialCommand="first" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="first" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     expect(stripAnsi(lastFrame() ?? "")).toContain("first");
 
-    rerender(
-      <ConfirmPanel initialCommand="second" initialRiskLevel="medium" onChoice={() => {}} />,
-    );
+    rerender(<Dialog initialCommand="second" initialRiskLevel="medium" onChoice={() => {}} />);
     expect(stripAnsi(lastFrame() ?? "")).toContain("first");
     expect(stripAnsi(lastFrame() ?? "")).not.toContain("second");
   });
 
   test("renders command text", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="rm -rf /" initialRiskLevel="high" onChoice={() => {}} />,
+      <Dialog initialCommand="rm -rf /" initialRiskLevel="high" onChoice={() => {}} />,
     );
     expect(lastFrame()).toContain("rm -rf /");
   });
 
   test("renders risk badge in border", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="chmod 777 ." initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="chmod 777 ." initialRiskLevel="medium" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("⚠ medium risk");
@@ -48,7 +46,7 @@ describe("ConfirmPanel", () => {
 
   test("renders high risk badge", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="rm -rf /" initialRiskLevel="high" onChoice={() => {}} />,
+      <Dialog initialCommand="rm -rf /" initialRiskLevel="high" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("⚠ high risk");
@@ -56,7 +54,7 @@ describe("ConfirmPanel", () => {
 
   test("shows explanation when provided", () => {
     const { lastFrame } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         initialExplanation="Deletes a file"
@@ -68,7 +66,7 @@ describe("ConfirmPanel", () => {
 
   test("shows action bar with Run command prompt", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("Run command?");
@@ -78,7 +76,7 @@ describe("ConfirmPanel", () => {
 
   test("shows secondary actions in action bar", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("Describe");
@@ -89,7 +87,7 @@ describe("ConfirmPanel", () => {
 
   test("has gradient border corners", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("╭");
@@ -100,7 +98,7 @@ describe("ConfirmPanel", () => {
 
   test("has vertical border characters", () => {
     const { lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("│");
@@ -108,7 +106,7 @@ describe("ConfirmPanel", () => {
 
   test("omits explanation line when not provided", () => {
     const withExplanation = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         initialExplanation="info"
@@ -116,7 +114,7 @@ describe("ConfirmPanel", () => {
       />,
     );
     const without = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     expect(stripAnsi(withExplanation.lastFrame() ?? "")).toContain("info");
     expect(stripAnsi(without.lastFrame() ?? "")).not.toContain("info");
@@ -124,7 +122,7 @@ describe("ConfirmPanel", () => {
 
   test("keeps side borders aligned when explanation wraps", async () => {
     const { lastFrame } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm CLAUDE.md"
         initialRiskLevel="medium"
         initialExplanation="Deletes the file CLAUDE.md from the current directory (/Users/tal/mysite/wrap/.claude/worktrees/tui-plan). This is irreversible and removes it immediately."
@@ -132,8 +130,8 @@ describe("ConfirmPanel", () => {
       />,
     );
     await new Promise((r) => setTimeout(r, 10));
-    const panel = extractPanelLines(lastFrame() ?? "");
-    const interior = panel.slice(1, -1);
+    const dialog = extractDialogLines(lastFrame() ?? "");
+    const interior = dialog.slice(1, -1);
     expect(interior.length).toBeGreaterThan(0);
     expect(
       interior.every((line) => line === "" || (line.startsWith("│") && line.endsWith("│"))),
@@ -142,7 +140,7 @@ describe("ConfirmPanel", () => {
 
   test("reflows on terminal resize without waiting for keyboard input", async () => {
     const app = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /Users/tal/mysite/wrap/CLAUDE.md"
         initialRiskLevel="high"
         initialExplanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
@@ -152,7 +150,7 @@ describe("ConfirmPanel", () => {
 
     await new Promise((r) => setTimeout(r, 10));
     const before = stripAnsi(app.lastFrame() ?? "");
-    const beforePanel = extractPanelLines(before);
+    const beforeDialog = extractDialogLines(before);
 
     Object.defineProperty(app.stdout, "columns", {
       value: 72,
@@ -162,18 +160,18 @@ describe("ConfirmPanel", () => {
 
     await new Promise((r) => setTimeout(r, 10));
     const after = stripAnsi(app.lastFrame() ?? "");
-    const afterPanel = extractPanelLines(after);
-    const interior = afterPanel.slice(1, -1);
+    const afterDialog = extractDialogLines(after);
+    const interior = afterDialog.slice(1, -1);
 
     expect(after).not.toBe(before);
-    expect(afterPanel.length).toBeGreaterThan(0);
-    expect(afterPanel[0]?.length).toBeLessThan(beforePanel[0]?.length ?? 0);
+    expect(afterDialog.length).toBeGreaterThan(0);
+    expect(afterDialog[0]?.length).toBeLessThan(beforeDialog[0]?.length ?? 0);
     expect(interior.every((line) => line.startsWith("│") && line.endsWith("│"))).toBe(true);
   });
 
   test("keeps top border corners visible on narrow terminals", async () => {
     const app = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /Users/tal/mysite/wrap/CLAUDE.md"
         initialRiskLevel="high"
         initialExplanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
@@ -188,8 +186,8 @@ describe("ConfirmPanel", () => {
 
     await new Promise((r) => setTimeout(r, 20));
     const after = stripAnsi(app.lastFrame() ?? "");
-    const panel = extractPanelLines(after);
-    const topLine = panel[0] ?? "";
+    const dialog = extractDialogLines(after);
+    const topLine = dialog[0] ?? "";
 
     expect(topLine.startsWith("╭")).toBe(true);
     expect(topLine.endsWith("╮")).toBe(true);
@@ -198,7 +196,7 @@ describe("ConfirmPanel", () => {
 
   test("uses the latest width after rapid resize bursts", async () => {
     const app = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /Users/tal/mysite/wrap/CLAUDE.md"
         initialRiskLevel="high"
         initialExplanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
@@ -218,8 +216,8 @@ describe("ConfirmPanel", () => {
     await new Promise((r) => setTimeout(r, 20));
 
     const after = stripAnsi(app.lastFrame() ?? "");
-    const panel = extractPanelLines(after);
-    const topLine = panel[0] ?? "";
+    const dialog = extractDialogLines(after);
+    const topLine = dialog[0] ?? "";
 
     expect(topLine.startsWith("╭")).toBe(true);
     expect(topLine.endsWith("╮")).toBe(true);
@@ -228,15 +226,11 @@ describe("ConfirmPanel", () => {
   });
 });
 
-describe("ConfirmPanel — keybindings (both risk levels)", () => {
+describe("Dialog — keybindings (both risk levels)", () => {
   test("y triggers run for medium risk", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("y");
     expect(result).toBe("run");
@@ -245,11 +239,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("y triggers run for high risk", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm -rf /"
-        initialRiskLevel="high"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm -rf /" initialRiskLevel="high" onChoice={(c) => (result = c)} />,
     );
     stdin.write("y");
     expect(result).toBe("run");
@@ -258,11 +248,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("n triggers cancel", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("n");
     expect(result).toBe("cancel");
@@ -271,11 +257,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("q triggers cancel", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("q");
     expect(result).toBe("cancel");
@@ -284,11 +266,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("Esc triggers cancel", async () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("\x1b");
     // Ink's input parser uses a timeout to distinguish bare Esc from escape sequences
@@ -299,11 +277,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("d/f/c are no-ops (ignored in phase 1)", () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("d");
     stdin.write("f");
@@ -315,11 +289,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("ignores unrecognized keys", () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("x");
     stdin.write("a");
@@ -330,11 +300,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("Enter activates selected action (default: No = cancel)", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("\r");
     expect(result).toBe("cancel");
@@ -343,11 +309,7 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("arrow right then Enter activates Yes = run", async () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     // Move right to "Yes" — wait for React re-render before pressing Enter
     stdin.write("\x1b[C");
@@ -359,21 +321,17 @@ describe("ConfirmPanel — keybindings (both risk levels)", () => {
   test("y passes original command to onChoice", () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(_c, c) => (cmd = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(_c, c) => (cmd = c)} />,
     );
     stdin.write("y");
     expect(cmd).toBe("rm file");
   });
 });
 
-describe("ConfirmPanel — edit mode", () => {
+describe("Dialog — edit mode", () => {
   test("e enters edit mode and shows run hint", async () => {
     const { stdin, lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -383,7 +341,7 @@ describe("ConfirmPanel — edit mode", () => {
 
   test("edit mode shows the command text", async () => {
     const { stdin, lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -393,11 +351,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("in edit mode y/n/q do not trigger actions", async () => {
     let result: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -412,7 +366,7 @@ describe("ConfirmPanel — edit mode", () => {
     let result: string | undefined;
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         onChoice={(c, command) => {
@@ -432,11 +386,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Esc in edit mode returns to normal mode", async () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <ConfirmPanel
-        initialCommand="rm file"
-        initialRiskLevel="medium"
-        onChoice={(c) => (result = c)}
-      />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -444,7 +394,7 @@ describe("ConfirmPanel — edit mode", () => {
 
     stdin.write("\x1b");
     await new Promise((r) => setTimeout(r, 100));
-    // Should be back to normal — Esc did not cancel the panel
+    // Should be back to normal — Esc did not cancel the dialog
     expect(result).toBeUndefined();
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("Run command?");
@@ -453,7 +403,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("after discarding edits, y runs original command", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         onChoice={(_c, command) => {
@@ -474,7 +424,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("empty command cannot be submitted", async () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <ConfirmPanel initialCommand="x" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog initialCommand="x" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -489,7 +439,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("edited command is passed to onChoice on Enter", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         onChoice={(_c, command) => {
@@ -509,7 +459,7 @@ describe("ConfirmPanel — edit mode", () => {
 
   test("action bar Edit button enters edit mode", async () => {
     const { stdin, lastFrame } = render(
-      <ConfirmPanel initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
     );
     // Arrow right to Edit: No(0) → Yes(1) → Describe(2) → Edit(3)
     stdin.write("\x1b[C");
@@ -527,7 +477,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Option+Left jumps to previous word boundary", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -550,7 +500,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Option+Right jumps to end of current word", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -575,7 +525,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Ctrl+A moves cursor to start", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -597,7 +547,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Ctrl+E moves cursor to end", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -621,7 +571,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Ctrl+U deletes to start of line", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -644,7 +594,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Ctrl+K deletes to end of line", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -669,7 +619,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Ctrl+Y yanks last killed text", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -696,7 +646,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Ctrl+U killed text can be yanked with Ctrl+Y", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -720,7 +670,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Fn+Delete (forward delete) deletes char after cursor", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {
@@ -746,7 +696,7 @@ describe("ConfirmPanel — edit mode", () => {
   test("Option+Backspace deletes word left", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <ConfirmPanel
+      <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
         onChoice={(_c, c) => {

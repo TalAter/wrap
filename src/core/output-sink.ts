@@ -1,5 +1,5 @@
 /**
- * Output sink — captures chrome/verbose writes while the confirm dialog
+ * Output sink — captures chrome/verbose writes while the dialog
  * owns the alt screen.
  *
  * Stderr writes during the alt screen would be discarded when we switch

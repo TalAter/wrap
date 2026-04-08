@@ -16,7 +16,7 @@ All Wrap UI ("chrome") goes to **stderr** or **/dev/tty**. Never stdout. This is
 
 **Tier 2 — Animated chrome.** Spinners, streaming text, progress indicators. Still lightweight, no Ink. Built on `chromeRaw()` with `setInterval` and cursor control (`\r`, hide/show cursor). A small spinner utility or `nanospinner` (tiny, supports custom streams). This tier covers "waiting for LLM response" indication.
 
-**Tier 3 — Interactive UI (Ink).** Anything that captures user input or has dynamic layout: confirmation panels, config wizard forms, interactive mode text input, error-recovery prompts. Loaded via `await import("ink")` only when triggered.
+**Tier 3 — Interactive UI (Ink).** Anything that captures user input or has dynamic layout: dialogs, config wizard forms, interactive mode text input, error-recovery prompts. Loaded via `await import("ink")` only when triggered.
 
 ## How Ink is configured
 
@@ -68,13 +68,13 @@ Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child proce
 
 ## Where Ink gets used
 
-**Confirmation panel** — when the LLM generates a medium or high-risk command. See `SPEC.md` for full keybinding spec and risk tiers. Basic panel implemented: renders command, risk level, explanation, tiered keybindings (medium: Enter=run; high: y+Enter=run). Falls back gracefully when no TTY is available.
+**Dialog** — when the LLM generates a medium or high-risk command. See `SPEC.md` for full keybinding spec and risk tiers. Basic dialog implemented: renders command, risk level, explanation, tiered keybindings (medium: Enter=run; high: y+Enter=run). Falls back gracefully when no TTY is available.
 
 **Config wizard** — first-run setup and `w config`. Provider selection (radio/select), API key entry (masked text input), model selection. Standard form UI. Ink has component libraries for these: `ink-select-input`, `ink-text-input`.
 
 **Interactive mode** — `w` with no args. Multiline text editor with Enter to submit, Shift+Enter for newline. Most complex Ink usage. See `specs/interactive-mode.md`.
 
-**Error recovery** — if a confirmed command fails, prompting "Retry? Edit? Explain?" This is a simpler variant of the confirmation panel.
+**Error recovery** — if a confirmed command fails, prompting "Retry? Edit? Explain?" This is a simpler variant of the dialog.
 
 ### Ink + chromeRaw coordination
 
@@ -96,11 +96,11 @@ For async dialog states (describe, follow-up) that trigger LLM calls while Ink i
 
 Ink + React + Yoga adds ~1MB to the compiled binary (measured). The lazy-load pattern means init costs are only paid when interactive UI is needed. Low-risk command execution (the common path) never imports Ink.
 
-React initialization adds roughly 50-100ms. For the confirmation panel this happens after the LLM response arrives (500-2000ms), so the user never perceives it. For interactive mode (`w` with no args) Ink is the first thing rendered — 100ms is below perception threshold for cold-start.
+React initialization adds roughly 50-100ms. For the dialog this happens after the LLM response arrives (500-2000ms), so the user never perceives it. For interactive mode (`w` with no args) Ink is the first thing rendered — 100ms is below perception threshold for cold-start.
 
-## Confirmation panel visual design
+## Dialog visual design
 
-The confirmation panel uses a **synthwave gradient** border that shifts hue based on risk level. See `specs/confirm-style.sh` for the exact ANSI reference rendering (run `bash specs/confirm-style.sh` to preview).
+The dialog uses a **synthwave gradient** border that shifts hue based on risk level. See `specs/dialog-style.sh` for the exact ANSI reference rendering (run `bash specs/dialog-style.sh` to preview).
 
 **Layout:**
 - Rounded corners (`╭╮╰╯`), thin lines (`─│`). No heavy border (Unicode has no heavy rounded corners).
@@ -133,7 +133,7 @@ The confirmation panel uses a **synthwave gradient** border that shifts hue base
 
 ## Useful companion libraries
 
-- **Syntax highlighting** for shell commands in the confirmation panel: `highlight.js` or `cli-highlight`
+- **Syntax highlighting** for shell commands in the dialog: `highlight.js` or `cli-highlight`
 - **Terminal markdown rendering** for answer mode: `marked-terminal`
 - **Tiny color library** if `src/core/ansi.ts` needs extending: `picocolors` (7KB, 14x smaller than chalk, no deps). Wrap's existing `ansi.ts` already covers bold, dim, 24-bit RGB, and gradients — may not need anything else.
 - **Spinner** for Tier 2: `nanospinner` or hand-roll on `chromeRaw()` (~20 lines)

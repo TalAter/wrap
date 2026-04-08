@@ -164,7 +164,7 @@ Wrap supports multiple modes via symlinks (or aliases — exact mechanism TBD):
 
 | Invocation (exact command TBD) | Behavior                                                                                                         |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `wrap <text>` / `w <text>`     | **Default mode.** Smart auto-execute: safe commands run automatically, dangerous commands show confirmation TUI. |
+| `wrap <text>` / `w <text>`     | **Default mode.** Smart auto-execute: safe commands run automatically, dangerous commands show the dialog. |
 | `wy <text>`                    | **Yolo mode.** No confirmation, ever. Execute immediately.                                                       |
 | `w! <text>`                    | **Force command mode.** LLM must return a shell command, not a text answer.                                      |
 | `w? <text>`                    | **Force answer mode.** LLM returns a text explanation, not a command.                                            |
@@ -228,9 +228,9 @@ Two layers, either can escalate to confirmation. LLM risk assessment provides th
 - **Yolo (`wy`):** Execute everything without confirmation
 - **Always-confirm variant:** Confirm everything regardless of risk
 
-### 5.2 Confirmation TUI
+### 5.2 Dialog
 
-When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr — not stdout):
+When confirmation is needed, show the dialog (rendered on /dev/tty or stderr — not stdout):
 
 - Syntax-highlighted command
 - Risk level indicator
@@ -249,11 +249,11 @@ When confirmation is needed, show a TUI panel (rendered on /dev/tty or stderr �
 
 **High-risk Enter behavior:** Pressing `Enter` alone on a high-risk command does not cancel or run — it highlights the `y + Enter` hint to teach the interaction. The user must type `y` then `Enter` to confirm. This prevents both accidental execution (if Enter ran it) and confusion (if Enter cancelled it).
 
-**`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the TUI panel. The user can then proceed with the other keybindings. **Does not consume a round** — it's a user-initiated side-channel request, not part of the command-generation loop.
+**`[D]escribe`:** Sends the generated command back to the LLM for a detailed explanation — what each flag does, what side effects to expect, what the output will look like. Displayed inline in the dialog. The user can then proceed with the other keybindings. **Does not consume a round** — it's a user-initiated side-channel request, not part of the command-generation loop.
 
-**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the TUI updates with the new generated command. The user can follow up multiple times before executing or cancelling. **Resets the round counter** — it's effectively a new query with fresh intent, so it gets a fresh round budget. This is only available in the confirmation TUI (medium/high risk commands) — for low-risk commands that auto-execute, the user can continue via `wyada` in a new invocation.
+**`[F]ollow-up`:** Opens a text input where the user can type a natural language refinement (e.g., "but only .ts files" or "use rsync instead"). The refinement is sent to the LLM as a thread continuation, and the dialog updates with the new generated command. The user can follow up multiple times before executing or cancelling. **Resets the round counter** — it's effectively a new query with fresh intent, so it gets a fresh round budget. This is only available in the dialog (medium/high risk commands) — for low-risk commands that auto-execute, the user can continue via `wyada` in a new invocation.
 
-**Input buffer flush:** Before rendering the confirmation prompt, flush/discard any buffered terminal input. This prevents a stray `Enter` (pressed while waiting for the LLM response) from accidentally confirming a dangerous command. The prompt only accepts input after it is fully displayed.
+**Input buffer flush:** Before rendering the dialog, flush/discard any buffered terminal input. This prevents a stray `Enter` (pressed while waiting for the LLM response) from accidentally confirming a dangerous command. The dialog only accepts input after it is fully displayed.
 
 ### 5.3 Interactive Commands
 
@@ -479,7 +479,7 @@ Wrap's own output (TUI panels, notifications, confirmations) goes to a non-stdou
 |------------|---------------------------------------------------------------------------------|
 | **stdout** | Useful output: command's stdout (command mode) or answer text (answer mode)     |
 | **stderr** | Wrap chrome: confirmations, risk warnings, memory notifications, probe status, errors |
-| **/dev/tty** | Interactive TUI (confirmation panel, edit field)                              |
+| **/dev/tty** | Interactive TUI (dialog)                                                       |
 
 ### 11.2 Answer Rendering — TTY-Aware
 
@@ -509,9 +509,9 @@ Wrap is opinionated and has personality:
 
 ### 11.4 TUI Components
 
-Built for the confirmation flow and future interactive needs:
+Built for the dialog and future interactive needs:
 
-- **Confirmation panel:** bordered box with syntax-highlighted command, risk indicator, explanation
+- **Dialog:** bordered box with syntax-highlighted command, risk indicator, explanation
 - **Radio buttons / single-select:** for choosing between LLM-suggested options
 - **Checkboxes / multi-select:** for multi-option scenarios
 - **Free text input:** for answering clarification questions
@@ -639,7 +639,7 @@ The following are acknowledged good ideas but **not in v1**:
 ## 17. Open Questions
 
 1. **Name conflicts:** Does `wrap` conflict with existing packages on Homebrew, apt, npm, etc.? Need to research.
-2. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: confirmation TUI, interactive mode, answer rendering.
+2. **TUI library:** Which TypeScript/Node TUI library? (Ink? Blessed? Custom ANSI? Needs research.) Blocking: dialog, interactive mode, answer rendering.
 3. **Symlink vs. alias vs. multi-call binary:** Exact mechanism for `w`, `wy`, `w!`, `w?` variants. Aliases are preferred over symlinks because they enable glob protection via `noglob` (zsh) / `set -f` (bash). Symlinks can't provide this.
 4. **Thread linking:** How does a continuation find its parent thread? Most recent? Terminal session detection?
 5. **`w!` and `w?` as symlink names:** `!` and `?` are shell special characters. These may need to be flags (`w --cmd`, `w --ask`) rather than symlink names. Needs investigation.

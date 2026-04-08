@@ -2,7 +2,7 @@
 
 Refine a command from inside the dialog by typing follow-up text. The LLM receives the full conversation + follow-up as a new round and returns an updated command. The dialog stays mounted (no alt-screen flicker) and updates in place.
 
-Depends on: `confirm-panel-impl.md`, `tui-approach.md`
+Depends on: `dialog-impl.md`, `tui-approach.md`
 
 ## Example flow
 
@@ -131,17 +131,17 @@ A generic input component used by all four uses (read-only display in confirming
 
 The props are a discriminated union of editable vs readOnly. Editable callers pass `value`, `onChange`, `onSubmit`, optional `placeholder`. Read-only callers pass only `value`. The union makes it impossible to pass no-op handlers in the read-only case, and an inner `EditableTextInput` skips `useInput` registration entirely so read-only doesn't subscribe to keypresses.
 
-`Esc` is NOT handled inside `TextInput`. Each parent state registers its own `useInput({ isActive: ... })` block to handle escape transitions, mirroring the existing pattern in `confirm.tsx`.
+`Esc` is NOT handled inside `TextInput`. Each parent state registers its own `useInput({ isActive: ... })` block to handle escape transitions, mirroring the existing pattern in `dialog.tsx`.
 
 In composing-followup / processing-followup states (step 7), the layout will be: command strip → explanation → TextInput → hint, with the TextInput just above the action bar slot.
 
-## Lifting ConfirmPanel props to local state
+## Lifting Dialog props to local state
 
-> **Status:** Implemented in `src/tui/confirm.tsx`. Setters exist as state but aren't called yet — step 7 wires them to the follow-up flow.
+> **Status:** Implemented in `src/tui/dialog.tsx`. Setters exist as state but aren't called yet — step 7 wires them to the follow-up flow.
 
-`command`, `riskLevel`, and `explanation` are held as local `useState` seeded from `initialCommand`/`initialRiskLevel`/`initialExplanation` props. When the follow-up LLM call resolves, the panel will call `setCommand/setRiskLevel/setExplanation` to swap to the new command in place. React re-renders the dialog without remounting it, so the alt screen never flickers.
+`command`, `riskLevel`, and `explanation` are held as local `useState` seeded from `initialCommand`/`initialRiskLevel`/`initialExplanation` props. When the follow-up LLM call resolves, the dialog will call `setCommand/setRiskLevel/setExplanation` to swap to the new command in place. React re-renders the dialog without remounting it, so the alt screen never flickers.
 
-Re-rendering with new `initial*` props after mount does NOT overwrite the state — only the initial values are read. Verified by `tests/confirm.test.tsx`.
+Re-rendering with new `initial*` props after mount does NOT overwrite the state — only the initial values are read. Verified by `tests/dialog.test.tsx`.
 
 ## Spinner
 
@@ -205,7 +205,7 @@ Order preservation. Chrome and verbose lines are interleaved in real time; separ
 
 ### Chrome vs verbose asymmetry
 
-Both kinds replay through the buffer on release. Only chrome lines reach the dialog handler — verbose is debug noise that would clutter the panel. The asymmetry is built into the API: verbose calls pass no `chromeEvent`.
+Both kinds replay through the buffer on release. Only chrome lines reach the dialog handler — verbose is debug noise that would clutter the dialog. The asymmetry is built into the API: verbose calls pass no `chromeEvent`.
 
 ### Lifecycle ordering (load-bearing for step 9)
 
@@ -321,7 +321,7 @@ const onFollowup: FollowupHandler = async (text, signal) => {
 };
 
 if (currentResponse.risk_level !== "low") {
-  const decision = await confirmCommand(currentResponse, onFollowup);
+  const decision = await showDialog(currentResponse, onFollowup);
   // ... handle decision ...
 }
 ```
@@ -333,9 +333,9 @@ Notes:
 - Probes are still executed inside the loop (they're part of "until final"). Their chrome output flows through the output sink to the dialog if it's intercepting (see "Output sink" section).
 - `AbortSignal` for cancellation: pass it through `runRoundsUntilFinal` and check it before each LLM call. On abort, return a sentinel like `{ type: "aborted" }` (add this variant) so the dialog knows to go back to composing-followup without treating it as exhausted.
 
-## confirmCommand API
+## showDialog API
 
-The `confirmCommand()` signature in `src/tui/render.ts` expands to carry follow-up results back to `query.ts`:
+The `showDialog()` signature in `src/tui/render.ts` expands to carry follow-up results back to `query.ts`:
 
 ```ts
 export type FollowupHandler = (
@@ -350,7 +350,7 @@ export type FollowupResult =
   | { type: "aborted" }     // user pressed Esc during processing-followup
   | { type: "error"; error: unknown }; // onFollowup threw
 
-export type ConfirmResult =
+export type DialogResult =
   | { result: "run"; command: string }
   | { result: "cancel" }
   | { result: "blocked"; command: string }   // no TTY
@@ -358,26 +358,26 @@ export type ConfirmResult =
   | { result: "exhausted" }                   // follow-up exhausted rounds
   | { result: "error"; error: unknown };     // follow-up threw
 
-export async function confirmCommand(
+export async function showDialog(
   command: string,
   riskLevel: "medium" | "high" | "low",
   explanation: string | undefined,
   onFollowup: FollowupHandler,   // required
-): Promise<ConfirmResult>;
+): Promise<DialogResult>;
 ```
 
-`onFollowup` is required, not optional. Every `confirmCommand` call site (currently only `query.ts`) provides one — there is no current use case for a non-follow-up dialog, and making it required removes a dead code path in the dialog.
+`onFollowup` is required, not optional. Every `showDialog` call site (currently only `query.ts`) provides one — there is no current use case for a non-follow-up dialog, and making it required removes a dead code path in the dialog.
 
 The dialog calls `onFollowup(text, signal)` from inside the processing-followup effect. The `AbortSignal` is wired to a controller that aborts when the user presses Esc during processing-followup. Inside `runRoundsUntilFinal`, the loop checks `signal.aborted` before each LLM call and bails out with `{ type: "aborted" }`.
 
 Result handling in the dialog:
 - `command` → call `setCommand/setRiskLevel/setExplanation`, transition to confirming
-- `answer` → unmount Ink, return `{ result: "answer", content }` from `confirmCommand`
+- `answer` → unmount Ink, return `{ result: "answer", content }` from `showDialog`
 - `exhausted` → unmount Ink, return `{ result: "exhausted" }`
-- `aborted` → transition back to composing-followup (text preserved), no return from `confirmCommand`
+- `aborted` → transition back to composing-followup (text preserved), no return from `showDialog`
 - `error` → unmount Ink, return `{ result: "error", error }`
 
-`query.ts` handles each `ConfirmResult` variant: `answer` prints to stdout (existing answer-path code), `exhausted` prints "Could not resolve..." (existing max-rounds code), `error` re-throws.
+`query.ts` handles each `DialogResult` variant: `answer` prints to stdout (existing answer-path code), `exhausted` prints "Could not resolve..." (existing max-rounds code), `error` re-throws.
 
 ## Logging
 
@@ -423,7 +423,7 @@ const BADGE = {
 };
 ```
 
-`topBorderSegments()` builds `badgeText` from `BADGE[riskLevel]` instead of the hardcoded ` ⚠ ${riskLevel} risk ` template. `interpolateGradient()` and `topBorderSegments()` accept `"low" | "medium" | "high"`. `confirm.tsx`'s `ConfirmPanelProps.riskLevel` widens accordingly.
+`topBorderSegments()` builds `badgeText` from `BADGE[riskLevel]` instead of the hardcoded ` ⚠ ${riskLevel} risk ` template. `interpolateGradient()` and `topBorderSegments()` accept `"low" | "medium" | "high"`. `dialog.tsx`'s `DialogProps.riskLevel` widens accordingly.
 
 Verify both `⚠` and `✔` have `string-width === 1` (or both === 2, so long as they match) before shipping — `badgeStart` math depends on consistent visual width.
 
@@ -463,15 +463,15 @@ Add a new section after `### Output`:
 | `src/core/output-sink.ts` | **Done.** `interceptOutput`/`release`/`writeLine` API; single buffer for both chrome and verbose. |
 | `src/core/output.ts` | **Done.** `chrome(text, icon?)` two-arg form, routes through output-sink. |
 | `src/core/verbose.ts` | **Done.** `verbose()`/`verboseHighlight()` route through output-sink. |
-| `src/tui/confirm.tsx` | **Partial.** State lifted from props (done). Still pending: 4-state machine, stub→real follow-up callback wiring, output-sink handler for border status. |
+| `src/tui/dialog.tsx` | **Partial.** State lifted from props (done). Still pending: 4-state machine, stub→real follow-up callback wiring, output-sink handler for border status. |
 | `src/tui/spinner.ts` | **New.** Frames + interval constants, `useSpinner(active)` hook, `startChromeSpinner()`. |
 | `src/tui/border.ts` | Low-risk gradient + BADGE table with icon/label. `topBorderSegments` reads from BADGE. `bottomBorderSegments(totalWidth, status?)` accepts optional status text + spinner frame, both rendered in the existing dim border color. Risk type widens to `"low" \| "medium" \| "high"`. |
-| `src/tui/render.ts` | `confirmCommand()` widens API: `onFollowup` required, `ConfirmResult` widened with `answer/exhausted/error` variants. Calls `interceptOutput` around the Ink lifecycle; `release()` runs AFTER `EXIT_ALT_SCREEN`. |
-| `src/core/query.ts` | Extract `runRoundsUntilFinal` from the inline loop. Provide `onFollowup` closure to `confirmCommand`. Handle new `ConfirmResult` variants. Probe/memory chrome calls already use two-arg form. |
+| `src/tui/render.ts` | `showDialog()` widens API: `onFollowup` required, `DialogResult` widened with `answer/exhausted/error` variants. Calls `interceptOutput` around the Ink lifecycle; `release()` runs AFTER `EXIT_ALT_SCREEN`. |
+| `src/core/query.ts` | Extract `runRoundsUntilFinal` from the inline loop. Provide `onFollowup` closure to `showDialog`. Handle new `DialogResult` variants. Probe/memory chrome calls already use two-arg form. |
 | `src/logging/entry.ts` | Add optional `followup_text` to `Round`. |
 | `specs/SPEC.md` | Glossary: move Follow-up entry into new TUI section, add dialog/action bar/risk badge/text input/dialog state/border status/state-name entries. |
 | `specs/tui-approach.md` | Remove or update the `### Phasing: describe and follow-up` section (this spec implements Phase 2 — keep Ink mounted, route stderr through the sink). |
-| `specs/confirm-panel-impl.md` | Strike the "deferred to phase 2" items that this spec implements (input buffer flush, keeping Ink mounted). |
+| `specs/dialog-impl.md` | Strike the "deferred to phase 2" items that this spec implements (input buffer flush, keeping Ink mounted). |
 
 ## Implementation plan
 
@@ -480,7 +480,7 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 ### Steps 1-3 — Done
 
 - **Step 1 — Extract TextInput component.** Generic `TextInput` in `src/tui/text-input.tsx` with editable + read-only modes (commits `03a4c65`, `c7f3f51`).
-- **Step 2 — Lift ConfirmPanel props to local state.** `initialCommand`/`initialRiskLevel`/`initialExplanation` props are read once into `useState` so the dialog can swap in place after a follow-up (commit `c77aa3b`).
+- **Step 2 — Lift Dialog props to local state.** `initialCommand`/`initialRiskLevel`/`initialExplanation` props are read once into `useState` so the dialog can swap in place after a follow-up (commit `c77aa3b`).
 - **Step 3 — Output sink + two-arg chrome.** `src/core/output-sink.ts` with `interceptOutput`/`release`/`writeLine`; `chrome(text, icon?)` two-arg form; `verbose()` and `verboseHighlight()` route through the sink (commit `f6d6d89`). See "Output sink" section above for the design.
 
 ### Step 4 — Low-risk gradient + BADGE table
@@ -488,8 +488,8 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 - Add `LOW_STOPS` to `src/tui/border.ts`.
 - Refactor hardcoded ` ⚠ ${riskLevel} risk ` in `topBorderSegments` to read from a `BADGE` table keyed by risk level, with `{ fg, bg, icon, label }` per level.
 - Widen `interpolateGradient` and `topBorderSegments` to accept `"low" | "medium" | "high"`.
-- Widen `ConfirmPanelProps.riskLevel` (and the local state from step 2).
-- `confirmCommand()` type widens to `"low" | "medium" | "high"`; all callers still pass `"medium" | "high"` (low-risk commands still auto-execute and don't trigger the dialog).
+- Widen `DialogProps.riskLevel` (and the local state from step 2).
+- `showDialog()` type widens to `"low" | "medium" | "high"`; all callers still pass `"medium" | "high"` (low-risk commands still auto-execute and don't trigger the dialog).
 - Verify `⚠` and `✔` have consistent `string-width` — add a unit test that asserts it.
 - Tests: low-risk gradient rendering, low-risk badge construction, width consistency.
 - **No user-visible change** (low-risk path isn't reachable yet).
@@ -515,12 +515,12 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 
 ### Step 7 — Dialog state machine + composing/processing UI
 
-- Add `DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup"` to `confirm.tsx`.
+- Add `DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup"` to `dialog.tsx`.
 - Replace the existing ad-hoc `editing` boolean with the state machine.
 - Add composing-followup: `f` key (or Enter on Follow-up action) transitions in. TextInput with `placeholder="actually..."`. `⏎` transitions to processing-followup. `Esc` returns to confirming (discarding text).
 - Add processing-followup: TextInput `readOnly`, spinner in bottom border via `useSpinner(true)`. `Esc` aborts via `AbortController` and returns to composing-followup (text preserved).
-- Widen `confirmCommand` API: `onFollowup: FollowupHandler` is a new REQUIRED parameter. Define `FollowupResult` and widen `ConfirmResult` with `answer`/`exhausted`/`error` variants.
-- Panel calls `onFollowup(text, signal)` on submit. On `{ type: "command" }` result, it calls `setCommand/setRiskLevel/setExplanation` and transitions back to confirming. On other results, it unmounts and passes the result up.
+- Widen `showDialog` API: `onFollowup: FollowupHandler` is a new REQUIRED parameter. Define `FollowupResult` and widen `DialogResult` with `answer`/`exhausted`/`error` variants.
+- Dialog calls `onFollowup(text, signal)` on submit. On `{ type: "command" }` result, it calls `setCommand/setRiskLevel/setExplanation` and transitions back to confirming. On other results, it unmounts and passes the result up.
 - **Resync `draft` after a follow-up swap.** `draft` is currently seeded from `initialCommand` on mount only — once `setCommand` swaps the displayed command, the next entry into editing-command would show the pre-swap text. Fix when adding the setter: either call `setDraft(command)` whenever transitioning into editing-command, run an effect `useEffect(() => setDraft(command), [command])`, or merge `draft` into a single source-of-truth (e.g. an `editBuffer` that only exists while `editing`). The state-machine refactor in this step is the right time to choose.
 - Flush pending stdin on every state transition (`tui-approach.md` safety feature).
 - `query.ts` provides a minimal stub `onFollowup` that immediately returns `{ type: "exhausted" }`. This keeps the integration compilable but no-op. Tests use a fake handler to drive the state machine.
@@ -530,7 +530,7 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 ### Step 8 — Real follow-up LLM call
 
 - Replace the stub `onFollowup` in `query.ts` with the real closure: append `{ role: "assistant", content: JSON.stringify(currentResponse) }` and `{ role: "user", content: text }` to `input.messages`, reset `state.budgetRemaining = maxRounds` (leave `state.roundNum` alone), call `runRoundsUntilFinal`, translate its result into a `FollowupResult`. Remember the new command in `currentResponse` so the next follow-up sees the right history.
-- Handle all new `ConfirmResult` variants in `runQuery`: `answer` → print to stdout and return 0, `exhausted` → print max-rounds error and return 1, `error` → re-throw.
+- Handle all new `DialogResult` variants in `runQuery`: `answer` → print to stdout and return 0, `exhausted` → print max-rounds error and return 1, `error` → re-throw.
 - **Strip stale `lastRoundInstruction` and probe-refusal messages from `input.messages` before re-entering `runRoundsUntilFinal`.** When a call ends on its last round, `runRoundsUntilFinal` pushes `lastRoundInstruction` (and `probeRiskInstruction` for refused probes) onto `input.messages`. These stay in the conversation forever — without cleanup, follow-up call 2 starts with stale "must return command or answer" instructions from call 1, misleading the LLM. Either pop them at the end of `runRoundsUntilFinal`, or strip them in the follow-up closure before calling again. Pick whichever is cleaner once the closure is written.
 - Replace the `aborted` `throw` in `runQuery` (left as a forcing function in step 6) with proper handling: the dialog handles `aborted` by transitioning back to composing-followup (state machine, step 7), so `runQuery` itself only sees `aborted` if a top-level signal is wired in — which step 8 doesn't currently plan to do. Either delete the branch or leave the throw in place.
 - Tests: end-to-end follow-up round (injected test provider), chained follow-ups, abort mid-flight via `AbortSignal`, answer-after-followup, exhausted-after-followup, **stale-instruction stripping after a follow-up that re-uses `input.messages`**.
@@ -539,7 +539,7 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 ### Step 9 — Live border status during follow-up
 
 - `render.ts` calls `interceptOutput` before mounting Ink and `release()` AFTER `EXIT_ALT_SCREEN` (ordering is load-bearing — see §"Output sink").
-- The handler forwards `ChromeEvent`s to a React setter on the panel. The panel holds `borderStatus` state that's displayed in the bottom border during processing-followup (falling back to "Reticulating splines..." when no message has arrived yet).
+- The handler forwards `ChromeEvent`s to a React setter on the dialog. The dialog holds `borderStatus` state that's displayed in the bottom border during processing-followup (falling back to "Reticulating splines..." when no message has arrived yet).
 - Lines buffered during the dialog lifetime flush to stderr on `release()` so the scrollback has history after the dialog closes.
 - Tests: probe during follow-up shows in border status, multiple chrome messages update the status in order, buffered messages flush to stderr after unmount, message ordering preserved across chrome/verbose interleave.
 - **User-visible change:** probes and memory updates during follow-up now show in the border status as they happen. After the dialog closes, the full history is in the scrollback.
@@ -556,7 +556,7 @@ The work breaks into 10 steps. Each step is standalone: the repo builds, lints, 
 
 - Describe action implementation
 - Copy action implementation
-- Chrome spinner for pre-panel LLM wait (uses `startChromeSpinner`, separate feature)
+- Chrome spinner for pre-dialog LLM wait (uses `startChromeSpinner`, separate feature)
 - Syntax highlighting in command display
 
 ## Future: `w --followup` subcommand

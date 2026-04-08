@@ -1,7 +1,7 @@
 #!/bin/bash
-# Confirmation panel visual reference — run `bash specs/confirm-style.sh` to preview.
+# Dialog visual reference — run `bash specs/dialog-style.sh` to preview.
 # This is not production code. It's a pixel-perfect ANSI mockup of the target design.
-# The actual implementation uses Ink (React) components in src/tui/confirm.tsx.
+# The actual implementation uses Ink (React) components in src/tui/dialog.tsx.
 
 RST=$'\033[0m'
 BOLD=$'\033[1m'

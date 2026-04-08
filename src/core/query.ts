@@ -378,8 +378,8 @@ export async function runQuery(
     // type === "command"
     const { response, round } = result;
     if (response.risk_level !== "low") {
-      const { confirmCommand } = await import("../tui/render.ts");
-      const decision = await confirmCommand(
+      const { showDialog } = await import("../tui/render.ts");
+      const decision = await showDialog(
         response.content,
         response.risk_level,
         response.explanation ?? undefined,

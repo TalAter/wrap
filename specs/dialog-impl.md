@@ -1,10 +1,10 @@
-# Confirmation Panel Implementation
+# Dialog Implementation
 
-Implementation plan for the styled confirmation panel. Visual design defined in `tui-approach.md` (section "Confirmation panel visual design") and `confirm-style.sh` (ANSI reference mockup).
+Implementation plan for the styled dialog. Visual design defined in `tui-approach.md` (section "Dialog visual design") and `dialog-style.sh` (ANSI reference mockup).
 
 ## Architecture: 3-Column Layout
 
-The panel is a vertical stack: top border, 3-column row, bottom border.
+The dialog is a vertical stack: top border, 3-column row, bottom border.
 
 **Why this approach:** Ink's native `<Box borderStyle="round">` only supports a single border color — no gradient, no badge-in-border. Ink's `<Transform>` can't contain `<Box>` children (throws at runtime — Transform is a text node). The 3-column layout lets us use standard Ink components for all interior content (wrapping, flexbox, state) while rendering custom gradient borders as separate elements.
 
@@ -125,7 +125,7 @@ Action bar items are navigable with left/right arrow keys. Track `selectedIndex`
 
 ## Gradient palettes
 
-From `tui-approach.md` and `confirm-style.sh`:
+From `tui-approach.md` and `dialog-style.sh`:
 
 **Medium risk** (pink → purple → dim):
 ```
@@ -158,7 +158,7 @@ Single-key bindings, same for both risk levels. This replaces the tiered keybind
 
 ## File structure
 
-- **`src/tui/confirm.tsx`** — `ConfirmPanel` component (layout, state, input), `ActionBar` component
+- **`src/tui/dialog.tsx`** — `Dialog` component (layout, state, input), `ActionBar` component
 - **`src/tui/border.ts`** — `gradientTopBorder()`, `gradientBottomBorder()`, gradient color interpolation, risk palettes
 - **`src/tui/render.ts`** — existing orchestration, minor type updates for new keybinding actions
 - **`src/core/ansi.ts`** — export the existing `interpolate()` function and `Color` type (currently private). No new helpers needed — `underline()`, `bg()`, etc. are handled by Ink's `<Text>` props inside the component.
@@ -173,4 +173,4 @@ Single-key bindings, same for both risk levels. This replaces the tiered keybind
 
 - Syntax highlighting for commands (shell tokenizer)
 - `d`/`c` handler implementations (`e` is implemented; `f` is implemented in `specs/follow-up.md`)
-- Responsive action bar — shrink button labels or abbreviate when panel width is narrow (currently they wrap, which looks sprawling)
+- Responsive action bar — shrink button labels or abbreviate when dialog width is narrow (currently they wrap, which looks sprawling)

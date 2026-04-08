@@ -9,7 +9,7 @@ export function hasJq(): boolean {
 }
 
 /**
- * Routes through the output sink so the confirm dialog can intercept chrome
+ * Routes through the output sink so the dialog can intercept chrome
  * lines during alt-screen rendering. Optional icon is shown as a prefix.
  */
 export function chrome(text: string, icon?: string): void {

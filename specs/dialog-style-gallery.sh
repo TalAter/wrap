@@ -1,6 +1,6 @@
 #!/bin/bash
-# Confirmation panel inspiration gallery — fun variations we explored.
-# Run: bash specs/confirm-style-gallery.sh
+# Dialog inspiration gallery — fun variations we explored.
+# Run: bash specs/dialog-style-gallery.sh
 
 RST=$'\033[0m'
 BOLD=$'\033[1m'

@@ -2,19 +2,19 @@ import type { RiskLevel } from "../command-response.schema.ts";
 import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, SHOW_CURSOR } from "../core/ansi.ts";
 import { chrome, chromeRaw } from "../core/output.ts";
 
-export type ConfirmChoice = "run" | "cancel";
-export type ConfirmResult = { result: ConfirmChoice | "blocked"; command: string };
+export type DialogChoice = "run" | "cancel";
+export type DialogResult = { result: DialogChoice | "blocked"; command: string };
 
 /**
- * Show a confirmation panel for a command.
+ * Show the dialog for a command.
  * Returns "run" if confirmed, "cancel" if the user declines,
- * or "blocked" if no TTY is available to show the panel.
+ * or "blocked" if no TTY is available to show the dialog.
  */
-export async function confirmCommand(
+export async function showDialog(
   command: string,
   riskLevel: RiskLevel,
   explanation?: string,
-): Promise<ConfirmResult> {
+): Promise<DialogResult> {
   if (!process.stderr.isTTY) {
     chrome(`Command requires confirmation (no TTY available): ${command}`);
     return { result: "blocked", command };
@@ -22,13 +22,13 @@ export async function confirmCommand(
 
   // TODO: When piped input lands, open /dev/tty for Ink's stdin (specs/tui-approach.md §2).
 
-  const [{ render }, { createElement }, { ConfirmPanel }] = await Promise.all([
+  const [{ render }, { createElement }, { Dialog }] = await Promise.all([
     import("ink"),
     import("react"),
-    import("./confirm.tsx"),
+    import("./dialog.tsx"),
   ]);
 
-  let choice: ConfirmChoice = "cancel";
+  let choice: DialogChoice = "cancel";
   let resultCommand = command;
 
   try {
@@ -36,11 +36,11 @@ export async function confirmCommand(
     chromeRaw(ENTER_ALT_SCREEN);
 
     const app = render(
-      createElement(ConfirmPanel, {
+      createElement(Dialog, {
         initialCommand: command,
         initialRiskLevel: riskLevel,
         initialExplanation: explanation,
-        onChoice: (c: ConfirmChoice, cmd: string) => {
+        onChoice: (c: DialogChoice, cmd: string) => {
           choice = c;
           resultCommand = cmd;
         },

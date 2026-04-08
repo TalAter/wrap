@@ -24,15 +24,15 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
 - [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
-- [ ] Show context indicators in confirmation panel — piped input, probe results, etc. (user has no visibility into what informed the command)
-- [ ] Confirmation TUI styling — bordered panel, syntax-highlighted command, risk indicator
+- [ ] Show context indicators in dialog — piped input, probe results, etc. (user has no visibility into what informed the command)
+- [ ] Dialog styling — border, syntax-highlighted command, risk indicator
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[F]ollow-up` option — text input for natural language refinement
 - [ ] `[C]opy` option — copy command to clipboard
-- [ ] Responsive action bar — shrink/abbreviate action buttons when panel is narrow to avoid sprawling layout
-- [ ] Edit mode — editable command field in confirmation TUI
-- [ ] Arrow key shortcuts in confirmation panel — Up enters edit mode, Down exits (same as Esc)
-- [ ] Input buffer flush before rendering confirmation prompt
+- [ ] Responsive action bar — shrink/abbreviate action buttons when dialog is narrow to avoid sprawling layout
+- [ ] Edit mode — editable command field in dialog
+- [ ] Arrow key shortcuts in dialog — Up enters edit mode, Down exits (same as Esc)
+- [ ] Input buffer flush before rendering dialog
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
@@ -62,7 +62,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
-- [ ] `cancelled` outcome type (blocked on confirmation TUI + signal handling)
+- [ ] `cancelled` outcome type (blocked on dialog + signal handling)
 - [ ] `expires` field + retention pruning (future)
 - [ ] Document in help/README that logs contain full LLM exchanges
 
