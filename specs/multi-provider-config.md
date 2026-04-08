@@ -1,14 +1,14 @@
 # Multi-Provider Config
 
-> Restructure of `config.jsonc` so users can configure multiple LLM providers and switch the default one without losing other providers' credentials.
+> `config.jsonc` carries a `providers` map plus a `defaultProvider`, so users can configure multiple LLM providers and switch the default one without losing other providers' credentials.
 
-> **Status:** Spec only. Not implemented.
+> **Status:** Implemented.
 
 ---
 
 ## Motivation
 
-Today the config has a single `provider` block. Switching providers means rewriting it from scratch — the previous provider's API key is lost. Users want:
+Originally the config had a single `provider` block. Switching providers meant rewriting it from scratch — the previous provider's API key was lost. Users want:
 
 1. Persist credentials for several providers in one place.
 2. Switch the persistent default provider/model.
@@ -116,12 +116,6 @@ If a transient model isn't supported by the resolved provider (e.g. `--model :gp
 
 `WRAP_MODEL` and `--model` resolve against the **merged** providers map (file ⊕ `WRAP_CONFIG`). The override layer never sees the raw file map alone.
 
-### Where `--model` / `--provider` parsing lives
-
-`parseArgs` (`src/core/input.ts`) recognizes both flags as value-taking modifiers and extracts the **raw string** into `Modifiers.modelOverride: string | undefined`. Both `--model foo` and `--model=foo` forms are accepted (same for `--provider`). The flag must appear before the prompt. Today's `extractModifiers` only handles boolean modifiers — it must be extended to support value-taking ones.
-
-All splitting, smart resolution, and provider lookup happens in `resolveProvider` in the LLM layer (see Internal Type).
-
 ### Override scope
 
 The flag/env override **only** swaps which provider entry and which model are used. `apiKey` and `baseURL` always come from the resolved entry in `providers`. There is no flag for ad-hoc credentials — edit config or set env vars.
@@ -130,53 +124,40 @@ Omitted `apiKey` on a known provider continues to fall back to the SDK's default
 
 ---
 
-## Internal Type
+## Internal Architecture
 
-`loadConfig` returns the file/env-merged `Config`. A new pure function in the LLM layer resolves it into the final state used by `initProvider`:
+Two layers, with a pure resolver in between:
+
+1. **`loadConfig`** (`src/config/config.ts`) returns the file/env-merged `Config` (owns `Config` and `ProviderEntry` types).
+2. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure function: takes `Config` + an `override` string + an `env` map, returns a `ResolvedProvider`.
+3. **`initProvider`** (`src/llm/index.ts`) dispatches the `ResolvedProvider` to the right factory via the registry's `kind`.
 
 ```ts
-type Config = {
-  providers?:       Record<string, ProviderEntry>;
-  defaultProvider?: string;
-  // ...other top-level fields unchanged
-};
-
-type ProviderEntry = {
-  apiKey?:  string;
-  baseURL?: string;
-  model?:   string;   // required at runtime for every entry
-};
-
 type ResolvedProvider = {
   name:     string;   // e.g. 'anthropic', 'ollama', 'groq'
-  model:    string;   // e.g. 'claude-haiku-4-5'
+  model:    string;
   apiKey?:  string;
   baseURL?: string;
 };
-
-function resolveProvider(
-  config: Config,
-  override?: string,   // raw value from CLI (--model) OR env (WRAP_MODEL); CLI wins, caller resolves
-): ResolvedProvider;
 ```
 
-The caller picks `override` from `Modifiers.modelOverride` if set, else `process.env.WRAP_MODEL`, else `undefined`. `resolveProvider` then parses it (split on first colon, smart-resolve bare values), applies the override on top of `defaultProvider`, looks up the entry in the merged providers map, and returns the final tuple.
+Flag parsing lives in `src/core/input.ts` (`parseArgs`), which treats `--model`/`--provider` as value-taking modifiers. The caller (`main.ts`) picks `override` from `Modifiers.values.get("modelOverride")` if set, else `process.env.WRAP_MODEL`, else `undefined`. `resolveProvider` parses it (split on first colon, smart-resolve bare values), applies the override on top of `defaultProvider`, validates the entry via the registry, and returns the final tuple. The user-facing name *is* the discriminant — there's no `type` field.
 
-`initProvider(resolved)` dispatches on `resolved.name`:
+### Provider registry
+
+`src/llm/providers/registry.ts` is the single source of truth for provider taxonomy. Each known provider is one entry in `KNOWN_PROVIDERS` mapping name → `{ kind, validate? }`. `kind` distinguishes the runtime SDK family:
 
 - `anthropic` → ai-sdk anthropic factory
-- `openai` → ai-sdk openai factory
-- `ollama` → ai-sdk openai factory with the entry's `baseURL` (required), placeholder apiKey
-- `claude-code` → claude-code subprocess provider
-- *anything else* → ai-sdk openai factory with the entry's `baseURL` and `apiKey`
+- `openai-compat` → ai-sdk openai factory (covers `openai`, `ollama`, and any unknown OpenAI-compatible endpoint)
+- `claude-code` → `claude` CLI subprocess
 
-This replaces today's `ProviderConfig` discriminated union and the `type` field. The user-facing name *is* the discriminant.
+`validate` is an optional per-entry structural check (e.g. ollama requires `baseURL`). Unknown provider names default to `openai-compat` and must supply `baseURL`, `apiKey`, and `model` — without an apiKey the call would silently send a placeholder against a real billed endpoint.
+
+Adding a built-in = one entry in `KNOWN_PROVIDERS`. Adding a brand-new SDK family = a new `kind`, a new branch in `initProvider`, and a new factory file.
 
 ### Test Provider
 
-The `test` provider is for the test suite only and is not in the user-facing `providers` map. Selection: if `WRAP_TEST_RESPONSE` is set (today's mechanism), `resolveProvider` short-circuits and returns a sentinel that `initProvider` routes to the test provider — config is not consulted at all.
-
-This removes the `test` exception from the schema, the per-entry validation, and the wizard. Tests no longer need a `{ "providers": { "test": {} } }` block — setting the env var alone selects the test provider.
+The `test` provider is for the test suite only and is not in the user-facing `providers` map. Selection: if `WRAP_TEST_RESPONSE` or `WRAP_TEST_RESPONSES` is set, `resolveProvider` short-circuits and returns a `TEST_RESOLVED_PROVIDER` sentinel that `initProvider` routes to the test provider — config is not consulted at all. Tests don't need a providers block; setting the env var alone selects the test provider.
 
 ---
 
@@ -234,14 +215,14 @@ The old `oneOf` provider variants are removed. Per-provider field requirements (
 
 ## Logging
 
-Two verbose log lines change in `src/main.ts`:
+Two verbose log lines in `src/main.ts`:
 
 ```
 Config loaded (anthropic / claude-haiku-4-5)
 Provider initialized (anthropic / claude-haiku-4-5)
 ```
 
-Both show the resolved tuple (provider name + model), reflecting any override. No separate "overridden" indicator. The existing `providerLabel()` helper in `src/llm/types.ts` is replaced by formatting the `ResolvedProvider` directly.
+Both show the resolved tuple (provider name + model), reflecting any override. No separate "overridden" indicator. `formatProvider()` in `src/llm/types.ts` produces this label.
 
 ---
 

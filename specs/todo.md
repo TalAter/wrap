@@ -49,7 +49,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## LLM Integration
 
-- [ ] Multi-provider config restructure — `providers` map + `defaultProvider` with per-entry `model`, `--model` flag, `WRAP_MODEL` env. See `specs/multi-provider-config.md`. Update `specs/llm-sdk.md` § Config when implementing.
 - [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
 
