@@ -184,11 +184,13 @@ export async function runQuery(
         }
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
-        verbose(`LLM error: ${errMsg}`);
         round.provider_error = errMsg;
         round.llm_ms = Math.round(performance.now() - llmStart);
         addRound(entry, round);
-        throw e;
+        // Wrap with the attempted provider/model so the user sees what was
+        // tried — bare SDK messages (e.g. Anthropic's `"model: gpt-4o-mini"`)
+        // give no hint that it's the *provider* rejecting the model.
+        throw new Error(`LLM error (${model}): ${errMsg}`);
       }
       round.llm_ms = Math.round(performance.now() - llmStart);
       round.parsed = response;

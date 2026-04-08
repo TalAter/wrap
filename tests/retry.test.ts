@@ -185,4 +185,39 @@ describe("round retry in runQuery", () => {
     }
     expect(callCount).toBe(1);
   });
+
+  test("wraps LLM errors with attempted provider/model label", async () => {
+    // Anthropic's 404 body literally is `{"message":"model: gpt-4o-mini"}` —
+    // the bare SDK message gives no clue which provider rejected which model.
+    // runQuery must wrap thrown errors with the resolved provider label so the
+    // user sees what was actually attempted.
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { runQuery } = await import("../src/core/query.ts");
+
+    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
+    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
+
+    const provider = {
+      runPrompt: async () => {
+        throw new Error("model: gpt-4o-mini");
+      },
+    };
+
+    let thrown: Error | undefined;
+    try {
+      await runQuery("test", provider, {
+        cwd: "/tmp",
+        resolvedProvider: { name: "anthropic", model: "gpt-4o-mini" },
+      });
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown).toBeDefined();
+    // Wrapping shows attempted provider/model so the user knows what was tried.
+    expect(thrown?.message).toContain("anthropic / gpt-4o-mini");
+    // Original SDK message is preserved inside the wrapper.
+    expect(thrown?.message).toContain("model: gpt-4o-mini");
+  });
 });
