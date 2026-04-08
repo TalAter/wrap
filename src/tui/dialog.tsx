@@ -61,6 +61,16 @@ const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
 const DIALOG_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
 
+const EDIT_HINTS = [
+  { combo: "⏎", label: "to run", primary: true },
+  { combo: "Esc", label: "to discard changes" },
+] as const;
+const COMPOSE_HINTS = [
+  { combo: "⏎", label: "to send", primary: true },
+  { combo: "Esc", label: "to cancel" },
+] as const;
+const PROCESS_HINTS = [{ combo: "Esc", label: "to abort" }] as const;
+
 export function Dialog({
   initialCommand,
   initialRiskLevel,
@@ -326,11 +336,11 @@ export function Dialog({
             <Text> </Text>
             <Text> </Text>
             {dialogState === "editing-command" ? (
-              <EditHint />
+              <KeyHints items={EDIT_HINTS} />
             ) : dialogState === "composing-followup" ? (
-              <ComposeHint />
+              <KeyHints items={COMPOSE_HINTS} />
             ) : dialogState === "processing-followup" ? (
-              <ProcessHint />
+              <KeyHints items={PROCESS_HINTS} />
             ) : (
               <ActionBar selectedIndex={selectedIndex} />
             )}
@@ -391,48 +401,21 @@ function BorderLine({ segments }: { segments: BorderSegment[] }) {
   );
 }
 
-function EditHint() {
-  return (
-    <Text>
-      <Text color="#d2d2e1">{"   "}</Text>
-      <Text bold color="#f5c864">
-        {"⏎"}
-      </Text>
-      <Text color="#73738c">{" to run"}</Text>
-      <Text color="#414150">{"  │  "}</Text>
-      <Text bold color="#aaaac3">
-        {"Esc"}
-      </Text>
-      <Text color="#73738c">{" to discard changes"}</Text>
-    </Text>
-  );
-}
+type HintItem = { combo: string; label: string; primary?: boolean };
 
-function ComposeHint() {
+function KeyHints({ items }: { items: readonly HintItem[] }) {
   return (
     <Text>
       <Text color="#d2d2e1">{"   "}</Text>
-      <Text bold color="#f5c864">
-        {"⏎"}
-      </Text>
-      <Text color="#73738c">{" to send"}</Text>
-      <Text color="#414150">{"  │  "}</Text>
-      <Text bold color="#aaaac3">
-        {"Esc"}
-      </Text>
-      <Text color="#73738c">{" to cancel"}</Text>
-    </Text>
-  );
-}
-
-function ProcessHint() {
-  return (
-    <Text>
-      <Text color="#d2d2e1">{"   "}</Text>
-      <Text bold color="#aaaac3">
-        {"Esc"}
-      </Text>
-      <Text color="#73738c">{" to abort"}</Text>
+      {items.map((item, i) => (
+        <Text key={item.combo}>
+          {i > 0 ? <Text color="#414150">{"  │  "}</Text> : null}
+          <Text bold color={item.primary ? "#f5c864" : "#aaaac3"}>
+            {item.combo}
+          </Text>
+          <Text color="#73738c">{` ${item.label}`}</Text>
+        </Text>
+      ))}
     </Text>
   );
 }
