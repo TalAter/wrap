@@ -22,6 +22,8 @@ export const CommandResponseSchema = z.object({
   explanation: z.string().nullable().optional(),
   // Reusable facts learned about the user's environment.
   // These are saved and given to you in future requests.
+  // Only remember facts that will be helpful in the future — not one-off requests,
+  // user actions, or ephemeral events (e.g. "user asked to delete X").
   // Only record facts already true — never facts that assume the command in this response will succeed.
   memory_updates: z
     .array(
