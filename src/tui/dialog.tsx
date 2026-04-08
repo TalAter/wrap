@@ -48,14 +48,18 @@ type DialogProps = {
 
 type DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup";
 
+// `id` is the stable handle for dispatch — labels are presentation only.
+// Convention: hotkey is the lowercased first letter of `label` so the action
+// bar can underline `label[0]` as the keybinding hint.
 const ACTION_ITEMS = [
-  { label: "No", primary: true },
-  { label: "Yes", primary: true },
-  { label: "Describe", primary: false },
-  { label: "Edit", primary: false },
-  { label: "Follow-up", primary: false },
-  { label: "Copy", primary: false },
+  { id: "cancel", label: "No", primary: true, hotkey: "n" },
+  { id: "run", label: "Yes", primary: true, hotkey: "y" },
+  { id: "describe", label: "Describe", primary: false, hotkey: "d" },
+  { id: "edit", label: "Edit", primary: false, hotkey: "e" },
+  { id: "followup", label: "Follow-up", primary: false, hotkey: "f" },
+  { id: "copy", label: "Copy", primary: false, hotkey: "c" },
 ] as const;
+type ActionId = (typeof ACTION_ITEMS)[number]["id"];
 const ACTION_BAR_WIDTH = 61;
 const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
 const DIALOG_MARGIN = 4;
@@ -174,29 +178,31 @@ export function Dialog({
     { isActive: dialogState === "editing-command" },
   );
 
+  const performAction = (id: ActionId) => {
+    if (id === "run") {
+      onResult({ type: "run", command });
+      exit();
+    } else if (id === "cancel") {
+      onResult({ type: "cancel", command });
+      exit();
+    } else if (id === "edit") {
+      setDialogState("editing-command");
+    } else if (id === "followup") {
+      setDialogState("composing-followup");
+    }
+    // describe, copy — no-op in phase 1
+  };
+
   useInput(
     (input, key) => {
       if (key.escape) {
-        onResult({ type: "cancel", command });
-        exit();
+        performAction("cancel");
         return;
       }
-      if (input === "e") {
-        setDialogState("editing-command");
-        return;
-      }
-      if (input === "f") {
-        setDialogState("composing-followup");
-        return;
-      }
-      if (input === "y") {
-        onResult({ type: "run", command });
-        exit();
-        return;
-      }
-      if (input === "n" || input === "q") {
-        onResult({ type: "cancel", command });
-        exit();
+      // q is an alias for cancel that doesn't fit the hotkey table (not the
+      // first letter of any label).
+      if (input === "q") {
+        performAction("cancel");
         return;
       }
       if (key.leftArrow) {
@@ -208,19 +214,13 @@ export function Dialog({
         return;
       }
       if (key.return) {
-        const label = ACTION_ITEMS[selectedIndex]?.label;
-        if (label === "Yes") {
-          onResult({ type: "run", command });
-          exit();
-        } else if (label === "No") {
-          onResult({ type: "cancel", command });
-          exit();
-        } else if (label === "Edit") {
-          setDialogState("editing-command");
-        } else if (label === "Follow-up") {
-          setDialogState("composing-followup");
-        }
-        // Describe, Copy — no-op in phase 1
+        const item = ACTION_ITEMS[selectedIndex];
+        if (item) performAction(item.id);
+        return;
+      }
+      const hotkeyMatch = ACTION_ITEMS.find((a) => a.hotkey === input);
+      if (hotkeyMatch) {
+        performAction(hotkeyMatch.id);
       }
     },
     { isActive: dialogState === "confirming" },
