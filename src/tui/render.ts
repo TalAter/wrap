@@ -6,9 +6,8 @@ export type DialogChoice = "run" | "cancel";
 export type DialogResult = { result: DialogChoice | "blocked"; command: string };
 
 /**
- * Show the dialog for a command.
- * Returns "run" if confirmed, "cancel" if the user declines,
- * or "blocked" if no TTY is available to show the dialog.
+ * Show the dialog for a command. Blocks until the user resolves it.
+ * Returns `{ result: "blocked" }` immediately if no TTY is available.
  */
 export async function showDialog(
   command: string,
