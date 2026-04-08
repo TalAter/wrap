@@ -299,9 +299,13 @@ export async function runRoundsUntilFinal(
       continue;
     }
 
-    // type === "command" — caller will mutate `round` (exec_ms/execution) and
-    // call `addRound` after running. NOT logged here so a throw between this
-    // point and exec doesn't leave a half-finished round in the log.
+    // Log the command round eagerly. Probe and answer rounds are already
+    // logged inline above. The caller mutates `round.exec_ms`/`round.execution`
+    // on the live array entry after running — `addRound` is just a push, so
+    // post-push mutation surfaces in the final JSONL flush. If runQuery throws
+    // between here and exec, the round still appears in the log with `parsed`
+    // set and `execution` undefined — more useful than dropping it entirely.
+    addRound(entry, round);
     return { type: "command", response, round };
   }
 
@@ -339,16 +343,16 @@ export function stripStaleInstructions(messages: PromptInput["messages"]): void 
 }
 
 /**
- * Mutable container for the "current" command + round so the follow-up
- * closure can update them as the user iterates. The round is held alongside
- * the response so it can be logged exactly once: the closure logs it before
- * re-entering the loop, then nulls the field; on a successful command result
- * the new round takes its place. The caller (runQuery) logs whatever round
- * remains after exec/cancel.
+ * Mutable container for the "current" command + its round, shared between
+ * runQuery and the follow-up closure. The closure updates these on each
+ * successful follow-up command so chained follow-ups see the latest state
+ * and runQuery can exec the swapped command. The round is always already
+ * in `entry.rounds` (logged eagerly by `runRoundsUntilFinal`) — runQuery
+ * mutates `exec_ms`/`execution` on it after exec.
  */
-export type FollowupRefs = {
+export type CurrentCommand = {
   response: CommandResponse;
-  round: Round | null;
+  round: Round;
 };
 
 export type FollowupHandlerDeps = {
@@ -357,33 +361,23 @@ export type FollowupHandlerDeps = {
   state: LoopState;
   entry: LogEntry;
   options: RoundsOptions;
-  refs: FollowupRefs;
+  current: CurrentCommand;
 };
 
 /**
  * Build the follow-up handler the dialog calls when the user submits text.
- * The handler:
- * 1. Logs the about-to-be-superseded round (if not already logged).
- * 2. Strips stale meta-instructions left over from the previous call.
- * 3. Pushes `[assistant: currentResponse JSON, user: follow-up text]`.
- * 4. Resets the round budget (round numbering keeps incrementing).
- * 5. Re-enters `runRoundsUntilFinal` with the dialog's AbortSignal.
- * 6. Translates the loop result into a `FollowupResult` for the dialog.
- *
- * On a successful `command` result, `refs.response` and `refs.round` are
- * updated so chained follow-ups see the latest state and the caller can
- * exec the swapped command.
+ * Strips stale meta-instructions, pushes the prior assistant response + the
+ * follow-up text, resets the round budget, and re-enters
+ * `runRoundsUntilFinal` with the dialog's AbortSignal. On a successful
+ * command result, mutates `current` so chained follow-ups and the eventual
+ * exec see the swapped state.
  */
 export function createFollowupHandler(deps: FollowupHandlerDeps): FollowupHandler {
-  const { provider, input, state, entry, options, refs } = deps;
+  const { provider, input, state, entry, options, current } = deps;
   return async (text, signal) => {
-    if (refs.round) {
-      addRound(entry, refs.round);
-      refs.round = null;
-    }
     stripStaleInstructions(input.messages);
     input.messages.push(
-      { role: "assistant", content: JSON.stringify(refs.response) },
+      { role: "assistant", content: JSON.stringify(current.response) },
       { role: "user", content: text },
     );
     state.budgetRemaining = options.maxRounds;
@@ -394,18 +388,15 @@ export function createFollowupHandler(deps: FollowupHandlerDeps): FollowupHandle
     });
 
     // Race: the user can press Esc *after* the loop finishes but *before*
-    // this resolves. The dialog drops the result via its signal-check guard,
-    // so we must NOT mutate refs (which would corrupt the displayed/logged
-    // command for the user's next action). Log any orphaned command round
-    // for the audit trail since the LLM did real work, then return aborted.
-    if (signal.aborted) {
-      if (result.type === "command") addRound(entry, result.round);
-      return { type: "aborted" };
-    }
+    // this resolves. The dialog will drop the result via its signal-check
+    // guard, so we must NOT mutate `current` (which would corrupt the
+    // user's next action). The orphan round is already in entry.rounds via
+    // eager logging — nothing else to do.
+    if (signal.aborted) return { type: "aborted" };
 
     if (result.type === "command") {
-      refs.response = result.response;
-      refs.round = result.round;
+      current.response = result.response;
+      current.round = result.round;
       return {
         type: "command",
         command: result.response.content,
@@ -420,8 +411,7 @@ export function createFollowupHandler(deps: FollowupHandlerDeps): FollowupHandle
       return { type: "exhausted" };
     }
     // result.type === "aborted" — signal was aborted (handled above) or the
-    // loop bailed out before any LLM call. Either way: return the typed
-    // variant so the union stays exhaustive; the dialog drops it.
+    // loop bailed out before any LLM call. The dialog drops it.
     return { type: "aborted" };
   };
 }
@@ -500,12 +490,11 @@ export async function runQuery(
       throw new Error("runRoundsUntilFinal returned 'aborted' but runQuery passed no signal");
     }
 
-    // type === "command".
-    // `refs.round` is the unlogged command round; it stays unlogged until we
-    // decide what to do with it: exec it, cancel it, or let the follow-up
-    // closure log it as a superseded round before swapping in a new one.
-    const refs: FollowupRefs = { response: result.response, round: result.round };
-    if (refs.response.risk_level !== "low") {
+    // type === "command". `current` holds the live command + its already-
+    // logged round; the follow-up closure mutates both on each successful
+    // refinement so the final exec runs against whatever the user accepted.
+    const current: CurrentCommand = { response: result.response, round: result.round };
+    if (current.response.risk_level !== "low") {
       const { showDialog } = await import("../tui/render.ts");
       const onFollowup = createFollowupHandler({
         provider,
@@ -513,68 +502,53 @@ export async function runQuery(
         state,
         entry,
         options: roundsOptions,
-        refs,
+        current,
       });
       const decision = await showDialog({
-        command: refs.response.content,
-        riskLevel: refs.response.risk_level,
+        command: current.response.content,
+        riskLevel: current.response.risk_level,
         onFollowup,
-        explanation: refs.response.explanation ?? undefined,
+        explanation: current.response.explanation ?? undefined,
       });
-      // After the dialog returns, refs may have been mutated by the closure:
-      // - refs.response holds the latest LLM command (possibly swapped)
-      // - refs.round is the unlogged round for that command, OR null if the
-      //   follow-up resolved with answer/exhausted (the closure logged the
-      //   superseded round and produced no new command round to log)
       if (decision.type === "answer") {
         console.log(decision.content);
         entry.outcome = "success";
-        if (refs.round) addRound(entry, refs.round);
         return 0;
       }
       if (decision.type === "exhausted") {
         chrome(`Could not resolve the request within ${maxRounds} rounds.`);
         entry.outcome = "max_rounds";
-        if (refs.round) addRound(entry, refs.round);
         return 1;
       }
       if (decision.type === "error") {
         entry.outcome = "error";
-        if (refs.round) addRound(entry, refs.round);
         throw new Error(decision.message);
       }
       if (decision.type !== "run") {
         entry.outcome = decision.type === "blocked" ? "blocked" : "cancelled";
-        if (refs.round) addRound(entry, refs.round);
         return 1;
       }
-      refs.response.content = decision.command;
+      current.response.content = decision.command;
     }
-    // The unlogged command round always exists at this point: low-risk path
-    // skips the dialog entirely (refs.round still set from the loop result),
-    // and the dialog `run` path mutates refs.response.content above without
-    // touching refs.round. The follow-up closure only nulls refs.round when
-    // it logs and replaces it, in which case refs.round is the new round.
-    if (!refs.round) {
-      throw new Error("internal: command round missing before exec");
-    }
-    const finalRound = refs.round;
     verbose("Executing command...");
     const stdinBlob =
-      refs.response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-    const exec = await executeShellCommand(refs.response.content, {
+      current.response.pipe_stdin && options.pipedInput
+        ? new Blob([options.pipedInput])
+        : undefined;
+    const exec = await executeShellCommand(current.response.content, {
       mode: "inherit",
       stdinBlob,
     });
-    finalRound.exec_ms = exec.exec_ms;
-    finalRound.execution = {
-      command: refs.response.content,
+    // Mutate exec details on the round in place — it's already in
+    // entry.rounds via eager logging, so the final flush picks them up.
+    current.round.exec_ms = exec.exec_ms;
+    current.round.execution = {
+      command: current.response.content,
       exit_code: exec.exitCode,
       shell: exec.shell,
     };
     verbose(`Command exited (${exec.exitCode})`);
     entry.outcome = exec.exitCode === 0 ? "success" : "error";
-    addRound(entry, finalRound);
     return exec.exitCode;
   } finally {
     try {

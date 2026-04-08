@@ -58,7 +58,7 @@ afterEach(() => {
 });
 
 describe("runRoundsUntilFinal", () => {
-  test("returns command result when LLM responds with command", async () => {
+  test("returns command result and logs the round eagerly", async () => {
     const { provider } = makeProvider([
       { type: "command", content: "ls -la", risk_level: "medium" } as CommandResponse,
     ]);
@@ -69,13 +69,14 @@ describe("runRoundsUntilFinal", () => {
     if (result.type === "command") {
       expect(result.response.content).toBe("ls -la");
       expect(result.response.risk_level).toBe("medium");
-      // Round is returned to the caller, NOT yet added to entry.rounds.
-      // The caller addRounds it after exec/cancel — see runQuery.
-      expect(result.round.parsed).toBe(result.response);
+      // The returned round IS the same object held in entry.rounds — the
+      // caller mutates exec_ms/execution on it after running, and the in-
+      // place mutation is what shows up at log-flush time.
+      expect(entry.rounds[0]).toBe(result.round);
     }
     expect(state.roundNum).toBe(1);
     expect(state.budgetRemaining).toBe(4);
-    expect(entry.rounds.length).toBe(0);
+    expect(entry.rounds.length).toBe(1);
   });
 
   test("returns answer result when LLM responds with answer", async () => {
