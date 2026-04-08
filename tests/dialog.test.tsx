@@ -1143,6 +1143,36 @@ describe("Dialog — follow-up processing", () => {
     expect(frame).not.toContain("Run command?");
   });
 
+  test("aborted FollowupResult is dropped without firing onResult", async () => {
+    // Defensive: if a FollowupHandler returns { type: "aborted" } (e.g. its
+    // inner loop detected the aborted signal), the dialog must drop it
+    // silently. The signal-check guard handles the common case; this asserts
+    // the explicit type-level branch.
+    const followup = makeFollowupHandler();
+    let captured: DialogOutput | undefined;
+    const { stdin } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          captured = r;
+        }}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("nope");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    // Resolve aborted WITHOUT aborting the signal — exercises the explicit
+    // type-level drop branch in the dialog.
+    followup.resolve({ type: "aborted" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(captured).toBeUndefined();
+  });
+
   test("after follow-up command swap, edit shows new command", async () => {
     const followup = makeFollowupHandler();
     const { stdin, lastFrame } = render(

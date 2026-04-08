@@ -9,19 +9,28 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
-import type { PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
+import type { ConversationMessage, PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
 import { addRound, createLogEntry, type LogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendFacts } from "../memory/memory.ts";
 import type { Memory } from "../memory/types.ts";
 import promptConstants from "../prompt.constants.json";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
+import type { FollowupHandler } from "../tui/dialog.tsx";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
 import { executeShellCommand } from "./shell.ts";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
+
+/**
+ * The exact text pushed when the loop refuses a non-low-risk probe. Held as
+ * a single constant so the producer (probe-refusal branch in
+ * `runRoundsUntilFinal`) and the consumer (`stripStaleInstructions`) can
+ * never drift — any change to one would silently break the other.
+ */
+export const REFUSED_PROBE_INSTRUCTION = `${promptConstants.probeRiskRefusedPrefix} ${promptConstants.probeRiskInstruction}`;
 
 export function isStructuredOutputError(e: unknown): boolean {
   return (
@@ -235,10 +244,7 @@ export async function runRoundsUntilFinal(
       if (response.risk_level !== "low") {
         input.messages.push(
           { role: "assistant", content: JSON.stringify(response) },
-          {
-            role: "user",
-            content: `${promptConstants.probeRiskRefusedPrefix} ${promptConstants.probeRiskInstruction}`,
-          },
+          { role: "user", content: REFUSED_PROBE_INSTRUCTION },
         );
         addRound(entry, round);
         continue;
@@ -302,6 +308,124 @@ export async function runRoundsUntilFinal(
   return { type: "exhausted" };
 }
 
+/**
+ * Drop leftover meta-instructions from a previous loop call (last-round
+ * prompt or refused-probe re-instruction). These are pushed by
+ * `runRoundsUntilFinal` to steer the LLM mid-call; once the call ends
+ * they're stale and would mislead subsequent calls. Called before a
+ * follow-up re-enters the loop with the same `input.messages`.
+ *
+ * The refused-probe instruction is pushed as an `[assistant probe JSON,
+ * user refusal]` pair. Stripping only the user side would leave an orphan
+ * assistant turn that some providers reject and most find confusing, so we
+ * remove the preceding assistant message together with the refusal.
+ */
+export function stripStaleInstructions(messages: PromptInput["messages"]): void {
+  const cleaned: ConversationMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "user" && m.content === promptConstants.lastRoundInstruction) {
+      continue;
+    }
+    if (m.role === "user" && m.content === REFUSED_PROBE_INSTRUCTION) {
+      // Drop the matching assistant probe echo we already pushed.
+      const last = cleaned[cleaned.length - 1];
+      if (last && last.role === "assistant") cleaned.pop();
+      continue;
+    }
+    cleaned.push(m);
+  }
+  messages.length = 0;
+  messages.push(...cleaned);
+}
+
+/**
+ * Mutable container for the "current" command + round so the follow-up
+ * closure can update them as the user iterates. The round is held alongside
+ * the response so it can be logged exactly once: the closure logs it before
+ * re-entering the loop, then nulls the field; on a successful command result
+ * the new round takes its place. The caller (runQuery) logs whatever round
+ * remains after exec/cancel.
+ */
+export type FollowupRefs = {
+  response: CommandResponse;
+  round: Round | null;
+};
+
+export type FollowupHandlerDeps = {
+  provider: Provider;
+  input: PromptInput;
+  state: LoopState;
+  entry: LogEntry;
+  options: RoundsOptions;
+  refs: FollowupRefs;
+};
+
+/**
+ * Build the follow-up handler the dialog calls when the user submits text.
+ * The handler:
+ * 1. Logs the about-to-be-superseded round (if not already logged).
+ * 2. Strips stale meta-instructions left over from the previous call.
+ * 3. Pushes `[assistant: currentResponse JSON, user: follow-up text]`.
+ * 4. Resets the round budget (round numbering keeps incrementing).
+ * 5. Re-enters `runRoundsUntilFinal` with the dialog's AbortSignal.
+ * 6. Translates the loop result into a `FollowupResult` for the dialog.
+ *
+ * On a successful `command` result, `refs.response` and `refs.round` are
+ * updated so chained follow-ups see the latest state and the caller can
+ * exec the swapped command.
+ */
+export function createFollowupHandler(deps: FollowupHandlerDeps): FollowupHandler {
+  const { provider, input, state, entry, options, refs } = deps;
+  return async (text, signal) => {
+    if (refs.round) {
+      addRound(entry, refs.round);
+      refs.round = null;
+    }
+    stripStaleInstructions(input.messages);
+    input.messages.push(
+      { role: "assistant", content: JSON.stringify(refs.response) },
+      { role: "user", content: text },
+    );
+    state.budgetRemaining = options.maxRounds;
+
+    const result = await runRoundsUntilFinal(provider, input, state, entry, {
+      ...options,
+      signal,
+    });
+
+    // Race: the user can press Esc *after* the loop finishes but *before*
+    // this resolves. The dialog drops the result via its signal-check guard,
+    // so we must NOT mutate refs (which would corrupt the displayed/logged
+    // command for the user's next action). Log any orphaned command round
+    // for the audit trail since the LLM did real work, then return aborted.
+    if (signal.aborted) {
+      if (result.type === "command") addRound(entry, result.round);
+      return { type: "aborted" };
+    }
+
+    if (result.type === "command") {
+      refs.response = result.response;
+      refs.round = result.round;
+      return {
+        type: "command",
+        command: result.response.content,
+        riskLevel: result.response.risk_level,
+        explanation: result.response.explanation ?? undefined,
+      };
+    }
+    if (result.type === "answer") {
+      return { type: "answer", content: result.content };
+    }
+    if (result.type === "exhausted") {
+      return { type: "exhausted" };
+    }
+    // result.type === "aborted" — signal was aborted (handled above) or the
+    // loop bailed out before any LLM call. Either way: return the typed
+    // variant so the union stays exhaustive; the dialog drops it.
+    return { type: "aborted" };
+  };
+}
+
 /** Returns the process exit code. Caller is responsible for process.exit(). */
 export async function runQuery(
   prompt: string,
@@ -347,13 +471,14 @@ export async function runQuery(
     );
 
     const state: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
-    const result = await runRoundsUntilFinal(provider, input, state, entry, {
+    const roundsOptions: RoundsOptions = {
       cwd: options.cwd,
       wrapHome,
       maxRounds,
       maxProbeOutput,
       pipedInput: options.pipedInput,
-    });
+    };
+    const result = await runRoundsUntilFinal(provider, input, state, entry, roundsOptions);
 
     if (result.type === "answer") {
       console.log(result.content);
@@ -368,66 +493,88 @@ export async function runQuery(
     }
 
     if (result.type === "aborted") {
-      // runQuery doesn't pass an AbortSignal yet, so this branch is unreachable
-      // from this caller. Step 7+ will wire a signal in via the follow-up
-      // closure and add proper UX (state-machine transition, not exit). Throw
-      // here so that step can't inherit a silent exit-1 by accident.
+      // The outer call passes no AbortSignal; aborted is only produced via
+      // the follow-up closure (which has its own dialog-driven signal). This
+      // branch is unreachable but throws as a defensive marker so a future
+      // caller that wires a top-level signal can't silently inherit exit 1.
       throw new Error("runRoundsUntilFinal returned 'aborted' but runQuery passed no signal");
     }
 
-    // type === "command"
-    const { response, round } = result;
-    if (response.risk_level !== "low") {
+    // type === "command".
+    // `refs.round` is the unlogged command round; it stays unlogged until we
+    // decide what to do with it: exec it, cancel it, or let the follow-up
+    // closure log it as a superseded round before swapping in a new one.
+    const refs: FollowupRefs = { response: result.response, round: result.round };
+    if (refs.response.risk_level !== "low") {
       const { showDialog } = await import("../tui/render.ts");
-      // Stub follow-up handler — step 8 will replace this with the real
-      // closure that re-enters runRoundsUntilFinal. For now it returns
-      // exhausted immediately so the dialog UI is exercisable end-to-end.
-      const followupStub = async () => ({ type: "exhausted" as const });
-      const decision = await showDialog({
-        command: response.content,
-        riskLevel: response.risk_level,
-        onFollowup: followupStub,
-        explanation: response.explanation ?? undefined,
+      const onFollowup = createFollowupHandler({
+        provider,
+        input,
+        state,
+        entry,
+        options: roundsOptions,
+        refs,
       });
+      const decision = await showDialog({
+        command: refs.response.content,
+        riskLevel: refs.response.risk_level,
+        onFollowup,
+        explanation: refs.response.explanation ?? undefined,
+      });
+      // After the dialog returns, refs may have been mutated by the closure:
+      // - refs.response holds the latest LLM command (possibly swapped)
+      // - refs.round is the unlogged round for that command, OR null if the
+      //   follow-up resolved with answer/exhausted (the closure logged the
+      //   superseded round and produced no new command round to log)
       if (decision.type === "answer") {
         console.log(decision.content);
         entry.outcome = "success";
-        addRound(entry, round);
+        if (refs.round) addRound(entry, refs.round);
         return 0;
       }
       if (decision.type === "exhausted") {
         chrome(`Could not resolve the request within ${maxRounds} rounds.`);
         entry.outcome = "max_rounds";
-        addRound(entry, round);
+        if (refs.round) addRound(entry, refs.round);
         return 1;
       }
       if (decision.type === "error") {
-        addRound(entry, round);
+        entry.outcome = "error";
+        if (refs.round) addRound(entry, refs.round);
         throw new Error(decision.message);
       }
       if (decision.type !== "run") {
         entry.outcome = decision.type === "blocked" ? "blocked" : "cancelled";
-        addRound(entry, round);
+        if (refs.round) addRound(entry, refs.round);
         return 1;
       }
-      response.content = decision.command;
+      refs.response.content = decision.command;
     }
+    // The unlogged command round always exists at this point: low-risk path
+    // skips the dialog entirely (refs.round still set from the loop result),
+    // and the dialog `run` path mutates refs.response.content above without
+    // touching refs.round. The follow-up closure only nulls refs.round when
+    // it logs and replaces it, in which case refs.round is the new round.
+    if (!refs.round) {
+      throw new Error("internal: command round missing before exec");
+    }
+    const finalRound = refs.round;
     verbose("Executing command...");
     const stdinBlob =
-      response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-    const exec = await executeShellCommand(response.content, {
+      refs.response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
+    const exec = await executeShellCommand(refs.response.content, {
       mode: "inherit",
       stdinBlob,
     });
-    round.exec_ms = exec.exec_ms;
-    round.execution = {
-      command: response.content,
+    finalRound.exec_ms = exec.exec_ms;
+    finalRound.execution = {
+      command: refs.response.content,
       exit_code: exec.exitCode,
       shell: exec.shell,
     };
     verbose(`Command exited (${exec.exitCode})`);
     entry.outcome = exec.exitCode === 0 ? "success" : "error";
-    addRound(entry, round);
+    addRound(entry, finalRound);
     return exec.exitCode;
   } finally {
     try {

@@ -24,6 +24,11 @@ export type FollowupResult =
   | { type: "command"; command: string; riskLevel: RiskLevel; explanation?: string }
   | { type: "answer"; content: string }
   | { type: "exhausted" }
+  // Returned when the inner LLM loop bailed via the AbortSignal. The dialog
+  // drops it; the user is already back in composing-followup via the
+  // signal-check guard. This variant exists so the closure's return type
+  // stays exhaustive without forcing a throw.
+  | { type: "aborted" }
   | { type: "error"; message: string };
 
 export type FollowupHandler = (text: string, signal: AbortSignal) => Promise<FollowupResult>;
@@ -282,6 +287,10 @@ export function Dialog({
       setDialogState("confirming");
       return;
     }
+    // Defensive: aborted should always be paired with signal.aborted (caught
+    // above), but if a handler returns it without aborting the signal we
+    // still drop it — there's no meaningful state for the dialog to land in.
+    if (result.type === "aborted") return;
     onResult(result);
     exit();
   };
