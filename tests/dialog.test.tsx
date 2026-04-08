@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
-import {
-  Dialog,
-  type DialogOutput,
-  type FollowupHandler,
-  type FollowupResult,
-} from "../src/tui/dialog.tsx";
+import type { FollowupHandler, FollowupResult } from "../src/core/followup-types.ts";
+import { Dialog, type DialogOutput } from "../src/tui/dialog.tsx";
 
 const noopFollowup: FollowupHandler = async () => ({ type: "exhausted" });
 

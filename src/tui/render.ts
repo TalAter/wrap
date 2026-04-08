@@ -1,7 +1,8 @@
 import type { RiskLevel } from "../command-response.schema.ts";
 import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, SHOW_CURSOR } from "../core/ansi.ts";
+import type { FollowupHandler } from "../core/followup-types.ts";
 import { chrome, chromeRaw } from "../core/output.ts";
-import type { DialogOutput, FollowupHandler } from "./dialog.tsx";
+import type { DialogOutput } from "./dialog.tsx";
 
 // Dialog outputs everything except `blocked`; that variant comes from
 // showDialog when there's no TTY and the dialog never mounts.

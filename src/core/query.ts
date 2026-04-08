@@ -16,7 +16,7 @@ import { appendFacts } from "../memory/memory.ts";
 import type { Memory } from "../memory/types.ts";
 import promptConstants from "../prompt.constants.json";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
-import type { FollowupHandler } from "../tui/dialog.tsx";
+import type { FollowupHandler } from "./followup-types.ts";
 import { getWrapHome } from "./home.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";

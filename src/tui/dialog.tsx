@@ -11,6 +11,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
 import type { RiskLevel } from "../command-response.schema.ts";
+import type { FollowupHandler, FollowupResult } from "../core/followup-types.ts";
 import {
   type BorderSegment,
   bottomBorderSegments,
@@ -19,19 +20,6 @@ import {
 } from "./border.ts";
 import { useSpinner } from "./spinner.ts";
 import { TextInput } from "./text-input.tsx";
-
-export type FollowupResult =
-  | { type: "command"; command: string; riskLevel: RiskLevel; explanation?: string }
-  | { type: "answer"; content: string }
-  | { type: "exhausted" }
-  // Returned when the inner LLM loop bailed via the AbortSignal. The dialog
-  // drops it; the user is already back in composing-followup via the
-  // signal-check guard. This variant exists so the closure's return type
-  // stays exhaustive without forcing a throw.
-  | { type: "aborted" }
-  | { type: "error"; message: string };
-
-export type FollowupHandler = (text: string, signal: AbortSignal) => Promise<FollowupResult>;
 
 // Terminal results emitted by the dialog itself. `blocked` lives on
 // `DialogResult` (in render.ts) — it's only produced when there's no TTY,
