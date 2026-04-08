@@ -9,13 +9,8 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
-import {
-  type PromptInput,
-  type Provider,
-  type ProviderConfig,
-  providerLabel,
-} from "../llm/types.ts";
-import { addRound, createLogEntry, type Round } from "../logging/entry.ts";
+import type { PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
+import { addRound, createLogEntry, type LogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendFacts } from "../memory/memory.ts";
 import type { Memory } from "../memory/types.ts";
@@ -102,6 +97,214 @@ function verboseResponse(response: CommandResponse): void {
   }
 }
 
+export type LoopState = {
+  /** Remaining round budget. Decremented per iteration. Reset by follow-up. */
+  budgetRemaining: number;
+  /** Monotonic round counter. Never reset, even across follow-ups. */
+  roundNum: number;
+};
+
+export type LoopResult =
+  | { type: "command"; response: CommandResponse; round: Round }
+  | { type: "answer"; content: string }
+  | { type: "exhausted" }
+  | { type: "aborted" };
+
+export type RoundsOptions = {
+  cwd: string;
+  wrapHome: string;
+  /** Max rounds total — used by the last-round instruction trigger. */
+  maxRounds: number;
+  maxProbeOutput: number;
+  pipedInput?: string;
+  signal?: AbortSignal;
+};
+
+/**
+ * Run rounds until we have a final-form response (command/answer), exhaust the
+ * budget, or get aborted. Probes are executed inline and their output is
+ * appended to `input.messages`. Probe and answer rounds are logged via
+ * `addRound(entry, ...)` as they complete.
+ *
+ * Command rounds are NOT logged inside this function — the round object is
+ * returned in the result so the caller can fill in execution data and call
+ * `addRound` after running (or after the user cancels).
+ *
+ * Throws on LLM errors (network failures, parse errors, empty responses). The
+ * errored round is `addRound`'d before throwing so the log captures the
+ * failure. The caller's outer `try/finally` then persists the log.
+ *
+ * The function does NOT execute final commands, does NOT print answers, and
+ * does NOT touch `entry.outcome`. The caller dispatches on the returned
+ * variant and owns all of those.
+ */
+export async function runRoundsUntilFinal(
+  provider: Provider,
+  input: PromptInput,
+  state: LoopState,
+  entry: LogEntry,
+  options: RoundsOptions,
+): Promise<LoopResult> {
+  while (state.budgetRemaining > 0) {
+    if (options.signal?.aborted) return { type: "aborted" };
+
+    state.roundNum += 1;
+    state.budgetRemaining -= 1;
+    const round: Round = {};
+    // budgetRemaining === 0 (post-decrement) means this is the last round of
+    // the current call. After a follow-up resets budgetRemaining to maxRounds,
+    // this becomes true again — which is correct, unlike checking roundNum
+    // against maxRounds (which would be wrong across follow-ups).
+    const isLastRound = state.budgetRemaining === 0;
+
+    if (state.roundNum > 1) {
+      verbose(`Round ${state.roundNum}/${options.maxRounds}`);
+    }
+
+    // On last round, instruct LLM not to probe
+    if (isLastRound) {
+      verbose("Final round: must return command or answer");
+      input.messages.push({
+        role: "user",
+        content: promptConstants.lastRoundInstruction,
+      });
+    }
+
+    // TODO(provider-label): replace "LLM" with the actual model name once
+    // Provider exposes a `label` field. See specs/todo.md → "Make Provider
+    // self-describing with a label field".
+    verbose("Calling LLM...");
+    const llmStart = performance.now();
+    let response: CommandResponse;
+    const stopSpinner = startChromeSpinner(SPINNER_TEXT);
+    try {
+      response = await callWithRetry(provider, input);
+
+      // Probes must be low risk — retry once (same treatment as malformed JSON)
+      if (response.type === "probe" && response.risk_level !== "low") {
+        response = await callWithRetry(provider, {
+          system: input.system,
+          messages: [
+            ...input.messages,
+            { role: "assistant" as const, content: JSON.stringify(response) },
+            {
+              role: "user" as const,
+              content: promptConstants.probeRiskInstruction,
+            },
+          ],
+        });
+      }
+    } catch (e) {
+      // Stop the spinner before logging so the error line lands on a clean
+      // row instead of being glued to the trailing spinner frame.
+      stopSpinner();
+      const errMsg = e instanceof Error ? e.message : String(e);
+      verbose(`LLM error: ${errMsg}`);
+      round.provider_error = errMsg;
+      round.llm_ms = Math.round(performance.now() - llmStart);
+      addRound(entry, round);
+      throw e;
+    } finally {
+      stopSpinner();
+    }
+    round.llm_ms = Math.round(performance.now() - llmStart);
+    round.parsed = response;
+
+    verboseResponse(response);
+
+    handleMemoryUpdates(response, options.wrapHome, options.cwd);
+
+    if (response.watchlist_additions?.length) {
+      addToWatchlist(options.wrapHome, response.watchlist_additions);
+      verbose(`Watchlist: added ${response.watchlist_additions.join(", ")}`);
+    }
+
+    if (!response.content.trim()) {
+      addRound(entry, round);
+      throw new Error("LLM returned an empty response.");
+    }
+
+    if (response.type === "answer") {
+      addRound(entry, round);
+      return { type: "answer", content: response.content };
+    }
+
+    if (response.type === "probe") {
+      // Safety: refuse non-low-risk probes even after retry
+      if (response.risk_level !== "low") {
+        input.messages.push(
+          { role: "assistant", content: JSON.stringify(response) },
+          {
+            role: "user",
+            content: `${promptConstants.probeRiskRefusedPrefix} ${promptConstants.probeRiskInstruction}`,
+          },
+        );
+        addRound(entry, round);
+        continue;
+      }
+
+      if (isLastRound) {
+        addRound(entry, round);
+        break;
+      }
+
+      const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
+      chrome(response.explanation || response.content, probeIcon);
+
+      const shell = process.env.SHELL || "sh";
+      verbose(`Probe: ${response.content}`);
+      const execStart = performance.now();
+      const stdinBlob =
+        response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
+      const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: stdinBlob,
+      });
+      const [probeExit, stdoutText, stderrText] = await Promise.all([
+        proc.exited,
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      round.exec_ms = Math.round(performance.now() - execStart);
+      round.execution = { command: response.content, exit_code: probeExit, shell };
+      verbose(`Probe exited (${probeExit})`);
+
+      let probeOutput = stdoutText;
+      if (stderrText.trim()) {
+        probeOutput += (probeOutput.trim() ? "\n" : "") + stderrText;
+      }
+      if (probeExit !== 0) {
+        probeOutput += `\nExit code: ${probeExit}`;
+      }
+      if (probeOutput.length > options.maxProbeOutput) {
+        const total = probeOutput.length;
+        probeOutput =
+          probeOutput.slice(0, options.maxProbeOutput) +
+          `\n[…truncated, showing first ${options.maxProbeOutput} of ${total} chars]`;
+      }
+
+      input.messages.push(
+        { role: "assistant", content: JSON.stringify(response) },
+        {
+          role: "user",
+          content: `${promptConstants.sectionProbeOutput}\n${probeOutput.trim() || promptConstants.probeNoOutput}`,
+        },
+      );
+
+      addRound(entry, round);
+      continue;
+    }
+
+    // type === "command" — caller will mutate `round` (exec_ms/execution) and
+    // call `addRound` after running. NOT logged here so a throw between this
+    // point and exec doesn't leave a half-finished round in the log.
+    return { type: "command", response, round };
+  }
+
+  return { type: "exhausted" };
+}
+
 /** Returns the process exit code. Caller is responsible for process.exit(). */
 export async function runQuery(
   prompt: string,
@@ -146,195 +349,73 @@ export async function runQuery(
       maxPipedInput,
     );
 
-    const model = providerLabel(options.providerConfig);
+    const state: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
+    const result = await runRoundsUntilFinal(provider, input, state, entry, {
+      cwd: options.cwd,
+      wrapHome,
+      maxRounds,
+      maxProbeOutput,
+      pipedInput: options.pipedInput,
+    });
 
-    for (let roundNum = 1; roundNum <= maxRounds; roundNum++) {
-      const round: Round = {};
-      const isLastRound = roundNum === maxRounds;
+    if (result.type === "answer") {
+      console.log(result.content);
+      entry.outcome = "success";
+      return 0;
+    }
 
-      if (roundNum > 1) {
-        verbose(`Round ${roundNum}/${maxRounds}`);
-      }
+    if (result.type === "exhausted") {
+      chrome(`Could not resolve the request within ${maxRounds} rounds.`);
+      entry.outcome = "max_rounds";
+      return 1;
+    }
 
-      // On last round, instruct LLM not to probe
-      if (isLastRound) {
-        verbose("Final round: must return command or answer");
-        input.messages.push({
-          role: "user",
-          content: promptConstants.lastRoundInstruction,
-        });
-      }
+    if (result.type === "aborted") {
+      // runQuery doesn't pass an AbortSignal yet, so this branch is unreachable
+      // from this caller. Step 7+ will wire a signal in via the follow-up
+      // closure and add proper UX (state-machine transition, not exit). Throw
+      // here so that step can't inherit a silent exit-1 by accident.
+      throw new Error("runRoundsUntilFinal returned 'aborted' but runQuery passed no signal");
+    }
 
-      verbose(`Calling ${model}...`);
-      const llmStart = performance.now();
-      let response: CommandResponse;
-      const stopSpinner = startChromeSpinner(SPINNER_TEXT);
-      try {
-        response = await callWithRetry(provider, input);
-
-        // Probes must be low risk — retry once (same treatment as malformed JSON)
-        if (response.type === "probe" && response.risk_level !== "low") {
-          response = await callWithRetry(provider, {
-            system: input.system,
-            messages: [
-              ...input.messages,
-              { role: "assistant" as const, content: JSON.stringify(response) },
-              {
-                role: "user" as const,
-                content: promptConstants.probeRiskInstruction,
-              },
-            ],
-          });
-        }
-      } catch (e) {
-        // Stop the spinner before logging so the error line lands on a clean
-        // row instead of being glued to the trailing spinner frame.
-        stopSpinner();
-        const errMsg = e instanceof Error ? e.message : String(e);
-        verbose(`LLM error: ${errMsg}`);
-        round.provider_error = errMsg;
-        round.llm_ms = Math.round(performance.now() - llmStart);
-        addRound(entry, round);
-        throw e;
-      } finally {
-        stopSpinner();
-      }
-      round.llm_ms = Math.round(performance.now() - llmStart);
-      round.parsed = response;
-
-      verboseResponse(response);
-
-      handleMemoryUpdates(response, wrapHome, options.cwd);
-
-      if (response.watchlist_additions?.length) {
-        addToWatchlist(wrapHome, response.watchlist_additions);
-        verbose(`Watchlist: added ${response.watchlist_additions.join(", ")}`);
-      }
-
-      if (!response.content.trim()) {
-        chrome("LLM returned an empty response.");
-        entry.outcome = "error";
+    // type === "command"
+    const { response, round } = result;
+    if (response.risk_level !== "low") {
+      const { confirmCommand } = await import("../tui/render.ts");
+      const decision = await confirmCommand(
+        response.content,
+        response.risk_level,
+        response.explanation ?? undefined,
+      );
+      if (decision.result !== "run") {
+        entry.outcome = decision.result === "blocked" ? "blocked" : "cancelled";
         addRound(entry, round);
         return 1;
       }
-
-      if (response.type === "answer") {
-        console.log(response.content);
-        entry.outcome = "success";
-        addRound(entry, round);
-        return 0;
-      }
-
-      if (response.type === "probe") {
-        // Safety: refuse non-low-risk probes even after retry
-        if (response.risk_level !== "low") {
-          input.messages.push(
-            { role: "assistant", content: JSON.stringify(response) },
-            {
-              role: "user",
-              content: `${promptConstants.probeRiskRefusedPrefix} ${promptConstants.probeRiskInstruction}`,
-            },
-          );
-          addRound(entry, round);
-          continue;
-        }
-
-        if (isLastRound) {
-          addRound(entry, round);
-          break;
-        }
-
-        const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
-        chrome(response.explanation || response.content, probeIcon);
-
-        const shell = process.env.SHELL || "sh";
-        verbose(`Probe: ${response.content}`);
-        const execStart = performance.now();
-        const stdinBlob =
-          response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-        const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: stdinBlob,
-        });
-        const [probeExit, stdoutText, stderrText] = await Promise.all([
-          proc.exited,
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-        round.exec_ms = Math.round(performance.now() - execStart);
-        round.execution = { command: response.content, exit_code: probeExit, shell };
-        verbose(`Probe exited (${probeExit})`);
-
-        let probeOutput = stdoutText;
-        if (stderrText.trim()) {
-          probeOutput += (probeOutput.trim() ? "\n" : "") + stderrText;
-        }
-        if (probeExit !== 0) {
-          probeOutput += `\nExit code: ${probeExit}`;
-        }
-        if (probeOutput.length > maxProbeOutput) {
-          const total = probeOutput.length;
-          probeOutput =
-            probeOutput.slice(0, maxProbeOutput) +
-            `\n[…truncated, showing first ${maxProbeOutput} of ${total} chars]`;
-        }
-
-        input.messages.push(
-          { role: "assistant", content: JSON.stringify(response) },
-          {
-            role: "user",
-            content: `${promptConstants.sectionProbeOutput}\n${probeOutput.trim() || promptConstants.probeNoOutput}`,
-          },
-        );
-
-        addRound(entry, round);
-        continue;
-      }
-
-      // type === "command"
-      if (response.risk_level !== "low") {
-        const { confirmCommand } = await import("../tui/render.ts");
-        const decision = await confirmCommand(
-          response.content,
-          response.risk_level,
-          response.explanation ?? undefined,
-        );
-        if (decision.result !== "run") {
-          entry.outcome = decision.result === "blocked" ? "blocked" : "cancelled";
-          addRound(entry, round);
-          return 1;
-        }
-        response.content = decision.command;
-      }
-      const shell = process.env.SHELL || "sh";
-      verbose("Executing command...");
-      const execStart = performance.now();
-      const stdinBlob =
-        response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-      // +m disables monitor mode (job control) so the spawned interactive
-      // shell doesn't call tcsetpgrp() to seize the foreground process group.
-      // Without this, the shell takes foreground and never restores it; any
-      // later tcsetattr (e.g. Bun's exit cleanup after Ink's setRawMode)
-      // sends SIGTTOU to the whole process group, suspending the parent.
-      const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: stdinBlob ?? "inherit",
-      });
-      const exitCode = await proc.exited;
-      round.exec_ms = Math.round(performance.now() - execStart);
-      round.execution = { command: response.content, exit_code: exitCode, shell };
-      verbose(`Command exited (${exitCode})`);
-      entry.outcome = exitCode === 0 ? "success" : "error";
-      addRound(entry, round);
-      return exitCode;
+      response.content = decision.command;
     }
-
-    // All rounds exhausted
-    chrome(`Could not resolve the request within ${maxRounds} rounds.`);
-    entry.outcome = "max_rounds";
-    return 1;
+    const shell = process.env.SHELL || "sh";
+    verbose("Executing command...");
+    const execStart = performance.now();
+    const stdinBlob =
+      response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
+    // +m disables monitor mode (job control) so the spawned interactive
+    // shell doesn't call tcsetpgrp() to seize the foreground process group.
+    // Without this, the shell takes foreground and never restores it; any
+    // later tcsetattr (e.g. Bun's exit cleanup after Ink's setRawMode)
+    // sends SIGTTOU to the whole process group, suspending the parent.
+    const proc = Bun.spawn([shell, "+m", "-ic", response.content], {
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: stdinBlob ?? "inherit",
+    });
+    const exitCode = await proc.exited;
+    round.exec_ms = Math.round(performance.now() - execStart);
+    round.execution = { command: response.content, exit_code: exitCode, shell };
+    verbose(`Command exited (${exitCode})`);
+    entry.outcome = exitCode === 0 ? "success" : "error";
+    addRound(entry, round);
+    return exitCode;
   } finally {
     try {
       appendLogEntry(wrapHome, entry);

@@ -51,6 +51,8 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
+- [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the model name lives separately on `ProviderConfig` and is computed via the `providerLabel(config)` helper. Code that holds a `Provider` and wants to display the model has to be passed the config too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `providerLabel(config)`, and update test fixtures (~10 inline `Provider` literals across `tests/retry.test.ts`, `tests/ensure-memory.test.ts`, `tests/rounds.test.ts`) to set `label: "test"`. After this lands, drop the sub-todo below.
+  - [ ] In `src/core/query.ts` `runRoundsUntilFinal`, the per-round verbose log currently says `Calling LLM...` because the model name isn't reachable from inside the loop without parameter sprawl. Once `Provider.label` exists, change the line to `verbose(\`Calling ${provider.label}...\`)` and delete the `TODO(provider-label)` comment above it.
 
 ## Memory System
 

@@ -63,7 +63,7 @@ Multi-round loop in `src/core/query.ts`. Assembles context once, then loops up t
 | Rule | Rationale |
 |---|---|
 | Unified counter for probes + error-fix rounds | One budget (`maxRounds`, configurable, default 5) prevents runaway loops regardless of response type. |
-| Rounds only tick for autonomous LLM calls | The budget prevents runaway loops *without user intervention*. User-initiated actions don't consume rounds: **Describe** doesn't increment the counter (side-channel explanation, not command generation). **Follow-up** resets the counter to 0 (new user intent = fresh budget). |
+| Rounds only tick for autonomous LLM calls | The round budget prevents runaway loops *without user intervention*. User-initiated actions don't consume budget: **Describe** doesn't decrement it (side-channel explanation, not command generation). **Follow-up** resets the budget to a fresh `maxRounds` so the user can refine without hitting the cap, but round numbers keep incrementing across the conversation — a probe after a follow-up shows up as round 5 in the log, not a new round 1. |
 | Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Writes to disk; context is not rebuilt per round (the LLM already knows what it discovered). |
 | Multi-turn conversation context | Probes become assistant/user turn pairs, giving the LLM full history for each subsequent call. |
 | Last-round constraint | "Do not probe" instruction injected on the final round. No budget info sent on earlier rounds — avoids polluting every request. |

@@ -37,7 +37,7 @@ describe("verbose e2e", () => {
     expect(stderr).toContain("Provider initialized");
     expect(stderr).toMatch(/Tools: \d+\/\d+ available/);
     expect(stderr).toMatch(/Memory: \d+ facts/);
-    expect(stderr).toContain("Calling test...");
+    expect(stderr).toContain("Calling LLM...");
     expect(stderr).toContain("LLM responded (answer, 5 chars)");
     // All verbose lines have elapsed timestamps
     const verboseLines = stderr.split("\n").filter((l) => l.includes("»"));
@@ -133,7 +133,7 @@ describe("verbose e2e", () => {
       }),
     });
     expect(stderr).toContain("Config loaded (test)");
-    expect(stderr).toContain("Calling test...");
+    expect(stderr).toContain("Calling LLM...");
   });
 
   test("--verbose shows command exit code for non-zero", async () => {
