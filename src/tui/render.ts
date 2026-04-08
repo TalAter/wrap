@@ -1,22 +1,25 @@
 import type { RiskLevel } from "../command-response.schema.ts";
 import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, SHOW_CURSOR } from "../core/ansi.ts";
 import { chrome, chromeRaw } from "../core/output.ts";
+import type { DialogOutput, FollowupHandler } from "./dialog.tsx";
 
-export type DialogChoice = "run" | "cancel";
-export type DialogResult = { result: DialogChoice | "blocked"; command: string };
+// Dialog outputs everything except `blocked`; that variant comes from
+// showDialog when there's no TTY and the dialog never mounts.
+export type DialogResult = DialogOutput | { type: "blocked"; command: string };
 
 /**
  * Show the dialog for a command. Blocks until the user resolves it.
- * Returns `{ result: "blocked" }` immediately if no TTY is available.
+ * Returns `{ type: "blocked" }` immediately if no TTY is available.
  */
 export async function showDialog(
   command: string,
   riskLevel: RiskLevel,
+  onFollowup: FollowupHandler,
   explanation?: string,
 ): Promise<DialogResult> {
   if (!process.stderr.isTTY) {
     chrome(`Command requires confirmation (no TTY available): ${command}`);
-    return { result: "blocked", command };
+    return { type: "blocked", command };
   }
 
   // TODO: When piped input lands, open /dev/tty for Ink's stdin (specs/tui-approach.md §2).
@@ -27,8 +30,7 @@ export async function showDialog(
     import("./dialog.tsx"),
   ]);
 
-  let choice: DialogChoice = "cancel";
-  let resultCommand = command;
+  let captured: DialogResult = { type: "cancel", command };
 
   try {
     // Isolate TUI rendering in alternate screen so resize redraw artifacts never corrupt main scrollback.
@@ -39,10 +41,10 @@ export async function showDialog(
         initialCommand: command,
         initialRiskLevel: riskLevel,
         initialExplanation: explanation,
-        onChoice: (c: DialogChoice, cmd: string) => {
-          choice = c;
-          resultCommand = cmd;
+        onResult: (r: DialogOutput) => {
+          captured = r;
         },
+        onFollowup,
       }),
       { stdout: process.stderr, patchConsole: false },
     );
@@ -52,5 +54,5 @@ export async function showDialog(
     chromeRaw(`${EXIT_ALT_SCREEN}${SHOW_CURSOR}`);
   }
 
-  return { result: choice, command: resultCommand };
+  return captured;
 }

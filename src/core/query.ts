@@ -379,13 +379,34 @@ export async function runQuery(
     const { response, round } = result;
     if (response.risk_level !== "low") {
       const { showDialog } = await import("../tui/render.ts");
+      // Stub follow-up handler — step 8 will replace this with the real
+      // closure that re-enters runRoundsUntilFinal. For now it returns
+      // exhausted immediately so the dialog UI is exercisable end-to-end.
+      const followupStub = async () => ({ type: "exhausted" as const });
       const decision = await showDialog(
         response.content,
         response.risk_level,
+        followupStub,
         response.explanation ?? undefined,
       );
-      if (decision.result !== "run") {
-        entry.outcome = decision.result === "blocked" ? "blocked" : "cancelled";
+      if (decision.type === "answer") {
+        console.log(decision.content);
+        entry.outcome = "success";
+        addRound(entry, round);
+        return 0;
+      }
+      if (decision.type === "exhausted") {
+        chrome(`Could not resolve the request within ${maxRounds} rounds.`);
+        entry.outcome = "max_rounds";
+        addRound(entry, round);
+        return 1;
+      }
+      if (decision.type === "error") {
+        addRound(entry, round);
+        throw new Error(decision.message);
+      }
+      if (decision.type !== "run") {
+        entry.outcome = decision.type === "blocked" ? "blocked" : "cancelled";
         addRound(entry, round);
         return 1;
       }

@@ -1,4 +1,13 @@
-import { Box, type DOMElement, measureElement, Text, useApp, useInput, useStdout } from "ink";
+import {
+  Box,
+  type DOMElement,
+  measureElement,
+  Text,
+  useApp,
+  useInput,
+  useStdin,
+  useStdout,
+} from "ink";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
 import type { RiskLevel } from "../command-response.schema.ts";
@@ -8,16 +17,36 @@ import {
   interpolateGradient,
   topBorderSegments,
 } from "./border.ts";
+import { useSpinner } from "./spinner.ts";
 import { TextInput } from "./text-input.tsx";
+
+export type FollowupResult =
+  | { type: "command"; command: string; riskLevel: RiskLevel; explanation?: string }
+  | { type: "answer"; content: string }
+  | { type: "exhausted" }
+  | { type: "error"; message: string };
+
+export type FollowupHandler = (text: string, signal: AbortSignal) => Promise<FollowupResult>;
+
+// Terminal results emitted by the dialog itself. `blocked` lives on
+// `DialogResult` (in render.ts) — it's only produced when there's no TTY,
+// before the dialog mounts.
+export type DialogOutput =
+  | { type: "run"; command: string }
+  | { type: "cancel"; command: string }
+  | { type: "answer"; content: string }
+  | { type: "exhausted" }
+  | { type: "error"; message: string };
 
 type DialogProps = {
   initialCommand: string;
   initialRiskLevel: RiskLevel;
   initialExplanation?: string;
-  onChoice: (choice: "run" | "cancel", command: string) => void;
+  onResult: (result: DialogOutput) => void;
+  onFollowup: FollowupHandler;
 };
 
-type DialogState = "confirming" | "editing-command";
+type DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup";
 
 const ACTION_ITEMS = [
   { label: "No", primary: true },
@@ -36,18 +65,50 @@ export function Dialog({
   initialCommand,
   initialRiskLevel,
   initialExplanation,
-  onChoice,
+  onResult,
+  onFollowup,
 }: DialogProps) {
   const { exit } = useApp();
   const { columns: termCols, rows: termRows } = useRenderSize();
   // Held as state so the follow-up flow can swap command/risk/explanation
   // in place without remounting the dialog (which would flicker the alt screen).
-  const [command] = useState(initialCommand);
-  const [riskLevel] = useState(initialRiskLevel);
-  const [explanation] = useState(initialExplanation);
+  const [command, setCommand] = useState(initialCommand);
+  const [riskLevel, setRiskLevel] = useState(initialRiskLevel);
+  const [explanation, setExplanation] = useState(initialExplanation);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dialogState, setDialogState] = useState<DialogState>("confirming");
   const [draft, setDraft] = useState(initialCommand);
+  const [followupText, setFollowupText] = useState("");
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // After a follow-up command swap, the next entry into editing-command must
+  // show the swapped-in command, not the pre-swap text. Resyncing draft on
+  // command change keeps them in lockstep without conflicting with edit-mode
+  // typing (the user can only edit when command is stable).
+  useEffect(() => {
+    setDraft(command);
+  }, [command]);
+
+  // Drain any buffered stdin on state transitions. Without this, a stray
+  // keypress from the previous mode (e.g. typed before the LLM responded)
+  // could be processed by the new mode and accidentally advance the dialog.
+  // tui-approach.md §3 lists this as critical for safety. dialogState is in
+  // the deps as a transition marker even though the body doesn't read it —
+  // re-firing on every state change is the entire point.
+  const { stdin } = useStdin();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dialogState is a transition marker
+  useEffect(() => {
+    try {
+      // Bounded so a misbehaving stream that never returns null can't hang
+      // the render. Real terminals never have more than a handful of bytes
+      // queued; 1024 is generous insurance.
+      for (let i = 0; i < 1024; i++) {
+        if (stdin.read?.() === null) break;
+      }
+    } catch {
+      // Test stdin streams may not implement read(); safe to ignore.
+    }
+  }, [dialogState, stdin]);
 
   // Width calculation
   const natural = Math.max(
@@ -106,7 +167,7 @@ export function Dialog({
   useInput(
     (input, key) => {
       if (key.escape) {
-        onChoice("cancel", command);
+        onResult({ type: "cancel", command });
         exit();
         return;
       }
@@ -114,13 +175,17 @@ export function Dialog({
         setDialogState("editing-command");
         return;
       }
+      if (input === "f") {
+        setDialogState("composing-followup");
+        return;
+      }
       if (input === "y") {
-        onChoice("run", command);
+        onResult({ type: "run", command });
         exit();
         return;
       }
       if (input === "n" || input === "q") {
-        onChoice("cancel", command);
+        onResult({ type: "cancel", command });
         exit();
         return;
       }
@@ -135,25 +200,85 @@ export function Dialog({
       if (key.return) {
         const label = ACTION_ITEMS[selectedIndex]?.label;
         if (label === "Yes") {
-          onChoice("run", command);
+          onResult({ type: "run", command });
           exit();
         } else if (label === "No") {
-          onChoice("cancel", command);
+          onResult({ type: "cancel", command });
           exit();
         } else if (label === "Edit") {
           setDialogState("editing-command");
+        } else if (label === "Follow-up") {
+          setDialogState("composing-followup");
         }
-        // Describe, Follow-up, Copy — no-op in phase 1
+        // Describe, Copy — no-op in phase 1
       }
     },
     { isActive: dialogState === "confirming" },
   );
 
+  // Composing follow-up: TextInput handles typing; parent only intercepts Esc.
+  useInput(
+    (_input, key) => {
+      if (key.escape) {
+        setDialogState("confirming");
+        setFollowupText("");
+      }
+    },
+    { isActive: dialogState === "composing-followup" },
+  );
+
+  // Processing follow-up: Esc aborts the in-flight call and returns to
+  // composing with the user's text preserved so they can refine it.
+  useInput(
+    (_input, key) => {
+      if (key.escape) {
+        abortControllerRef.current?.abort();
+        setDialogState("composing-followup");
+      }
+    },
+    { isActive: dialogState === "processing-followup" },
+  );
+
   const handleEditSubmit = (value: string) => {
     if (value.trim() === "") return;
-    onChoice("run", value);
+    onResult({ type: "run", command: value });
     exit();
   };
+
+  const handleFollowupSubmit = async (text: string) => {
+    if (text.trim() === "") return;
+    setDialogState("processing-followup");
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    let result: FollowupResult;
+    try {
+      result = await onFollowup(text, controller.signal);
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      onResult({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
+      exit();
+      return;
+    }
+    // Stale result after Esc-abort: drop it; user is back in composing.
+    if (controller.signal.aborted) return;
+    if (result.type === "command") {
+      setCommand(result.command);
+      setRiskLevel(result.riskLevel);
+      setExplanation(result.explanation);
+      setFollowupText("");
+      setDialogState("confirming");
+      return;
+    }
+    onResult(result);
+    exit();
+  };
+
+  const spinnerFrame = useSpinner(dialogState === "processing-followup");
+  const bottomStatus =
+    dialogState === "processing-followup" ? `${spinnerFrame ?? ""} Following up...` : undefined;
 
   return (
     <Box width={termCols} height={termRows} justifyContent="center" alignItems="center">
@@ -178,6 +303,15 @@ export function Dialog({
           >
             {dialogState === "editing-command" ? (
               <TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} />
+            ) : dialogState === "composing-followup" ? (
+              <TextInput
+                value={followupText}
+                onChange={setFollowupText}
+                onSubmit={handleFollowupSubmit}
+                placeholder="actually..."
+              />
+            ) : dialogState === "processing-followup" ? (
+              <TextInput value={followupText} readOnly />
             ) : (
               <TextInput value={command} readOnly />
             )}
@@ -193,6 +327,10 @@ export function Dialog({
             <Text> </Text>
             {dialogState === "editing-command" ? (
               <EditHint />
+            ) : dialogState === "composing-followup" ? (
+              <ComposeHint />
+            ) : dialogState === "processing-followup" ? (
+              <ProcessHint />
             ) : (
               <ActionBar selectedIndex={selectedIndex} />
             )}
@@ -207,7 +345,7 @@ export function Dialog({
           </Box>
         </Box>
 
-        <BorderLine segments={bottomBorderSegments(totalWidth)} />
+        <BorderLine segments={bottomBorderSegments(totalWidth, bottomStatus)} />
       </Box>
     </Box>
   );
@@ -266,6 +404,35 @@ function EditHint() {
         {"Esc"}
       </Text>
       <Text color="#73738c">{" to discard changes"}</Text>
+    </Text>
+  );
+}
+
+function ComposeHint() {
+  return (
+    <Text>
+      <Text color="#d2d2e1">{"   "}</Text>
+      <Text bold color="#f5c864">
+        {"⏎"}
+      </Text>
+      <Text color="#73738c">{" to send"}</Text>
+      <Text color="#414150">{"  │  "}</Text>
+      <Text bold color="#aaaac3">
+        {"Esc"}
+      </Text>
+      <Text color="#73738c">{" to cancel"}</Text>
+    </Text>
+  );
+}
+
+function ProcessHint() {
+  return (
+    <Text>
+      <Text color="#d2d2e1">{"   "}</Text>
+      <Text bold color="#aaaac3">
+        {"Esc"}
+      </Text>
+      <Text color="#73738c">{" to abort"}</Text>
     </Text>
   );
 }

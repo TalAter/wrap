@@ -1,7 +1,34 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { Dialog } from "../src/tui/dialog.tsx";
+import {
+  Dialog,
+  type DialogOutput,
+  type FollowupHandler,
+  type FollowupResult,
+} from "../src/tui/dialog.tsx";
+
+const noopFollowup: FollowupHandler = async () => ({ type: "exhausted" });
+
+function makeFollowupHandler() {
+  let resolveCurrent: ((r: FollowupResult) => void) | null = null;
+  const calls: Array<{ text: string; signal: AbortSignal }> = [];
+  const handler: FollowupHandler = (text, signal) => {
+    calls.push({ text, signal });
+    return new Promise<FollowupResult>((r) => {
+      resolveCurrent = r;
+    });
+  };
+  return {
+    handler,
+    calls,
+    resolve(result: FollowupResult) {
+      const r = resolveCurrent;
+      resolveCurrent = null;
+      r?.(result);
+    },
+  };
+}
 
 function extractDialogLines(frame: string): string[] {
   const lines = stripAnsi(frame).split("\n");
@@ -20,25 +47,47 @@ describe("Dialog", () => {
     // remounting. The dialog holds them as local state seeded from initial*
     // props — re-rendering with new props after mount must NOT overwrite it.
     const { lastFrame, rerender } = render(
-      <Dialog initialCommand="first" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="first"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     expect(stripAnsi(lastFrame() ?? "")).toContain("first");
 
-    rerender(<Dialog initialCommand="second" initialRiskLevel="medium" onChoice={() => {}} />);
+    rerender(
+      <Dialog
+        initialCommand="second"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("first");
     expect(stripAnsi(lastFrame() ?? "")).not.toContain("second");
   });
 
   test("renders command text", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="rm -rf /" initialRiskLevel="high" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm -rf /"
+        initialRiskLevel="high"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     expect(lastFrame()).toContain("rm -rf /");
   });
 
   test("renders risk badge in border", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="chmod 777 ." initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="chmod 777 ."
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("⚠ medium risk");
@@ -46,7 +95,12 @@ describe("Dialog", () => {
 
   test("renders high risk badge", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="rm -rf /" initialRiskLevel="high" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm -rf /"
+        initialRiskLevel="high"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("⚠ high risk");
@@ -58,7 +112,8 @@ describe("Dialog", () => {
         initialCommand="rm file"
         initialRiskLevel="medium"
         initialExplanation="Deletes a file"
-        onChoice={() => {}}
+        onResult={() => {}}
+        onFollowup={noopFollowup}
       />,
     );
     expect(lastFrame()).toContain("Deletes a file");
@@ -66,7 +121,12 @@ describe("Dialog", () => {
 
   test("shows action bar with Run command prompt", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("Run command?");
@@ -76,7 +136,12 @@ describe("Dialog", () => {
 
   test("shows secondary actions in action bar", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("Describe");
@@ -87,7 +152,12 @@ describe("Dialog", () => {
 
   test("has gradient border corners", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("╭");
@@ -98,7 +168,12 @@ describe("Dialog", () => {
 
   test("has vertical border characters", () => {
     const { lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("│");
@@ -110,11 +185,17 @@ describe("Dialog", () => {
         initialCommand="rm file"
         initialRiskLevel="medium"
         initialExplanation="info"
-        onChoice={() => {}}
+        onResult={() => {}}
+        onFollowup={noopFollowup}
       />,
     );
     const without = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     expect(stripAnsi(withExplanation.lastFrame() ?? "")).toContain("info");
     expect(stripAnsi(without.lastFrame() ?? "")).not.toContain("info");
@@ -126,7 +207,8 @@ describe("Dialog", () => {
         initialCommand="rm CLAUDE.md"
         initialRiskLevel="medium"
         initialExplanation="Deletes the file CLAUDE.md from the current directory (/Users/tal/mysite/wrap/.claude/worktrees/tui-plan). This is irreversible and removes it immediately."
-        onChoice={() => {}}
+        onResult={() => {}}
+        onFollowup={noopFollowup}
       />,
     );
     await new Promise((r) => setTimeout(r, 10));
@@ -144,7 +226,8 @@ describe("Dialog", () => {
         initialCommand="rm /Users/tal/mysite/wrap/CLAUDE.md"
         initialRiskLevel="high"
         initialExplanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
-        onChoice={() => {}}
+        onResult={() => {}}
+        onFollowup={noopFollowup}
       />,
     );
 
@@ -175,7 +258,8 @@ describe("Dialog", () => {
         initialCommand="rm /Users/tal/mysite/wrap/CLAUDE.md"
         initialRiskLevel="high"
         initialExplanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
-        onChoice={() => {}}
+        onResult={() => {}}
+        onFollowup={noopFollowup}
       />,
     );
 
@@ -200,7 +284,8 @@ describe("Dialog", () => {
         initialCommand="rm /Users/tal/mysite/wrap/CLAUDE.md"
         initialRiskLevel="high"
         initialExplanation="Deletes the CLAUDE.md file in your wrap project directory. This is irreversible and cannot be recovered unless you have git history or backup."
-        onChoice={() => {}}
+        onResult={() => {}}
+        onFollowup={noopFollowup}
       />,
     );
 
@@ -230,7 +315,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("y triggers run for medium risk", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("y");
     expect(result).toBe("run");
@@ -239,7 +331,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("y triggers run for high risk", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm -rf /" initialRiskLevel="high" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm -rf /"
+        initialRiskLevel="high"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("y");
     expect(result).toBe("run");
@@ -248,7 +347,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("n triggers cancel", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("n");
     expect(result).toBe("cancel");
@@ -257,7 +363,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("q triggers cancel", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("q");
     expect(result).toBe("cancel");
@@ -266,7 +379,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("Esc triggers cancel", async () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("\x1b");
     // Ink's input parser uses a timeout to distinguish bare Esc from escape sequences
@@ -274,13 +394,19 @@ describe("Dialog — keybindings (both risk levels)", () => {
     expect(result).toBe("cancel");
   });
 
-  test("d/f/c are no-ops (ignored in phase 1)", () => {
+  test("d/c are no-ops (ignored in phase 1)", () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("d");
-    stdin.write("f");
     stdin.write("c");
     expect(result).toBeUndefined();
     expect(lastFrame()).toContain("rm file");
@@ -289,7 +415,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("ignores unrecognized keys", () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("x");
     stdin.write("a");
@@ -300,7 +433,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("Enter activates selected action (default: No = cancel)", () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("\r");
     expect(result).toBe("cancel");
@@ -309,7 +449,14 @@ describe("Dialog — keybindings (both risk levels)", () => {
   test("arrow right then Enter activates Yes = run", async () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     // Move right to "Yes" — wait for React re-render before pressing Enter
     stdin.write("\x1b[C");
@@ -318,10 +465,17 @@ describe("Dialog — keybindings (both risk levels)", () => {
     expect(result).toBe("run");
   });
 
-  test("y passes original command to onChoice", () => {
+  test("y passes original command in result", () => {
     let cmd: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(_c, c) => (cmd = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("y");
     expect(cmd).toBe("rm file");
@@ -331,7 +485,12 @@ describe("Dialog — keybindings (both risk levels)", () => {
 describe("Dialog — edit mode", () => {
   test("e enters edit mode and shows run hint", async () => {
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -341,7 +500,12 @@ describe("Dialog — edit mode", () => {
 
   test("edit mode shows the command text", async () => {
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -351,7 +515,14 @@ describe("Dialog — edit mode", () => {
   test("in edit mode y/n/q do not trigger actions", async () => {
     let result: string | undefined;
     const { stdin } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -369,10 +540,11 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
-        onChoice={(c, command) => {
-          result = c;
-          cmd = command;
+        onResult={(r) => {
+          result = r.type;
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -386,7 +558,14 @@ describe("Dialog — edit mode", () => {
   test("Esc in edit mode returns to normal mode", async () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -406,9 +585,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
-        onChoice={(_c, command) => {
-          cmd = command;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -424,7 +604,14 @@ describe("Dialog — edit mode", () => {
   test("empty command cannot be submitted", async () => {
     let result: string | undefined;
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="x" initialRiskLevel="medium" onChoice={(c) => (result = c)} />,
+      <Dialog
+        initialCommand="x"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          result = r.type;
+        }}
+        onFollowup={noopFollowup}
+      />,
     );
     stdin.write("e");
     await new Promise((r) => setTimeout(r, 50));
@@ -436,15 +623,16 @@ describe("Dialog — edit mode", () => {
     expect(lastFrame()).toBeDefined();
   });
 
-  test("edited command is passed to onChoice on Enter", async () => {
+  test("edited command is passed in result on Enter", async () => {
     let cmd: string | undefined;
     const { stdin } = render(
       <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
-        onChoice={(_c, command) => {
-          cmd = command;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -459,7 +647,12 @@ describe("Dialog — edit mode", () => {
 
   test("action bar Edit button enters edit mode", async () => {
     const { stdin, lastFrame } = render(
-      <Dialog initialCommand="rm file" initialRiskLevel="medium" onChoice={() => {}} />,
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
     );
     // Arrow right to Edit: No(0) → Yes(1) → Describe(2) → Edit(3)
     stdin.write("\x1b[C");
@@ -480,9 +673,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -503,9 +697,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -528,9 +723,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -550,9 +746,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -574,9 +771,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -597,9 +795,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -622,9 +821,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -649,9 +849,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -673,9 +874,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -699,9 +901,10 @@ describe("Dialog — edit mode", () => {
       <Dialog
         initialCommand="rm /tmp/file"
         initialRiskLevel="medium"
-        onChoice={(_c, c) => {
-          cmd = c;
+        onResult={(r) => {
+          if (r.type === "run" || r.type === "cancel") cmd = r.command;
         }}
+        onFollowup={noopFollowup}
       />,
     );
     stdin.write("e");
@@ -711,6 +914,263 @@ describe("Dialog — edit mode", () => {
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 50));
     expect(cmd).toBe("rm /tmp/");
+  });
+});
+
+describe("Dialog — follow-up composing", () => {
+  test("f key enters composing-followup state", async () => {
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    // Composing shows the placeholder text
+    expect(frame).toContain("actually");
+    // Action bar is hidden in composing
+    expect(frame).not.toContain("Run command?");
+  });
+
+  test("Enter on Follow-up action enters composing-followup", async () => {
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
+    );
+    // Arrow right to Follow-up: No(0) → Yes(1) → Describe(2) → Edit(3) → Follow-up(4)
+    for (let i = 0; i < 4; i++) {
+      stdin.write("\x1b[C");
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("actually");
+  });
+
+  test("Esc in composing returns to confirming and discards text", async () => {
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("hello");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 100));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("Run command?");
+    expect(frame).not.toContain("hello");
+  });
+
+  test("Submit in composing calls onFollowup with text", async () => {
+    const followup = makeFollowupHandler();
+    const { stdin } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("only .ts files");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(followup.calls).toHaveLength(1);
+    expect(followup.calls[0]?.text).toBe("only .ts files");
+  });
+
+  test("empty submit in composing is ignored", async () => {
+    const followup = makeFollowupHandler();
+    const { stdin } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(followup.calls).toHaveLength(0);
+  });
+});
+
+describe("Dialog — follow-up processing", () => {
+  test("after submit, dialog shows processing state with readOnly input", async () => {
+    const followup = makeFollowupHandler();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("changes");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    // Text still visible (readOnly)
+    expect(frame).toContain("changes");
+    // Action bar hidden
+    expect(frame).not.toContain("Run command?");
+  });
+
+  test("command result swaps command and returns to confirming", async () => {
+    const followup = makeFollowupHandler();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("be safer");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    followup.resolve({
+      type: "command",
+      command: "rm -i file",
+      riskLevel: "medium",
+      explanation: "Interactive",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("rm -i file");
+    expect(frame).toContain("Interactive");
+    expect(frame).toContain("Run command?");
+  });
+
+  test("answer result fires onResult", async () => {
+    const followup = makeFollowupHandler();
+    let captured: DialogOutput | undefined;
+    const { stdin } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          captured = r;
+        }}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("just tell me");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    followup.resolve({ type: "answer", content: "the answer is 42" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(captured?.type).toBe("answer");
+    if (captured?.type === "answer") expect(captured.content).toBe("the answer is 42");
+  });
+
+  test("exhausted result fires onResult", async () => {
+    const followup = makeFollowupHandler();
+    let captured: DialogOutput | undefined;
+    const { stdin } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={(r) => {
+          captured = r;
+        }}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("xyz");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    followup.resolve({ type: "exhausted" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(captured?.type).toBe("exhausted");
+  });
+
+  test("Esc in processing aborts and returns to composing with text preserved", async () => {
+    const followup = makeFollowupHandler();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("preserve me");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(followup.calls[0]?.signal.aborted).toBe(false);
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(followup.calls[0]?.signal.aborted).toBe(true);
+    const frame = stripAnsi(lastFrame() ?? "");
+    // Text preserved in composing
+    expect(frame).toContain("preserve me");
+    // Not in processing nor confirming
+    expect(frame).not.toContain("Run command?");
+  });
+
+  test("after follow-up command swap, edit shows new command", async () => {
+    const followup = makeFollowupHandler();
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm file"
+        initialRiskLevel="medium"
+        onResult={() => {}}
+        onFollowup={followup.handler}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("safer");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    followup.resolve({
+      type: "command",
+      command: "rm -i file",
+      riskLevel: "medium",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    // Now press 'e' to edit — the draft should show the swapped command
+    stdin.write("e");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("rm -i file");
+    expect(frame).toContain("⏎ to run");
   });
 });
 
@@ -729,8 +1189,10 @@ describe("showDialog", () => {
 
   test("returns blocked when stderr is not a TTY", async () => {
     const { showDialog } = await import("../src/tui/render.ts");
-    const result = await showDialog("rm -rf /", "high");
-    expect(result.result).toBe("blocked");
-    expect(result.command).toBe("rm -rf /");
+    const result = await showDialog("rm -rf /", "high", noopFollowup);
+    expect(result.type).toBe("blocked");
+    if (result.type === "blocked") {
+      expect(result.command).toBe("rm -rf /");
+    }
   });
 });
