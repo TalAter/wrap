@@ -383,12 +383,12 @@ export async function runQuery(
       // closure that re-enters runRoundsUntilFinal. For now it returns
       // exhausted immediately so the dialog UI is exercisable end-to-end.
       const followupStub = async () => ({ type: "exhausted" as const });
-      const decision = await showDialog(
-        response.content,
-        response.risk_level,
-        followupStub,
-        response.explanation ?? undefined,
-      );
+      const decision = await showDialog({
+        command: response.content,
+        riskLevel: response.risk_level,
+        onFollowup: followupStub,
+        explanation: response.explanation ?? undefined,
+      });
       if (decision.type === "answer") {
         console.log(decision.content);
         entry.outcome = "success";

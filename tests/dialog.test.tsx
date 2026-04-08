@@ -1189,7 +1189,11 @@ describe("showDialog", () => {
 
   test("returns blocked when stderr is not a TTY", async () => {
     const { showDialog } = await import("../src/tui/render.ts");
-    const result = await showDialog("rm -rf /", "high", noopFollowup);
+    const result = await showDialog({
+      command: "rm -rf /",
+      riskLevel: "high",
+      onFollowup: noopFollowup,
+    });
     expect(result.type).toBe("blocked");
     if (result.type === "blocked") {
       expect(result.command).toBe("rm -rf /");

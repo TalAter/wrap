@@ -7,16 +7,23 @@ import type { DialogOutput, FollowupHandler } from "./dialog.tsx";
 // showDialog when there's no TTY and the dialog never mounts.
 export type DialogResult = DialogOutput | { type: "blocked"; command: string };
 
+type ShowDialogOptions = {
+  command: string;
+  riskLevel: RiskLevel;
+  onFollowup: FollowupHandler;
+  explanation?: string;
+};
+
 /**
  * Show the dialog for a command. Blocks until the user resolves it.
  * Returns `{ type: "blocked" }` immediately if no TTY is available.
  */
-export async function showDialog(
-  command: string,
-  riskLevel: RiskLevel,
-  onFollowup: FollowupHandler,
-  explanation?: string,
-): Promise<DialogResult> {
+export async function showDialog({
+  command,
+  riskLevel,
+  onFollowup,
+  explanation,
+}: ShowDialogOptions): Promise<DialogResult> {
   if (!process.stderr.isTTY) {
     chrome(`Command requires confirmation (no TTY available): ${command}`);
     return { type: "blocked", command };
