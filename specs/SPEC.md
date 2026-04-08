@@ -473,7 +473,7 @@ echo "timeout: $(w? what is a good HTTP timeout in seconds, just the number)" >>
 w? summarize the MIT license in one sentence | pbcopy
 ```
 
-Wrap's own output (TUI panels, notifications, confirmations) goes to a non-stdout channel:
+Wrap's own output (UI, notifications, confirmations, errors) goes to a non-stdout channel:
 
 | Channel    | What goes there                                                                 |
 |------------|---------------------------------------------------------------------------------|
