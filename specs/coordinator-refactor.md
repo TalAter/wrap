@@ -64,7 +64,7 @@ Five layers, one direction of data flow.
 ```
 
 **Layer A — Round runner.** Three pure-ish primitives in `src/core/`:
-- `Transcript` (in `src/core/transcript.ts`) — the conversation history as a list of *semantic* turns (`user_request`, `followup`, `probe`, `candidate_command`, `answer`), NOT a provider-shaped `PromptInput`. The transcript is the durable state; `PromptInput` is built fresh from it on every LLM call. There is no `stripStaleInstructions` because there are no stale instructions to strip — meta-directives (`lastRoundInstruction`, refused-probe retry) live only inside the local scope of one `runRound` call.
+- `Transcript` (in `src/core/transcript.ts`) — the conversation history as a list of *semantic* turns (`user`, `probe`, `candidate_command`, `answer`), NOT a provider-shaped `PromptInput`. The transcript is the durable state; `PromptInput` is built fresh from it on every LLM call. There is no `stripStaleInstructions` because there are no stale instructions to strip — meta-directives (`lastRoundInstruction`, refused-probe retry) live only inside the local scope of one `runRound` call.
 - `runRound(provider, transcript, system, options) → Round` — a single LLM call with in-round retries (parse-failure retry, probe-risk retry). No logging, no chrome, no spinner. Calls `buildPromptInput(transcript, system, attemptDirectives)` internally to produce the messages array. The transcript is read-only inside `runRound`; the loop pushes new turns AFTER each round.
 - `runLoop(provider, transcript, system, state, options) → AsyncGenerator<LoopEvent, LoopReturn>` — drives `runRound` repeatedly, executes probes inline, pushes `probe` turns to the transcript after each probe runs, yields lifecycle events (`round-complete`, `step-running`, `step-output`), returns a final-form discriminated union.
 
@@ -95,12 +95,12 @@ The honest division of labour: the runner does *narrow* I/O (LLM calls, probe ex
 ```
 src/
   core/
-    transcript.ts       # Transcript + TranscriptTurn + buildPromptInput + pushTurn
-    round.ts            # runRound + helpers (callWithRetry, isStructuredOutputError, extractFailedText)
+    transcript.ts       # Transcript + TranscriptTurn + buildPromptInput + AttemptDirectives
+    round.ts            # runRound + RoundError + helpers (callWithRetry, isStructuredOutputError, extractFailedText)
     runner.ts           # runLoop async generator + LoopState + LoopEvent + LoopReturn types
-    notify.ts           # NotificationBus + the singleton + Notification type
-                        # (in core/, not session/, so chrome/verbose can import it
-                        #  without core depending on session)
+    notify.ts           # emit/subscribe/Notification + writeNotificationToStderr
+                        # (module-level state, not a class; in core/ deliberately
+                        #  so chrome/verbose can import without crossing into session/)
   session/
     state.ts            # AppState + AppEvent + SessionOutcome (LoopReturn re-imported from core/runner.ts)
     reducer.ts          # reduce(state, event) → AppState  (pure)
@@ -163,10 +163,13 @@ import type { PromptInput } from "../llm/types.ts";
 export type Transcript = TranscriptTurn[];
 
 export type TranscriptTurn =
-  /** The initial query, the first turn of every transcript. */
-  | { kind: "user_request"; text: string }
-  /** A free-text follow-up the user typed into the dialog. */
-  | { kind: "followup"; text: string }
+  /**
+   * A user turn — the initial query (first in the transcript) OR a follow-up
+   * typed into the dialog. The two are not distinguished at the data layer
+   * because they render identically in `buildPromptInput`. The "first turn
+   * is the initial query" convention is positional.
+   */
+  | { kind: "user"; text: string }
   /**
    * A non-final command the loop executed inline. Carries the full LLM
    * response (so subsequent rounds can echo it as an assistant turn) plus
@@ -186,8 +189,9 @@ export type TranscriptTurn =
    */
   | { kind: "answer"; content: string };
 
-/** Append a turn. Always mutates in place — there is one transcript per session. */
-export function pushTurn(transcript: Transcript, turn: TranscriptTurn): void;
+// `Transcript` is `TranscriptTurn[]`. Push turns directly with
+// `transcript.push(turn)` — there is no `pushTurn` helper because it would
+// add nothing over the array method.
 
 /**
  * Ephemeral attempt-scoped directives that the builder applies for ONE call
@@ -211,8 +215,7 @@ export type AttemptDirectives = {
  * does not mutate the transcript.
  *
  * Rendering rules:
- *   - `user_request` → `{ role: "user", content: text }`
- *   - `followup` → `{ role: "user", content: text }`
+ *   - `user` → `{ role: "user", content: text }`
  *   - `probe` → `{ role: "assistant", content: JSON.stringify(response) }`,
  *     then `{ role: "user", content: sectionCapturedOutput + "\n" + output }`
  *     (with the same truncation/exit-code formatting today's loop applies)
@@ -221,6 +224,13 @@ export type AttemptDirectives = {
  *     (only relevant when an answer turn is followed by a follow-up)
  *   - directives.isLastRound → append `{ role: "user", content: lastRoundInstruction }`
  *   - directives.probeRiskRetry → append rejected echo + probeRiskInstruction
+ *
+ * Performance note: `buildPromptInput` re-stringifies prior responses on every
+ * round (today's loop strings them once into `input.messages` and never
+ * re-builds). The cost is negligible compared to the LLM call itself, and the
+ * tradeoff is worth it: re-building per call means there is no persistent
+ * provider-shaped buffer to maintain, and multi-step's `projectForEcho`
+ * field-stripping naturally lives inside the per-call build (no extra helper).
  */
 export function buildPromptInput(
   transcript: Transcript,
@@ -230,8 +240,8 @@ export function buildPromptInput(
 ```
 
 Implementation notes:
-- The transcript is the SINGLE source of truth for "what the conversation looks like." The runner, the session, and the reducer all read from it; only the runner and the session's `submit-followup` post-transition hook write to it.
-- `assembleCommandPrompt` (currently in `src/llm/context.ts`) splits in two: the system-prompt portion stays as `assembleSystemPrompt(systemContext)` returning a string; the messages portion is replaced by `buildPromptInput`. The session calls `assembleSystemPrompt` once at startup and pushes the initial `user_request` turn to the transcript.
+- The transcript is the SINGLE source of truth for "what the conversation looks like." The runner, the session, and the reducer all read from it; only the runner and the session's `submit-followup` post-transition hook write to it (via `transcript.push(turn)` directly — no helper).
+- `assembleCommandPrompt` (currently in `src/llm/context.ts`) splits in two: the system-prompt portion stays as `assembleSystemPrompt(systemContext)` returning a string; the messages portion is replaced by `buildPromptInput`. The session calls `assembleSystemPrompt` once at startup and pushes the initial `user` turn to the transcript.
 - `stripStaleInstructions` does NOT exist in the new architecture. Multi-step's `projectForEcho` is also unnecessary — the transcript-to-PromptInput rendering does the projection.
 
 ### `src/core/round.ts`
@@ -249,6 +259,16 @@ export type RunRoundOptions = {
   isLastRound: boolean;
   /** Display label for the active provider, for the error message wrapper. */
   model: string;
+  /**
+   * Show the chrome spinner around the LLM call. The session passes `true` for
+   * the initial loop in `thinking` (no dialog), `false` for follow-up loops in
+   * `processing` (the dialog has its own bottom-border spinner). Spinner
+   * lifecycle is per LLM call (per `runRound`), not per loop — between
+   * iterations, the spinner is stopped, so chrome lines emitted by the loop
+   * (memory updates, step explanations) land on a clean stderr row. This
+   * matches today's behaviour in `runRoundsUntilFinal:209-242`.
+   */
+  showSpinner: boolean;
 };
 
 /**
@@ -311,6 +331,7 @@ Implementation notes:
 - Move `callWithRetry`, `isStructuredOutputError`, `extractFailedText`, and `REFUSED_PROBE_INSTRUCTION` from `src/core/query.ts`. They keep their current behaviour.
 - `stripStaleInstructions` is GONE. The semantic transcript makes it impossible for stale meta-instructions to leak across calls — they live only inside `directives` for the call that uses them.
 - The `Round` returned has `parsed`, `llm_ms`, and (on error) `provider_error` populated. Memory updates and watchlist additions are NOT runRound's job — they're side effects of the loop and are handled in `runner.ts`.
+- **Spinner lifecycle (load-bearing).** When `showSpinner` is true, `runRound` calls `startChromeSpinner(SPINNER_TEXT)` at the top and the returned stop function in a `finally` block. This is the ONLY place the chrome spinner is started in the new architecture. Doing it per LLM call (rather than once around the whole loop) means the spinner is stopped between iterations, so any chrome notifications emitted by the loop (memory updates, step-running, step-output) land on a clean stderr row instead of racing the spinner's `\r`-rewritten frame. Today's `runRoundsUntilFinal` does this exact thing; the refactor preserves it.
 
 ### `src/core/runner.ts`
 
@@ -337,22 +358,28 @@ export type LoopOptions = {
   pipedInput?: string;
   signal?: AbortSignal;
   /**
-   * User text that triggered this loop call. The runner sets `round.followup_text`
-   * on the FIRST round of the call (consume-once), then leaves it unset on
-   * subsequent rounds in the same call. Set by the coordinator's restart-loop
-   * primitive when re-entering after a follow-up; absent on the initial call.
+   * Forwarded to `runRound` per iteration. The session sets this true for the
+   * initial loop in `thinking`, false for follow-up loops in `processing`.
+   * The runner doesn't read it directly — just passes it through. See
+   * `RunRoundOptions.showSpinner` for the lifecycle.
    */
-  followupText?: string;
+  showSpinner: boolean;
 };
+
+// Note: there is NO `followupText` on `LoopOptions`. The runner is pure
+// generator logic over a transcript and doesn't know about follow-ups. The
+// coordinator stamps `round.followup_text` on the first `round-complete` of
+// each loop restart in its event handler — see the `pumpLoop`/`handleLoopEvent`
+// pseudocode in § runSession.
 
 export type LoopEvent =
   /**
    * Yielded immediately after a successful LLM round. The Round object is the
    * one the consumer should `addRound(entry, round)` — same reference, so any
    * later mutation by the consumer (exec_ms / execution after final exec)
-   * lands in the entry too. The runner is responsible for setting
-   * `round.followup_text` from `LoopOptions.followupText` on the FIRST round
-   * of the call only.
+   * lands in the entry too. The consumer is also responsible for stamping
+   * `round.followup_text` on the first round-complete of each loop restart;
+   * the runner doesn't know about follow-ups.
    */
   | { type: "round-complete"; round: Round }
   /**
@@ -389,23 +416,23 @@ export type LoopReturn =
  *   1. Check options.signal — if aborted, return `{ type: "aborted" }`.
  *      The consumer's `ctrl.signal.aborted` guard catches it as a backup,
  *      but the explicit return variant means the contract is unambiguous.
- *   2. Call runRound(provider, transcript, system, { isLastRound }). On the
- *      FIRST iteration of the call, set `round.followup_text = options.followupText`
- *      (consume-once via a local variable cleared after the first round).
+ *   2. Call runRound(provider, transcript, system, { isLastRound, model,
+ *      showSpinner: options.showSpinner }). The runner forwards `showSpinner`
+ *      from its options through to runRound; runRound owns the lifecycle.
  *   3. yield round-complete with the produced Round.
  *   4. Apply side effects of the parsed response:
  *        - memory updates → write to disk + emit `notifications.emit({ kind: "chrome", ..., icon: "🧠" })`
  *        - watchlist additions → write to disk
  *   5. Route by response type:
- *        - answer  → pushTurn(transcript, { kind: "answer", content }), return { type: "answer", ... }
- *        - command → pushTurn(transcript, { kind: "candidate_command", response }), return { type: "command", response, round }
+ *        - answer  → transcript.push({ kind: "answer", content }), return { type: "answer", ... }
+ *        - command → transcript.push({ kind: "candidate_command", response }), return { type: "command", response, round }
  *        - probe   → execute inline:
  *            a) yield step-running with explanation + icon (fetchesUrl heuristic)
  *            b) executeShellCommand in capture mode
  *            c) post-process output (combine stdout+stderr, truncate, prepend
  *               sectionCapturedOutput header, fall back to capturedNoOutput on empty)
  *            d) yield step-output with the post-processed text
- *            e) pushTurn(transcript, { kind: "probe", response, output, exitCode })
+ *            e) transcript.push({ kind: "probe", response, output, exitCode })
  *            f) continue loop
  *   6. When budget reaches zero, return { type: "exhausted" }.
  *
@@ -460,44 +487,55 @@ export type NotificationListener = (n: Notification) => void;
 /**
  * Typed event bus. Replaces output-sink.ts.
  *
- * - Producers (chrome, verbose, runner memory-update emits) call `emit(n)`.
- * - With NO listener subscribed: emit() writes a formatted line to stderr.
- *   This is the path used outside any session (during main.ts setup, in tests,
- *   in subcommand dispatch).
- * - With a listener subscribed: emit() invokes the listener and skips the
- *   stderr write. The session subscribes a listener that buffers + optionally
- *   forwards to the dialog.
+ * Module-level state — matches the existing pattern in `src/core/verbose.ts`
+ * (which uses `let enabled = false`) and `src/core/spinner.ts` (which uses
+ * `let exitGuardInstalled = false`). No class, no singleton instance — just
+ * functions that close over module-private state.
  *
- * In practice there is one subscriber at a time (the active session), so
- * the bus behaves like the old single-slot sink minus the failure modes.
+ * - Producers (chrome, verbose, runner memory-update emits) call `emit(n)`.
+ * - With NO listener subscribed: emit() writes a formatted line to stderr
+ *   via `writeNotificationToStderr`. This is the path used outside any
+ *   session (during main.ts setup, in tests, in subcommand dispatch).
+ * - With a listener subscribed: emit() invokes the listener and skips the
+ *   stderr write. The session subscribes a listener that EITHER writes to
+ *   stderr (when no dialog is mounted) OR buffers (when the dialog is up).
+ *
+ * In practice there is one subscriber at a time (the active session). The
+ * `Set<NotificationListener>` shape supports multiple subscribers because
+ * tests need it, but production never has more than one.
+ *
  * Differences from the old output-sink:
  *   - Subscribe/unsubscribe via add/remove on a Set (no claim/release lifecycle)
  *   - Never throws (no double-claim error class)
  *   - Listener exceptions are swallowed; producers can never crash from a
  *     buggy listener
- *   - Multiple simultaneous subscribers are supported (used by tests; not
- *     exercised in production)
  */
-class NotificationBus {
-  emit(n: Notification): void;
-  subscribe(listener: NotificationListener): () => void;
-  /** Test-only reset. */
-  reset(): void;
-}
 
-export const notifications: NotificationBus;
+// Module-private state
+// let listeners = new Set<NotificationListener>();
+
+export function emit(n: Notification): void;
+export function subscribe(listener: NotificationListener): () => void;
+
+/** Test-only — clears all listeners. */
+export function resetNotifications(): void;
 
 /** Format-and-write a notification to stderr. Used as the default fallback. */
 export function writeNotificationToStderr(n: Notification): void;
+
+// Convenience namespace re-export for the rest of the codebase. Importing
+// `notifications` lets call sites read like `notifications.emit(...)` /
+// `notifications.subscribe(...)` instead of pulling individual functions.
+export const notifications = { emit, subscribe };
 ```
 
 Implementation notes:
-- The default fallback (no listener) is just `writeNotificationToStderr` called inline.
-- The session's listener buffers raw `Notification` objects (not formatted strings) and on unmount calls `writeNotificationToStderr` for each in original order.
+- The default fallback (no listener) is just `writeNotificationToStderr` called inline by `emit` when `listeners.size === 0`.
+- The session's listener handles the buffer/stderr decision based on `dialogHost === null` — see the listener pseudocode in § runSession.
 - `chrome(text, icon?)` becomes one line: `notifications.emit({ kind: "chrome", text, icon })`.
 - `verbose(text)` becomes: `if (!enabled) return; notifications.emit({ kind: "verbose", line: prefix() + dim(text) })`.
 - `verboseHighlight` similarly: builds the line, emits as `verbose`.
-- The bus singleton lives at `src/core/notify.ts` and is imported by `src/core/output.ts`, `src/core/verbose.ts`, `src/core/runner.ts`, and `src/session/session.ts`. Lives in `core/` deliberately so the chrome/verbose producers don't have to reach across into `session/`.
+- Lives at `src/core/notify.ts` (deliberately in `core/`, not `session/`) so the chrome/verbose producers don't have to reach across into `session/`.
 
 ### `src/session/state.ts`
 
@@ -505,6 +543,7 @@ Implementation notes:
 import type { CommandResponse, RiskLevel } from "../command-response.schema.ts";
 import type { Round } from "../logging/entry.ts";
 import type { LoopReturn } from "../core/runner.ts";
+import type { Notification } from "../core/notify.ts";
 
 /** All states the session can be in. The dialog is mounted iff `tag` is one
  *  of the dialog tags (confirming, editing, composing, processing). */
@@ -520,47 +559,42 @@ export type AppState =
  *  final-form response. Initial state of every session. */
 export type ThinkingState = { tag: "thinking" };
 
-/** Dialog mounted, user choosing what to do. */
+/** Dialog mounted, user choosing what to do.
+ *
+ * `command`, `risk`, `explanation` are NOT separate fields — they are
+ * derived from `response.content`, `response.risk_level`, and
+ * `response.explanation` respectively. The dialog reads them via
+ * `state.response.content` etc. The reducer threads `response` and `round`
+ * through every transition; it does not maintain parallel projections. */
 export type ConfirmingState = {
   tag: "confirming";
-  command: string;
-  risk: RiskLevel;
-  explanation?: string;
-  /** The full LLM response. Kept on state so `exiting{run}` can carry it
-   *  through to `SessionOutcome.run.response` — both `source: "model"`
-   *  (where `command === response.content`) and `source: "user_override"`
-   *  (where the audit log records both the executed bytes and the original
-   *  model response) need it. The transcript also has it as a
-   *  `candidate_command` turn, so the followup hook does NOT read this
-   *  field — it just pushes a `followup` turn and lets the builder render
-   *  the prior candidate from the transcript. */
+  /** The full LLM response. The dialog reads command/risk/explanation off
+   *  this. The exiting{run} hook reads it for `SessionOutcome.run.response`
+   *  — both `source: "model"` (where the executed command equals
+   *  `response.content`) and `source: "user_override"` (where the audit log
+   *  records both the executed bytes and the original model response) need
+   *  it. The transcript also has it as a `candidate_command` turn, so the
+   *  followup hook does NOT read this field — it just pushes a `user` turn
+   *  and lets the builder render the prior candidate from the transcript. */
   response: CommandResponse;
   /** The eagerly-logged round for this command — kept on state so
    *  `exiting{run}` can mutate `exec_ms`/`execution` on it after exec. */
   round: Round;
-  /** Index into ACTION_ITEMS for the keyboard-navigable action bar. */
-  selectedAction: number;
 };
 
 /** User editing the command in place. */
 export type EditingState = {
   tag: "editing";
-  /** The command before edits — used to restore on Esc. */
-  original: string;
-  risk: RiskLevel;
-  explanation?: string;
   response: CommandResponse;
   round: Round;
-  /** Live edit buffer. */
+  /** Live edit buffer. The "discard to original" Esc behaviour reads from
+   *  `response.content` (no separate `original` field needed). */
   draft: string;
 };
 
 /** User typing a follow-up. */
 export type ComposingState = {
   tag: "composing";
-  command: string;
-  risk: RiskLevel;
-  explanation?: string;
   response: CommandResponse;
   round: Round;
   /** Live follow-up text. Preserved into processing and back. */
@@ -570,9 +604,6 @@ export type ComposingState = {
 /** Follow-up call in flight, dialog visible with status. */
 export type ProcessingState = {
   tag: "processing";
-  command: string;
-  risk: RiskLevel;
-  explanation?: string;
   response: CommandResponse;
   round: Round;
   /** The follow-up text the user submitted; preserved so Esc → composing keeps it. */
@@ -639,10 +670,18 @@ export type AppEvent =
    */
   | { type: "block"; command: string }
   // ──── from the notification bus (relayed by the coordinator while in `processing`) ────
-  | { type: "notification"; text: string }
+  /** The full Notification object — the reducer projects to whatever the
+   *  dialog needs (today: just `text` for the bottom border; tomorrow with
+   *  multi-step: also `icon` for the step output slot). */
+  | { type: "notification"; notification: Notification }
   // ──── from the dialog ────
+  // Note: action-bar selection (left/right arrow highlight) is dialog-local
+  // useState. It's pure presentation — no application state depends on it,
+  // and routing every keystroke through the reducer would force a rerender
+  // that the local-state model handles trivially. The dialog dispatches
+  // `key-action` only when the user activates an action (Enter on the
+  // highlighted item, or a hotkey).
   | { type: "key-action"; action: ActionId }
-  | { type: "key-arrow"; direction: "left" | "right" }
   | { type: "key-esc" }
   | { type: "submit-edit"; text: string }
   | { type: "submit-followup"; text: string }
@@ -682,7 +721,6 @@ Transition table (the implementer's exhaustive reference; `*` means "any"):
 | `confirming` | `key-action edit` | `editing{ original=command, draft=command }` | |
 | `confirming` | `key-action followup` | `composing{ draft="" }` | |
 | `confirming` | `key-action describe/copy` | `state` (no-op, deferred actions) | |
-| `confirming` | `key-arrow left/right` | `confirming` with `selectedAction` bumped | clamped |
 | `confirming` | `key-esc` | `exiting{cancel}` | Esc in confirming = cancel |
 | `editing` | `key-esc` | `confirming` (with `command = original`) | discard edits |
 | `editing` | `submit-edit text` | `exiting{run, command: text, source: "user_override"}` | run the user's edited text; risk/explanation/response carry through from the model's original |
@@ -691,7 +729,7 @@ Transition table (the implementer's exhaustive reference; `*` means "any"):
 | `composing` | `draft-change text` | `composing` with new `draft` | |
 | `composing` | `submit-followup text` | `processing{ draft=text, status=undefined }` | coordinator restarts loop |
 | `processing` | `key-esc` | `composing{ draft }` | coordinator aborts loop |
-| `processing` | `notification text` | `processing` with new `status` | live border update |
+| `processing` | `notification {kind:"chrome", text}` | `processing` with `status: text` | live border update; non-chrome notifications are no-ops |
 | `processing` | `loop-final command *` | `confirming` with new command/risk/explanation | swap in place |
 | `processing` | `loop-final answer` | `exiting{answer}` | |
 | `processing` | `loop-final exhausted` | `exiting{exhausted}` | |
@@ -749,7 +787,7 @@ export async function runSession(prompt, provider, options): Promise<number> {
   const entry = createLogEntry({...});
   const system: string = assembleSystemPrompt({ memory, tools, cwd, ... });
   const transcript: Transcript = [];
-  pushTurn(transcript, { kind: "user_request", text: prompt });
+  transcript.push({ kind: "user", text: prompt });
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const loopOptions: LoopOptions = {...};
 
@@ -762,10 +800,11 @@ export async function runSession(prompt, provider, options): Promise<number> {
 
   let state: AppState = { tag: "thinking" };
   let dialogHost: DialogHost | null = null;
+  let mountInProgress = false;     // gates the first-mount race in syncDialog
   let currentLoopAbort: AbortController | null = null;
   const buffered: Notification[] = [];
 
-  const exitDeferred = createDeferred<SessionOutcome>();
+  const exitDeferred = Promise.withResolvers<SessionOutcome>();
 
   // 2. Dispatch closure — pre-transition hook handles abort, reducer applies,
   //    post-transition hook handles dialog sync + loop restart + exit.
@@ -788,15 +827,23 @@ export async function runSession(prompt, provider, options): Promise<number> {
       exitDeferred.resolve(state.outcome);
       return;
     }
-    if (state.tag === "processing" && currentLoopAbort === null) {
+    if (state.tag === "processing") {
       // submit-followup just transitioned us; the coordinator restarts the loop.
-      // Push a `followup` turn to the transcript and reset the budget. The
-      // previous candidate_command turn is already in the transcript (the
-      // loop pushed it before returning), so the LLM will see [..., candidate, followup].
-      // No stripStaleInstructions, no JSON.stringify, no message-history hygiene.
-      pushTurn(transcript, { kind: "followup", text: state.draft });
+      // Push a `user` turn to the transcript and reset the budget. The previous
+      // candidate_command turn is already in the transcript (the loop pushed it
+      // before returning), so the LLM sees [..., candidate, user]. No
+      // stripStaleInstructions, no JSON.stringify, no message-history hygiene.
+      //
+      // We do NOT gate on `currentLoopAbort === null`. If a previous pumpLoop is
+      // still draining (the LLM call from the just-aborted loop hasn't resolved
+      // yet — providers don't all honour AbortSignal synchronously), pumpLoop's
+      // `if (currentLoopAbort === ctrl)` finally check ensures the stale loop
+      // won't clobber the new ctrl. Both pumpLoops can coexist briefly; the
+      // stale one's `signal.aborted` guard drops its events. See the
+      // "Concurrent pumpLoop drain" note below for the corner case.
+      transcript.push({ kind: "user", text: state.draft });
       loopState.budgetRemaining = loopOptions.maxRounds;
-      void driveLoop({ followupText: state.draft });
+      void pumpLoop();
     }
   };
 
@@ -804,63 +851,92 @@ export async function runSession(prompt, provider, options): Promise<number> {
   // Async ONLY for the very first mount (to await the lazy import). Every
   // subsequent rerender/unmount is sync. By the time syncDialog runs for the
   // first time, the no-TTY case has already been intercepted upstream in
-  // handleLoopEvent (which dispatches `block` instead of `loop-final` for
-  // medium/high commands when there's no TTY), so syncDialog is guaranteed
-  // to only see dialog tags when a TTY is available.
+  // pumpLoop (which dispatches `block` instead of `loop-final` for medium/high
+  // commands when there's no TTY), so syncDialog is guaranteed to only see
+  // dialog tags when a TTY is available.
+  //
+  // First-mount race: dispatch is called via `void syncDialog()` (fire and
+  // forget). If a SECOND dispatch arrives while the FIRST syncDialog is
+  // awaiting `inkReady`, both calls would observe `dialogHost === null` and
+  // race into the mount branch — two mounts, two Ink apps. The
+  // `mountInProgress` flag gates this: while a mount is in flight, subsequent
+  // syncDialog calls return early. After the in-flight mount completes, we
+  // re-syncDialog to apply any state changes that happened during the await.
   async function syncDialog(): Promise<void> {
     const wantsDialog = isDialogTag(state.tag);
+
+    // Mount in progress: skip — the in-flight mount will re-sync after.
+    if (wantsDialog && mountInProgress) return;
+
     if (wantsDialog && !dialogHost) {
-      // First mount: await the lazy-loaded Ink modules (in practice already
-      // resolved because the LLM call took longer), then mount synchronously.
-      await inkReady;
-      dialogHost = mountDialog({ state, dispatch });
-    } else if (wantsDialog && dialogHost) {
+      mountInProgress = true;
+      try {
+        await inkReady;            // Already resolved in practice.
+        dialogHost = mountDialog({ state, dispatch });
+      } finally {
+        mountInProgress = false;
+      }
+      // Re-sync in case state transitioned during the await (e.g., the user
+      // typed Esc while we were mounting). The recursive call is sync from
+      // here forward (dialogHost is now set), so it terminates in one step.
+      void syncDialog();
+      return;
+    }
+
+    if (wantsDialog && dialogHost) {
       dialogHost.rerender({ state, dispatch });
-    } else if (!wantsDialog && dialogHost) {
+      return;
+    }
+
+    if (!wantsDialog && dialogHost) {
       // Unmount: exit alt screen, unmount Ink, flush buffered notifications
+      // (in that order — flushed lines must land in real scrollback, not the
+      // alt buffer that's about to disappear).
       dialogHost.unmount();
       dialogHost = null;
       flushBuffered();
     }
   }
 
-  // 4. Loop driver — pumps the generator's events through dispatch
-  async function driveLoop(opts?: { followupText?: string }): Promise<void> {
+  // 4. Loop pump — drains the generator's events into dispatch. Named
+  // `pumpLoop` to disambiguate from `runLoop` (the generator itself). The
+  // pump owns the AbortController, calls runLoop with it, and routes yielded
+  // events to dispatch via handleLoopEvent.
+  //
+  // The chrome spinner is NOT controlled here — it's per-LLM-call inside
+  // runRound (see RunRoundOptions.showSpinner). pumpLoop just decides whether
+  // to enable spinning (true in `thinking`, false everywhere else) and passes
+  // the flag through LoopOptions.
+  async function pumpLoop(): Promise<void> {
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
-    let chromeSpin: (() => void) | null = null;
-    if (state.tag === "thinking") chromeSpin = startChromeSpinner(SPINNER_TEXT);
-
-    // Stop the chrome spinner BEFORE dispatching loop-final, not in finally.
-    // syncDialog() runs synchronously inside dispatch and may mount the alt
-    // screen, and a still-running chrome spinner would write \r frames into
-    // the alt buffer. Doing it here ensures no overlap window exists.
-    const stopSpin = (): void => { chromeSpin?.(); chromeSpin = null; };
+    let firstRoundComplete = true;     // for follow-up_text stamping below
+    const isInitialLoop = state.tag === "thinking";
+    const followupText = isInitialLoop ? undefined : (state as ProcessingState).draft;
 
     try {
       const generator = runLoop(provider, transcript, system, loopState, {
         ...loopOptions,
         signal: ctrl.signal,
-        followupText: opts?.followupText,
+        showSpinner: isInitialLoop,
       });
       let final: LoopReturn | undefined;
       while (true) {
         const { value, done } = await generator.next();
-        if (ctrl.signal.aborted) { stopSpin(); return; }
+        if (ctrl.signal.aborted) return;
         if (done) { final = value; break; }
         handleLoopEvent(value);
       }
-      stopSpin();
       if (!ctrl.signal.aborted && final) {
         // No-TTY interception: a medium/high command can't be confirmed
         // without a dialog. Dispatch `block` instead so the reducer routes
-        // to `exiting{blocked}`. Only intercept on the FIRST loop call
-        // (state.tag === "thinking"); follow-up calls run with a dialog
-        // already mounted, so a TTY is guaranteed.
+        // to `exiting{blocked}`. Only intercept on the initial loop;
+        // follow-up loops run with a dialog already mounted, so a TTY is
+        // guaranteed.
         if (
           final.type === "command" &&
           final.response.risk_level !== "low" &&
-          state.tag === "thinking" &&
+          isInitialLoop &&
           !process.stderr.isTTY
         ) {
           dispatch({ type: "block", command: final.response.content });
@@ -869,51 +945,77 @@ export async function runSession(prompt, provider, options): Promise<number> {
         }
       }
     } catch (e) {
-      stopSpin();
       if (ctrl.signal.aborted) return;
       dispatch({ type: "loop-error", error: toError(e) });
     } finally {
-      stopSpin();
+      // Identity check: only clear if WE are still the active loop. A second
+      // pumpLoop started during our drain may have set currentLoopAbort to
+      // its own ctrl already.
       if (currentLoopAbort === ctrl) currentLoopAbort = null;
     }
-  }
 
-  // 5. Loop event handler — turns generator events into addRound calls + notifications
-  function handleLoopEvent(event: LoopEvent): void {
-    switch (event.type) {
-      case "round-complete":
-        addRound(entry, event.round);
-        return;
-      case "step-running":
-        notifications.emit({ kind: "chrome", text: event.explanation, icon: event.icon });
-        return;
-      case "step-output":
-        notifications.emit({ kind: "step-output", text: event.text });
-        return;
+    // Local closure for handleLoopEvent — kept inside pumpLoop so the
+    // `firstRoundComplete` boolean is per-call, scoped to this pumpLoop's
+    // followupText stamping.
+    function handleLoopEvent(event: LoopEvent): void {
+      switch (event.type) {
+        case "round-complete":
+          if (firstRoundComplete && followupText !== undefined) {
+            event.round.followup_text = followupText;
+          }
+          firstRoundComplete = false;
+          addRound(entry, event.round);
+          return;
+        case "step-running":
+          notifications.emit({ kind: "chrome", text: event.explanation, icon: event.icon });
+          return;
+        case "step-output":
+          notifications.emit({ kind: "step-output", text: event.text });
+          return;
+      }
     }
   }
 
-  // 6. Notification listener — buffers everything, forwards chrome to the
-  //    reducer while in `processing`.
+  // 6. Notification listener.
+  //
+  //    NO dialog mounted (`dialogHost === null`): write directly to stderr.
+  //    This is the path for `thinking`, `exiting`, and any state where the
+  //    dialog hasn't mounted yet or has already unmounted. Chrome lines from
+  //    the initial loop's probes/memory updates land in real scrollback as
+  //    they happen — same as today's behaviour. The chrome spinner (managed
+  //    inside runRound, per LLM call) is stopped between iterations, so the
+  //    stderr write lands on a clean row.
+  //
+  //    Dialog mounted (`dialogHost !== null`): buffer for replay after
+  //    unmount. Without buffering, stderr writes during alt-screen would land
+  //    in the alt buffer and disappear on exit. While in `processing`,
+  //    chrome notifications are ALSO dispatched to the reducer for live
+  //    border display.
   const unsubscribe = notifications.subscribe((n) => {
+    if (dialogHost === null) {
+      writeNotificationToStderr(n);
+      return;
+    }
     buffered.push(n);
     if (state.tag === "processing" && n.kind === "chrome") {
-      dispatch({ type: "notification", text: n.text });
+      dispatch({ type: "notification", notification: n });
     }
   });
 
   // 7. Run!
   let outcome: SessionOutcome;
   try {
-    void driveLoop();             // initial loop in `thinking`
+    void pumpLoop();              // initial loop in `thinking`
     outcome = await exitDeferred.promise;
   } finally {
     unsubscribe();
     if (dialogHost) {
       dialogHost.unmount();
       dialogHost = null;
-      flushBuffered();
+      flushBuffered();             // flush anything buffered while dialog was up
     }
+    // Anything emitted while dialogHost was null already went to stderr
+    // through the listener — no flush needed for the no-dialog case.
     appendLogEntryIgnoreErrors(wrapHome, entry);
   }
 
@@ -924,12 +1026,15 @@ export async function runSession(prompt, provider, options): Promise<number> {
 
 Key invariants the coordinator MUST preserve:
 - **`appendLogEntry` runs in `finally`**, so logs survive any throw.
-- **The chrome spinner only runs in `thinking`**. The dialog has its own bottom-border spinner via `useSpinner`. There is no overlap window, so the `isOutputIntercepted` short-circuit is no longer needed.
-- **The notification buffer is flushed AFTER `dialogHost.unmount()`**, which itself happens after `EXIT_ALT_SCREEN` is written. Flushed lines must land in real scrollback, not the alt buffer that's about to disappear. This is the same lifecycle ordering as today's `output-sink.ts` comment, just relocated.
+- **The chrome spinner is per LLM call (inside `runRound`), not per pumpLoop.** Started at the top of `runRound`, stopped in its `finally`. Between iterations of the loop, the spinner is stopped, so chrome notifications emitted by the loop (memory updates, step explanations) land on a clean stderr row instead of racing the spinner. The session passes `showSpinner: true` for the initial loop in `thinking` and `false` for follow-up loops in `processing` (where the dialog has its own bottom-border spinner).
+- **Notifications from the no-dialog-mounted phase go straight to stderr**, not into the buffer. The listener checks `dialogHost === null` and writes via `writeNotificationToStderr`. The buffer only exists to replay notifications that fired WHILE the dialog was up — those would otherwise land in the alt buffer and disappear.
+- **The notification buffer is flushed AFTER `dialogHost.unmount()`**, which itself happens after `EXIT_ALT_SCREEN` is written. Flushed lines must land in real scrollback, not the alt buffer that's about to disappear.
 - **The abort happens BEFORE the reducer transitions** for `key-esc` in `processing`, so any in-flight LLM call gets cancelled even if its result was about to land.
-- **Loop events emitted AFTER an abort are dropped** by the `if (ctrl.signal.aborted) return;` check inside `driveLoop`. The reducer doesn't have to know about abort epochs.
+- **Loop events emitted AFTER an abort are dropped** by the `if (ctrl.signal.aborted) return;` check inside `pumpLoop`. The reducer doesn't have to know about abort epochs.
 - **`loop-final` produced by an aborted loop is dropped** by the same check. The reducer never sees stale results.
-- **Round logging happens in `handleLoopEvent`** as soon as a round-complete event arrives. This preserves today's eager-log guarantee: if `runRound` throws, every round emitted before the throw is already in `entry.rounds` because the throw happens AFTER the yield.
+- **Round logging happens in `handleLoopEvent`** as soon as a round-complete event arrives. This preserves today's eager-log guarantee: if `runRound` throws a `RoundError` carrying the partial round, the runner yields `round-complete` before re-throwing, so the partial round is in `entry.rounds` by the time the catch in `pumpLoop` dispatches `loop-error`.
+
+**Concurrent pumpLoop drain (corner case).** When the user presses Esc during `processing` and immediately resubmits, a previous `pumpLoop` may still be draining (its `await generator.next()` is held by a provider that hasn't honoured the AbortSignal yet). The `currentLoopAbort === ctrl` identity check in the previous pumpLoop's `finally` prevents it from clobbering the new pumpLoop's controller. Both pumpLoops can coexist briefly. The stale one's `if (ctrl.signal.aborted) return;` guard drops its `loop-final` dispatch. **Limitation:** the runner's iteration body that was in flight when the abort fired will still complete its current iteration BEFORE the next abort check, which means it MAY push a turn (probe / candidate_command / answer) to the transcript after the abort. The new pumpLoop sees that orphan turn in the transcript. In practice this is rare (most providers honour AbortSignal within milliseconds), and the orphan turn is at most one. If it bites in production, the fix is to snapshot `transcript.length` per iteration in the runner and truncate on abort detection. Out of scope for this refactor.
 
 "Current command" location: the dialog states (`ConfirmingState`, `EditingState`, `ComposingState`, `ProcessingState`) carry `response: CommandResponse` and `round: Round` as type fields. The reducer threads them through every transition (e.g., `confirming → composing` copies `response`/`round` along with `command`/`risk`/`explanation`). The coordinator reads `state.response` when building the `SessionOutcome.run` (so the run outcome carries both the executed bytes and the original model response, supporting `source: "user_override"` audits). The followup post-transition hook does NOT read `state.response` — it just pushes a `followup` turn to the transcript; the prior `candidate_command` turn already in the transcript provides the LLM context. There is one source of truth (state for outcome data, transcript for conversation history) and no separate `CurrentCommand` bag.
 
@@ -997,15 +1102,17 @@ Rewrite rules:
 - KEEP the stdin drain on first mount. The reducer model fixes the case where a stray key lands in the wrong dialog STATE (because every key goes through `dispatch` and the reducer decides how each state handles each event), but it does NOT fix the case where the user pressed Enter while waiting for the LLM and the keystroke is buffered in stdin BEFORE the dialog mounts. Without the drain, that buffered Enter reaches Ink's `useInput` on the very first frame and gets dispatched as `key-action run` against `confirming`, executing a dangerous command the user never confirmed. The drain MUST run on first mount; subsequent state transitions don't need it (no buffered keys can leak across in-process transitions).
 
 Allowed local state in the dialog:
-- `borderCount` from `useLayoutEffect` + `measureElement` (this is purely visual, not application state).
+- `borderCount` from `useLayoutEffect` + `measureElement` (purely visual).
 - `useRenderSize` for terminal dimensions (visual).
 - `useSpinner(state.tag === "processing")` for the bottom border frame (visual).
+- `selectedAction: number` (`useState(0)`) for the action-bar highlight in `confirming`. Pure presentation — left/right arrows just update local state, no dispatch. Reset when transitioning out of `confirming` (no special handling needed; the dialog re-mounts the action bar subtree each time it enters `confirming`).
+- `Cursor` state inside `TextInput` for the editing/composing text input (already exists today in `text-input.tsx`).
 
 Input handling:
 - One `useInput` block per dialog tag, gated on `state.tag`. Same as today, but every handler dispatches an event instead of mutating local state.
 - `editing` and `composing` states use `<TextInput value={state.draft} onChange={(t) => dispatch({ type: "draft-change", text: t })} onSubmit={(t) => dispatch({ type: state.tag === "editing" ? "submit-edit" : "submit-followup", text: t })} />`.
 - `processing` uses `<TextInput value={state.draft} readOnly />`.
-- `confirming` renders the command + explanation + the navigable action bar; key handler maps `y/n/q/Esc/e/f/d/c/←/→/Enter` to `dispatch({ type: "key-action", action })` / `dispatch({ type: "key-arrow", ... })` / `dispatch({ type: "key-esc" })`.
+- `confirming` renders the command (read from `state.response.content`) + explanation (`state.response.explanation`) + the navigable action bar. Action-bar selection (`selectedAction`) is dialog-local `useState` — pure presentation, no application state depends on it. Left/right arrows update local state only. Hotkeys (`y/n/q/e/f/d/c`) and Enter on the highlighted action dispatch `key-action`. `Esc` dispatches `key-esc`.
 
 Width/height calculation: same as today. The `command`/`explanation`/`draft` reads come from `state` instead of `useState`, but the layout math is unchanged.
 
@@ -1062,11 +1169,11 @@ Event names in `LoopEvent` use `step-running` / `step-output` rather than `probe
 
 ### 2. The coordinator's loop-restart primitive is parameterised
 
-Today the coordinator restarts the loop after `submit-followup`. Multi-step adds a second restart trigger: after the user confirms a non-final medium/high command (`onConfirmStep` in the multi-step spec). Both will push different message-history mutations (text turn vs assistant echo + captured-output turn) and then call the same `driveLoop({ followupText? })` primitive.
+Today the coordinator restarts the loop after `submit-followup`. Multi-step adds a second restart trigger: after the user confirms a non-final medium/high command (`onConfirmStep` in the multi-step spec). Both will push different turns to the transcript (a `user` turn vs a `step` turn) and then call the same `pumpLoop()` primitive.
 
-**Implementation directive:** keep the message-pushing logic OUT of `driveLoop`. Push the messages at the dispatch site (the `submit-followup` post-transition hook), then call `driveLoop` with the followupText. Multi-step will add a `submit-step-confirm` post-transition hook that pushes its own messages and calls `driveLoop` the same way. If you bake follow-up-specific message assembly into `driveLoop`, multi-step will fork it.
+**Implementation directive:** keep the turn-pushing logic OUT of `pumpLoop`. Push the turn at the dispatch site (the `submit-followup` post-transition hook), then call `pumpLoop()`. Multi-step will add a `submit-step-confirm` post-transition hook that pushes its own turn and calls `pumpLoop()` the same way. If you bake follow-up-specific turn assembly into `pumpLoop`, multi-step will fork it.
 
-Concretely: `driveLoop` only takes generator options. The `followupText` parameter is passed through as `LoopOptions.followupText`. Anything else (which messages get pushed, what budget reset behaviour) is the post-transition hook's job.
+Concretely: `pumpLoop` takes no arguments. It reads `state` to decide whether the current pump is the initial loop (showSpinner=true) or a follow-up loop (showSpinner=false), and reads `transcript` directly. The post-transition hook is the only thing that pushes turns and resets the budget.
 
 ### 3. State fields are additive
 
@@ -1080,9 +1187,9 @@ If the implementer is tempted to "DRY up" the dialog states with a shared base, 
 
 ### 4. The post-transition hook for "loop-restart from a new state tag" must be addable
 
-Multi-step adds an `executing-step` reducer tag and a parallel coordinator hook (`submit-step-confirm`) that pushes a `step` turn (the new turn kind multi-step adds to the transcript) and calls `driveLoop`. The structure mirrors today's `submit-followup` post-transition hook (the `if (state.tag === "processing" && currentLoopAbort === null)` branch in `dispatch`). Multi-step will add a similar branch: `if (state.tag === "executing-step" && currentLoopAbort === null)`.
+Multi-step adds an `executing-step` reducer tag and a parallel coordinator hook (`submit-step-confirm`) that pushes a `step` turn (the new turn kind multi-step adds to the transcript) and calls `pumpLoop()`. The structure mirrors today's `submit-followup` post-transition hook (the `if (state.tag === "processing")` branch in `dispatch`). Multi-step will add a similar branch: `if (state.tag === "executing-step")`.
 
-**Implementation directive:** when writing the `submit-followup` branch, write it in a shape that makes adding `submit-step-confirm` mechanical. Concretely: extract the body (push the followup turn, reset budget, drive loop) into a small helper if it's more than ~10 lines. Don't try to abstract over the turn-pushing — that's intentionally hook-specific per constraint 2.
+**Implementation directive:** when writing the `submit-followup` branch, write it in a shape that makes adding `submit-step-confirm` mechanical. Concretely: extract the body (push the user turn, reset budget, call pumpLoop) into a small helper if it's more than ~10 lines. Don't try to abstract over the turn-pushing — that's intentionally hook-specific per constraint 2.
 
 ### 5. The semantic transcript subsumes `projectForEcho`
 
@@ -1095,7 +1202,7 @@ Multi-step's `projectForEcho` helper exists to strip user-facing fields (`explan
 The torch is in hand: this is one refactor, not a sequence of incremental landings. The implementer SHOULD:
 
 1. **Write the new files first**, with all their tests passing in isolation:
-   - `src/core/transcript.ts` (Transcript + TranscriptTurn + pushTurn + buildPromptInput + AttemptDirectives)
+   - `src/core/transcript.ts` (Transcript + TranscriptTurn + buildPromptInput + AttemptDirectives — no `pushTurn` helper, callers use `transcript.push(turn)` directly)
    - `src/core/round.ts` (lift `callWithRetry`, `isStructuredOutputError`, `extractFailedText`, `REFUSED_PROBE_INSTRUCTION` from `query.ts`; add `runRound` taking `transcript` + `system` + `options`. `stripStaleInstructions` is NOT lifted — the transcript model deletes it)
    - `src/core/runner.ts` (rewrite `runRoundsUntilFinal` as the `runLoop` async generator taking `transcript` + `system`; add `LoopState` / `LoopOptions` / `LoopEvent` / `LoopReturn` types; lift `fetchesUrl`)
    - `src/core/notify.ts` (the bus + Notification type + writeNotificationToStderr)
@@ -1136,15 +1243,14 @@ The implementer MAY do steps 1–6 in any order that makes their tests easier to
 
 ### What gets written
 
-**`tests/transcript.test.ts`** — pure unit tests for `buildPromptInput` and `pushTurn`:
-- `buildPromptInput` of an empty transcript with system="x" → `{ system: "x", messages: [] }`.
-- `buildPromptInput` of `[user_request]` → messages with one user turn.
-- `buildPromptInput` of `[user_request, probe(p1, "out1", 0)]` → user turn + assistant turn (`JSON.stringify(p1)`) + user turn (`sectionCapturedOutput\nout1`).
-- `buildPromptInput` of `[user_request, candidate_command(c1), followup("hmm")]` → user turn + assistant turn (`JSON.stringify(c1)`) + user turn ("hmm").
-- `buildPromptInput` with `directives.isLastRound: true` appends a final user turn with `lastRoundInstruction`.
-- `buildPromptInput` with `directives.probeRiskRetry: { rejectedResponse }` appends assistant echo + user `probeRiskInstruction`.
-- `buildPromptInput` is pure: calling it twice with the same args returns equal output, the transcript is not mutated.
-- `pushTurn` mutates in place and returns void.
+**`tests/transcript.test.ts`** — pure unit tests for `buildPromptInput`:
+- Empty transcript with system="x" → `{ system: "x", messages: [] }`.
+- `[user "hi"]` → messages with one user turn.
+- `[user, probe(p1, "out1", 0)]` → user + assistant (`JSON.stringify(p1)`) + user (`sectionCapturedOutput\nout1`).
+- `[user, candidate_command(c1), user "hmm"]` → user + assistant (`JSON.stringify(c1)`) + user ("hmm").
+- `directives.isLastRound: true` appends a final user turn with `lastRoundInstruction`.
+- `directives.probeRiskRetry: { rejectedResponse }` appends assistant echo + user `probeRiskInstruction`.
+- Pure: calling twice with the same args returns equal output, the transcript is not mutated.
 
 **`tests/round.test.ts`** — pure unit tests for `runRound`:
 - Returns a `Round` with `parsed` set on a successful command.
@@ -1152,9 +1258,10 @@ The implementer MAY do steps 1–6 in any order that makes their tests easier to
 - With `isLastRound: true`, the LLM sees `lastRoundInstruction` in the messages (asserted by capturing the provider's `runPrompt` call args). The transcript is unchanged before vs after the call.
 - Retries once on a parse-failure error and succeeds on the retry.
 - Retries once on a non-low probe (the second call's messages contain the probe-risk retry directive) and succeeds.
-- Throws on empty response.
-- Throws with the model label in the error message when the LLM call fails.
-- The transcript is read-only inside `runRound` — no `pushTurn` calls happen inside it.
+- Throws `RoundError` (with the partial round attached) on empty response.
+- Throws `RoundError` with the model label in the error message when the LLM call fails.
+- The transcript is read-only inside `runRound` — `transcript` array length is unchanged before vs after the call.
+- With `showSpinner: true`, `startChromeSpinner` is called once at entry and the returned stop function is called in finally (asserted by mocking `startChromeSpinner`). With `showSpinner: false`, neither happens.
 
 **`tests/runner.test.ts`** — generator unit tests for `runLoop`:
 - Single-iteration command: yields `round-complete`, pushes a `candidate_command` turn to the transcript, returns `{ type: "command", ... }`.
@@ -1248,7 +1355,8 @@ If the implementer finds themselves touching any of these, stop and ask: this re
 
 ## Open questions for the implementer
 
-1. **Does Ink's `app.rerender()` re-trigger `useInput` registration?** The dialog has multiple `useInput` blocks gated on state tag. After a rerender that changes the tag, Ink should switch which block is active. Verify this works as expected before relying on it; if not, add a stable wrapper hook that takes the tag as a parameter and dispatches based on it.
+1. **Does Ink's `app.rerender()` re-trigger `useInput` registration?** PRE-IMPLEMENTATION BLOCKER. The dialog has multiple `useInput` blocks gated on state tag. After a rerender that changes the tag, Ink should switch which block is active. The whole dialog rewrite assumes this works. If it doesn't, every keystroke either fails to dispatch OR dispatches against the wrong tag — the dialog is unusable.
+   **Resolve before starting implementation:** spike a ~20-line Ink test that mounts a component with two `useInput` blocks gated on a prop, calls `app.rerender(<Component prop={"b"} />)`, fires a synthetic keystroke, and observes which handler runs. If it works as expected, proceed. If not, refactor the dialog input handling into a single `useInput` block that switches on `state.tag` internally — this is a small spec change that's much easier to make BEFORE the implementer starts.
 
 2. **Should `dispatch` be reentrant?** The dispatch closure has post-transition side effects that themselves call `dispatch` (e.g., the loop driver dispatches `loop-final`). This is reentrant. Verify the pattern works without surprising you (it should — JavaScript is single-threaded and the reducer is sync — but the `void syncDialog()` introduces an awaited segment that completes after dispatch returns, so reentrant calls during that gap would interleave).
 
@@ -1272,5 +1380,5 @@ If the implementer finds themselves touching any of these, stop and ask: this re
 
 ## Glossary
 
-- **Driving the loop** — pumping the generator's events through `dispatch` until it returns or the consumer aborts via the AbortSignal it created. `driveLoop` in the coordinator pseudocode.
+- **Pumping the loop** — pulling events from the `runLoop` async generator and dispatching them until it returns or the consumer aborts via the AbortSignal it created. `pumpLoop` in the coordinator pseudocode (named to disambiguate from `runLoop`, the generator itself).
 - **Post-transition hook** — the section of the dispatch closure that runs AFTER `reduce()` produces a new state. Triggers side effects (dialog mount/rerender/unmount, loop restart, exit) based on the new state's tag. Multi-step adds a parallel post-transition hook for `submit-step-confirm`.
