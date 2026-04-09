@@ -11,7 +11,7 @@ export { initProvider, runCommandPrompt };
 /**
  * Dispatch a `ResolvedProvider` to the right SDK factory. The test sentinel
  * is special-cased; everything else routes through the registry's `kind`.
- * See specs/multi-provider-config.md.
+ * See specs/llm.md.
  */
 function initProvider(resolved: ResolvedProvider): Provider {
   if (resolved.name === "test") return testProvider();

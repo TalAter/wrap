@@ -4,7 +4,7 @@ Refine a command from inside the dialog by typing follow-up text. The LLM receiv
 
 > **Status:** Implemented. Entry points: `src/session/session.ts`, `src/session/reducer.ts`, `src/session/state.ts`, `src/core/runner.ts`, `src/core/transcript.ts`, `src/tui/dialog.tsx`. Glossary lives in `specs/SPEC.md` § TUI.
 
-Depends on: `dialog-impl.md`, `tui-approach.md`, `coordinator-refactor.md`
+Depends on: `tui.md`, `session.md`
 
 ## Example flow
 

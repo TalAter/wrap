@@ -6,7 +6,7 @@
 
 > **Prerequisites:**
 > - `specs/follow-up.md` — UX vocabulary: four-state dialog machine, low-risk gradient, bottom-border status slot.
-> - `specs/coordinator-refactor.md` — landed. This spec is written against the post-refactor surface: `runLoop` generator (`src/core/runner.ts`), `runRound` (`src/core/round.ts`), `Transcript` + `buildPromptInput` (`src/core/transcript.ts`), typed notification bus (`src/core/notify.ts`), `AppState` reducer (`src/session/reducer.ts`), and `runSession` + `pumpLoop` with dispatch closure + post-transition hooks (`src/session/session.ts`).
+> - `specs/session.md` — landed. This spec is written against the post-refactor surface: `runLoop` generator (`src/core/runner.ts`), `runRound` (`src/core/round.ts`), `Transcript` + `buildPromptInput` (`src/core/transcript.ts`), typed notification bus (`src/core/notify.ts`), `AppState` reducer (`src/session/reducer.ts`), and `runSession` + `pumpLoop` with dispatch closure + post-transition hooks (`src/session/session.ts`).
 > - `specs/scratchpad.md` — orthogonal; ordering rules below. May land before or after this spec.
 
 ---

@@ -1,165 +1,172 @@
 # Wrap — Runtime Architecture
 
-> How Wrap runs: flow from invocation to execution, module responsibilities, and key design decisions.
+High-level map of how an invocation flows through the code. Details live in the area sub-specs; this file is the orientation you read first.
 
 ---
 
-## Top-Level Flow
+## Top-level flow
 
 ```
-extractModifiers(argv)  ──→ { modifiers, remaining }
-       │
-parseInput(remaining)
-       │
-       ├─ readPipedInput()  ──→ reads stdin if piped, returns string | null  [NOT YET IMPLEMENTED]
-       │
-       ├─ flag? ──→ dispatch subcommand (exit)
-       │
-       ├─ no args? ──→ dispatch --help (exit)  [will change: no args + pipe → piped input becomes prompt]
-       │
-       ├─ loadConfig()  ──→ loads config from file + env
-       │
-       ├─ initVerbose()  ──→ enables verbose if flag or config
-       │
-       ├─ initProvider()  ──→ factory: config → Provider
-       │
-       ├─ loadWatchlist() + probeTools()  ──→ `which` for defaults + watchlist
-       │
-       ├─ ensureMemory()  ──→ loads memory or initializes with probes
-       │
-       ├─ resolvePath(cwd)  ──→ canonical CWD
-       │
-       └─ runQuery({ prompt, provider, memory, cwd, tools })
+extractModifiers(argv)      strip --verbose / --model / --provider
+    │
+parseArgs / parseInput      { subcommand? prompt? pipedInput? }
+    │
+dispatch subcommand?   ──→  yes: run subcommand, exit (see subcommands.md)
+    │
+loadConfig                  ~/.wrap/config.jsonc + $WRAP_CONFIG (see llm.md)
+    │
+resolveProvider             config + overrides → ResolvedProvider (see llm.md)
+    │
+probeTools + loadWatchlist  `which` every entry (see discovery.md)
+    │
+ensureMemory                load or initialize memory (see memory.md)
+    │
+runSession                  state machine: rounds × LLM × dialog × execute
+    │
+appendLogEntry              JSONL at ~/.wrap/logs/wrap.jsonl (see logging.md)
 ```
 
-Subcommands (including `--help` for no-args) short-circuit before `loadConfig()`. They handle their own prerequisites — `--log` only needs `WRAP_HOME`, not config or memory.
-
-When piped input is implemented (see `specs/piped-input.md`), `readPipedInput()` will run eagerly before subcommand dispatch, and the no-args branch will check for piped content before dispatching `--help`.
+Subcommands short-circuit before `loadConfig` — `--log` only needs `$WRAP_HOME`, not config or memory. See `subcommands.md` for the registry and dispatch rules, including modifier-flag stripping.
 
 ---
 
-## Prerequisites
+## The session loop
 
-- **`loadConfig()`** — Reads config from `~/.wrap/config.jsonc` + `WRAP_CONFIG` env var (shallow merge). Returns `Config`. Caller checks for missing provider — will become an "ensure" function when the first-run wizard is built.
-- **`probeTools()`** — Runs `which` for all tools in `PROBED_TOOLS` (package managers, dev tools, clipboard utilities). Runs every startup, not stored in memory — see `specs/discovery.md` for details.
-- **`ensureMemory(provider, wrapHome)`** — The "ensure" pattern: loads existing memory or creates it (probes OS/shell/config, sends to LLM, saves as global facts). Either returns `Memory` or throws. The caller never checks.
+The heart of an interactive invocation lives in `src/session/`. The session owns:
 
----
+- **AppState reducer** (`reducer.ts`) — pure state machine driving the dialog (`confirming` / `editing` / `composing` / `processing`).
+- **pumpLoop** (`session.ts`) — drives the query loop, dispatches post-transition hooks (`submit-followup`, etc.), and is the single caller that mounts/unmounts the dialog.
+- **Dialog host** (`dialog-host.ts`) — lazy-loads Ink + React, mounts/rerenders/unmounts.
+- **Notification router** (`notification-router.ts`) — subscribes to the global notification bus and routes each event to stderr, to the buffered replay queue, or to the dialog's bottom border. It is the single source of truth for "is a dialog up?".
 
-## The Query Loop
+The query loop itself (one round at a time) lives in `src/core/`:
 
-Multi-round loop in `src/core/query.ts`. Assembles context once, then loops up to `maxRounds` times. Each iteration: call LLM → route by response type.
+- `runner.ts` — generator over rounds; enforces `maxRounds`, injects "do not probe" on the last round.
+- `round.ts` — a single round: call LLM, parse, classify, execute.
+- `transcript.ts` — semantic conversation turns (`user`, `probe`, `candidate_command`, `answer`) with an attempt directive attached to the latest turn.
+- `parse-response.ts`, `shell.ts`, `notify.ts`, `input.ts`, `output.ts`, `spinner.ts`, `piped-input.ts`, `verbose.ts`, `ansi.ts`, `paths.ts`, `home.ts` — pure-ish supporting modules.
 
-**Flow per round:**
-1. If last round → inject "do not probe" instruction
-2. Call LLM (with round retry on structured output parse failure)
-3. If non-low-risk probe → retry once within the round, refuse if still non-low
-4. Handle memory updates (write to disk immediately, notify user on stderr)
-5. Handle watchlist additions
-6. Route: answer → stdout, probe → execute + capture + append to conversation, command → execute if low-risk
-
-### Loop Rules
-
-| Rule | Rationale |
-|---|---|
-| Unified counter for probes + error-fix rounds | One budget (`maxRounds`, configurable, default 5) prevents runaway loops regardless of response type. |
-| Rounds only tick for autonomous LLM calls | The round budget prevents runaway loops *without user intervention*. User-initiated actions don't consume budget: **Describe** doesn't decrement it (side-channel explanation, not command generation). **Follow-up** resets the budget to a fresh `maxRounds` so the user can refine without hitting the cap, but round numbers keep incrementing across the conversation — a probe after a follow-up shows up as round 5 in the log, not a new round 1. |
-| Memory writes are immediate | A probe that discovers `shell=zsh` is useful even if the final command fails. Writes to disk; context is not rebuilt per round (the LLM already knows what it discovered). |
-| Multi-turn conversation context | Probes become assistant/user turn pairs, giving the LLM full history for each subsequent call. |
-| Last-round constraint | "Do not probe" instruction injected on the final round. No budget info sent on earlier rounds — avoids polluting every request. |
-| User-edited commands don't get auto-fix | The user took manual control — don't second-guess with LLM auto-fix. (Not yet implemented.) |
-
-### Error-Fix Rounds (Design — not yet implemented)
-
-When a command fails with an infrastructure-level error (command not found, syntax error, wrong flags — not application-level failures like 404s), the error output (stderr) is fed back to the LLM as a conversation turn for auto-fix. This shares the same loop and round budget as probes.
-
-The LLM decides the fix strategy: most tools include usage help in their error messages (`grep: unrecognized option` prints valid flags), so the error alone is often enough. For cryptic errors, the LLM can spend a probe round on `<tool> --help` or `tldr <tool>` (if installed — known from the tool probe). Wrap doesn't auto-enrich errors with help output; the LLM makes that cost/benefit decision within the round budget.
-
-See `specs/SPEC.md` §6 for the full error-handling design (auto-fix scope, command-not-found memory updates, informational vs fixable errors).
+**Why session is separate from core:** `core` is "run one round, return a result"; `session` is "loop those rounds while a dialog may be mounted and events may be dispatched." Separating them keeps the pure loop testable in isolation from the Ink/React surface. See `session.md` for the full rationale (and the six problems that drove the refactor).
 
 ---
 
-## Module Structure
+## Module layout
 
 ```
 src/
-  index.ts                    Entry point
-  main.ts                     Top-level orchestration
-  prompt.constants.json       Shared prompt strings (section headers, fixed instructions)
-  prompt.optimized.json       DSPy-generated: instruction, schema text, few-shot examples, prompt hash
-  command-response.schema.ts  Zod schema for LLM command/answer/probe responses
+  index.ts                       bin entry
+  main.ts                        top-level orchestration
+  command-response.schema.ts     Zod schema for LLM responses
+  prompt.constants.json          fixed instructions and section headers
+  prompt.optimized.json          DSPy-generated: instruction + demos + schema text + hash
 
-  core/
-    input.ts                  CLI arg parsing (prompt | flag | none)
-    query.ts                  Query execution, round retry, command execution
-    parse-response.ts         JSON parsing + schema validation
-    paths.ts                  resolvePath() + prettyPath()
-    output.ts                 isTTY(), hasJq(), chrome() (stderr output)
-    home.ts                   getWrapHome() — resolves ~/.wrap or WRAP_HOME
-    ansi.ts                   ANSI color/style utilities
-    verbose.ts                Verbose mode: initVerbose() + verbose()
+  core/                          pure loop + shared primitives
+    runner.ts                    generator over rounds
+    round.ts                     one round: LLM → parse → classify → execute
+    transcript.ts                semantic conversation turns
+    parse-response.ts            JSON + Zod validation + stripFences
+    shell.ts                     spawn + inherit stdio
+    notify.ts                    typed notification bus
+    input.ts                     argv → { prompt, modifiers, pipedInput }
+    output.ts                    chrome() / chromeRaw() — stderr sink
+    piped-input.ts               stdin reader (TTY detection, byte cap)
+    verbose.ts                   notification → narrative stderr line
+    spinner.ts                   animated chrome without Ink
+    ansi.ts                      RGB interpolation + styling primitives
+    paths.ts, home.ts            path helpers
 
-  config/
-    config.ts                 Config loading + merging (file + env var)
-    config.schema.json        JSON Schema for editor support
+  session/                       stateful loop + dialog lifecycle
+    session.ts                   pumpLoop, runSession, post-transition hooks
+    reducer.ts                   pure state machine (AppState × AppEvent)
+    state.ts                     AppState / AppEvent / ActionId / isDialogTag
+    dialog-host.ts               Ink lazy-load + mount/rerender/unmount
+    notification-router.ts       dialog-aware notification routing
 
-  llm/                        See specs/llm-sdk.md
-    types.ts                  Provider interface, PromptInput, config types
-    index.ts                  initProvider() dispatch + runCommandPrompt()
-    context.ts                assembleCommandPrompt() — thin wrapper over format-context + build-prompt
-    format-context.ts         Pure: memory + tools + cwd → context string
-    build-prompt.ts           Pure: config + context + query → PromptInput
-    utils.ts                  Shared LLM utilities (stripFences, etc.)
+  tui/                           Ink presentation layer — see tui.md
+    dialog.tsx                   Dialog, ActionBar, KeyHints, BorderLine
+    border.ts                    gradient interpolation, risk palettes, badges
+    text-input.tsx               custom editable field (word jump, kill, yank)
+    cursor.ts                    Cursor abstraction for text-input
+    spinner.ts                   React hook variant of the spinner
+
+  llm/                           see llm.md
+    index.ts                     initProvider dispatch + runCommandPrompt
+    types.ts                     Provider interface, PromptScaffold, Config shape
+    resolve-provider.ts          config + overrides → ResolvedProvider
+    build-prompt.ts              config + context + query → PromptScaffold
+    format-context.ts            memory + tools + cwd → context string
+    context.ts                   thin wrapper over format-context + build-prompt
+    utils.ts                     stripFences, toOpenAIStrictSchema, etc.
     providers/
-      ai-sdk.ts               Anthropic + OpenAI via Vercel AI SDK
-      claude-code.ts           Claude CLI subprocess provider
-      test.ts                  Deterministic test mock
+      ai-sdk.ts                  Anthropic + OpenAI-compat via Vercel AI SDK
+      claude-code.ts             Claude CLI subprocess provider
+      test.ts                    Deterministic test mock
+      registry.ts                Provider kinds (anthropic, openai-compat, claude-code)
 
-  logging/                    See specs/logging.md
-    entry.ts                  Log entry type, creation, round management
-    writer.ts                 JSONL append to ~/.wrap/logs/wrap.jsonl
+  config/                        see llm.md §Config Shape
+    config.ts                    file + env → Config (shallow merge)
+    config.schema.json           JSON Schema for editor support
 
-  discovery/                  See specs/discovery.md
-    init-probes.ts            Init probe commands (OS, shell) + runtime tool probe
-    cwd-files.ts              CWD file listing (readdir + lstat, mtime sorted, cap 50)
+  discovery/                     see discovery.md
+    init-probes.ts               first-run probes (OS, shell)
+    cwd-files.ts                 CWD file listing (mtime sorted, capped)
+    watchlist.ts                 tool watchlist load/save
 
-  memory/                     See specs/memory.md
-    types.ts                  Fact, FactScope, Memory types
-    memory.ts                 load, save, append, ensure (init flow)
-    init-prompt.ts            LLM prompt for parsing probe output into facts
+  memory/                        see memory.md
+    types.ts                     Memory, Scope, Fact, FactScope
+    memory.ts                    load / save / append / ensure
+    init-prompt.ts               LLM prompt for parsing probe output into facts
 
-  subcommands/                See specs/subcommands.md
-    types.ts                  Subcommand type
-    registry.ts               All subcommands registered here
-    dispatch.ts               Flag matching + dispatch
-    help.ts                   --help (auto-generated from registry)
-    version.ts                --version
-    log.ts                    --log (raw/pretty, search, filtering)
+  logging/                       see logging.md
+    entry.ts                     LogEntry construction + round management
+    writer.ts                    JSONL append (failures swallowed)
+
+  subcommands/                   see subcommands.md
+    registry.ts                  all subcommands declared here
+    dispatch.ts                  flag matching + dispatch
+    help.ts, version.ts, log.ts  individual subcommands
+    types.ts                     Subcommand type
 ```
 
-Runtime data at `~/.wrap/` (overridable via `WRAP_HOME`):
+Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`):
 - `config.jsonc` — user config
-- `memory.json` — scoped facts (see `specs/memory.md`)
-- `logs/wrap.jsonl` — invocation logs (see `specs/logging.md`)
+- `memory.json` — scoped facts
+- `tool-watchlist.json` — persistent tool names to `which`
+- `logs/wrap.jsonl` — invocation logs
 
 ---
 
-## Mode
+## Design decisions that cross layers
 
-Mode is a string (`"smart" | "yolo" | "force-cmd" | "force-answer" | "confirm-all"`) resolved from the invocation name or flags and passed to `runQuery`. **Not yet implemented** — all invocations currently behave as smart mode: low-risk commands auto-execute, medium/high-risk commands show the dialog (Ink TUI on stderr).
+### Sequential code, not pipeline/middleware
 
-Mode affects:
-- **Confirmation**: yolo skips, confirm-all always shows, smart checks risk level
-- **Response handling**: force-cmd / force-answer constrain LLM behavior
+Considered and rejected. Wrap has a small fixed set of flows — the composability of a pipeline pattern doesn't pay for its costs (implicit ordering dependencies, shared mutable context bag with optional fields, indirection). Sequential code with good function decomposition is simpler, more explicit, and more testable.
+
+### Ensure-pattern over resolve/execute split
+
+A pure `resolve()` → `execute()` split breaks when flows continue after prerequisites. First-run setup creates config, then the query should proceed — not re-resolve. `ensureConfig()` / `ensureMemory()` return and the next line runs.
+
+### Core is pure; session owns the world
+
+`core/runner.ts` is a generator — hand it a transcript and a provider and it yields rounds. `session/session.ts` wraps that with an Ink dialog, a state reducer, and an event-dispatch closure. Tests pin the session's full lifecycle without needing Ink; tests pin the runner without needing the session. See `session.md` for the history of this split.
+
+### The notification bus is the only stderr sink while a dialog is mounted
+
+Any direct `process.stderr.write` during alt-screen lands in the alt buffer and vanishes on exit. All chrome flows through `notify()` → notification router → (stderr | buffer | dialog). See `tui.md` and `session.md`.
+
+### Prompt scaffold, not prompt string
+
+Prompts are assembled as a `PromptScaffold` (`system` + `prefixMessages` + `initialUserText`) rather than a concatenated string. Cache-friendly ordering, deterministic tests, and the ability to inject few-shot examples as real conversation turns. See `llm.md`.
 
 ---
 
-## Design Decisions
+## Where to go next
 
-### Why not pipeline/middleware?
-
-Considered and rejected. Wrap has a fixed, small set of flows — the composability of a pipeline pattern doesn't pay for its costs (implicit ordering dependencies, shared mutable context bag with optional fields, indirection). Sequential code with good function decomposition is simpler, more explicit, and more testable.
-
-### Why not hybrid resolve/execute?
-
-A pure `resolve()` → `execute()` separation breaks down when flows continue after prerequisites. First-run setup creates config, then the query should proceed — not re-resolve. The ensure pattern handles this naturally: `ensureConfig()` returns and the next line runs.
+- **Changing a dialog behavior?** → `tui.md` + `session.md`
+- **Adding a provider?** → `llm.md` § Extending
+- **Changing what the LLM sees?** → `llm.md` § Prompt scaffold + `discovery.md`
+- **Changing when a command is blocked?** → `safety.md`
+- **Changing what gets logged?** → `logging.md`
+- **Changing stderr narrative?** → `verbose.md`
+- **Adding a subcommand?** → `subcommands.md`
+- **Multi-step flows?** → `multi-step.md` (planned; blocked on session architecture it builds on)

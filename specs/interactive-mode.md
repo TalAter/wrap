@@ -1,6 +1,6 @@
 # Interactive Mode
 
-**Status:** Unbuilt. TUI library selected: Ink (see `specs/tui-approach.md`). The dialog TUI for confirmations exists; the no-arg entry TUI does not.
+**Status:** Unbuilt. TUI library selected: Ink (see `specs/tui.md`). The dialog TUI for confirmations exists; the no-arg entry TUI does not.
 
 ## Purpose
 
@@ -26,7 +26,7 @@ Interactive mode is the primary driver for the TUI library choice. Requirements:
 - Clean teardown before handing the terminal to a child process (the executed command may be interactive — vim, less, fzf).
 - Never writes to stdout. All TUI paint goes to stderr or `/dev/tty`.
 
-Ink satisfies these; see `specs/tui-approach.md` for the rationale.
+Ink satisfies these; see `specs/tui.md` for the rationale.
 
 ## Open Questions
 

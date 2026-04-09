@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { type ParseError, parse } from "jsonc-parser";
 import { getWrapHome } from "../core/home.ts";
 
-/** One entry in the providers map — see specs/multi-provider-config.md. */
+/** One entry in the providers map — see specs/llm.md. */
 export type ProviderEntry = {
   apiKey?: string;
   baseURL?: string;

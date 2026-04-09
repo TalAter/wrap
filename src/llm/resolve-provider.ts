@@ -8,7 +8,7 @@ const NO_LLM_ERROR = "Config error: no LLM configured. Edit ~/.wrap/config.jsonc
 /**
  * Resolve a merged `Config` plus an optional override string into the final
  * `ResolvedProvider` used by `initProvider`. See
- * `specs/multi-provider-config.md` for the full resolution rules.
+ * `specs/llm.md` for the full resolution rules.
  *
  * `override` is the raw value from `--model`/`--provider` or `WRAP_MODEL` —
  * caller picks one (CLI wins over env).
