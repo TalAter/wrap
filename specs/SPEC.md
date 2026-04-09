@@ -64,7 +64,7 @@ Read the sub-spec for the area you care about. Each owns its architecture, reaso
 | Verbose mode (stderr narrative) | [`verbose.md`](./verbose.md) |
 | Structured JSONL logging | [`logging.md`](./logging.md) |
 | Answer-mode voice | [`answer-voice.md`](./answer-voice.md) |
-| Scratchpad (planned) | [`scratchpad.md`](./scratchpad.md) |
+| Scratchpad field | [`scratchpad.md`](./scratchpad.md) |
 | Interactive mode (planned) | [`interactive-mode.md`](./interactive-mode.md) |
 | Open TODOs across the project | [`todo.md`](./todo.md) |
 

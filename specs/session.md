@@ -195,7 +195,7 @@ Multi-step adds an `executing-step` reducer tag and a parallel post-transition b
 
 ### 5. The semantic transcript subsumes `projectForEcho`
 
-Multi-step's `projectForEcho` helper exists to strip user-facing fields (`explanation`, `_scratchpad`) when echoing a `CommandResponse` back to the LLM. With the semantic transcript, this becomes `buildPromptInput`'s rendering rule for `candidate_command` and `probe` turns: render only the model-facing fields. The projection logic belongs INSIDE `buildPromptInput`, not as a separate helper. The transcript stores full responses; the builder decides what to expose.
+Multi-step's `projectForEcho` helper was originally proposed to strip user-facing fields (`explanation`, `_scratchpad`) when echoing a `CommandResponse` back to the LLM. With the semantic transcript, the projection logic belongs INSIDE `buildPromptInput`'s rendering rules for `candidate_command` / `probe` / `answer` turns, not as a separate exported helper. Scratchpad's landing implemented this: `stringifyWithoutScratchpad` in `src/core/transcript.ts` is the single place that decides which fields the LLM sees across rounds. Multi-step will extend the same rule to the additional fields.
 
 ---
 

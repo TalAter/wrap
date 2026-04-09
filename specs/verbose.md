@@ -68,6 +68,7 @@ Every pipeline step is reported. Fast steps (<1ms) are still shown — verbose m
 - `Final round: must return command or answer` — when one round remains
 - `Calling {model}...`
 - `LLM parse error, retrying...` — on structured-output retry
+- `LLM scratchpad: {text}` — printed before the LLM response line whenever `_scratchpad` is non-null (see `specs/scratchpad.md`). Newlines collapsed to ` \n ` so each scratchpad is one line.
 - `LLM responded (command, {risk_level}): {content}` — content highlighted
 - `LLM responded (answer, {N} chars)` — content not echoed (it goes to stdout)
 - `LLM responded (probe): {content}` — content highlighted
@@ -95,4 +96,3 @@ Steps defined in this spec but not yet wired (add `verbose()` calls when their f
 - **Context line**: `Context: {N} memory facts, {T} tools, {F} CWD files` before the first LLM call.
 - **Error retry**: `Command failed ({code}), feeding error to LLM...` when a failed command is fed back to the model.
 - **Risk escalation** (`specs/safety.md`): `Risk escalated: {llm} → {effective} (matched: {pattern})` — only when the local rule engine overrides the LLM's level.
-- **Scratchpad** (`specs/scratchpad.md`): `_scratchpad: {text}` before the LLM response line when the model returns a non-null `_scratchpad`. Newlines collapsed to ` \n ` so each scratchpad is one line.
