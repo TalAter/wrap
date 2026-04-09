@@ -345,4 +345,90 @@ describe("createFollowupHandler", () => {
     // Round counter is monotonic — incremented from 5 to 6.
     expect(state.roundNum).toBe(6);
   });
+
+  test("stamps followup_text on the first round of a follow-up call only", async () => {
+    // Probe → command sequence: only the FIRST round (the probe) gets the
+    // user's follow-up text. The probe-driven command round that follows
+    // belongs to the same follow-up call but must NOT carry the text — that
+    // would double-count it when reconstructing the conversation from logs.
+    const { provider } = makeProvider([
+      { type: "probe", content: "ls", risk_level: "low" } as CommandResponse,
+      { type: "command", content: "rm -i a", risk_level: "low" } as CommandResponse,
+    ]);
+    const input = makeInput();
+    const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
+    const entry = makeEntry();
+    const current = makeCurrent();
+    const handler = createFollowupHandler({
+      provider,
+      input,
+      state,
+      entry,
+      options: makeOptions(),
+      current,
+    });
+
+    await handler("be safer", new AbortController().signal);
+
+    expect(entry.rounds).toHaveLength(2);
+    expect(entry.rounds[0]?.followup_text).toBe("be safer");
+    expect(entry.rounds[1]?.followup_text).toBeUndefined();
+  });
+
+  test("each follow-up call stamps its own text on its first round", async () => {
+    // Two chained follow-ups, each producing a single command round. Each
+    // round should carry only the text the user typed for that specific call.
+    const { provider } = makeProvider([
+      { type: "command", content: "rm -i a", risk_level: "low" } as CommandResponse,
+      { type: "command", content: "rm -v a", risk_level: "medium" } as CommandResponse,
+    ]);
+    const input = makeInput();
+    const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
+    const entry = makeEntry();
+    const current = makeCurrent();
+    const handler = createFollowupHandler({
+      provider,
+      input,
+      state,
+      entry,
+      options: makeOptions(),
+      current,
+    });
+
+    await handler("be safer", new AbortController().signal);
+    await handler("verbose please", new AbortController().signal);
+
+    expect(entry.rounds).toHaveLength(2);
+    expect(entry.rounds[0]?.followup_text).toBe("be safer");
+    expect(entry.rounds[1]?.followup_text).toBe("verbose please");
+  });
+
+  test("does not stamp followup_text on the original (pre-follow-up) round", async () => {
+    // The round attached to `current` before any follow-up runs is the
+    // initial command from runQuery. It must stay clean — followup_text is
+    // only meaningful for rounds produced by a follow-up call.
+    const { provider } = makeProvider([
+      { type: "command", content: "rm -i a", risk_level: "low" } as CommandResponse,
+    ]);
+    const input = makeInput();
+    const state: LoopState = { budgetRemaining: 0, roundNum: 1 };
+    const entry = makeEntry();
+    const current = makeCurrent();
+    // Simulate runQuery's eager-logged initial command round.
+    entry.rounds.push(current.round);
+    const handler = createFollowupHandler({
+      provider,
+      input,
+      state,
+      entry,
+      options: makeOptions(),
+      current,
+    });
+
+    await handler("be safer", new AbortController().signal);
+
+    expect(entry.rounds).toHaveLength(2);
+    expect(entry.rounds[0]?.followup_text).toBeUndefined();
+    expect(entry.rounds[1]?.followup_text).toBe("be safer");
+  });
 });

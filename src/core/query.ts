@@ -128,6 +128,13 @@ export type RoundsOptions = {
   maxProbeOutput: number;
   pipedInput?: string;
   signal?: AbortSignal;
+  /**
+   * User text that triggered this loop call, stamped on the FIRST round only
+   * so the log can attribute follow-up sequences back to the user message
+   * that started them. Set by `createFollowupHandler`; absent for the
+   * top-level call from `runQuery` (which is attributed to `entry.prompt`).
+   */
+  followupText?: string;
 };
 
 /**
@@ -155,12 +162,20 @@ export async function runRoundsUntilFinal(
   entry: LogEntry,
   options: RoundsOptions,
 ): Promise<LoopResult> {
+  // Stamp follow-up text on the first round only — even if it's a probe and
+  // the real command lands several rounds later. Held as a consume-once
+  // local so the second iteration has nothing left to stamp.
+  let pendingFollowupText = options.followupText;
   while (state.budgetRemaining > 0) {
     if (options.signal?.aborted) return { type: "aborted" };
 
     state.roundNum += 1;
     state.budgetRemaining -= 1;
     const round: Round = {};
+    if (pendingFollowupText !== undefined) {
+      round.followup_text = pendingFollowupText;
+      pendingFollowupText = undefined;
+    }
     // budgetRemaining === 0 (post-decrement) means this is the last round of
     // the current call. After a follow-up resets budgetRemaining to maxRounds,
     // this becomes true again — which is correct, unlike checking roundNum
@@ -380,6 +395,7 @@ export function createFollowupHandler(deps: FollowupHandlerDeps): FollowupHandle
     const result = await runRoundsUntilFinal(provider, input, state, entry, {
       ...options,
       signal,
+      followupText: text,
     });
 
     // Race: the user can press Esc *after* the loop finishes but *before*

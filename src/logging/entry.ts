@@ -25,6 +25,14 @@ export type Round = {
   execution?: Execution;
   llm_ms?: number;
   exec_ms?: number;
+  /**
+   * The user's follow-up text that triggered this round, set only on the
+   * FIRST round produced by a follow-up call. Subsequent rounds in the same
+   * call (e.g. probe → command) leave it unset so the log can faithfully
+   * reconstruct which user message kicked off which sequence. The very first
+   * user turn of the entry is NOT a follow-up — it lives on `LogEntry.prompt`.
+   */
+  followup_text?: string;
 };
 
 export type LogEntry = {
