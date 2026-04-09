@@ -1009,6 +1009,29 @@ describe("Dialog — follow-up composing", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(followup.calls).toHaveLength(0);
   });
+
+  test("command stays visible while composing a follow-up", async () => {
+    // The follow-up input should appear ABOVE the action bar without
+    // hiding the original command — the user wants to read the command
+    // they're refining while typing the refinement.
+    const { stdin, lastFrame } = render(
+      <Dialog
+        initialCommand="rm important.txt"
+        initialRiskLevel="medium"
+        initialExplanation="Removes the file"
+        onResult={() => {}}
+        onFollowup={noopFollowup}
+      />,
+    );
+    stdin.write("f");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("be safer");
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("rm important.txt");
+    expect(frame).toContain("Removes the file");
+    expect(frame).toContain("be safer");
+  });
 });
 
 describe("Dialog — follow-up processing", () => {
@@ -1029,8 +1052,11 @@ describe("Dialog — follow-up processing", () => {
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 50));
     const frame = stripAnsi(lastFrame() ?? "");
-    // Text still visible (readOnly)
+    // Follow-up text still visible (readOnly during processing)
     expect(frame).toContain("changes");
+    // Original command also still visible — the user kept it on screen
+    // throughout composing and that should not change in processing.
+    expect(frame).toContain("rm file");
     // Action bar hidden
     expect(frame).not.toContain("Run command?");
   });

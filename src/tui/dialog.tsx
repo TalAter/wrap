@@ -140,9 +140,12 @@ export function Dialog({
   }, [dialogState, stdin]);
 
   // Width calculation
+  const showFollowupInput =
+    dialogState === "composing-followup" || dialogState === "processing-followup";
   const natural = Math.max(
     stringWidth(command),
     explanation ? stringWidth(explanation) : 0,
+    showFollowupInput ? stringWidth(followupText) : 0,
     MIN_INNER_WIDTH,
   );
   const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - DIALOG_MARGIN);
@@ -156,8 +159,23 @@ export function Dialog({
     explanation && innerWidth > 0
       ? Math.max(1, Math.ceil(stringWidth(explanation) / Math.max(1, innerWidth - 1)))
       : 0;
-  // First-pass estimate only. Wrapped content can change the real height after Ink layout runs.
-  const initialBorderCount = 1 + cmdLines + (explLines > 0 ? 1 : 0) + explLines + 1 + 1 + 1 + 1;
+  const followupLines =
+    showFollowupInput && innerWidth > 0
+      ? Math.max(1, Math.ceil(stringWidth(` ${followupText}`) / innerWidth))
+      : 0;
+  // First-pass estimate only. Wrapped content can change the real height
+  // after Ink layout runs (useLayoutEffect below corrects via measureElement).
+  const initialBorderCount =
+    1 +
+    cmdLines +
+    (explLines > 0 ? 1 : 0) +
+    explLines +
+    (followupLines > 0 ? 1 : 0) +
+    followupLines +
+    1 +
+    1 +
+    1 +
+    1;
   const [borderCount, setBorderCount] = useState(initialBorderCount);
   const middleRef = useRef<DOMElement>(null);
 
@@ -339,15 +357,6 @@ export function Dialog({
           >
             {dialogState === "editing-command" ? (
               <TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} />
-            ) : dialogState === "composing-followup" ? (
-              <TextInput
-                value={followupText}
-                onChange={setFollowupText}
-                onSubmit={handleFollowupSubmit}
-                placeholder="actually..."
-              />
-            ) : dialogState === "processing-followup" ? (
-              <TextInput value={followupText} readOnly />
             ) : (
               <TextInput value={command} readOnly />
             )}
@@ -357,6 +366,21 @@ export function Dialog({
                 <Box paddingLeft={1}>
                   <Text color="#87879b">{explanation}</Text>
                 </Box>
+              </>
+            )}
+            {(dialogState === "composing-followup" || dialogState === "processing-followup") && (
+              <>
+                <Text> </Text>
+                {dialogState === "composing-followup" ? (
+                  <TextInput
+                    value={followupText}
+                    onChange={setFollowupText}
+                    onSubmit={handleFollowupSubmit}
+                    placeholder="actually..."
+                  />
+                ) : (
+                  <TextInput value={followupText} readOnly />
+                )}
               </>
             )}
             <Text> </Text>
