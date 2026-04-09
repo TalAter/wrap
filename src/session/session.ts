@@ -23,7 +23,7 @@ import { addRound, createLogEntry, type LogEntry } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
-import { type DialogHost, mountDialog, preloadDialogModules } from "./dialog-host.ts";
+import { mountDialog, preloadDialogModules } from "./dialog-host.ts";
 import { createNotificationRouter } from "./notification-router.ts";
 import { reduce } from "./reducer.ts";
 import { type AppEvent, type AppState, isDialogTag, type SessionOutcome } from "./state.ts";
@@ -104,9 +104,6 @@ export async function runSession(
     : null;
 
   let state: AppState = { tag: "thinking" };
-  // Mutation through `hostRef.current` is opaque to TS control-flow analysis,
-  // so the finally block can read it without being narrowed to `null`.
-  const hostRef: { current: DialogHost | null } = { current: null };
   let mountInProgress = false;
   let currentLoopAbort: AbortController | null = null;
 
@@ -147,16 +144,15 @@ export async function runSession(
 
   async function syncDialog(): Promise<void> {
     const wantsDialog = isDialogTag(state.tag);
+    const mounted = router.isDialogMounted();
 
     if (wantsDialog && mountInProgress) return;
 
-    if (wantsDialog && !hostRef.current) {
+    if (wantsDialog && !mounted) {
       mountInProgress = true;
       try {
         if (inkReady) await inkReady;
-        const host = mountDialog({ state, dispatch });
-        hostRef.current = host;
-        router.setDialog(host);
+        router.setDialog(mountDialog({ state, dispatch }));
       } finally {
         mountInProgress = false;
       }
@@ -166,13 +162,13 @@ export async function runSession(
       return;
     }
 
-    if (wantsDialog && hostRef.current) {
-      hostRef.current.rerender({ state, dispatch });
+    if (wantsDialog && mounted) {
+      router.getDialog()?.rerender({ state, dispatch });
       return;
     }
 
-    if (!wantsDialog && hostRef.current) {
-      teardownDialog();
+    if (!wantsDialog && mounted) {
+      router.teardownDialog();
     }
   }
 
@@ -195,12 +191,6 @@ export async function runSession(
 
   const unsubscribe = router.subscribe();
 
-  function teardownDialog(): void {
-    if (hostRef.current === null) return;
-    hostRef.current = null;
-    router.teardownDialog();
-  }
-
   let exitCode = 1;
   try {
     startPumpLoop({ isInitialLoop: true, followupText: undefined });
@@ -208,11 +198,11 @@ export async function runSession(
     // Unmount before exec so the alt screen is gone when the inherited
     // stdio command writes. The listener stays subscribed so verbose/chrome
     // lines from the exec phase still route through the bus.
-    teardownDialog();
+    router.teardownDialog();
     exitCode = await finaliseOutcome(outcome, entry, options.pipedInput);
   } finally {
     unsubscribe();
-    teardownDialog();
+    router.teardownDialog();
     appendLogEntryIgnoreErrors(wrapHome, entry);
   }
 

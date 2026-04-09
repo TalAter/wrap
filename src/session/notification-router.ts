@@ -51,6 +51,13 @@ export type NotificationRouter = {
   subscribe(): () => void;
   /** Hand the dialog handle to the router after a successful mount. */
   setDialog(host: DialogHost): void;
+  /** Whether a dialog is currently mounted. The router is the single source
+   *  of truth for this — the coordinator reads through here rather than
+   *  tracking its own copy. */
+  isDialogMounted(): boolean;
+  /** Read the mounted dialog (or null). The coordinator uses this to call
+   *  `rerender` when the state tag changes within a dialog window. */
+  getDialog(): DialogHost | null;
   /**
    * Unmount the dialog (if any) and flush the buffered notifications to
    * stderr. The unmount writes EXIT_ALT_SCREEN before the flush, so flushed
@@ -86,6 +93,12 @@ export function createNotificationRouter(options: NotificationRouterOptions): No
     },
     setDialog(host: DialogHost): void {
       dialog = host;
+    },
+    isDialogMounted(): boolean {
+      return dialog !== null;
+    },
+    getDialog(): DialogHost | null {
+      return dialog;
     },
     teardownDialog(): void {
       if (dialog === null) return;
