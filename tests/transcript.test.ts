@@ -138,6 +138,32 @@ describe("buildPromptInput", () => {
     });
   });
 
+  test("scratchpadRequiredRetry echoes rejected response with _scratchpad intact", () => {
+    const rejected: CommandResponse = {
+      _scratchpad: null,
+      type: "command",
+      content: "rm -rf node_modules",
+      risk_level: "high",
+    } as CommandResponse;
+    const transcript: Transcript = [{ kind: "user", text: "nuke deps" }];
+    const out = buildPromptInput(transcript, sys, {
+      scratchpadRequiredRetry: { rejectedResponse: rejected },
+    });
+    expect(out.messages).toHaveLength(3);
+    // Assistant echo must preserve _scratchpad (even null) so the model
+    // sees what it needs to fix — the one exception to the cross-round
+    // strip rule.
+    expect(out.messages[1]).toEqual({
+      role: "assistant",
+      content: JSON.stringify(rejected),
+    });
+    expect(out.messages[1]?.content).toContain("_scratchpad");
+    expect(out.messages[2]).toEqual({
+      role: "user",
+      content: promptConstants.scratchpadRequiredInstruction,
+    });
+  });
+
   test("probeRiskRetry directive appends rejected echo + probeRiskInstruction", () => {
     const rejected: CommandResponse = {
       type: "probe",

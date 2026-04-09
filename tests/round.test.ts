@@ -209,6 +209,96 @@ describe("runRound", () => {
     expect(stderr.text).not.toContain("scratchpad");
   });
 
+  test("retries once when a high-risk command has a null scratchpad", async () => {
+    const { provider, captured } = makeProvider([
+      {
+        _scratchpad: null,
+        type: "command",
+        content: "rm -rf node_modules",
+        risk_level: "high",
+      } as CommandResponse,
+      {
+        _scratchpad: "Destructive: blow away deps for a clean install.",
+        type: "command",
+        content: "rm -rf node_modules",
+        risk_level: "high",
+      } as CommandResponse,
+    ]);
+    const round = await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    expect(captured.calls).toBe(2);
+    expect(round.parsed?._scratchpad).toBe(
+      "Destructive: blow away deps for a clean install.",
+    );
+    // The retry call must include the scratchpadRequiredInstruction
+    const userMessages = captured.lastInput?.messages.filter((m) => m.role === "user") ?? [];
+    const hasDirective = userMessages.some(
+      (m) => m.content === promptConstants.scratchpadRequiredInstruction,
+    );
+    expect(hasDirective).toBe(true);
+  });
+
+  test("does not retry when a high-risk command already has a scratchpad", async () => {
+    const { provider, captured } = makeProvider([
+      {
+        _scratchpad: "Blowing away node_modules for a clean install.",
+        type: "command",
+        content: "rm -rf node_modules",
+        risk_level: "high",
+      } as CommandResponse,
+    ]);
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    expect(captured.calls).toBe(1);
+  });
+
+  test("does not retry for medium risk with a null scratchpad", async () => {
+    const { provider, captured } = makeProvider([
+      {
+        _scratchpad: null,
+        type: "command",
+        content: "mkdir build",
+        risk_level: "medium",
+      } as CommandResponse,
+    ]);
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    expect(captured.calls).toBe(1);
+  });
+
+  test("accepts a still-null scratchpad after the retry without a third call", async () => {
+    const { provider, captured } = makeProvider([
+      {
+        _scratchpad: null,
+        type: "command",
+        content: "rm -rf node_modules",
+        risk_level: "high",
+      } as CommandResponse,
+      {
+        _scratchpad: null,
+        type: "command",
+        content: "rm -rf node_modules",
+        risk_level: "high",
+      } as CommandResponse,
+    ]);
+    const round = await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    expect(captured.calls).toBe(2);
+    expect(round.parsed?.type).toBe("command");
+  });
+
   test("retries once on a structured-output parse failure", async () => {
     let calls = 0;
     const provider: Provider = {

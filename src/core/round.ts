@@ -155,6 +155,24 @@ export async function runRound(
         }),
       );
     }
+
+    // High-risk destructive commands must carry a scratchpad so the reasoning
+    // is visible in logs and to anyone reviewing the confirm panel. Retry
+    // once if the model skipped it. A still-null retry is accepted — don't
+    // retry-storm; the confirm panel remains the final safety layer.
+    if (
+      response.type === "command" &&
+      response.risk_level === "high" &&
+      response._scratchpad == null
+    ) {
+      response = await callWithRetry(
+        provider,
+        buildPromptInput(transcript, scaffold, {
+          ...(directives ?? {}),
+          scratchpadRequiredRetry: { rejectedResponse: response },
+        }),
+      );
+    }
   } catch (e) {
     // Stop the spinner before logging so the error line lands on a clean row
     // instead of being glued to the trailing spinner frame.
