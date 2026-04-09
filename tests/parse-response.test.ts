@@ -47,9 +47,9 @@ describe("parseResponse with fenced input", () => {
   });
 
   test("parses valid JSON wrapped in bare ``` fences", () => {
-    const raw = '```\n{"type":"answer","content":"42","risk_level":"low"}\n```';
+    const raw = '```\n{"type":"reply","content":"42","risk_level":"low"}\n```';
     const result = parseResponse(raw);
-    expect(result.type).toBe("answer");
+    expect(result.type).toBe("reply");
     expect(result.content).toBe("42");
   });
 
@@ -72,14 +72,14 @@ describe("parseResponse", () => {
     expect(result.risk_level).toBe("low");
   });
 
-  test("parses valid answer response", () => {
+  test("parses valid reply response", () => {
     const raw = JSON.stringify({
-      type: "answer",
+      type: "reply",
       content: "42",
       risk_level: "low",
     });
     const result = parseResponse(raw);
-    expect(result.type).toBe("answer");
+    expect(result.type).toBe("reply");
     expect(result.content).toBe("42");
   });
 

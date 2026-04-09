@@ -91,7 +91,7 @@ describe("runLoop", () => {
 
   test("single-iteration answer pushes an answer turn and returns answer", async () => {
     const { provider } = makeProvider([
-      { type: "answer", content: "hi back", risk_level: "low" } as CommandResponse,
+      { type: "reply", content: "hi back", risk_level: "low" } as CommandResponse,
     ]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };

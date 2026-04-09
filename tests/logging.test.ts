@@ -334,13 +334,13 @@ describe("logging integration", () => {
 
   test("successful answer: outcome, fields, timing, no execution", async () => {
     const result = await wrapMock("what is 2+2", {
-      type: "answer",
+      type: "reply",
       content: "4",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("success");
-    expect(entry.rounds[0].parsed.type).toBe("answer");
+    expect(entry.rounds[0].parsed.type).toBe("reply");
     expect(entry.rounds[0].execution).toBeUndefined();
     // Invocation-level fields
     expect(entry.id).toMatch(/^[0-9a-f]{8}-/);
@@ -362,13 +362,13 @@ describe("logging integration", () => {
 
   test("empty content logs with outcome 'error'", async () => {
     const result = await wrapMock("what is 2+2", {
-      type: "answer",
+      type: "reply",
       content: "",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("error");
-    expect(entry.rounds[0].parsed.type).toBe("answer");
+    expect(entry.rounds[0].parsed.type).toBe("reply");
   });
 
   test("parse error logs provider_error", async () => {
@@ -411,7 +411,7 @@ describe("logging integration", () => {
 
   test("logs memory state from invocation", async () => {
     const result = await wrapMock("test", {
-      type: "answer",
+      type: "reply",
       content: "ok",
       risk_level: "low",
     });

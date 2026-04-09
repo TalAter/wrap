@@ -31,7 +31,7 @@ const probeResponse: CommandResponse = {
 } as CommandResponse;
 
 const answerResponse: CommandResponse = {
-  type: "answer",
+  type: "reply",
   content: "the answer",
   risk_level: "low",
 } as CommandResponse;

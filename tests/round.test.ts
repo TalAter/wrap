@@ -66,14 +66,14 @@ describe("runRound", () => {
 
   test("returns a Round with parsed set on a successful answer", async () => {
     const { provider } = makeProvider([
-      { type: "answer", content: "hello", risk_level: "low" } as CommandResponse,
+      { type: "reply", content: "hello", risk_level: "low" } as CommandResponse,
     ]);
     const round = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
-    expect(round.parsed?.type).toBe("answer");
+    expect(round.parsed?.type).toBe("reply");
   });
 
   test("with isLastRound: true the LLM sees lastRoundInstruction", async () => {
@@ -129,7 +129,7 @@ describe("runRound", () => {
 
   test("throws RoundError on empty content with the partial round attached", async () => {
     const { provider } = makeProvider([
-      { type: "answer", content: "   ", risk_level: "low" } as CommandResponse,
+      { type: "reply", content: "   ", risk_level: "low" } as CommandResponse,
     ]);
     let thrown: unknown;
     try {

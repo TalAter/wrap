@@ -16,15 +16,24 @@ describe("CommandResponseSchema", () => {
     expect(result.explanation).toBe("Find TypeScript files modified today");
   });
 
-  test("parses valid answer response", () => {
+  test("parses valid reply response", () => {
     const input = {
-      type: "answer",
+      type: "reply",
       content: "The speed of light is approximately 299,792,458 m/s",
       risk_level: "low",
     };
     const result = CommandResponseSchema.parse(input);
-    expect(result.type).toBe("answer");
+    expect(result.type).toBe("reply");
     expect(result.content).toBe("The speed of light is approximately 299,792,458 m/s");
+  });
+
+  test("rejects legacy 'answer' type", () => {
+    const input = {
+      type: "answer",
+      content: "hi",
+      risk_level: "low",
+    };
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
   test("parses valid probe response", () => {

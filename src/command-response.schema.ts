@@ -16,10 +16,10 @@ export const CommandResponseSchema = z.object({
     "command",
     // probe = a safe, read-only discovery command to learn about the user's environment (e.g. what shell they use, what's installed) or to fetch the contents of a URL when the live page would ground your response (e.g. `curl -sL --max-time 10 URL`). The probe output will be fed back to you in the next round so you can then produce the final command or answer.
     "probe",
-    // answer = a direct text response. Use for general knowledge questions that don't need a shell command.
-    "answer",
+    // reply = a direct text response. Use for general knowledge questions that don't need a shell command.
+    "reply",
   ]),
-  // The shell command (for command/probe) or text response (for answer)
+  // The shell command (for command/probe) or text response (for reply)
   content: z.string(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),

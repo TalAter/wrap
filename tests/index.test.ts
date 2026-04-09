@@ -116,7 +116,7 @@ describe("wrap", () => {
 
   test("answer: prints to stdout and exits 0", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("what is 6*7", {
-      type: "answer",
+      type: "reply",
       content: "42",
       risk_level: "low",
     });
@@ -127,9 +127,9 @@ describe("wrap", () => {
 
   test("errors on empty or whitespace content", async () => {
     const [emptyAnswer, emptyCommand, whitespace] = await Promise.all([
-      wrapMock("hello", { type: "answer", content: "", risk_level: "low" }),
+      wrapMock("hello", { type: "reply", content: "", risk_level: "low" }),
       wrapMock("hello", { type: "command", content: "", risk_level: "low" }),
-      wrapMock("hello", { type: "answer", content: "   ", risk_level: "low" }),
+      wrapMock("hello", { type: "reply", content: "   ", risk_level: "low" }),
     ]);
     expect(emptyAnswer.exitCode).toBe(1);
     expect(emptyAnswer.stdout).toBe("");
@@ -273,7 +273,7 @@ describe("wrap", () => {
         risk_level: "low",
         explanation: "Reading example.com",
       },
-      { type: "answer", content: "Done.", risk_level: "low" },
+      { type: "reply", content: "Done.", risk_level: "low" },
     ]);
     expect(stderr).toContain("🌐");
     expect(stderr).not.toContain("🔍");
@@ -283,7 +283,7 @@ describe("wrap", () => {
   test("probe → answer: returns answer after probe", async () => {
     const { exitCode, stdout } = await wrapMock("what shell am I using", [
       { type: "probe", content: "echo /bin/zsh", risk_level: "low", explanation: "Checking shell" },
-      { type: "answer", content: "You're using zsh", risk_level: "low" },
+      { type: "reply", content: "You're using zsh", risk_level: "low" },
     ]);
     expect(exitCode).toBe(0);
     expect(stdout).toBe("You're using zsh\n");
@@ -443,7 +443,7 @@ describe("piped input", () => {
   test("pipe + CLI args: LLM receives both piped content and prompt", async () => {
     const { exitCode, stdout } = await wrapMock(
       "explain this",
-      { type: "answer", content: "It's an error log", risk_level: "low" },
+      { type: "reply", content: "It's an error log", risk_level: "low" },
       undefined,
       "ERROR: connection refused",
     );
@@ -454,7 +454,7 @@ describe("piped input", () => {
   test("pipe only (no args): proceeds to query, not --help", async () => {
     const { exitCode, stdout } = await wrapMock(
       "",
-      { type: "answer", content: "42 lines", risk_level: "low" },
+      { type: "reply", content: "42 lines", risk_level: "low" },
       undefined,
       "line1\nline2\nline3",
     );
@@ -501,7 +501,7 @@ describe("piped input", () => {
       "count lines",
       [
         { type: "probe", content: "wc -l", risk_level: "low", pipe_stdin: true },
-        { type: "answer", content: "3 lines", risk_level: "low" },
+        { type: "reply", content: "3 lines", risk_level: "low" },
       ],
       undefined,
       "a\nb\nc\n",
@@ -513,7 +513,7 @@ describe("piped input", () => {
   test("piped content not parsed as flags", async () => {
     const { exitCode, stdout } = await wrapMock(
       "explain this",
-      { type: "answer", content: "That's a version flag", risk_level: "low" },
+      { type: "reply", content: "That's a version flag", risk_level: "low" },
       undefined,
       "--version",
     );
@@ -526,7 +526,7 @@ describe("piped input", () => {
   test("piped input logged in entry", async () => {
     const { wrapHome } = await wrapMock(
       "explain",
-      { type: "answer", content: "ok", risk_level: "low" },
+      { type: "reply", content: "ok", risk_level: "low" },
       undefined,
       "log data here",
     );
@@ -539,7 +539,7 @@ describe("piped input", () => {
     const largeInput = "x".repeat(5000);
     const { wrapHome } = await wrapMock(
       "explain",
-      { type: "answer", content: "ok", risk_level: "low" },
+      { type: "reply", content: "ok", risk_level: "low" },
       undefined,
       largeInput,
     );
@@ -551,7 +551,7 @@ describe("piped input", () => {
 
   test("no piped input: log omits piped_input field", async () => {
     const { wrapHome } = await wrapMock("hello", {
-      type: "answer",
+      type: "reply",
       content: "ok",
       risk_level: "low",
     });

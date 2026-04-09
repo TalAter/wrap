@@ -106,7 +106,9 @@ function handleMemoryUpdates(
  *   3. yield round-complete with the produced Round.
  *   4. Apply side effects: memory updates, watchlist additions.
  *   5. Route by response type:
- *        - answer  → push answer turn, return { type: "answer" }
+ *        - reply   → push answer turn, return { type: "answer" }
+ *                   (LoopReturn variant name stays "answer" — the schema
+ *                   field is decoupled from the coordinator-facing tag.)
  *        - command → push candidate_command turn, return { type: "command" }
  *        - probe   → execute inline, push probe turn, continue
  *   6. When budget reaches zero, return { type: "exhausted" }.
@@ -179,7 +181,7 @@ export async function* runLoop(
       verbose(`Watchlist: added ${response.watchlist_additions.join(", ")}`);
     }
 
-    if (response.type === "answer") {
+    if (response.type === "reply") {
       transcript.push({ kind: "answer", response });
       return { type: "answer", content: response.content };
     }

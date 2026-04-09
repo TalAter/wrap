@@ -26,7 +26,7 @@ async function wrapVerbose(
 describe("verbose e2e", () => {
   test("--verbose answer: shows all standard lines and passes output", async () => {
     const { exitCode, stdout, stderr } = await wrapVerbose("hello", {
-      type: "answer",
+      type: "reply",
       content: "world",
       risk_level: "low",
     });
@@ -37,7 +37,7 @@ describe("verbose e2e", () => {
     expect(stderr).toMatch(/Tools: \d+\/\d+ available/);
     expect(stderr).toMatch(/Memory: \d+ facts/);
     expect(stderr).toContain("Calling test / test...");
-    expect(stderr).toContain("LLM responded (answer, 5 chars)");
+    expect(stderr).toContain("LLM responded (reply, 5 chars)");
     // All verbose lines have elapsed timestamps
     const verboseLines = stderr.split("\n").filter((l) => l.includes("»"));
     expect(verboseLines.length).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ describe("verbose e2e", () => {
 
   test("without --verbose flag, no verbose output", async () => {
     const { stderr } = await wrapMock("hello", {
-      type: "answer",
+      type: "reply",
       content: "world",
       risk_level: "low",
     });
@@ -123,7 +123,7 @@ describe("verbose e2e", () => {
       WRAP_HOME: wrapHome,
       WRAP_CONFIG: JSON.stringify({ verbose: true }),
       WRAP_TEST_RESPONSE: JSON.stringify({
-        type: "answer",
+        type: "reply",
         content: "world",
         risk_level: "low",
       }),
@@ -148,7 +148,7 @@ describe("verbose e2e", () => {
       WRAP_HOME: wrapHome,
       WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: JSON.stringify({
-        type: "answer",
+        type: "reply",
         content: "world",
         risk_level: "low",
       }),

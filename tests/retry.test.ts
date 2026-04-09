@@ -143,7 +143,7 @@ describe("round retry in runSession", () => {
           throw mockNoObjectError({ text: "not valid json" });
         }
         // Second call succeeds
-        return { type: "answer", content: "retried ok", risk_level: "low" };
+        return { type: "reply", content: "retried ok", risk_level: "low" };
       },
     };
 
@@ -248,7 +248,7 @@ describe("chrome spinner around LLM call", () => {
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
 
     const provider = {
-      runPrompt: async () => ({ type: "answer", content: "ok", risk_level: "low" }),
+      runPrompt: async () => ({ type: "reply", content: "ok", risk_level: "low" }),
     };
 
     await runSession("test", provider, {
@@ -276,7 +276,7 @@ describe("chrome spinner around LLM call", () => {
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
 
     const provider = {
-      runPrompt: async () => ({ type: "answer", content: "ok", risk_level: "low" }),
+      runPrompt: async () => ({ type: "reply", content: "ok", risk_level: "low" }),
     };
 
     await runSession("test", provider, {

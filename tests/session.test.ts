@@ -70,7 +70,7 @@ describe("runSession — initial low-risk command", () => {
 describe("runSession — initial answer", () => {
   test("answer is printed to stdout and exits 0", async () => {
     const { provider } = makeProvider([
-      { type: "answer", content: "the answer", risk_level: "low" } as CommandResponse,
+      { type: "reply", content: "the answer", risk_level: "low" } as CommandResponse,
     ]);
     const exit = await runSession("question?", provider, {
       cwd: "/tmp",
@@ -141,7 +141,7 @@ describe("runSession — multi-round probe → answer", () => {
   test("probe followed by answer logs both rounds and exits 0", async () => {
     const { provider } = makeProvider([
       { type: "probe", content: "echo hi", risk_level: "low" } as CommandResponse,
-      { type: "answer", content: "the answer", risk_level: "low" } as CommandResponse,
+      { type: "reply", content: "the answer", risk_level: "low" } as CommandResponse,
     ]);
     const exit = await runSession("test", provider, {
       cwd: "/tmp",
@@ -155,7 +155,7 @@ describe("runSession — multi-round probe → answer", () => {
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
     expect(entry.rounds).toHaveLength(2);
     expect(entry.rounds[0].parsed.type).toBe("probe");
-    expect(entry.rounds[1].parsed.type).toBe("answer");
+    expect(entry.rounds[1].parsed.type).toBe("reply");
   });
 
   test("captured probe output never lands on stderr (only the chrome explanation does)", async () => {
@@ -174,7 +174,7 @@ describe("runSession — multi-round probe → answer", () => {
         risk_level: "low",
         explanation: "Find the secret",
       } as CommandResponse,
-      { type: "answer", content: "done", risk_level: "low" } as CommandResponse,
+      { type: "reply", content: "done", risk_level: "low" } as CommandResponse,
     ]);
     const exit = await runSession("test", provider, {
       cwd: "/tmp",

@@ -100,8 +100,8 @@ function verboseResponse(response: CommandResponse): void {
     case "command":
       verboseHighlight(`LLM responded (command, ${response.risk_level}): `, response.content);
       break;
-    case "answer":
-      verbose(`LLM responded (answer, ${response.content.length} chars)`);
+    case "reply":
+      verbose(`LLM responded (reply, ${response.content.length} chars)`);
       break;
     case "probe":
       verboseHighlight("LLM responded (probe): ", response.content);
