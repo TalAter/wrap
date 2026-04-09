@@ -192,6 +192,58 @@ describe("buildPromptInput", () => {
     expect(out.messages[2]).toEqual({ role: "user", content: "real" });
   });
 
+  test("strips _scratchpad from probe response before echoing as assistant turn", () => {
+    const probeWithScratchpad: CommandResponse = {
+      _scratchpad: "Need to check shell first.",
+      type: "probe",
+      content: "echo $SHELL",
+      risk_level: "low",
+    } as CommandResponse;
+    const transcript: Transcript = [
+      { kind: "user", text: "hi" },
+      { kind: "probe", response: probeWithScratchpad, output: "zsh", exitCode: 0 },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    const assistantMsg = out.messages[1];
+    expect(assistantMsg?.role).toBe("assistant");
+    expect(assistantMsg?.content).not.toContain("_scratchpad");
+    expect(assistantMsg?.content).not.toContain("Need to check shell first");
+    // Other fields still present
+    const parsed = JSON.parse(assistantMsg?.content ?? "{}");
+    expect(parsed.content).toBe("echo $SHELL");
+    expect(parsed.type).toBe("probe");
+  });
+
+  test("strips _scratchpad from candidate_command turn", () => {
+    const cmdWithScratchpad: CommandResponse = {
+      _scratchpad: "Listing files.",
+      type: "command",
+      content: "ls",
+      risk_level: "low",
+    } as CommandResponse;
+    const transcript: Transcript = [
+      { kind: "user", text: "hi" },
+      { kind: "candidate_command", response: cmdWithScratchpad },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[1]?.content).not.toContain("_scratchpad");
+  });
+
+  test("strips _scratchpad from answer turn", () => {
+    const answerWithScratchpad: CommandResponse = {
+      _scratchpad: "Knowledge question.",
+      type: "answer",
+      content: "42",
+      risk_level: "low",
+    } as CommandResponse;
+    const transcript: Transcript = [
+      { kind: "user", text: "meaning of life?" },
+      { kind: "answer", response: answerWithScratchpad },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[1]?.content).not.toContain("_scratchpad");
+  });
+
   test("probe output with non-zero exit code includes the exit code", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },

@@ -61,6 +61,19 @@ export type AttemptDirectives = {
 };
 
 /**
+ * Serialize an LLM response for echo back into a later round, minus
+ * `_scratchpad`. Scratchpad is intra-round reasoning; replaying it to the
+ * model adds tokens and encourages the next round to anchor on stale plans
+ * instead of planning fresh. The probeRiskRetry path is the one exception —
+ * it serializes the rejected response directly so the model sees what it
+ * just wrote.
+ */
+function stringifyWithoutScratchpad(response: CommandResponse): string {
+  const { _scratchpad, ...rest } = response;
+  return JSON.stringify(rest);
+}
+
+/**
  * Format a probe's captured output: prepend the section header, fall back to
  * the no-output sentinel when the post-processed body is blank, append a
  * trailing exit-code line on non-zero exits. The runner is responsible for
@@ -102,7 +115,7 @@ export function buildPromptInput(
       case "probe":
         messages.push({
           role: "assistant",
-          content: JSON.stringify(turn.response),
+          content: stringifyWithoutScratchpad(turn.response),
         });
         messages.push({
           role: "user",
@@ -113,7 +126,7 @@ export function buildPromptInput(
       case "answer":
         messages.push({
           role: "assistant",
-          content: JSON.stringify(turn.response),
+          content: stringifyWithoutScratchpad(turn.response),
         });
         break;
       default: {
@@ -125,6 +138,8 @@ export function buildPromptInput(
     }
   }
   if (directives?.probeRiskRetry) {
+    // Intentional raw stringify — intra-round retry, the model must see its
+    // own `_scratchpad` to correct itself. See `stringifyWithoutScratchpad`.
     messages.push({
       role: "assistant",
       content: JSON.stringify(directives.probeRiskRetry.rejectedResponse),
