@@ -1,6 +1,12 @@
 import type { CommandResponse } from "../../src/command-response.schema.ts";
 import type { RoundsOptions } from "../../src/core/query.ts";
-import type { ConversationMessage, PromptInput, Provider } from "../../src/llm/types.ts";
+import { TEST_RESOLVED_PROVIDER } from "../../src/llm/providers/test.ts";
+import {
+  type ConversationMessage,
+  formatProvider,
+  type PromptInput,
+  type Provider,
+} from "../../src/llm/types.ts";
 import { createLogEntry, type LogEntry } from "../../src/logging/entry.ts";
 
 /**
@@ -41,7 +47,7 @@ export function makeEntry(): LogEntry {
   return createLogEntry({
     prompt: "test",
     cwd: "/tmp",
-    provider: { name: "test", model: "test" },
+    provider: TEST_RESOLVED_PROVIDER,
     promptHash: "h",
   });
 }
@@ -50,7 +56,7 @@ export function makeOptions(overrides: Partial<RoundsOptions> = {}): RoundsOptio
   return {
     cwd: "/tmp",
     wrapHome: "/tmp",
-    model: "test / test",
+    model: formatProvider(TEST_RESOLVED_PROVIDER),
     maxRounds: 5,
     maxProbeOutput: 10000,
     pipedInput: undefined,
