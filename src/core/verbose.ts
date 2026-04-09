@@ -1,5 +1,5 @@
 import { dim } from "./ansi.ts";
-import { writeLine } from "./output-sink.ts";
+import { emit } from "./notify.ts";
 
 let enabled = false;
 let initialized = false;
@@ -18,10 +18,10 @@ function prefix(): string {
   return dim(`» [+${elapsed}s] `);
 }
 
-/** Emit a verbose line to stderr if enabled; no-op if disabled. */
+/** Emit a verbose line through the notification bus if enabled; no-op if disabled. */
 export function verbose(msg: string): void {
   if (!enabled) return;
-  writeLine(`${prefix()}${dim(msg)}\n`);
+  emit({ kind: "verbose", line: `${prefix()}${dim(msg)}\n` });
 }
 
 /**
@@ -30,7 +30,7 @@ export function verbose(msg: string): void {
  */
 export function verboseHighlight(msg: string, highlight: string): void {
   if (!enabled) return;
-  writeLine(`${prefix()}${dim(msg)}${highlight}\n`);
+  emit({ kind: "verbose", line: `${prefix()}${dim(msg)}${highlight}\n` });
 }
 
 /** Reset state — for tests only. */

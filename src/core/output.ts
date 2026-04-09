@@ -1,4 +1,4 @@
-import { writeLine } from "./output-sink.ts";
+import { emit } from "./notify.ts";
 
 export function isTTY(): boolean {
   return !!process.stdout.isTTY;
@@ -9,12 +9,12 @@ export function hasJq(): boolean {
 }
 
 /**
- * Routes through the output sink so the dialog can intercept chrome
- * lines during alt-screen rendering. Optional icon is shown as a prefix.
+ * Emit a chrome line through the notification bus. With no listener
+ * subscribed, the bus writes a formatted line to stderr; with the session
+ * subscribed, it routes to the buffer + reducer.
  */
 export function chrome(text: string, icon?: string): void {
-  const line = icon ? `${icon} ${text}\n` : `${text}\n`;
-  writeLine(line, { text, icon });
+  emit({ kind: "chrome", text, icon });
 }
 
 /** Write raw chrome output to stderr — no trailing newline. For ANSI escapes, partial writes. */
