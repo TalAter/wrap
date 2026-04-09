@@ -61,7 +61,17 @@ export function resetNotifications(): void {
   listeners.clear();
 }
 
-/** Format-and-write a notification to stderr. The default fallback. */
+/**
+ * Format-and-write a notification to stderr. The default fallback used when
+ * no listener is subscribed (or when a subscribed listener delegates here).
+ *
+ * **`step-output` is intentionally dropped.** That kind carries the
+ * post-truncated captured output of an intermediate command (a probe today,
+ * a confirmed multi-step in the future). Its only consumer is the dialog's
+ * output slot — there is no stderr fallback for it. Writing it to stderr
+ * during `thinking` would flood the user's terminal with raw probe output
+ * that was already fed to the LLM via the transcript.
+ */
 export function writeNotificationToStderr(n: Notification): void {
   switch (n.kind) {
     case "chrome": {
@@ -73,7 +83,7 @@ export function writeNotificationToStderr(n: Notification): void {
       process.stderr.write(n.line);
       return;
     case "step-output":
-      process.stderr.write(`${n.text}\n`);
+      // Dialog-only — no stderr fallback. See JSDoc above.
       return;
   }
 }

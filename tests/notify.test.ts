@@ -92,4 +92,14 @@ describe("notifications bus", () => {
     emit({ kind: "verbose", line: "raw verbose line\n" });
     expect(stderr.text).toBe("raw verbose line\n");
   });
+
+  test("step-output is dropped on the no-listener path (dialog-only)", () => {
+    // step-output carries the captured intermediate command output that was
+    // pushed back to the LLM. It's meant for the dialog's output slot
+    // (multi-step) — there is no stderr fallback. Without this drop, the
+    // initial loop's probe output would flood the user's terminal in
+    // `thinking` state.
+    emit({ kind: "step-output", text: "captured probe output" });
+    expect(stderr.text).toBe("");
+  });
 });

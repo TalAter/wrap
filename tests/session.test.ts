@@ -157,4 +157,33 @@ describe("runSession — multi-round probe → answer", () => {
     expect(entry.rounds[0].parsed.type).toBe("probe");
     expect(entry.rounds[1].parsed.type).toBe("answer");
   });
+
+  test("captured probe output never lands on stderr (only the chrome explanation does)", async () => {
+    // Regression test: in the old loop, captured probe output went only to
+    // the LLM via input.messages. After the refactor, the runner yields a
+    // `step-output` event that the session forwards to the notification bus.
+    // `writeNotificationToStderr` MUST drop step-output (it's dialog-only),
+    // otherwise during `thinking` the user would see raw grep results
+    // streamed to their terminal. Pinned here so a future change to the
+    // bus / writeNotificationToStderr can't silently re-introduce it.
+    const SECRET = "OUTPUT_THAT_MUST_NOT_LEAK_TO_STDERR";
+    const { provider } = makeProvider([
+      {
+        type: "probe",
+        content: `echo ${SECRET}`,
+        risk_level: "low",
+        explanation: "Find the secret",
+      } as CommandResponse,
+      { type: "answer", content: "done", risk_level: "low" } as CommandResponse,
+    ]);
+    const exit = await runSession("test", provider, {
+      cwd: "/tmp",
+      resolvedProvider: TEST_RESOLVED_PROVIDER,
+    });
+    expect(exit).toBe(0);
+    // The probe explanation IS chrome and SHOULD appear on stderr.
+    expect(stderr.text).toContain("Find the secret");
+    // The captured probe output MUST NOT appear on stderr.
+    expect(stderr.text).not.toContain(SECRET);
+  });
 });
