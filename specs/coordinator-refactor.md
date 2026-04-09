@@ -63,9 +63,10 @@ Five layers, one direction of data flow.
                             AppState
 ```
 
-**Layer A — Round runner.** A pair of pure-ish functions in `src/core/`:
-- `runRound(provider, input, options) → Round` — a single LLM call with in-round retries (parse-failure retry, probe-risk retry). No logging, no chrome, no spinner. Pushes meta-instructions into `input.messages` only within its own scope (push-then-pop in finally for `lastRoundInstruction`). Probe-risk refused pairs persist within the call (so the next probe attempt sees them) but are cleaned up by the caller before any *next* call (`stripStaleInstructions`).
-- `runLoop(provider, input, state, options) → AsyncGenerator<LoopEvent, LoopReturn>` — drives `runRound` repeatedly, executes probes inline, yields lifecycle events (`round-complete`, `step-running`, `step-output`), returns a final-form discriminated union.
+**Layer A — Round runner.** Three pure-ish primitives in `src/core/`:
+- `Transcript` (in `src/core/transcript.ts`) — the conversation history as a list of *semantic* turns (`user_request`, `followup`, `probe`, `candidate_command`, `answer`), NOT a provider-shaped `PromptInput`. The transcript is the durable state; `PromptInput` is built fresh from it on every LLM call. There is no `stripStaleInstructions` because there are no stale instructions to strip — meta-directives (`lastRoundInstruction`, refused-probe retry) live only inside the local scope of one `runRound` call.
+- `runRound(provider, transcript, system, options) → Round` — a single LLM call with in-round retries (parse-failure retry, probe-risk retry). No logging, no chrome, no spinner. Calls `buildPromptInput(transcript, system, attemptDirectives)` internally to produce the messages array. The transcript is read-only inside `runRound`; the loop pushes new turns AFTER each round.
+- `runLoop(provider, transcript, system, state, options) → AsyncGenerator<LoopEvent, LoopReturn>` — drives `runRound` repeatedly, executes probes inline, pushes `probe` turns to the transcript after each probe runs, yields lifecycle events (`round-complete`, `step-running`, `step-output`), returns a final-form discriminated union.
 
 **Layer B — Application state machine.** A pure reducer over a tagged union:
 - `AppState` lives in `src/session/state.ts`. Tags: `thinking`, `confirming`, `editing`, `composing`, `processing`, `exiting`. Each tag is a self-contained record — no shared base type, no class hierarchy. Adding fields (for multi-step) is additive.
@@ -92,6 +93,7 @@ Five layers, one direction of data flow.
 ```
 src/
   core/
+    transcript.ts       # Transcript + TranscriptTurn + buildPromptInput + pushTurn
     round.ts            # runRound + helpers (callWithRetry, isStructuredOutputError, extractFailedText)
     runner.ts           # runLoop async generator + LoopState + LoopEvent + LoopReturn types
     notify.ts           # NotificationBus + the singleton + Notification type
@@ -133,12 +135,110 @@ Everything not in the three lists above. See § Things explicitly not touched be
 
 The implementer should write these out exactly, then fill in the bodies. They ARE the architecture.
 
+### `src/core/transcript.ts`
+
+```ts
+import type { CommandResponse } from "../command-response.schema.ts";
+import type { PromptInput } from "../llm/types.ts";
+
+/**
+ * The conversation between the user and the LLM, recorded as semantic turns
+ * rather than as a provider-shaped `PromptInput`. This is the durable state
+ * that the session, the runner, and the coordinator all read and write.
+ *
+ * Why semantic turns instead of `input.messages`:
+ *   - Today's loop pushes meta-instructions (`lastRoundInstruction`,
+ *     refused-probe pairs) into `input.messages` mid-call. Those pushes
+ *     outlive the call and require `stripStaleInstructions` cleanup before
+ *     re-entry. With a semantic transcript, meta-instructions never enter
+ *     the persistent state — they live only in the local scope of one
+ *     `runRound` call, applied during `buildPromptInput` and discarded.
+ *   - The transcript is the natural place to add new turn kinds for
+ *     multi-step (a confirmed step is a turn; the next round's prompt
+ *     renders it as assistant echo + user output). No `projectForEcho`
+ *     helper needed — the transcript IS the projection.
+ */
+export type Transcript = TranscriptTurn[];
+
+export type TranscriptTurn =
+  /** The initial query, the first turn of every transcript. */
+  | { kind: "user_request"; text: string }
+  /** A free-text follow-up the user typed into the dialog. */
+  | { kind: "followup"; text: string }
+  /**
+   * A non-final command the loop executed inline. Carries the full LLM
+   * response (so subsequent rounds can echo it as an assistant turn) plus
+   * the captured output and exit code (rendered as a user turn).
+   */
+  | { kind: "probe"; response: CommandResponse; output: string; exitCode: number }
+  /**
+   * A final-form command the LLM proposed. Pushed by the loop just before
+   * returning. Subsequent calls (e.g., after a follow-up) need it as an
+   * assistant turn so the LLM sees its own previous answer.
+   */
+  | { kind: "candidate_command"; response: CommandResponse }
+  /**
+   * A final-form answer. Pushed by the loop just before returning. Rarely
+   * needed in subsequent calls (answers usually exit the session) but
+   * included for completeness — multi-step's `reply` shape will reuse it.
+   */
+  | { kind: "answer"; content: string };
+
+/** Append a turn. Always mutates in place — there is one transcript per session. */
+export function pushTurn(transcript: Transcript, turn: TranscriptTurn): void;
+
+/**
+ * Ephemeral attempt-scoped directives that the builder applies for ONE call
+ * only. Never persisted in the transcript.
+ */
+export type AttemptDirectives = {
+  /** Append `lastRoundInstruction` as the final user turn. */
+  isLastRound?: boolean;
+  /**
+   * For the in-round probe-risk retry: echo the rejected response as an
+   * assistant turn and append `probeRiskInstruction` as the user turn so
+   * the LLM can correct itself. Only used inside `runRound`'s retry block;
+   * never in the persistent transcript.
+   */
+  probeRiskRetry?: { rejectedResponse: CommandResponse };
+};
+
+/**
+ * Build a `PromptInput` (provider-shaped messages array) from a transcript
+ * plus the system prompt plus optional ephemeral directives. Pure function:
+ * does not mutate the transcript.
+ *
+ * Rendering rules:
+ *   - `user_request` → `{ role: "user", content: text }`
+ *   - `followup` → `{ role: "user", content: text }`
+ *   - `probe` → `{ role: "assistant", content: JSON.stringify(response) }`,
+ *     then `{ role: "user", content: sectionCapturedOutput + "\n" + output }`
+ *     (with the same truncation/exit-code formatting today's loop applies)
+ *   - `candidate_command` → `{ role: "assistant", content: JSON.stringify(response) }`
+ *   - `answer` → `{ role: "assistant", content: JSON.stringify(response) }`
+ *     (only relevant when an answer turn is followed by a follow-up)
+ *   - directives.isLastRound → append `{ role: "user", content: lastRoundInstruction }`
+ *   - directives.probeRiskRetry → append rejected echo + probeRiskInstruction
+ */
+export function buildPromptInput(
+  transcript: Transcript,
+  system: string,
+  directives?: AttemptDirectives,
+): PromptInput;
+```
+
+Implementation notes:
+- The transcript is the SINGLE source of truth for "what the conversation looks like." The runner, the session, and the reducer all read from it; only the runner and the session's `submit-followup` post-transition hook write to it.
+- `assembleCommandPrompt` (currently in `src/llm/context.ts`) splits in two: the system-prompt portion stays as `assembleSystemPrompt(systemContext)` returning a string; the messages portion is replaced by `buildPromptInput`. The session calls `assembleSystemPrompt` once at startup and pushes the initial `user_request` turn to the transcript.
+- `stripStaleInstructions` does NOT exist in the new architecture. Multi-step's `projectForEcho` is also unnecessary — the transcript-to-PromptInput rendering does the projection.
+
 ### `src/core/round.ts`
 
 ```ts
 import type { CommandResponse } from "../command-response.schema.ts";
-import type { PromptInput, Provider } from "../llm/types.ts";
+import type { Provider } from "../llm/types.ts";
 import type { Round } from "../logging/entry.ts";
+import type { Transcript } from "./transcript.ts";
 
 /** A successful round, ready to be addRound'd into the entry. */
 export type RoundResult = Round;
@@ -154,14 +254,13 @@ export type RunRoundOptions = {
  *   - probe risk-level violations (a probe with risk_level !== "low" is retried
  *     once with the existing probeRiskInstruction text)
  *
- * Pushes meta-instructions into `input.messages` ONLY within its own call. The
- * `lastRoundInstruction` push (when `isLastRound`) is popped in a `finally`
- * block so the array shape is unchanged on return. The probe-risk refused pair
- * (assistant probe echo + user refusal) IS left on `input.messages` because the
- * loop expects it to persist within the same call (the loop pushes its own
- * REFUSED_PROBE_INSTRUCTION pair when a refused probe leaks past the in-round
- * retry — see runner.ts). Cleanup of refused-probe pairs across re-entries is
- * the caller's job via `stripStaleInstructions`.
+ * Reads the transcript via `buildPromptInput(transcript, system, directives)`.
+ * Does NOT mutate the transcript — that's the caller's job (the loop pushes
+ * `probe`/`candidate_command`/`answer` turns based on the returned round's
+ * `parsed` field). Meta-directives like `isLastRound` and the probe-risk
+ * retry pair live ONLY inside the local `directives` arg passed to
+ * `buildPromptInput` — they never enter the persistent transcript, so there
+ * is nothing to clean up after the call returns.
  *
  * Throws on network errors, empty responses, or parse failures that survive
  * the in-round retry. The thrown error contains the model label so the user
@@ -169,37 +268,30 @@ export type RunRoundOptions = {
  */
 export async function runRound(
   provider: Provider,
-  input: PromptInput,
+  transcript: Transcript,
+  system: string,
   options: RunRoundOptions,
 ): Promise<RoundResult>;
 
-/** Constants kept here so producer/consumer can't drift.
+/** Used as the constant text for the probe-risk retry's user turn.
  *  TEMPORARY: deleted entirely by `specs/multi-step.md` (which removes the
  *  probe concept). Kept on the post-refactor surface only because the refactor
  *  preserves the current behaviour. */
 export const REFUSED_PROBE_INSTRUCTION: string;
-
-/** Strip refused-probe pairs from the message history.
- *  Called by the coordinator before re-entering the loop on a follow-up.
- *  TEMPORARY: deleted entirely by `specs/multi-step.md` (no probe concept,
- *  no refused-probe pairs to strip). The `lastRoundInstruction` cleanup
- *  this used to do is no longer necessary because `runRound` push/pops it
- *  inside its own scope. */
-export function stripStaleInstructions(messages: PromptInput["messages"]): void;
 ```
 
 Implementation notes:
-- Move `callWithRetry`, `isStructuredOutputError`, `extractFailedText`, `REFUSED_PROBE_INSTRUCTION`, and `stripStaleInstructions` from `src/core/query.ts`. They keep their current behaviour.
-- The `lastRoundInstruction` push is the *only* mid-call message-history mutation that runRound itself owns. Push it before the LLM call, pop it in a finally. (Today the loop does this and never pops; refactor it to push-and-pop within `runRound`.)
+- Move `callWithRetry`, `isStructuredOutputError`, `extractFailedText`, and `REFUSED_PROBE_INSTRUCTION` from `src/core/query.ts`. They keep their current behaviour.
+- `stripStaleInstructions` is GONE. The semantic transcript makes it impossible for stale meta-instructions to leak across calls — they live only inside `directives` for the call that uses them.
 - The `Round` returned has `parsed`, `llm_ms`, and (on error) `provider_error` populated. Memory updates and watchlist additions are NOT runRound's job — they're side effects of the loop and are handled in `runner.ts`.
 
 ### `src/core/runner.ts`
 
 ```ts
 import type { CommandResponse, RiskLevel } from "../command-response.schema.ts";
-import type { ToolProbeResult } from "../discovery/init-probes.ts";
-import type { PromptInput, Provider } from "../llm/types.ts";
+import type { Provider } from "../llm/types.ts";
 import type { Round } from "../logging/entry.ts";
+import type { Transcript } from "./transcript.ts";
 
 export type LoopState = {
   /** Remaining round budget. Decremented per iteration. Reset on follow-up by the coordinator. */
@@ -260,23 +352,23 @@ export type LoopReturn =
  * Per iteration:
  *   1. Check options.signal — if aborted, return the sentinel `{ type: "exhausted" }`.
  *      The consumer's `ctrl.signal.aborted` guard drops it before acting on it.
- *   2. Call runRound(). On the FIRST iteration of the call, set
- *      `round.followup_text = options.followupText` (consume-once via a local
- *      variable cleared after the first round).
+ *   2. Call runRound(provider, transcript, system, { isLastRound }). On the
+ *      FIRST iteration of the call, set `round.followup_text = options.followupText`
+ *      (consume-once via a local variable cleared after the first round).
  *   3. yield round-complete with the produced Round.
  *   4. Apply side effects of the parsed response:
  *        - memory updates → write to disk + emit `notifications.emit({ kind: "chrome", ..., icon: "🧠" })`
  *        - watchlist additions → write to disk
  *   5. Route by response type:
- *        - answer  → return { type: "answer", ... }
- *        - command → return { type: "command", response, round }
+ *        - answer  → pushTurn(transcript, { kind: "answer", content }), return { type: "answer", ... }
+ *        - command → pushTurn(transcript, { kind: "candidate_command", response }), return { type: "command", response, round }
  *        - probe   → execute inline:
  *            a) yield step-running with explanation + icon (fetchesUrl heuristic)
  *            b) executeShellCommand in capture mode
  *            c) post-process output (combine stdout+stderr, truncate, prepend
  *               sectionCapturedOutput header, fall back to capturedNoOutput on empty)
  *            d) yield step-output with the post-processed text
- *            e) push [assistant probe echo, user output] onto input.messages
+ *            e) pushTurn(transcript, { kind: "probe", response, output, exitCode })
  *            f) continue loop
  *   6. When budget reaches zero, return { type: "exhausted" }.
  *
@@ -292,7 +384,8 @@ export type LoopReturn =
  */
 export async function* runLoop(
   provider: Provider,
-  input: PromptInput,
+  transcript: Transcript,
+  system: string,
   state: LoopState,
   options: LoopOptions,
 ): AsyncGenerator<LoopEvent, LoopReturn>;
@@ -385,9 +478,14 @@ export type ConfirmingState = {
   command: string;
   risk: RiskLevel;
   explanation?: string;
-  /** The full LLM response — kept on state so the coordinator's
-   *  `submit-followup` hook can echo it back into `input.messages` without
-   *  reaching for a coordinator-local mutable reference. */
+  /** The full LLM response. Kept on state so `exiting{run}` can carry it
+   *  through to `SessionOutcome.run.response` — both `source: "model"`
+   *  (where `command === response.content`) and `source: "user_override"`
+   *  (where the audit log records both the executed bytes and the original
+   *  model response) need it. The transcript also has it as a
+   *  `candidate_command` turn, so the followup hook does NOT read this
+   *  field — it just pushes a `followup` turn and lets the builder render
+   *  the prior candidate from the transcript. */
   response: CommandResponse;
   /** The eagerly-logged round for this command — kept on state so
    *  `exiting{run}` can mutate `exec_ms`/`execution` on it after exec. */
@@ -442,8 +540,26 @@ export type ExitingState = {
 };
 
 export type SessionOutcome =
-  /** A command was confirmed. The session will exec it with inherit stdio. */
-  | { kind: "run"; command: string; response: CommandResponse; round: Round }
+  /**
+   * A command was confirmed. The session will exec it with inherit stdio.
+   *
+   * `source` distinguishes the model's command from a user-edited override.
+   * `model`         — exactly what the LLM produced; `command === response.content`.
+   * `user_override` — the user opened Edit, modified the text, and ran it.
+   *                   `command !== response.content`. Risk and explanation
+   *                   carry through from the model's response, but the
+   *                   actual bytes the shell executes are user-authored.
+   *                   The log records both `command` (what ran) and
+   *                   `response.content` (what the model said) so audits
+   *                   can tell them apart.
+   */
+  | {
+      kind: "run";
+      command: string;
+      response: CommandResponse;
+      round: Round;
+      source: "model" | "user_override";
+    }
   /** A reply/answer was returned (initial or via follow-up). Print to stdout. */
   | { kind: "answer"; content: string }
   /** User cancelled. Exit code 1. */
@@ -503,7 +619,7 @@ Transition table (the implementer's exhaustive reference; `*` means "any"):
 | `thinking` | `loop-final answer` | `exiting{answer}` | print to stdout |
 | `thinking` | `loop-final exhausted` | `exiting{exhausted}` | |
 | `thinking` | `loop-error` | `exiting{error}` | |
-| `confirming` | `key-action run` | `exiting{run}` | unmount + exec |
+| `confirming` | `key-action run` | `exiting{run, source: "model"}` | unmount + exec the model's command unchanged |
 | `confirming` | `key-action cancel` | `exiting{cancel}` | |
 | `confirming` | `key-action edit` | `editing{ original=command, draft=command }` | |
 | `confirming` | `key-action followup` | `composing{ draft="" }` | |
@@ -511,7 +627,7 @@ Transition table (the implementer's exhaustive reference; `*` means "any"):
 | `confirming` | `key-arrow left/right` | `confirming` with `selectedAction` bumped | clamped |
 | `confirming` | `key-esc` | `exiting{cancel}` | Esc in confirming = cancel |
 | `editing` | `key-esc` | `confirming` (with `command = original`) | discard edits |
-| `editing` | `submit-edit text` | `exiting{run}` with `command = text` | run the edited command |
+| `editing` | `submit-edit text` | `exiting{run, command: text, source: "user_override"}` | run the user's edited text; risk/explanation/response carry through from the model's original |
 | `editing` | `draft-change text` | `editing` with new `draft` | |
 | `composing` | `key-esc` | `confirming` (drop draft) | |
 | `composing` | `draft-change text` | `composing` with new `draft` | |
@@ -529,7 +645,8 @@ Reducer rules to pin in tests (`tests/session-reducer.test.ts`):
 - Pure: same `(state, event)` always returns the same next state.
 - Returns `state` by reference (===) for any no-op transition.
 - `key-esc` in `confirming` cancels; in `editing`/`composing` returns to `confirming`; in `processing` returns to `composing` with the draft preserved.
-- `loop-final command low` from `thinking` skips the dialog (sets `exiting{run}`); from `processing` opens the dialog in `confirming` (low-risk gradient). Pin both — this is the key asymmetry from `specs/follow-up.md` § Low-risk dialog.
+- `loop-final command low` from `thinking` skips the dialog (sets `exiting{run, source: "model"}`); from `processing` opens the dialog in `confirming` (low-risk gradient). Pin both — this is the key asymmetry from `specs/follow-up.md` § Low-risk dialog.
+- `key-action run` from `confirming` produces `source: "model"`; `submit-edit` from `editing` produces `source: "user_override"`. Pin both — this is what makes audit logs trustworthy when an edited command goes wrong.
 
 ### `src/session/session.ts`
 
@@ -571,7 +688,9 @@ export async function runSession(prompt, provider, options): Promise<number> {
   // 1. Setup
   const wrapHome = getWrapHome();
   const entry = createLogEntry({...});
-  const input = assembleCommandPrompt({...});
+  const system: string = assembleSystemPrompt({ memory, tools, cwd, ... });
+  const transcript: Transcript = [];
+  pushTurn(transcript, { kind: "user_request", text: prompt });
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const loopOptions: LoopOptions = {...};
 
@@ -612,14 +731,11 @@ export async function runSession(prompt, provider, options): Promise<number> {
     }
     if (state.tag === "processing" && currentLoopAbort === null) {
       // submit-followup just transitioned us; the coordinator restarts the loop.
-      // Push the user message and reset the budget, then drive the new generator.
-      // state.response was carried through from confirming → composing → processing
-      // by the reducer, so it's the live response we want to echo back.
-      stripStaleInstructions(input.messages);
-      input.messages.push(
-        { role: "assistant", content: JSON.stringify(state.response) },
-        { role: "user", content: state.draft },
-      );
+      // Push a `followup` turn to the transcript and reset the budget. The
+      // previous candidate_command turn is already in the transcript (the
+      // loop pushed it before returning), so the LLM will see [..., candidate, followup].
+      // No stripStaleInstructions, no JSON.stringify, no message-history hygiene.
+      pushTurn(transcript, { kind: "followup", text: state.draft });
       loopState.budgetRemaining = loopOptions.maxRounds;
       void driveLoop({ followupText: state.draft });
     }
@@ -665,7 +781,7 @@ export async function runSession(prompt, provider, options): Promise<number> {
     const stopSpin = (): void => { chromeSpin?.(); chromeSpin = null; };
 
     try {
-      const generator = runLoop(provider, input, loopState, {
+      const generator = runLoop(provider, transcript, system, loopState, {
         ...loopOptions,
         signal: ctrl.signal,
         followupText: opts?.followupText,
@@ -891,9 +1007,13 @@ If the implementer is tempted to "DRY up" the dialog states with a shared base, 
 
 ### 4. The post-transition hook for "loop-restart from a new state tag" must be addable
 
-Multi-step adds an `executing-step` reducer tag and a parallel coordinator hook (`submit-step-confirm`) that pushes echo + captured-output messages and calls `driveLoop`. The structure mirrors today's `submit-followup` post-transition hook (the `if (state.tag === "processing" && currentLoopAbort === null)` branch in `dispatch`). Multi-step will add a similar branch: `if (state.tag === "executing-step" && currentLoopAbort === null)`.
+Multi-step adds an `executing-step` reducer tag and a parallel coordinator hook (`submit-step-confirm`) that pushes a `step` turn (the new turn kind multi-step adds to the transcript) and calls `driveLoop`. The structure mirrors today's `submit-followup` post-transition hook (the `if (state.tag === "processing" && currentLoopAbort === null)` branch in `dispatch`). Multi-step will add a similar branch: `if (state.tag === "executing-step" && currentLoopAbort === null)`.
 
-**Implementation directive:** when writing the `submit-followup` branch, write it in a shape that makes adding `submit-step-confirm` mechanical. Concretely: extract the body (push messages, reset budget, drive loop) into a small helper if it's more than ~10 lines. Don't try to abstract over the message-pushing — that's intentionally hook-specific per constraint 2.
+**Implementation directive:** when writing the `submit-followup` branch, write it in a shape that makes adding `submit-step-confirm` mechanical. Concretely: extract the body (push the followup turn, reset budget, drive loop) into a small helper if it's more than ~10 lines. Don't try to abstract over the turn-pushing — that's intentionally hook-specific per constraint 2.
+
+### 5. The semantic transcript subsumes `projectForEcho`
+
+Multi-step's `projectForEcho` helper exists to strip user-facing fields (`explanation`, `_scratchpad`) when echoing a `CommandResponse` back to the LLM. With the semantic transcript, this becomes `buildPromptInput`'s rendering rule for `candidate_command` and `probe` turns: render only the model-facing fields. The implementer of multi-step should add the projection logic INSIDE `buildPromptInput`, not as a separate `projectForEcho` helper. The transcript stores full responses; the builder decides which fields to expose to the LLM.
 
 ---
 
@@ -902,13 +1022,15 @@ Multi-step adds an `executing-step` reducer tag and a parallel coordinator hook 
 The torch is in hand: this is one refactor, not a sequence of incremental landings. The implementer SHOULD:
 
 1. **Write the new files first**, with all their tests passing in isolation:
-   - `src/core/round.ts` (lift `callWithRetry`, `isStructuredOutputError`, `extractFailedText`, `REFUSED_PROBE_INSTRUCTION`, `stripStaleInstructions` from `query.ts`; add the `runRound` function with push/pop of `lastRoundInstruction`)
-   - `src/core/runner.ts` (rewrite `runRoundsUntilFinal` as the `runLoop` async generator; add `LoopState` / `LoopOptions` / `LoopEvent` / `LoopReturn` types; lift `fetchesUrl`)
+   - `src/core/transcript.ts` (Transcript + TranscriptTurn + pushTurn + buildPromptInput + AttemptDirectives)
+   - `src/core/round.ts` (lift `callWithRetry`, `isStructuredOutputError`, `extractFailedText`, `REFUSED_PROBE_INSTRUCTION` from `query.ts`; add `runRound` taking `transcript` + `system` + `options`. `stripStaleInstructions` is NOT lifted — the transcript model deletes it)
+   - `src/core/runner.ts` (rewrite `runRoundsUntilFinal` as the `runLoop` async generator taking `transcript` + `system`; add `LoopState` / `LoopOptions` / `LoopEvent` / `LoopReturn` types; lift `fetchesUrl`)
    - `src/core/notify.ts` (the bus + Notification type + writeNotificationToStderr)
    - `src/session/state.ts` (AppState + AppEvent + SessionOutcome + ActionId; re-imports `LoopReturn` from `core/runner.ts`)
    - `src/session/reducer.ts` (the reducer)
    - `src/session/dialog-host.ts` (mountDialog)
    - `src/session/session.ts` (runSession)
+   - Split `src/llm/context.ts` if needed: extract `assembleSystemPrompt(systemContext): string` from the existing `assembleCommandPrompt`. The session calls it once at startup; the messages portion is now built per-call by `buildPromptInput`.
 
 2. **Rewrite `src/tui/dialog.tsx`** to take `state` and `dispatch` props with no application `useState`.
 
@@ -941,21 +1063,31 @@ The implementer MAY do steps 1–6 in any order that makes their tests easier to
 
 ### What gets written
 
+**`tests/transcript.test.ts`** — pure unit tests for `buildPromptInput` and `pushTurn`:
+- `buildPromptInput` of an empty transcript with system="x" → `{ system: "x", messages: [] }`.
+- `buildPromptInput` of `[user_request]` → messages with one user turn.
+- `buildPromptInput` of `[user_request, probe(p1, "out1", 0)]` → user turn + assistant turn (`JSON.stringify(p1)`) + user turn (`sectionCapturedOutput\nout1`).
+- `buildPromptInput` of `[user_request, candidate_command(c1), followup("hmm")]` → user turn + assistant turn (`JSON.stringify(c1)`) + user turn ("hmm").
+- `buildPromptInput` with `directives.isLastRound: true` appends a final user turn with `lastRoundInstruction`.
+- `buildPromptInput` with `directives.probeRiskRetry: { rejectedResponse }` appends assistant echo + user `probeRiskInstruction`.
+- `buildPromptInput` is pure: calling it twice with the same args returns equal output, the transcript is not mutated.
+- `pushTurn` mutates in place and returns void.
+
 **`tests/round.test.ts`** — pure unit tests for `runRound`:
 - Returns a `Round` with `parsed` set on a successful command.
 - Returns a `Round` with `parsed` set on a successful answer.
-- Pushes `lastRoundInstruction` into `input.messages` when `isLastRound`, then pops it on success (asserted by checking `input.messages` length before vs after).
-- Pops `lastRoundInstruction` even when the LLM call throws (try/finally semantics).
+- With `isLastRound: true`, the LLM sees `lastRoundInstruction` in the messages (asserted by capturing the provider's `runPrompt` call args). The transcript is unchanged before vs after the call.
 - Retries once on a parse-failure error and succeeds on the retry.
-- Retries once on a non-low probe and succeeds on the retry.
+- Retries once on a non-low probe (the second call's messages contain the probe-risk retry directive) and succeeds.
 - Throws on empty response.
 - Throws with the model label in the error message when the LLM call fails.
+- The transcript is read-only inside `runRound` — no `pushTurn` calls happen inside it.
 
 **`tests/runner.test.ts`** — generator unit tests for `runLoop`:
-- Single-iteration command: yields `round-complete`, returns `{ type: "command", ... }`.
-- Single-iteration answer: yields `round-complete`, returns `{ type: "answer", ... }`.
-- Probe → command: yields `round-complete`, `step-running`, `step-output`, `round-complete`, returns `{ type: "command", ... }`. Asserts the conversation history has the assistant probe echo + user output appended.
-- Refused probe (non-low): pushes refused-probe pair into messages, yields `round-complete` for the probe, continues. (Keeps current behaviour.)
+- Single-iteration command: yields `round-complete`, pushes a `candidate_command` turn to the transcript, returns `{ type: "command", ... }`.
+- Single-iteration answer: yields `round-complete`, pushes an `answer` turn to the transcript, returns `{ type: "answer", ... }`.
+- Probe → command: yields `round-complete`, `step-running`, `step-output`, `round-complete`. After the probe, asserts the transcript has a new `probe` turn (with `response`/`output`/`exitCode`). After the final command, asserts the transcript has a new `candidate_command` turn. Returns `{ type: "command", ... }`.
+- Probe-risk retry inside a round: with the test provider returning a non-low probe first and a low probe second, asserts that `runRound` is called once (the retry is in-round), the second LLM call's messages contain the retry directive, and the transcript ends up with one `probe` turn (the final accepted one). No refused-probe pair leaks into the transcript.
 - Exhaustion: returns `{ type: "exhausted" }` when budget hits zero.
 - Abort: caller aborts mid-iteration; the next iteration check sees the abort and the generator returns the sentinel `{ type: "exhausted" }`. Caller drops it via the signal guard.
 - Generator throws if `runRound` throws; the error propagates AFTER the previously-yielded events have been consumed.
@@ -977,6 +1109,8 @@ The implementer MAY do steps 1–6 in any order that makes their tests easier to
 - Initial low-risk command: provider returns one low-risk command; session runs it and exits 0; no dialog mount.
 - Initial medium-risk command: provider returns one medium command; dialog mounts in `confirming`; we synthetically dispatch `key-action run`; session executes the command and exits.
 - User cancels: dialog in `confirming`; dispatch `key-esc`; exit 1; outcome `cancel`; log entry's `outcome` is `cancelled`.
+- User edits then runs: dialog in `confirming`; dispatch `key-action edit` → `editing` → `submit-edit "echo overridden"`; outcome is `{ kind: "run", source: "user_override", command: "echo overridden", response: <original LLM response> }`. Assert `command !== response.content`. Assert the log round records both the executed bytes and the original model response.
+- User runs without editing: outcome is `{ kind: "run", source: "model", command: response.content }`. `command === response.content`. Pin alongside the override case so both branches stay covered.
 - Follow-up refine: provider returns medium command, then a different medium command; dispatch `key-action followup`, `submit-followup "..."`; coordinator restarts loop; reducer transitions to `confirming` with the new command; dispatch `key-action run`; verify entry has both rounds and the second has `followup_text`.
 - Follow-up abort race: identical to today's `tests/followup.test.ts` "aborts mid-flight" case but expressed at the session level. The follow-up provider's promise is held; we dispatch `key-esc` while in `processing`; the loop's late-arriving result is dropped; state is back in `composing` with the draft preserved; the orphan round is in `entry.rounds` (eager logging guarantee).
 - Follow-up exhausted: provider returns probes forever; budget runs out; reducer transitions to `exiting{exhausted}`; chrome line printed; exit 1.
@@ -1046,6 +1180,11 @@ If the implementer finds themselves touching any of these, stop and ask: this re
 2. **Should `dispatch` be reentrant?** The dispatch closure has post-transition side effects that themselves call `dispatch` (e.g., the loop driver dispatches `loop-final`). This is reentrant. Verify the pattern works without surprising you (it should — JavaScript is single-threaded and the reducer is sync — but the `void syncDialog()` introduces an awaited segment that completes after dispatch returns, so reentrant calls during that gap would interleave).
 
 3. **The `notification` event is currently described as carrying just `text`.** If the implementer finds it useful to carry the icon too (so the dialog could render a small icon next to the status line), broaden it to `{ type: "notification"; text: string; icon?: string }`. Not required for parity with today's branch.
+
+4. **Should `source: "user_override"` re-run model risk assessment before exec?** Today, the user can edit a command to anything and run it; the model never sees the edited bytes. Risk and explanation in the log come from the model's original response, which may not match what actually ran. Two options:
+   - **Trust the user.** Edit means "I know what I'm doing." Carry the model's risk through unchanged. (Today's behavior. Simplest.)
+   - **Re-rate the edited command.** Before exec, fire one more LLM call asking the model to assess the edited bytes. Adds latency to every edited command and adds a round the user didn't ask for. Caught me by surprise risk: if the model rates it lower than the original (`high → medium`), do we re-show the dialog?
+   - **Recommendation: trust the user, but mark the round explicitly.** Out of scope for this refactor — the source field makes it visible in logs without forcing a behavior change. Multi-step or a future safety pass can decide.
 
 ---
 

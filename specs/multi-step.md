@@ -15,8 +15,9 @@
 >   - Dialog `setCommand/setRiskLevel/setExplanation` (local React state) → reducer transitions; the dialog is now `(state, dispatch) → JSX` with no application `useState`.
 >   - The dialog state machine names: `editing-command` → `editing`, `composing-followup` → `composing`, `processing-followup` → `processing`. `confirming` is unchanged. `executing-step` is the new state this spec adds.
 >   - `maxProbeOutput*`, `sectionProbeOutput`, `probeNoOutput` — already renamed in the refactor to `maxCapturedOutput*`, `sectionCapturedOutput`, `capturedNoOutput`. The "Removals" table below should now be read as deletions only (the renames already happened).
->   - `REFUSED_PROBE_INSTRUCTION`, `probeRiskInstruction`, `probeRiskRefusedPrefix`, the probe-risk retry block, and `verboseResponse`'s probe case are STILL present after the refactor — they live in `src/core/round.ts` / `src/core/runner.ts`. This spec's step 4 deletes them.
->   - `stripStaleInstructions` is STILL present after the refactor (in `src/core/round.ts`) but only handles refused-probe pairs — `lastRoundInstruction` is now push/popped within `runRound` itself, so the cross-call cleanup of that constant is gone. This spec's step 4 simplifies it further (deletes the refused-probe branch when the probe concept goes away).
+>   - `REFUSED_PROBE_INSTRUCTION`, `probeRiskInstruction`, `probeRiskRefusedPrefix`, the probe-risk retry block, and `verboseResponse`'s probe case are STILL present after the refactor — they live in `src/core/round.ts` / `src/core/runner.ts` / `src/core/transcript.ts` (the retry directive is applied via `AttemptDirectives.probeRiskRetry` in the builder). This spec's step 4 deletes them.
+>   - `stripStaleInstructions` does NOT exist after the refactor — it was deleted because the semantic transcript makes stale-instruction cleanup unnecessary by construction. Any references to it in this spec should be ignored.
+>   - The conversation lives in `src/core/transcript.ts` as a `Transcript` (semantic turns), NOT in a `PromptInput.messages` buffer. Multi-step's new turn types (e.g., `step` for confirmed mid-flight commands) slot into `TranscriptTurn` as new `kind`s. The `buildPromptInput` builder gains rendering rules for the new turn kinds.
 >
 > When this spec refers to file paths or function names that the refactor moves, the post-refactor name is authoritative — read `specs/coordinator-refactor.md` if anything below seems out of date.
 
@@ -174,7 +175,7 @@ When echoing a prior response into `input.messages` for the next round, project 
 
 `explanation` is user-facing, not model-facing — replaying it wastes tokens and invites the model to use it as scratchpad. `plan` stays because cross-round continuity is its purpose. `_scratchpad` strips per `specs/scratchpad.md`. The rest are user-facing chrome already actioned by Wrap.
 
-Implementation: a `projectForEcho(response)` helper next to `runLoop` in `src/core/runner.ts`. Swap it in at every `JSON.stringify(response)` call site — inside the loop's probe-echo push and inside the coordinator's `submit-followup` and `submit-step-confirm` dispatch hooks. Single helper, single source of truth.
+Implementation (post-coordinator-refactor): the projection lives inside `buildPromptInput` in `src/core/transcript.ts`. The transcript stores full `CommandResponse` objects on `probe` and `candidate_command` turns; the builder is the one place that decides which fields the LLM sees. Add the field-stripping logic to the builder's `probe` and `candidate_command` rendering branches. There is no separate `projectForEcho` helper, and there is no `JSON.stringify(response)` call site outside the builder.
 
 ### `lastRoundInstruction` rewrite
 
@@ -354,7 +355,8 @@ Read `.claude/skills/editing-prompts.md` before touching the prompt files — th
 Code paths deleted or renamed (post-coordinator-refactor file paths):
 
 - `REFUSED_PROBE_INSTRUCTION` in `src/core/round.ts` — deleted
-- `stripStaleInstructions` in `src/core/round.ts` — refused-probe branch deleted. After this step, the helper has no behaviour left (the refactor already moved `lastRoundInstruction` push/pop into `runRound`). DELETE the helper entirely once the refused-probe branch is gone, AND delete its sole call site in the `submit-followup` post-transition hook in `src/session/session.ts` (the hook still runs the assistant-echo + user-turn push, just without the prior `stripStaleInstructions(input.messages)` call).
+- `AttemptDirectives.probeRiskRetry` in `src/core/transcript.ts` — deleted (no probe concept means no probe-risk retry directive)
+- `stripStaleInstructions` is already absent in the post-refactor codebase; nothing to delete here.
 - `runRound`'s probe risk-level retry block (in `src/core/round.ts`) — deleted
 - `runLoop`'s refused-probe continuation branch (in `src/core/runner.ts`) — deleted
 - `verboseResponse`'s `case "probe"` — folded into `case "command"`
