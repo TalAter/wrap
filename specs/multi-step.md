@@ -7,7 +7,7 @@
 > **Prerequisites:**
 > - `specs/follow-up.md` — UX vocabulary: four-state dialog machine, low-risk gradient, bottom-border status slot.
 > - `specs/session.md` — landed. This spec is written against the post-refactor surface: `runLoop` generator (`src/core/runner.ts`), `runRound` (`src/core/round.ts`), `Transcript` + `buildPromptInput` (`src/core/transcript.ts`), typed notification bus (`src/core/notify.ts`), `AppState` reducer (`src/session/reducer.ts`), and `runSession` + `pumpLoop` with dispatch closure + post-transition hooks (`src/session/session.ts`).
-> - `specs/scratchpad.md` — orthogonal; ordering rules below. May land before or after this spec.
+> - `specs/scratchpad.md` — **implemented**. `_scratchpad` is already field 1 of `CommandResponseSchema`. Ordering rules below.
 
 ---
 
@@ -30,7 +30,8 @@ This reverses the older "single composed pipeline, never sequential confirmation
 ```ts
 // SCHEMA_START
 export const CommandResponseSchema = z.object({
-  // `_scratchpad` (from specs/scratchpad.md) goes here as field 1 if it lands.
+  // `_scratchpad` (from specs/scratchpad.md) is already field 1; multi-step
+  // keeps it there and inserts `final` / `plan` after `type`.
 
   type: z.enum([
     "command",  // shell command to execute
@@ -66,7 +67,7 @@ export const CommandResponseSchema = z.object({
 
 Structured output is generated linearly, so earlier fields steer later ones. `plan` must sit before `content` so the model commits to multi-step intent before writing the command — same logic as scratchpad.
 
-Two specs touch ordering and must coexist. They solve different problems; don't collapse them.
+`_scratchpad` and `plan` solve different problems; don't collapse them.
 
 | Field | Audience | Lifetime | Stripped from echo? |
 |---|---|---|---|
@@ -74,7 +75,7 @@ Two specs touch ordering and must coexist. They solve different problems; don't 
 | `plan` | model next round + user (dialog) | until `final: true` ends the chain | no |
 | `explanation` | user only | n/a | yes |
 
-Natural order: `_scratchpad, type, final, plan, content, risk_level, explanation, memory_updates, memory_updates_message, watchlist_additions, pipe_stdin`. Whichever of scratchpad/multi-step lands second preserves the other's position.
+Natural order: `_scratchpad, type, final, plan, content, risk_level, explanation, memory_updates, memory_updates_message, watchlist_additions, pipe_stdin`. `_scratchpad` is already in place as field 1; multi-step inserts `final` and `plan` between `type` and `content` without moving it.
 
 ---
 
