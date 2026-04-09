@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
 import { HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
+import { interceptOutput, resetOutputSink } from "../src/core/output-sink.ts";
 import {
   resetExitGuard,
   SPINNER_FRAMES,
@@ -9,6 +10,10 @@ import {
   startChromeSpinner,
 } from "../src/core/spinner.ts";
 import { mockStderr } from "./helpers/mock-stderr.ts";
+
+afterEach(() => {
+  resetOutputSink();
+});
 
 describe("SPINNER_FRAMES", () => {
   test("has frames", () => {
@@ -96,6 +101,24 @@ describe("startChromeSpinner", () => {
       stop();
       expect(stderr.lines).toHaveLength(0);
     } finally {
+      stderr.restore();
+    }
+  });
+
+  test("no-op while output is intercepted (dialog owns the alt screen)", () => {
+    // The dialog has its own bottom-border spinner during follow-up
+    // processing — the chrome spinner writing raw frames to stderr would
+    // corrupt the alt-screen render with a flicker at the bottom-left.
+    // While interceptOutput is active, startChromeSpinner must produce
+    // zero stderr writes.
+    const stderr = mockStderr({ isTTY: true });
+    const release = interceptOutput(() => {});
+    try {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      stop();
+      expect(stderr.lines).toHaveLength(0);
+    } finally {
+      release();
       stderr.restore();
     }
   });

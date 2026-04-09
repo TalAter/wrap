@@ -70,6 +70,16 @@ export function interceptOutput(handler: ChromeHandler): () => void {
 }
 
 /**
+ * True while a dialog or other consumer holds an interception. Lets producers
+ * that bypass `writeLine` (e.g. the chrome spinner, which uses `chromeRaw` for
+ * partial-line `\r` updates) know to stay silent so they don't corrupt the
+ * alt-screen render.
+ */
+export function isOutputIntercepted(): boolean {
+  return active !== null;
+}
+
+/**
  * Write a line of output. With no interception active, goes straight to
  * stderr. With an interception active, the line is buffered for the
  * eventual replay on `release()`, and — if `chromeEvent` is provided —

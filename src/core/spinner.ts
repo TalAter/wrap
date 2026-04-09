@@ -1,5 +1,6 @@
 import { ERASE_LINE, HIDE_CURSOR, SHOW_CURSOR } from "./ansi.ts";
 import { chromeRaw } from "./output.ts";
+import { isOutputIntercepted } from "./output-sink.ts";
 
 // Two-cell braille frames so the spinner sits in a fixed slot inside the
 // dialog's bottom border without shifting the trailing dashes each tick.
@@ -53,9 +54,13 @@ export function resetExitGuard(): void {
  * that restores the cursor if the process dies before stop() runs.
  *
  * No-op when stderr is not a TTY — keeps `\r` garbage out of redirected logs.
+ * Also no-op while output is intercepted — the dialog renders its own
+ * spinner in the bottom border, and a second one writing raw `\r` frames
+ * to stderr would flicker into the alt-screen render.
  */
 export function startChromeSpinner(text: string): () => void {
   if (!process.stderr.isTTY) return () => {};
+  if (isOutputIntercepted()) return () => {};
 
   ensureExitGuard();
 
