@@ -211,5 +211,5 @@ Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off 
 ## Deferred
 
 - Syntax highlighting for the command row (shell tokenizer).
-- `describe` and `copy` handler implementations. (`edit` done; `followup` done — see `specs/follow-up.md`.)
+- `describe` and `copy` handler implementations. (`edit` done; `followup` done — see `specs/follow-up.md`.) When `describe` lands, it must be a user-initiated side channel — the LLM call it triggers does **not** consume a round from the session's round budget. Describe is an explanation, not part of the command-generation loop.
 - Responsive action bar: shrink labels or abbreviate on narrow terminals instead of wrapping.

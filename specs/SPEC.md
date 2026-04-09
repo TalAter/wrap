@@ -184,6 +184,7 @@ These apply everywhere and cross sub-spec boundaries. If they ever conflict with
 3. **Effective risk is monotone.** The rule engine may only escalate the LLM's risk level, never lower it.
 4. **Memory writes are immediate.** A fact discovered mid-query is persisted before the invocation ends, even if the invocation later fails.
 5. **Logging failures are swallowed.** A broken log file must never crash a Wrap invocation.
+6. **Wrap disappears during exec.** Once a command is confirmed, Wrap unmounts the dialog, releases raw mode, and hands the tty to the child with `inherit` stdio. No spinner, no status line, no chrome overlay while the child runs. Interactive commands (`vim`, `top`, `ssh`, `sudo`) work because Wrap is not in the way; long-running commands stream stdout/stderr directly to the terminal. Wrap reappears only after the child exits.
 
 ---
 
@@ -225,7 +226,9 @@ Error-fix rounds share the `maxRounds` budget with probes. See `session.md` for 
 
 ## 8. Thread continuation (planned)
 
-A command like `wyada but only in my home dir` would continue the most recent thread in the current terminal. Open questions: thread linking (most-recent? terminal session id?), storage shape (tee output vs re-read from log), TTL, large-output warnings before re-sending to the LLM. Distinct from in-dialog **follow-up** — follow-up lives within a single invocation; continuation spans invocations.
+A command like `wyada but only in my home dir` would continue the most recent thread in the current terminal. Open questions: thread linking (most-recent? terminal session id?), storage shape, TTL, large-output warnings before re-sending to the LLM. Distinct from in-dialog **follow-up** — follow-up lives within a single invocation; continuation spans invocations.
+
+**Storage gotcha:** teeing the child's output into a thread file conflicts with hard-rule #6 (Wrap disappears during exec). Teeing breaks TTY detection, strips colors, and mangles interactive commands like `vim` and `top`. Any implementation must either re-read output from the log (if logging grows an exec-capture mode), or accept that thread storage is stdin/LLM-turn only and commands do not contribute their real output.
 
 ---
 

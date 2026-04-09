@@ -21,6 +21,8 @@ The shape generalises: any "do step 1 so I can decide step 2" flow collapses bad
 
 The fix: the dimension separating `probe` from `command` isn't kind-of-action, it's *terminality*. Probes are non-terminal commands whose output goes to the LLM; commands are terminal commands whose output goes to the user. Risk-limiting probes to `low` was a safety patch on top of that. Once non-terminal commands at any risk are allowed (with the same confirmation gating), `probe` has nothing left to distinguish it.
 
+This reverses the older "single composed pipeline, never sequential confirmations" rule from SPEC.md v1 — back then, stepping through a multi-command sequence with confirmation between steps was forbidden because there was no architecture for it and the LLM would just bundle everything into one shell invocation. The `final` flag + dialog-open rule below is the architecture that was missing.
+
 ---
 
 ## Schema Change

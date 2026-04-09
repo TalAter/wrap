@@ -156,6 +156,10 @@ Dialog states (`ConfirmingState`, `EditingState`, `ComposingState`, `ProcessingS
 
 Pinned in `tests/session-reducer.test.ts`.
 
+### Full tty handoff during exec
+
+Once the session transitions to an `exiting{run}` state and calls `executeShellCommand`, Wrap steps fully out of the tty. The dialog is unmounted (`router.teardownDialog()`), raw mode is released, the alt screen is exited, and the child is spawned with `inherit` stdio. No spinner, no chrome overlay, no notification replay during exec — the user sees exactly what the child writes, in real time, with correct TTY detection and colors. This is what makes `vim`, `top`, `ssh`, and `sudo` work without special-casing: Wrap is not in the way. It's also what makes long-running commands stream naturally. Wrap reappears only after the child exits and the router flushes any chrome that was buffered during the intervening instants. **This is a hard rule (see `SPEC.md` §5).** Any future "watch the command's output and react" feature must not violate it — teeing the child's output breaks TTY detection and colors, and overlay UIs break interactive commands.
+
 ### `thinking` vs `processing` low-risk asymmetry
 
 - `thinking → loop-final command low` → `exiting{run, source: "model"}` (skip the dialog, exec straight away).
