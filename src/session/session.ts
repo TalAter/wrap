@@ -4,7 +4,6 @@ import {
   DEFAULT_MAX_ROUNDS,
 } from "../config/config.ts";
 import { getWrapHome } from "../core/home.ts";
-import { type Notification, notifications, writeNotificationToStderr } from "../core/notify.ts";
 import { chrome } from "../core/output.ts";
 import {
   type LoopEvent,
@@ -24,6 +23,8 @@ import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
 import { type DialogHost, mountDialog, preloadDialogModules } from "./dialog-host.ts";
+import { notifications } from "../core/notify.ts";
+import { createNotificationRouter } from "./notification-router.ts";
 import { reduce } from "./reducer.ts";
 import { type AppEvent, type AppState, isDialogTag, type SessionOutcome } from "./state.ts";
 
@@ -110,17 +111,14 @@ export async function runSession(
   const hostRef: { current: DialogHost | null } = { current: null };
   let mountInProgress = false;
   let currentLoopAbort: AbortController | null = null;
-  const buffered: Notification[] = [];
+
+  const router = createNotificationRouter({
+    isProcessing: () => state.tag === "processing",
+    onProcessingChrome: (n) => dispatch({ type: "notification", notification: n }),
+  });
 
   const exitDeferred = Promise.withResolvers<SessionOutcome>();
   let exited = false;
-
-  function flushBuffered(): void {
-    while (buffered.length > 0) {
-      const n = buffered.shift();
-      if (n) writeNotificationToStderr(n);
-    }
-  }
 
   const dispatch = (event: AppEvent): void => {
     if (exited) return;
@@ -159,7 +157,9 @@ export async function runSession(
       mountInProgress = true;
       try {
         if (inkReady) await inkReady;
-        hostRef.current = mountDialog({ state, dispatch });
+        const host = mountDialog({ state, dispatch });
+        hostRef.current = host;
+        router.setDialog(host);
       } finally {
         mountInProgress = false;
       }
@@ -176,12 +176,7 @@ export async function runSession(
     }
 
     if (!wantsDialog && hostRef.current) {
-      // Unmount: exit alt screen, unmount Ink, then flush buffered
-      // notifications. Order is load-bearing — flushed lines must land in
-      // real scrollback, not the alt buffer that's about to disappear.
-      hostRef.current.unmount();
-      hostRef.current = null;
-      flushBuffered();
+      teardownDialog();
     }
   }
 
@@ -262,33 +257,12 @@ export async function runSession(
     }
   }
 
-  // Notification listener.
-  //
-  //   No dialog mounted (`hostRef.current === null`): write directly to
-  //   stderr. This is the path for `thinking`, `exiting`, and any state
-  //   where the dialog hasn't mounted yet or has already unmounted.
-  //
-  //   Dialog mounted: buffer for replay after unmount. Without buffering,
-  //   stderr writes during alt-screen would land in the alt buffer and
-  //   disappear on exit. While in `processing`, chrome notifications are
-  //   ALSO dispatched to the reducer for live border display.
-  const unsubscribe = notifications.subscribe((n) => {
-    if (hostRef.current === null) {
-      writeNotificationToStderr(n);
-      return;
-    }
-    buffered.push(n);
-    if (state.tag === "processing" && n.kind === "chrome") {
-      dispatch({ type: "notification", notification: n });
-    }
-  });
+  const unsubscribe = router.subscribe();
 
   function teardownDialog(): void {
-    if (hostRef.current !== null) {
-      hostRef.current.unmount();
-      hostRef.current = null;
-      flushBuffered();
-    }
+    if (hostRef.current === null) return;
+    hostRef.current = null;
+    router.teardownDialog();
   }
 
   let exitCode = 1;
