@@ -11,22 +11,86 @@ describe("wrap", () => {
     expect(stderr).toBe("");
   });
 
-  test("errors when no provider configured", async () => {
+  test("errors when no LLM configured", async () => {
     const { exitCode, stdout, stderr } = await wrap("hello", {
       WRAP_CONFIG: JSON.stringify({}),
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toBe("Config error: no provider configured.\n");
+    expect(stderr).toBe("Config error: no LLM configured. Edit ~/.wrap/config.jsonc.\n");
   });
 
-  test("errors on unrecognized provider type", async () => {
+  test("errors when defaultProvider not in providers map", async () => {
     const { exitCode, stdout, stderr } = await wrap("hello", {
-      WRAP_CONFIG: JSON.stringify({ provider: { type: "nonexistent" } }),
+      WRAP_CONFIG: JSON.stringify({
+        providers: { anthropic: { model: "haiku" } },
+        defaultProvider: "openai",
+      }),
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toBe('Config error: unrecognized provider "nonexistent".\n');
+    expect(stderr).toBe("Config error: no LLM configured. Edit ~/.wrap/config.jsonc.\n");
+  });
+
+  test("errors when --model names a provider not in config", async () => {
+    const { exitCode, stdout, stderr } = await wrap("--model openai hello", {
+      WRAP_CONFIG: JSON.stringify({
+        providers: { anthropic: { model: "haiku" } },
+        defaultProvider: "anthropic",
+      }),
+    });
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toBe('Config error: provider "openai" not found in config.\n');
+  });
+
+  test("errors when WRAP_MODEL names a provider not in config", async () => {
+    const { exitCode, stdout, stderr } = await wrap("hello", {
+      WRAP_CONFIG: JSON.stringify({
+        providers: { anthropic: { model: "haiku" } },
+        defaultProvider: "anthropic",
+      }),
+      WRAP_MODEL: "openai",
+    });
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toBe('Config error: provider "openai" not found in config.\n');
+  });
+
+  test("--model wins over WRAP_MODEL", async () => {
+    // CLI flag passes through to resolveProvider, which throws on the named
+    // provider. WRAP_MODEL is ignored entirely.
+    const { exitCode, stderr } = await wrap("--model openai hello", {
+      WRAP_CONFIG: JSON.stringify({
+        providers: { anthropic: { model: "haiku" } },
+        defaultProvider: "anthropic",
+      }),
+      WRAP_MODEL: "anthropic",
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe('Config error: provider "openai" not found in config.\n');
+  });
+
+  test("ollama entry without baseURL → specific validation error", async () => {
+    const { exitCode, stderr } = await wrap("hello", {
+      WRAP_CONFIG: JSON.stringify({
+        providers: { ollama: { model: "llama3.2" } },
+        defaultProvider: "ollama",
+      }),
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe('Config error: provider "ollama" requires baseURL.\n');
+  });
+
+  test("unknown provider missing required fields → specific validation error", async () => {
+    const { exitCode, stderr } = await wrap("hello", {
+      WRAP_CONFIG: JSON.stringify({
+        providers: { groq: { model: "llama" } },
+        defaultProvider: "groq",
+      }),
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe('Config error: provider "groq" requires baseURL, apiKey, and model.\n');
   });
 
   test("errors on malformed WRAP_CONFIG", async () => {
@@ -40,7 +104,7 @@ describe("wrap", () => {
 
   test("shows clean error when LLM provider fails", async () => {
     const { exitCode, stdout, stderr } = await wrap("hello", {
-      WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: "ERROR:something went wrong",
     });
     expect(exitCode).toBe(1);
@@ -79,9 +143,8 @@ describe("wrap", () => {
   });
 
   test("errors on invalid JSON from LLM", async () => {
-    const config = JSON.stringify({ provider: { type: "test" } });
     const { exitCode, stdout, stderr } = await wrap("hello", {
-      WRAP_CONFIG: config,
+      WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: "not json",
     });
     expect(exitCode).toBe(1);
@@ -318,10 +381,9 @@ describe("wrap", () => {
   });
 
   test("e2e: first run inits memory, then query succeeds", async () => {
-    const config = JSON.stringify({ provider: { type: "test" } });
     const response = JSON.stringify({ type: "command", content: "echo hi", risk_level: "low" });
     const { exitCode, stdout, stderr, wrapHome } = await wrap("say hi", {
-      WRAP_CONFIG: config,
+      WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: response,
     });
     expect(exitCode).toBe(0);

@@ -1,6 +1,6 @@
 import { loadConfig } from "./config/config.ts";
 import { getWrapHome } from "./core/home.ts";
-import { parseArgs } from "./core/input.ts";
+import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
@@ -10,13 +10,19 @@ import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { loadWatchlist } from "./discovery/watchlist.ts";
 import { initProvider } from "./llm/index.ts";
-import { providerLabel } from "./llm/types.ts";
+import { resolveProvider } from "./llm/resolve-provider.ts";
+import { formatProvider } from "./llm/types.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 
+const MODIFIER_SPECS: readonly ModifierSpec[] = [
+  { name: "verbose", flags: ["--verbose"], takesValue: false },
+  { name: "modelOverride", flags: ["--model", "--provider"], takesValue: true },
+];
+
 export async function main() {
   try {
-    const { modifiers, input } = parseArgs(process.argv);
+    const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
     if (input.type === "flag") {
       await dispatch(input.flag, input.args);
@@ -33,16 +39,18 @@ export async function main() {
     const prompt = input.type === "prompt" ? input.prompt : "";
 
     const config = loadConfig();
-    initVerbose(modifiers.verbose || config.verbose === true);
-    verbose(`Config loaded (${config.provider?.type ?? "no provider"})`);
+    initVerbose(modifiers.flags.has("verbose") || config.verbose === true);
 
-    if (!config.provider) {
-      chrome("Config error: no provider configured.");
-      process.exit(1);
-    }
+    // CLI flag wins over WRAP_MODEL env var. resolveProvider then parses the
+    // raw string and short-circuits to the test sentinel if WRAP_TEST_RESPONSE
+    // is set, regardless of config.
+    const override = modifiers.values.get("modelOverride") ?? process.env.WRAP_MODEL;
+    const resolved = resolveProvider(config, override);
+    const label = formatProvider(resolved);
+    verbose(`Config loaded (${label})`);
 
-    const provider = initProvider(config.provider);
-    verbose(`Provider initialized (${providerLabel(config.provider)})`);
+    const provider = initProvider(resolved);
+    verbose(`Provider initialized (${label})`);
 
     const wrapHome = getWrapHome();
     const watchlist = loadWatchlist(wrapHome);
@@ -65,7 +73,7 @@ export async function main() {
       await runQuery(prompt, provider, {
         memory,
         cwd,
-        providerConfig: config.provider,
+        resolvedProvider: resolved,
         tools,
         cwdFiles,
         pipedInput,

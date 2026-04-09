@@ -61,7 +61,7 @@ Each line in `wrap.jsonl` is a single JSON object. **Fields with null values are
 | `memory` | object? | Memory state at invocation time — full `Memory` object (all scopes). Omitted if empty. CWD-filtered subset can be reconstructed from `cwd` field. |
 | `tools_available` | string[]? | Tool names found by the runtime `which` probe (defaults + watchlist). Omitted if probe returned nothing. |
 | `tools_unavailable` | string[]? | Tool names not found by the runtime `which` probe. Omitted if all tools were found. |
-| `provider` | object | Provider config snapshot (e.g., `{"type": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
+| `provider` | object | Resolved provider snapshot (e.g., `{"name": "claude-code", "model": "haiku"}`). API keys redacted to last 4 chars. |
 | `prompt_hash` | string | SHA-256 hex digest of the system prompt components (see Prompt Hash Computation below) |
 | `rounds` | array | Array of rounds (see below) |
 | `outcome` | string | `"success"` \| `"error"` \| `"blocked"` \| `"cancelled"` \| `"max_rounds"` |
@@ -99,31 +99,31 @@ Note: stdout/stderr are not captured. The executed command's output streams dire
 ### Successful command
 
 ```json
-{"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","version":"0.1.0","prompt":"find all typescript files","cwd":"/Users/tal/projects","memory":{"/":[{"fact":"macOS 14.6, Apple Silicon (arm64)"},{"fact":"zsh"}],"/Users/tal/projects":[{"fact":"uses bun"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum"],"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"command","content":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0,"shell":"/bin/zsh"},"llm_ms":820,"exec_ms":45}],"outcome":"success"}
+{"id":"a1b2c3d4-...","timestamp":"2026-03-21T14:30:00.123Z","version":"0.1.0","prompt":"find all typescript files","cwd":"/Users/tal/projects","memory":{"/":[{"fact":"macOS 14.6, Apple Silicon (arm64)"},{"fact":"zsh"}],"/Users/tal/projects":[{"fact":"uses bun"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum"],"provider":{"name":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"command","content":"find . -name '*.ts'","risk_level":"low"},"execution":{"command":"find . -name '*.ts'","exit_code":0,"shell":"/bin/zsh"},"llm_ms":820,"exec_ms":45}],"outcome":"success"}
 ```
 
 ### Parse failure (the primary debugging use case)
 
 ```json
-{"id":"b2c3d4e5-...","timestamp":"2026-03-21T14:31:00.456Z","version":"0.1.0","prompt":"list docker containers","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"provider_error":"No object generated: could not parse output as JSON.","llm_ms":650}],"outcome":"error"}
+{"id":"b2c3d4e5-...","timestamp":"2026-03-21T14:31:00.456Z","version":"0.1.0","prompt":"list docker containers","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"provider":{"name":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"provider_error":"No object generated: could not parse output as JSON.","llm_ms":650}],"outcome":"error"}
 ```
 
 ### Provider failure
 
 ```json
-{"id":"c3d4e5f6-...","timestamp":"2026-03-21T14:32:00.789Z","version":"0.1.0","prompt":"show disk usage","cwd":"/Users/tal","provider":{"type":"claude-code"},"prompt_hash":"e3b0c44...","rounds":[{"provider_error":"claude: command not found","llm_ms":12}],"outcome":"error"}
+{"id":"c3d4e5f6-...","timestamp":"2026-03-21T14:32:00.789Z","version":"0.1.0","prompt":"show disk usage","cwd":"/Users/tal","provider":{"name":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"provider_error":"claude: command not found","llm_ms":12}],"outcome":"error"}
 ```
 
 ### Multi-round invocation (probe + command)
 
 ```json
-{"id":"x9y8z7w6-...","timestamp":"2026-03-21T14:33:00.000Z","version":"0.1.0","prompt":"add alias to shell config","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum","docker","kubectl","python3","tldr","fd","bat","eza","xclip","xsel","wl-copy","wl-paste"],"provider":{"type":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"echo $SHELL","risk_level":"low"},"execution":{"command":"echo $SHELL","exit_code":0,"shell":"/bin/zsh"},"llm_ms":400,"exec_ms":5},{"parsed":{"type":"command","content":"echo \"alias ll='ls -la'\" >> ~/.zshrc","risk_level":"medium"},"llm_ms":500}],"outcome":"success"}
+{"id":"x9y8z7w6-...","timestamp":"2026-03-21T14:33:00.000Z","version":"0.1.0","prompt":"add alias to shell config","cwd":"/Users/tal","memory":{"/":[{"fact":"macOS 14.6"}]},"tools_available":["brew","git","node","bun","curl","jq","rg","pbcopy","pbpaste"],"tools_unavailable":["apt","dnf","pacman","yum","docker","kubectl","python3","tldr","fd","bat","eza","xclip","xsel","wl-copy","wl-paste"],"provider":{"name":"claude-code","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"echo $SHELL","risk_level":"low"},"execution":{"command":"echo $SHELL","exit_code":0,"shell":"/bin/zsh"},"llm_ms":400,"exec_ms":5},{"parsed":{"type":"command","content":"echo \"alias ll='ls -la'\" >> ~/.zshrc","risk_level":"medium"},"llm_ms":500}],"outcome":"success"}
 ```
 
 ### Watchlist growth (probe with watchlist_additions)
 
 ```json
-{"id":"d4e5f6g7-...","timestamp":"2026-03-21T14:34:00.000Z","version":"0.1.0","prompt":"convert all gifs to pngs","cwd":"/Users/tal/images","tools_available":["brew","git","sips"],"tools_unavailable":["convert","magick"],"provider":{"type":"anthropic","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"which sips convert magick mogrify pngquant optipng cwebp","risk_level":"low","watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"]},"watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"],"execution":{"command":"which sips convert magick mogrify pngquant optipng cwebp","exit_code":1,"shell":"/bin/zsh"},"llm_ms":600,"exec_ms":4},{"parsed":{"type":"command","content":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","risk_level":"low"},"execution":{"command":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","exit_code":0,"shell":"/bin/zsh"},"llm_ms":450,"exec_ms":120}],"outcome":"success"}
+{"id":"d4e5f6g7-...","timestamp":"2026-03-21T14:34:00.000Z","version":"0.1.0","prompt":"convert all gifs to pngs","cwd":"/Users/tal/images","tools_available":["brew","git","sips"],"tools_unavailable":["convert","magick"],"provider":{"name":"anthropic","model":"haiku"},"prompt_hash":"e3b0c44...","rounds":[{"parsed":{"type":"probe","content":"which sips convert magick mogrify pngquant optipng cwebp","risk_level":"low","watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"]},"watchlist_additions":["sips","convert","magick","mogrify","pngquant","optipng","cwebp"],"execution":{"command":"which sips convert magick mogrify pngquant optipng cwebp","exit_code":1,"shell":"/bin/zsh"},"llm_ms":600,"exec_ms":4},{"parsed":{"type":"command","content":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","risk_level":"low"},"execution":{"command":"for f in *.gif; do sips -s format png \"$f\" --out \"${f%.gif}.png\"; done","exit_code":0,"shell":"/bin/zsh"},"llm_ms":450,"exec_ms":120}],"outcome":"success"}
 ```
 
 ---

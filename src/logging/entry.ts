@@ -1,14 +1,12 @@
 import pkg from "../../package.json";
 import type { CommandResponse } from "../command-response.schema.ts";
-import type { AISDKProviderConfig, ProviderConfig } from "../llm/types.ts";
+import type { ResolvedProvider } from "../llm/types.ts";
 import type { Memory } from "../memory/types.ts";
 
-function redactProvider(provider: ProviderConfig): ProviderConfig {
-  if (provider.type !== "anthropic" && provider.type !== "openai") return provider;
-  const p = provider as AISDKProviderConfig;
-  if (!p.apiKey) return provider;
-  const suffix = p.apiKey.length >= 4 ? `...${p.apiKey.slice(-4)}` : "...";
-  return { ...p, apiKey: suffix };
+function redactProvider(provider: ResolvedProvider): ResolvedProvider {
+  if (!provider.apiKey) return provider;
+  const suffix = provider.apiKey.length >= 4 ? `...${provider.apiKey.slice(-4)}` : "...";
+  return { ...provider, apiKey: suffix };
 }
 
 export type Execution = {
@@ -43,7 +41,7 @@ export type LogEntry = {
   cwd: string;
   piped_input?: string;
   memory?: Memory;
-  provider: ProviderConfig;
+  provider: ResolvedProvider;
   prompt_hash: string;
   rounds: Round[];
   outcome: "success" | "error" | "blocked" | "cancelled" | "max_rounds";
@@ -54,7 +52,7 @@ export function createLogEntry(params: {
   cwd: string;
   pipedInput?: string;
   memory?: Memory;
-  provider: ProviderConfig;
+  provider: ResolvedProvider;
   promptHash: string;
 }): LogEntry {
   const entry: LogEntry = {

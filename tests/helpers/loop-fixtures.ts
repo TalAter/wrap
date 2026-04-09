@@ -41,7 +41,7 @@ export function makeEntry(): LogEntry {
   return createLogEntry({
     prompt: "test",
     cwd: "/tmp",
-    provider: { type: "test" },
+    provider: { name: "test", model: "test" },
     promptHash: "h",
   });
 }
@@ -50,6 +50,7 @@ export function makeOptions(overrides: Partial<RoundsOptions> = {}): RoundsOptio
   return {
     cwd: "/tmp",
     wrapHome: "/tmp",
+    model: "test / test",
     maxRounds: 5,
     maxProbeOutput: 10000,
     pipedInput: undefined,

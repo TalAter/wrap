@@ -1,4 +1,18 @@
-import type { Provider } from "../types.ts";
+import type { Provider, ResolvedProvider } from "../types.ts";
+
+/**
+ * Sentinel `ResolvedProvider` used by the test provider. The test provider
+ * isn't user-facing — it's selected by `WRAP_TEST_RESPONSE`/`WRAP_TEST_RESPONSES`
+ * env vars and bypasses the providers map entirely.
+ */
+export const TEST_RESOLVED_PROVIDER: ResolvedProvider = { name: "test", model: "test" };
+
+/** True when one of the test-provider env vars is set, regardless of value. */
+export function isTestProviderSelected(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.WRAP_TEST_RESPONSE !== undefined || env.WRAP_TEST_RESPONSES !== undefined;
+}
 
 export function testProvider(): Provider {
   let callIndex = 0;

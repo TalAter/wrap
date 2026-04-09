@@ -3,41 +3,92 @@ export type Input =
   | { type: "flag"; flag: string; args: string[] }
   | { type: "none" };
 
-export type Modifiers = { verbose: boolean };
+/**
+ * Describes one modifier the parser should recognize. The caller defines
+ * specs — `input.ts` has no built-in knowledge of which modifiers exist.
+ */
+export type ModifierSpec = {
+  /** Canonical key written into the resulting `Modifiers`. */
+  name: string;
+  /** CLI flags that map to this modifier (e.g. `["--model", "--provider"]`). */
+  flags: readonly string[];
+  /** True for `--flag value` / `--flag=value`; false for boolean toggles. */
+  takesValue: boolean;
+};
 
-const KNOWN_MODIFIERS: Record<string, keyof Modifiers> = {
-  "--verbose": "verbose",
+/**
+ * Extracted modifiers, split by kind so the type is honest about what each
+ * key holds. Booleans live in `flags`; value-taking modifiers in `values`.
+ */
+export type Modifiers = {
+  readonly flags: ReadonlySet<string>;
+  readonly values: ReadonlyMap<string, string>;
 };
 
 /**
  * Parse process.argv into modifiers and input.
  * Strips the runtime/script prefix, extracts modifiers, then parses the rest.
  */
-export function parseArgs(argv: string[]): { modifiers: Modifiers; input: Input } {
-  const { modifiers, remaining } = extractModifiers(argv.slice(2));
+export function parseArgs(
+  argv: string[],
+  specs: readonly ModifierSpec[],
+): { modifiers: Modifiers; input: Input } {
+  const { modifiers, remaining } = extractModifiers(argv.slice(2), specs);
   return { modifiers, input: parseInput(remaining) };
 }
 
 /**
  * Extract modifier flags from leading positions.
- * Only leading args that are known modifiers are consumed;
- * the first non-modifier stops extraction.
+ * Only leading args matching a spec are consumed; the first non-match stops
+ * extraction. Value-taking modifiers accept both `--flag value` and
+ * `--flag=value` forms.
  */
-export function extractModifiers(args: string[]): {
-  modifiers: Modifiers;
-  remaining: string[];
-} {
-  const modifiers: Modifiers = { verbose: false };
+export function extractModifiers(
+  args: string[],
+  specs: readonly ModifierSpec[],
+): { modifiers: Modifiers; remaining: string[] } {
+  const flagToSpec = new Map<string, ModifierSpec>();
+  for (const spec of specs) {
+    for (const flag of spec.flags) flagToSpec.set(flag, spec);
+  }
+
+  const flags = new Set<string>();
+  const values = new Map<string, string>();
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
     if (arg === undefined) break;
-    const key = KNOWN_MODIFIERS[arg];
-    if (key === undefined) break;
-    modifiers[key] = true;
-    i++;
+
+    const eqIdx = arg.indexOf("=");
+    const flagName = eqIdx > 0 ? arg.slice(0, eqIdx) : arg;
+    const spec = flagToSpec.get(flagName);
+    if (spec === undefined) break;
+
+    if (!spec.takesValue) {
+      if (eqIdx > 0) {
+        throw new Error(`Config error: ${flagName} does not take a value.`);
+      }
+      flags.add(spec.name);
+      i++;
+      continue;
+    }
+
+    if (eqIdx > 0) {
+      values.set(spec.name, arg.slice(eqIdx + 1));
+      i++;
+    } else {
+      const next = args[i + 1];
+      // Treat the next arg as missing if it's itself a known modifier flag —
+      // otherwise `--model --verbose` would silently consume `--verbose` as the
+      // model value.
+      if (next === undefined || flagToSpec.has(next)) {
+        throw new Error(`Config error: ${arg} requires a value.`);
+      }
+      values.set(spec.name, next);
+      i += 2;
+    }
   }
-  return { modifiers, remaining: args.slice(i) };
+  return { modifiers: { flags, values }, remaining: args.slice(i) };
 }
 
 /** Parse user args into an Input. */

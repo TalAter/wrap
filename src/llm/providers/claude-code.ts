@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import { stripFences } from "../../core/parse-response.ts";
-import type { ClaudeCodeProviderConfig, ConversationMessage, Provider } from "../types.ts";
+import type { ConversationMessage, Provider, ResolvedProvider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
 /** Flatten conversation messages into a single string for the -p flag. */
@@ -11,8 +11,8 @@ function flattenMessages(messages: ConversationMessage[]): string {
     .join("\n\n");
 }
 
-export function claudeCodeProvider(config: ClaudeCodeProviderConfig): Provider {
-  const model = config.model ?? "haiku";
+export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
+  const model = resolved.model;
 
   return {
     runPrompt: async (input, schema?) => {

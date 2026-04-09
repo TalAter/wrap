@@ -2,40 +2,53 @@ import { describe, expect, test } from "bun:test";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { initProvider, runCommandPrompt } from "../src/llm/index.ts";
 import { claudeCodeProvider } from "../src/llm/providers/claude-code.ts";
-import { testProvider } from "../src/llm/providers/test.ts";
-import type { PromptInput } from "../src/llm/types.ts";
+import { TEST_RESOLVED_PROVIDER, testProvider } from "../src/llm/providers/test.ts";
+import type { PromptInput, ResolvedProvider } from "../src/llm/types.ts";
 
 const input: PromptInput = {
   system: "you are a test",
   messages: [{ role: "user", content: "hello world" }],
 };
 
+const ANTHROPIC_RESOLVED: ResolvedProvider = {
+  name: "anthropic",
+  model: "claude-haiku-4-5",
+};
+const OPENAI_RESOLVED: ResolvedProvider = { name: "openai", model: "gpt-4o-mini" };
+const CLAUDE_CODE_RESOLVED: ResolvedProvider = {
+  name: "claude-code",
+  model: "haiku",
+};
+
 describe("initProvider factory", () => {
-  test("returns a provider with runPrompt", () => {
-    const provider = initProvider({ type: "test" });
+  test("returns a provider for the test sentinel", () => {
+    const provider = initProvider(TEST_RESOLVED_PROVIDER);
     expect(typeof provider.runPrompt).toBe("function");
   });
 
   test("returns a provider for claude-code", () => {
-    const provider = initProvider({ type: "claude-code" });
+    const provider = initProvider(CLAUDE_CODE_RESOLVED);
     expect(typeof provider.runPrompt).toBe("function");
   });
 
   test("returns a provider for anthropic", () => {
-    const provider = initProvider({ type: "anthropic" });
+    const provider = initProvider(ANTHROPIC_RESOLVED);
     expect(typeof provider.runPrompt).toBe("function");
   });
 
   test("returns a provider for openai", () => {
-    const provider = initProvider({ type: "openai" });
+    const provider = initProvider(OPENAI_RESOLVED);
     expect(typeof provider.runPrompt).toBe("function");
   });
 
-  test("throws on unrecognized provider type", () => {
-    // @ts-expect-error testing invalid provider type
-    expect(() => initProvider({ type: "nonexistent" })).toThrow(
-      'Config error: unrecognized provider "nonexistent".',
-    );
+  test("returns a provider for unknown openai-compat (e.g. groq)", () => {
+    const provider = initProvider({
+      name: "groq",
+      model: "llama-3.1-70b-versatile",
+      apiKey: "gsk_x",
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+    expect(typeof provider.runPrompt).toBe("function");
   });
 });
 
@@ -133,7 +146,7 @@ describe("runCommandPrompt", () => {
 
 describe("claudeCodeProvider", () => {
   test("returns a provider with runPrompt", () => {
-    const provider = claudeCodeProvider({ type: "claude-code" });
+    const provider = claudeCodeProvider(CLAUDE_CODE_RESOLVED);
     expect(typeof provider.runPrompt).toBe("function");
   });
 });

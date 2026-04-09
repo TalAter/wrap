@@ -25,9 +25,9 @@ All LLM providers implement a single `runPrompt` method. Without a Zod schema it
 
 ### AI SDK Provider (`src/llm/providers/ai-sdk.ts`)
 
-One file handles all AI SDK-supported backends (Anthropic, OpenAI, future others). A `MODEL_FACTORIES` map routes `config.type` to the correct SDK factory.
+`ai-sdk.ts` handles all AI SDK-supported backends; the provider registry (`src/llm/providers/registry.ts`) is the source of truth for which names map to which `kind` (`anthropic`, `openai-compat`, or `claude-code`). `openai-compat` covers `openai`, `ollama`, and any unknown user-defined OpenAI-compatible endpoint.
 
-**Adding a new AI SDK provider** = extend the config type union + add a `MODEL_FACTORIES` entry + `bun add @ai-sdk/<provider>`. No new files, no changes to `initProvider`.
+**Adding a new AI SDK provider** = one entry in `KNOWN_PROVIDERS` + `bun add @ai-sdk/<provider>` (only if a new SDK family, which also means a new `kind` + a branch in `initProvider`).
 
 Static imports for all provider packages. Wrap is a run-once CLI — startup cost is negligible, and static imports keep `initProvider` synchronous.
 
@@ -42,11 +42,11 @@ Spawns `claude` CLI as a subprocess. Flattens the multi-turn message array into 
 
 ### Test Provider (`src/llm/providers/test.ts`)
 
-Deterministic mock for testing. Reads from `WRAP_TEST_RESPONSE` env var. With schema → parses as JSON and validates. Without → returns as string.
+Deterministic mock for testing. Reads from `WRAP_TEST_RESPONSE` env var. With schema → parses as JSON and validates. Without → returns as string. Selected by setting the env var, not by config — `resolveProvider` short-circuits to a `TEST_RESOLVED_PROVIDER` sentinel.
 
 ### Provider Dispatch (`src/llm/index.ts`)
 
-`initProvider(config)` is a synchronous switch that routes config type to the correct provider factory.
+`initProvider(resolved)` takes a `ResolvedProvider` and dispatches via the registry's `kind` to the matching factory. The `test` sentinel is special-cased.
 
 ---
 
@@ -75,20 +75,17 @@ Prompt data lives in two shared JSON files. **`src/prompt.constants.json`** cont
 
 ## Config
 
-One config shape for all AI SDK providers — `type` discriminant determines which SDK factory to use:
+Config carries a `providers` map keyed by user-facing provider name plus a `defaultProvider`. Each entry stores its own `apiKey?`, `baseURL?`, and `model`. `--model` / `--provider` / `WRAP_MODEL` overrides which entry is used for a single run. Full shape, resolution rules, and error matrix: `specs/multi-provider-config.md`.
 
 ```jsonc
-// Anthropic (minimal — reads ANTHROPIC_API_KEY from env)
-{ "provider": { "type": "anthropic" } }
-
-// OpenAI with explicit model and key
-{ "provider": { "type": "openai", "model": "gpt-4o", "apiKey": "sk-..." } }
-
-// Ollama via OpenAI-compatible endpoint
-{ "provider": { "type": "openai", "model": "llama3", "baseURL": "http://localhost:11434/v1" } }
+{
+  "providers": {
+    "anthropic": { "apiKey": "$ANTHROPIC_API_KEY", "model": "claude-haiku-4-5" },
+    "ollama":    { "baseURL": "http://localhost:11434/v1", "model": "llama3.2" }
+  },
+  "defaultProvider": "anthropic"
+}
 ```
-
-Fields: `type` (required), `model` (optional, defaults vary by type), `apiKey` (optional, see resolution above), `baseURL` (optional, for custom endpoints). Config schema in `src/config/config.schema.json` supports all provider types.
 
 ---
 

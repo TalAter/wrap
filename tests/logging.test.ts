@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import { addRound, createLogEntry, type Round, serializeEntry } from "../src/logging/entry.ts";
 import { appendLogEntry } from "../src/logging/writer.ts";
 import { wrap, wrapMock } from "./helpers.ts";
@@ -10,7 +11,7 @@ describe("createLogEntry", () => {
   const defaults = {
     prompt: "find all ts files",
     cwd: "/Users/tal/projects",
-    provider: { type: "claude-code" as const, model: "haiku" },
+    provider: { name: "claude-code", model: "haiku" },
     promptHash: "abc123",
   };
 
@@ -28,7 +29,7 @@ describe("createLogEntry", () => {
     const entry = createLogEntry(defaults);
     expect(entry.prompt).toBe("find all ts files");
     expect(entry.cwd).toBe("/Users/tal/projects");
-    expect(entry.provider).toEqual({ type: "claude-code", model: "haiku" });
+    expect(entry.provider).toEqual({ name: "claude-code", model: "haiku" });
     expect(entry.prompt_hash).toBe("abc123");
   });
 
@@ -90,42 +91,44 @@ describe("createLogEntry redacts apiKey", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "anthropic", apiKey: "sk-ant-api03-xxxxxxxxxxxxxxxxxxxx-abcd" },
+      provider: {
+        name: "anthropic",
+        model: "claude-haiku-4-5",
+        apiKey: "sk-ant-api03-xxxxxxxxxxxxxxxxxxxx-abcd",
+      },
       promptHash: "abc",
     });
-    const p = entry.provider as { type: string; apiKey?: string };
-    expect(p.apiKey).toBe("...abcd");
+    expect(entry.provider.apiKey).toBe("...abcd");
   });
 
   test("fully masks keys shorter than 4 chars", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "openai", apiKey: "ab" },
+      provider: { name: "openai", model: "gpt-4o-mini", apiKey: "ab" },
       promptHash: "abc",
     });
-    const p = entry.provider as { type: string; apiKey?: string };
-    expect(p.apiKey).toBe("...");
+    expect(entry.provider.apiKey).toBe("...");
   });
 
   test("no apiKey field left unchanged", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "anthropic", model: "haiku" },
+      provider: { name: "anthropic", model: "haiku" },
       promptHash: "abc",
     });
-    expect(entry.provider).toEqual({ type: "anthropic", model: "haiku" });
+    expect(entry.provider).toEqual({ name: "anthropic", model: "haiku" });
   });
 
-  test("non-AISDK providers unchanged", () => {
+  test("test sentinel provider unchanged", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    expect(entry.provider).toEqual({ type: "test" });
+    expect(entry.provider).toEqual(TEST_RESOLVED_PROVIDER);
   });
 });
 
@@ -134,7 +137,7 @@ describe("addRound", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     const round: Round = { raw_response: '{"type":"answer"}' };
@@ -149,7 +152,7 @@ describe("addRound", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     addRound(entry, { raw_response: "first", parse_error: "bad json" });
@@ -163,7 +166,7 @@ describe("serializeEntry", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     const json = serializeEntry(entry);
@@ -174,7 +177,7 @@ describe("serializeEntry", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     const parsed = JSON.parse(serializeEntry(entry));
@@ -186,7 +189,7 @@ describe("serializeEntry", () => {
       prompt: "test",
       cwd: "/tmp",
       pipedInput: "stdin data",
-      provider: { type: "claude-code", model: "haiku" },
+      provider: { name: "claude-code", model: "haiku" },
       promptHash: "abc",
     });
     entry.outcome = "success";
@@ -210,7 +213,7 @@ describe("serializeEntry", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     addRound(entry, { raw_response: "garbage", parse_error: "bad json" });
@@ -227,7 +230,7 @@ describe("serializeEntry", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     expect(serializeEntry(entry)).not.toContain("\n");
@@ -243,7 +246,7 @@ describe("appendLogEntry", () => {
     return createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      provider: { type: "test" },
+      provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
   }
@@ -344,7 +347,7 @@ describe("logging integration", () => {
     expect(entry.timestamp).toBeDefined();
     expect(entry.prompt).toBe("what is 2+2");
     expect(entry.cwd).toBeDefined();
-    expect(entry.provider).toEqual({ type: "test" });
+    expect(entry.provider).toEqual(TEST_RESOLVED_PROVIDER);
     expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(typeof entry.version).toBe("string");
     expect(entry.version.length).toBeGreaterThan(0);
@@ -373,7 +376,7 @@ describe("logging integration", () => {
     seedMemoryIn(home);
     const result = await wrap("test prompt", {
       WRAP_HOME: home,
-      WRAP_CONFIG: JSON.stringify({ provider: { type: "test" } }),
+      WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: "not json at all",
     });
     expect(result.exitCode).not.toBe(0);

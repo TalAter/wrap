@@ -9,7 +9,13 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import { assembleCommandPrompt } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
-import type { ConversationMessage, PromptInput, Provider, ProviderConfig } from "../llm/types.ts";
+import {
+  type ConversationMessage,
+  formatProvider,
+  type PromptInput,
+  type Provider,
+  type ResolvedProvider,
+} from "../llm/types.ts";
 import { addRound, createLogEntry, type LogEntry, type Round } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import { appendFacts } from "../memory/memory.ts";
@@ -123,6 +129,8 @@ export type LoopResult =
 export type RoundsOptions = {
   cwd: string;
   wrapHome: string;
+  /** Display label for the active provider, e.g. "anthropic / claude-sonnet-4-6". */
+  model: string;
   /** Max rounds total — used by the last-round instruction trigger. */
   maxRounds: number;
   maxProbeOutput: number;
@@ -195,10 +203,7 @@ export async function runRoundsUntilFinal(
       });
     }
 
-    // TODO(provider-label): replace "LLM" with the actual model name once
-    // Provider exposes a `label` field. See specs/todo.md → "Make Provider
-    // self-describing with a label field".
-    verbose("Calling LLM...");
+    verbose(`Calling ${options.model}...`);
     const llmStart = performance.now();
     let response: CommandResponse;
     const stopSpinner = startChromeSpinner(SPINNER_TEXT);
@@ -228,7 +233,10 @@ export async function runRoundsUntilFinal(
       round.provider_error = errMsg;
       round.llm_ms = Math.round(performance.now() - llmStart);
       addRound(entry, round);
-      throw e;
+      // Wrap with the attempted provider/model so the user sees what was
+      // tried — bare SDK messages (e.g. Anthropic's `"model: gpt-4o-mini"`)
+      // give no hint that it's the *provider* rejecting the model.
+      throw new Error(`LLM error (${options.model}): ${errMsg}`);
     } finally {
       stopSpinner();
     }
@@ -434,7 +442,7 @@ export async function runQuery(
   options: {
     memory?: Memory;
     cwd: string;
-    providerConfig: ProviderConfig;
+    resolvedProvider: ResolvedProvider;
     tools?: ToolProbeResult | null;
     cwdFiles?: string;
     pipedInput?: string;
@@ -453,7 +461,7 @@ export async function runQuery(
     cwd: options.cwd,
     pipedInput: options.pipedInput,
     memory,
-    provider: options.providerConfig,
+    provider: options.resolvedProvider,
     promptHash: PROMPT_HASH,
   });
 
@@ -471,10 +479,12 @@ export async function runQuery(
       maxPipedInput,
     );
 
+    const model = formatProvider(options.resolvedProvider);
     const state: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
     const roundsOptions: RoundsOptions = {
       cwd: options.cwd,
       wrapHome,
+      model,
       maxRounds,
       maxProbeOutput,
       pipedInput: options.pipedInput,

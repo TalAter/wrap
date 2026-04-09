@@ -1,25 +1,26 @@
 import { type CommandResponse, CommandResponseSchema } from "../command-response.schema.ts";
 import { aiSdkProvider } from "./providers/ai-sdk.ts";
 import { claudeCodeProvider } from "./providers/claude-code.ts";
+import { getRegistration } from "./providers/registry.ts";
 import { testProvider } from "./providers/test.ts";
-import type { PromptInput, Provider, ProviderConfig } from "./types.ts";
+import type { PromptInput, Provider, ResolvedProvider } from "./types.ts";
 
-export type { PromptInput, Provider, ProviderConfig } from "./types.ts";
+export type { PromptInput, Provider, ResolvedProvider } from "./types.ts";
 export { initProvider, runCommandPrompt };
 
-function initProvider(config: ProviderConfig): Provider {
-  switch (config.type) {
-    case "anthropic":
-    case "openai":
-      return aiSdkProvider(config);
+/**
+ * Dispatch a `ResolvedProvider` to the right SDK factory. The test sentinel
+ * is special-cased; everything else routes through the registry's `kind`.
+ * See specs/multi-provider-config.md.
+ */
+function initProvider(resolved: ResolvedProvider): Provider {
+  if (resolved.name === "test") return testProvider();
+  switch (getRegistration(resolved.name).kind) {
     case "claude-code":
-      return claudeCodeProvider(config);
-    case "test":
-      return testProvider();
-    default:
-      throw new Error(
-        `Config error: unrecognized provider "${(config as { type: string }).type}".`,
-      );
+      return claudeCodeProvider(resolved);
+    case "anthropic":
+    case "openai-compat":
+      return aiSdkProvider(resolved);
   }
 }
 

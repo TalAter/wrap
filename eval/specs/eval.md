@@ -140,7 +140,7 @@ Non-zero exit code + stderr for truly fatal issues (missing dependencies, bridge
 The bridge uses the existing `WRAP_CONFIG` environment variable. Docker sets this with eval-specific provider config:
 
 ```bash
-WRAP_CONFIG='{"provider":{"type":"anthropic","model":"claude-haiku-4-5-20251001","apiKey":"$ANTHROPIC_API_KEY"}}'
+WRAP_CONFIG='{"providers":{"anthropic":{"model":"claude-haiku-4-5-20251001","apiKey":"$ANTHROPIC_API_KEY"}},"defaultProvider":"anthropic"}'
 ```
 
 The bridge calls `loadConfig()` → `initProvider()` using the existing config loading path. No new config code.

@@ -198,7 +198,10 @@ describe("runRoundsUntilFinal", () => {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as Error).message).toBe("network down");
+    // Wrapped with attempted provider/model so users see what was tried;
+    // original SDK message is preserved inside.
+    expect((thrown as Error).message).toContain("test / test");
+    expect((thrown as Error).message).toContain("network down");
     // The errored round must still be in the log so failures are visible.
     expect(entry.rounds.length).toBe(1);
     expect(entry.rounds[0]?.provider_error).toBe("network down");

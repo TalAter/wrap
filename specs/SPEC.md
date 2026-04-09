@@ -529,7 +529,7 @@ Config is loaded in priority order (highest wins):
 2. **JSONC config file** — `~/.wrap/config.jsonc` (directory overridable via `WRAP_HOME` env var).
 3. **Defaults** — no default provider. If unconfigured, Wrap errors and prompts setup (future: first-run UI).
 
-Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys from the file config. Nested objects (e.g., `provider`) are replaced entirely, not deep-merged.
+Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys from the file config. Nested objects (e.g., `providers`) are replaced entirely, not deep-merged.
 
 ### 12.2 Config Validation
 
@@ -546,30 +546,28 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
   - Validation of values
   - Descriptions/documentation for each setting
   - Type checking
-- Schema uses `oneOf` for discriminated unions (e.g., different provider types have different required fields)
+- Schema is loose: it documents top-level shape and the `ProviderEntry` shape but does not enumerate provider names. Per-provider field requirements (e.g. ollama needs `baseURL`) are enforced at runtime by the registry, not in the schema.
 
 ### 12.4 Configurable Settings
 
-Currently only `provider` is implemented. Future settings shown below for reference:
-
 ```jsonc
 {
-  // LLM provider configuration (IMPLEMENTED — see specs/llm-sdk.md)
-  "provider": { "type": "anthropic" },
+  // LLM providers — map keyed by user-facing provider name. See specs/multi-provider-config.md.
+  "providers": {
+    "anthropic": { "apiKey": "$ANTHROPIC_API_KEY", "model": "claude-haiku-4-5" }
+  },
+  "defaultProvider": "anthropic",
+
+  // LLM round budget
+  "maxRounds": 5,
+  "maxProbeOutputChars": 200000,  // ~200KB cap on probe output fed to LLM
+  "maxPipedInputChars":  200000,  // ~200KB cap on piped stdin fed to LLM
 
   // Safety (NOT YET IMPLEMENTED — see specs/safety.md)
-  "defaultMode": "smart", // "smart" | "yolo" | "confirm-all"
-
-  // LLM round budget (IMPLEMENTED — maxRounds. showRetryAttempts not yet implemented)
-  "maxRounds": 5,
-  "maxProbeOutputChars": 200000, // ~200KB cap on probe output fed to LLM
-  "showRetryAttempts": true,
+  "defaultMode": "smart",  // "smart" | "yolo" | "confirm-all"
 
   // Threads (NOT YET IMPLEMENTED)
-  "threadTTL": "24h",
-
-  // Display
-  // ...TBD
+  "threadTTL": "24h"
 }
 ```
 

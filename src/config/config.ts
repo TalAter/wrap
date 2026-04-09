@@ -2,10 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type ParseError, parse } from "jsonc-parser";
 import { getWrapHome } from "../core/home.ts";
-import type { ProviderConfig } from "../llm/types.ts";
+
+/** One entry in the providers map — see specs/multi-provider-config.md. */
+export type ProviderEntry = {
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+};
 
 export type Config = {
-  provider?: ProviderConfig;
+  providers?: Record<string, ProviderEntry>;
+  defaultProvider?: string;
   maxRounds?: number;
   maxProbeOutputChars?: number;
   maxPipedInputChars?: number;
