@@ -2,9 +2,8 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import type { Memory } from "../memory/types.ts";
 import promptConstants from "../prompt.constants.json";
 import promptOptimized from "../prompt.optimized.json";
-import { buildPrompt } from "./build-prompt.ts";
+import { buildPromptScaffold, type PromptScaffold } from "./build-prompt.ts";
 import { formatContext } from "./format-context.ts";
-import type { PromptInput } from "./types.ts";
 
 export type QueryContext = {
   prompt: string;
@@ -16,8 +15,16 @@ export type QueryContext = {
   piped?: boolean;
 };
 
-/** Assemble a PromptInput for a command prompt call. */
-export function assembleCommandPrompt(ctx: QueryContext, maxPipedInputChars?: number): PromptInput {
+/**
+ * Assemble the per-session prompt scaffold (system text, static prefix
+ * messages, and the initial user-turn text). The session calls this once
+ * at startup; the runner re-uses `system` + `prefixMessages` on every
+ * `runRound` call via `buildPromptInput`.
+ */
+export function assemblePromptScaffold(
+  ctx: QueryContext,
+  maxPipedInputChars?: number,
+): PromptScaffold {
   const contextString = formatContext({
     memory: ctx.memory,
     tools: ctx.tools,
@@ -29,7 +36,7 @@ export function assembleCommandPrompt(ctx: QueryContext, maxPipedInputChars?: nu
     constants: promptConstants,
   });
 
-  return buildPrompt(
+  return buildPromptScaffold(
     {
       instruction: promptOptimized.instruction,
       schemaInstruction: promptConstants.schemaInstruction,

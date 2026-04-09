@@ -1,4 +1,4 @@
-import type { ConversationMessage, PromptInput } from "./types.ts";
+import type { ConversationMessage } from "./types.ts";
 
 export type PromptConfig = {
   instruction: string;
@@ -13,12 +13,35 @@ export type PromptConfig = {
   sectionUserRequest: string;
 };
 
-/** Assemble system message + messages array from config, context string, and query. Pure function. */
-export function buildPrompt(
+/**
+ * The static, per-session pieces of the prompt: the system text, the few-shot
+ * example messages (as a flat conversation prefix), and the formatted initial
+ * user-request text. The session uses these to seed a `Transcript` and the
+ * `LoopOptions`. Pure function — produced once at session start, not on
+ * every round.
+ */
+export type PromptScaffold = {
+  system: string;
+  /**
+   * Few-shot examples + separator, prepended verbatim to every round's
+   * messages array by `buildPromptInput`. Empty if the prompt config has
+   * no examples. Treated as immutable after assembly.
+   */
+  prefixMessages: ReadonlyArray<ConversationMessage>;
+  /**
+   * The text content of the initial user turn the session pushes to the
+   * transcript: `${contextString}\n\n${sectionUserRequest}\n${query}` (or
+   * whichever subset of those parts is non-empty).
+   */
+  initialUserText: string;
+};
+
+/** Assemble the per-session prompt scaffold. Pure function. */
+export function buildPromptScaffold(
   config: PromptConfig,
   contextString: string,
   query: string,
-): PromptInput {
+): PromptScaffold {
   const systemParts: string[] = [
     config.instruction,
     config.memoryRecencyInstruction,
@@ -32,25 +55,22 @@ export function buildPrompt(
     systemParts.push(`${config.schemaInstruction}\n${config.schemaText}`);
   }
 
-  const messages: ConversationMessage[] = [];
-
+  const prefixMessages: ConversationMessage[] = [];
   if (config.fewShotExamples.length > 0) {
     for (const example of config.fewShotExamples) {
-      messages.push({ role: "user", content: example.input });
-      messages.push({ role: "assistant", content: example.output });
+      prefixMessages.push({ role: "user", content: example.input });
+      prefixMessages.push({ role: "assistant", content: example.output });
     }
-    messages.push({ role: "user", content: config.fewShotSeparator });
+    prefixMessages.push({ role: "user", content: config.fewShotSeparator });
   }
 
   const userParts: string[] = [];
-  if (contextString) {
-    userParts.push(contextString);
-  }
-  if (query) {
-    userParts.push(`${config.sectionUserRequest}\n${query}`);
-  }
+  if (contextString) userParts.push(contextString);
+  if (query) userParts.push(`${config.sectionUserRequest}\n${query}`);
 
-  messages.push({ role: "user", content: userParts.join("\n\n") });
-
-  return { system: systemParts.join("\n\n"), messages };
+  return {
+    system: systemParts.join("\n\n"),
+    prefixMessages,
+    initialUserText: userParts.join("\n\n"),
+  };
 }

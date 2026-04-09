@@ -9,10 +9,11 @@
 import { NoObjectGeneratedError } from "ai";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
-import { buildPrompt } from "../src/llm/build-prompt.ts";
+import { buildPromptScaffold } from "../src/llm/build-prompt.ts";
 import { formatContext } from "../src/llm/format-context.ts";
 import { initProvider } from "../src/llm/index.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
+import type { PromptInput } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
 
 function out(value: object): void {
@@ -41,7 +42,7 @@ const contextString = formatContext({
   constants: promptConstants,
 });
 
-const promptInput = buildPrompt(
+const scaffold = buildPromptScaffold(
   {
     instruction: input.instruction,
     schemaText: input.schemaText,
@@ -57,6 +58,11 @@ const promptInput = buildPrompt(
   contextString,
   input.query,
 );
+
+const promptInput: PromptInput = {
+  system: scaffold.system,
+  messages: [...scaffold.prefixMessages, { role: "user", content: scaffold.initialUserText }],
+};
 
 // Multi-turn: append extra messages (e.g. probe response + output) after the initial prompt
 if (input.extraMessages) {

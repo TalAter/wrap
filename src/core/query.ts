@@ -7,7 +7,7 @@ import {
 } from "../config/config.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
-import { assembleCommandPrompt } from "../llm/context.ts";
+import { assemblePromptScaffold } from "../llm/context.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import {
   type ConversationMessage,
@@ -466,7 +466,7 @@ export async function runQuery(
   });
 
   try {
-    const input = assembleCommandPrompt(
+    const scaffold = assemblePromptScaffold(
       {
         prompt,
         cwd: options.cwd,
@@ -478,6 +478,16 @@ export async function runQuery(
       },
       maxPipedInput,
     );
+    // Transitional inline assembly: query.ts is deleted in the final stage of
+    // the coordinator refactor, so we keep its old `PromptInput` shape here
+    // rather than introduce a deprecated shim.
+    const input: PromptInput = {
+      system: scaffold.system,
+      messages: [
+        ...scaffold.prefixMessages,
+        { role: "user" as const, content: scaffold.initialUserText },
+      ],
+    };
 
     const model = formatProvider(options.resolvedProvider);
     const state: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
