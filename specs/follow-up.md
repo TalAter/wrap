@@ -62,7 +62,7 @@ LLM returns → confirming state with updated command:
 
 ## Dialog state machine
 
-Four states. Each defines what renders in the content area, the action bar slot, and which keys are active. Each state transition flushes any pending stdin to prevent stray keypresses from leaking across states (safety feature, see `tui-approach.md` § "Input buffer flush").
+Four states. Each defines what renders in the content area, the action bar slot, and which keys are active.
 
 ```
                  ┌───────────────────────────┐
