@@ -9,6 +9,7 @@ import re
 # Weights for assertion checks (higher = more important)
 WEIGHTS = {
     "type": 3.0,
+    "final_expected": 3.0,
     "risk_level": 3.0,
     "content_pattern": 2.0,
     "content_forbidden_pattern": 2.0,
@@ -35,6 +36,14 @@ def score(response: dict, assertions: dict) -> float:
             checks.append(("type", response["type"] in expected))
         else:
             checks.append(("type", response["type"] == expected))
+
+    # final must match expected boolean (multi-step: distinguishes non-final
+    # discovery commands from terminal actions even though both have type="command")
+    if "final_expected" in assertions:
+        checks.append((
+            "final_expected",
+            response.get("final", True) == assertions["final_expected"],
+        ))
 
     # risk_level must be within expected range
     if "risk_range" in assertions:

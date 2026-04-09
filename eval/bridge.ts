@@ -51,6 +51,7 @@ const scaffold = buildPromptScaffold(
     toolsScopeInstruction: promptConstants.toolsScopeInstruction,
     voiceInstructions: promptConstants.voiceInstructions,
     tempDirPrinciple: promptConstants.tempDirPrinciple,
+    finalFlagInstruction: promptConstants.finalFlagInstruction,
     pipedInputInstruction: input.pipedInput ? promptConstants.pipedInputInstruction : undefined,
     fewShotExamples: input.fewShotExamples,
     fewShotSeparator: promptConstants.fewShotSeparator,

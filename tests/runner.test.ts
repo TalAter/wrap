@@ -100,13 +100,62 @@ describe("runLoop", () => {
     expect(transcript[1]?.kind).toBe("answer");
   });
 
+  test("non-final low: runs inline, pushes a step turn, continues the loop", async () => {
+    const { provider } = makeProvider([
+      {
+        type: "command",
+        final: false,
+        content: "echo discovered",
+        risk_level: "low",
+        explanation: "check",
+      },
+      { type: "command", final: true, content: "echo done", risk_level: "low" },
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+    const { events, final } = await drain(
+      runLoop(provider, transcript, scaffold, state, makeOptions()),
+    );
+    expect(final.type).toBe("command");
+    const stepEvents = events.filter((e) => e.type === "step-running" || e.type === "step-output");
+    expect(stepEvents.length).toBe(2);
+    // One step turn + one candidate_command turn were pushed.
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
+  });
+
+  test("non-final medium: returns to coordinator without executing", async () => {
+    // Step 4 leaves confirmation for step 5, but runLoop must already
+    // surface non-final non-low as a LoopReturn so the coordinator can
+    // route it to the dialog. Here we just pin that it does NOT run inline.
+    const { provider } = makeProvider([
+      {
+        type: "command",
+        final: false,
+        content: "git stash",
+        risk_level: "medium",
+        plan: "stash, test, then pop",
+      },
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "test clean" }];
+    const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+    const { events, final } = await drain(
+      runLoop(provider, transcript, scaffold, state, makeOptions()),
+    );
+    expect(final.type).toBe("command");
+    // No step-running / step-output yielded — the runner did not execute.
+    expect(events.some((e) => e.type === "step-running")).toBe(false);
+    // A candidate_command turn was pushed (not a step).
+    expect(transcript[1]?.kind).toBe("candidate_command");
+  });
+
   test("exhausted when budget runs out", async () => {
-    const probe: CommandResponse = {
-      type: "probe",
+    const step: CommandResponse = {
+      type: "command",
+      final: false,
       content: "true",
       risk_level: "low",
-    } as CommandResponse;
-    const { provider } = makeProvider([probe, probe, probe]);
+    };
+    const { provider } = makeProvider([step, step, step]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 2, roundNum: 0 };
     const { final } = await drain(
@@ -138,7 +187,12 @@ describe("runLoop", () => {
         calls += 1;
         if (calls === 1) {
           ctrl.abort();
-          return { type: "probe", content: "true", risk_level: "low" } as CommandResponse;
+          return {
+            type: "command",
+            final: false,
+            content: "true",
+            risk_level: "low",
+          } as CommandResponse;
         }
         throw new Error("should not reach second call");
       },
@@ -221,7 +275,7 @@ describe("fetchesUrl", () => {
     expect(fetchesUrl("wget http://example.com")).toBe(true);
   });
 
-  test("returns false for non-fetch probes", () => {
+  test("returns false for non-fetch step commands", () => {
     expect(fetchesUrl("ls")).toBe(false);
   });
 });

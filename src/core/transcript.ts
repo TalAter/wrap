@@ -9,7 +9,7 @@ import promptConstants from "../prompt.constants.json";
  * that the session, the runner, and the coordinator all read and write.
  *
  * Why semantic turns instead of `input.messages`:
- *   - Meta-instructions (`lastRoundInstruction`, refused-probe pairs) never
+ *   - Meta-instructions (`lastRoundInstruction`, live temp-dir context) never
  *     enter the persistent state — they live only in the local scope of one
  *     `runRound` call, applied during `buildPromptInput` and discarded.
  *   - The transcript is the natural place to add new turn kinds for
@@ -26,11 +26,19 @@ export type TranscriptTurn =
    */
   | { kind: "user"; text: string }
   /**
-   * A non-final command the loop executed inline. Carries the full LLM
-   * response (so subsequent rounds can echo it as an assistant turn) plus
-   * the captured output and exit code (rendered as a user turn).
+   * A non-final low-risk command the loop executed inline without user
+   * confirmation. Carries the full LLM response (so subsequent rounds can
+   * echo it as an assistant turn) plus the captured output and exit code
+   * (rendered as a user turn).
    */
-  | { kind: "probe"; response: CommandResponse; output: string; exitCode: number }
+  | { kind: "step"; response: CommandResponse; output: string; exitCode: number }
+  /**
+   * A non-final medium/high-risk command the user confirmed via the dialog.
+   * Shape identical to `step` and rendered the same way — the LLM does not
+   * need to distinguish model-authored from user-confirmed steps. The round
+   * audit log keeps the `source` distinction separately.
+   */
+  | { kind: "confirmed_step"; response: CommandResponse; output: string; exitCode: number }
   /**
    * A final-form command the LLM proposed. Pushed by the loop just before
    * returning. Subsequent calls (e.g., after a follow-up) need it as an
@@ -38,9 +46,10 @@ export type TranscriptTurn =
    */
   | { kind: "candidate_command"; response: CommandResponse }
   /**
-   * A final-form answer. Pushed by the loop just before returning. Rarely
-   * needed in subsequent calls (answers usually exit the session) but
-   * included for completeness.
+   * A final-form reply. Pushed by the loop just before returning. Rarely
+   * needed in subsequent calls (replies usually exit the session) but
+   * included for completeness. The turn kind stays `answer` — it is
+   * decoupled from the schema's `reply` discriminator.
    */
   | { kind: "answer"; response: CommandResponse };
 
@@ -52,50 +61,54 @@ export type AttemptDirectives = {
   /** Append `lastRoundInstruction` as the final user turn. */
   isLastRound?: boolean;
   /**
-   * For the in-round probe-risk retry: echo the rejected response as an
-   * assistant turn and append `probeRiskInstruction` as the user turn so
-   * the LLM can correct itself. Only used inside `runRound`'s retry block;
-   * never in the persistent transcript.
-   */
-  probeRiskRetry?: { rejectedResponse: CommandResponse };
-  /**
    * A pre-formatted block of context that changes between rounds (e.g. the
    * current `$WRAP_TEMP_DIR` listing). Appended as a user turn after the
-   * transcript but before `probeRiskRetry` / `lastRoundInstruction`, so the
-   * LLM sees it with every decision without polluting the persistent
-   * transcript.
+   * transcript but before `lastRoundInstruction`, so the LLM sees it with
+   * every decision without polluting the persistent transcript.
    */
   liveContext?: string;
 };
 
 /**
- * Serialize an LLM response for echo back into a later round, minus
- * `_scratchpad`. Scratchpad is intra-round reasoning; replaying it to the
- * model adds tokens and encourages the next round to anchor on stale plans
- * instead of planning fresh. The probeRiskRetry path is the one exception —
- * it serializes the rejected response directly so the model sees what it
- * just wrote.
- */
-function stringifyWithoutScratchpad(response: CommandResponse): string {
-  const { _scratchpad, ...rest } = response;
-  return JSON.stringify(rest);
-}
-
-/**
- * Format a probe's captured output: prepend the section header, fall back to
+ * Format a step's captured output: prepend the section header, fall back to
  * the no-output sentinel when the post-processed body is blank, append a
  * trailing exit-code line on non-zero exits. The runner is responsible for
- * stdout+stderr merge and truncation BEFORE storing the probe turn —
+ * stdout+stderr merge and truncation BEFORE storing the step turn —
  * `output` here is already post-processed; this function only adds the
  * surrounding section header / exit-code suffix / blank-output sentinel.
  */
-function formatProbeBody(output: string, exitCode: number): string {
+function formatStepBody(output: string, exitCode: number): string {
   let body = output;
   if (exitCode !== 0) {
     body += `\nExit code: ${exitCode}`;
   }
   const trimmed = body.trim();
   return `${promptConstants.sectionCapturedOutput}\n${trimmed.length > 0 ? trimmed : promptConstants.capturedNoOutput}`;
+}
+
+/**
+ * Project a `CommandResponse` down to the minimal shape that is meaningful
+ * to the model on the next round. The builder is the one place that decides
+ * which fields the LLM sees echoed back; every `JSON.stringify(response)` at
+ * an assistant-turn site must go through this function, never the raw
+ * response.
+ *
+ * **Include:** `type`, `content`, `risk_level`, `final`, `plan` (when set),
+ * `pipe_stdin` (when set).
+ * **Strip:** `explanation` (user-facing, wastes tokens, invites misuse as a
+ * scratchpad), `memory_updates` / `memory_updates_message` / `watchlist_additions`
+ * (already actioned by the runner).
+ */
+function projectResponseForEcho(response: CommandResponse): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    type: response.type,
+    final: response.final,
+    content: response.content,
+    risk_level: response.risk_level,
+  };
+  if (response.plan != null) out.plan = response.plan;
+  if (response.pipe_stdin) out.pipe_stdin = response.pipe_stdin;
+  return out;
 }
 
 /**
@@ -120,21 +133,22 @@ export function buildPromptInput(
       case "user":
         messages.push({ role: "user", content: turn.text });
         break;
-      case "probe":
+      case "step":
+      case "confirmed_step":
         messages.push({
           role: "assistant",
-          content: stringifyWithoutScratchpad(turn.response),
+          content: JSON.stringify(projectResponseForEcho(turn.response)),
         });
         messages.push({
           role: "user",
-          content: formatProbeBody(turn.output, turn.exitCode),
+          content: formatStepBody(turn.output, turn.exitCode),
         });
         break;
       case "candidate_command":
       case "answer":
         messages.push({
           role: "assistant",
-          content: stringifyWithoutScratchpad(turn.response),
+          content: JSON.stringify(projectResponseForEcho(turn.response)),
         });
         break;
       default: {
@@ -147,30 +161,6 @@ export function buildPromptInput(
   }
   if (directives?.liveContext) {
     messages.push({ role: "user", content: directives.liveContext });
-  }
-  if (directives?.probeRiskRetry) {
-    // Intentional raw stringify — intra-round retry, the model must see its
-    // own `_scratchpad` to correct itself. See `stringifyWithoutScratchpad`.
-    messages.push({
-      role: "assistant",
-      content: JSON.stringify(directives.probeRiskRetry.rejectedResponse),
-    });
-    messages.push({
-      role: "user",
-      content: promptConstants.probeRiskInstruction,
-    });
-  }
-  if (directives?.scratchpadRequiredRetry) {
-    // Intentional raw stringify — the whole point is to show the model that
-    // `_scratchpad` came back null so it knows what to fix.
-    messages.push({
-      role: "assistant",
-      content: JSON.stringify(directives.scratchpadRequiredRetry.rejectedResponse),
-    });
-    messages.push({
-      role: "user",
-      content: promptConstants.scratchpadRequiredInstruction,
-    });
   }
   if (directives?.isLastRound) {
     messages.push({

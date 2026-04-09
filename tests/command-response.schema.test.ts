@@ -36,16 +36,26 @@ describe("CommandResponseSchema", () => {
     expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
-  test("parses valid probe response", () => {
+  test("rejects legacy 'probe' type", () => {
     const input = {
       type: "probe",
       content: "echo $SHELL",
       risk_level: "low",
-      explanation: "Checking which shell you use",
+    };
+    expect(() => CommandResponseSchema.parse(input)).toThrow();
+  });
+
+  test("parses non-final command as a step", () => {
+    const input = {
+      type: "command",
+      content: "curl -fsSL https://example.com/installer.sh -o $WRAP_TEMP_DIR/installer.sh",
+      risk_level: "low",
+      final: false,
+      plan: "Download, then inspect, then run from the temp dir.",
     };
     const result = CommandResponseSchema.parse(input);
-    expect(result.type).toBe("probe");
-    expect(result.content).toBe("echo $SHELL");
+    expect(result.type).toBe("command");
+    expect(result.final).toBe(false);
   });
 
   test("parses response with memory_updates including scope", () => {
@@ -143,9 +153,10 @@ describe("CommandResponseSchema", () => {
 
   test("parses response with watchlist_additions", () => {
     const input = {
-      type: "probe",
+      type: "command",
       content: "which sips convert magick",
       risk_level: "low",
+      final: false,
       watchlist_additions: ["sips", "convert", "magick"],
     };
     const result = CommandResponseSchema.parse(input);

@@ -44,13 +44,13 @@ export type LoopEvent =
    */
   | { type: "round-complete"; round: Round }
   /**
-   * Yielded just before executing a probe. The consumer surfaces this as a
-   * chrome line (or to the dialog's status slot if a dialog is up). The
-   * runner does NOT call chrome() itself for this event.
+   * Yielded just before executing a non-final low-risk step. The consumer
+   * surfaces this as a chrome line (or to the dialog's status slot if a
+   * dialog is up). The runner does NOT call chrome() itself for this event.
    */
   | { type: "step-running"; explanation: string; icon: string }
   /**
-   * Yielded after a probe finishes, with the post-truncated output that was
+   * Yielded after a step finishes, with the post-truncated output that was
    * pushed back to the LLM.
    */
   | { type: "step-output"; text: string };
@@ -70,7 +70,7 @@ export type LoopReturn =
    */
   | { type: "aborted" };
 
-/** Pick 🌐 over 🔍 for URL-fetching probes. */
+/** Pick 🌐 over 🔍 for URL-fetching steps. */
 export function fetchesUrl(content: string): boolean {
   return /^\s*(curl|wget)\b[^\n]*https?:\/\//.test(content);
 }
@@ -105,12 +105,15 @@ function handleMemoryUpdates(
  *      transcript or yielding round-complete (orphan-turn prevention).
  *   3. yield round-complete with the produced Round.
  *   4. Apply side effects: memory updates, watchlist additions.
- *   5. Route by response type:
- *        - reply   → push answer turn, return { type: "answer" }
- *                   (LoopReturn variant name stays "answer" — the schema
- *                   field is decoupled from the coordinator-facing tag.)
- *        - command → push candidate_command turn, return { type: "command" }
- *        - probe   → execute inline, push probe turn, continue
+ *   5. Route by response shape:
+ *        - reply                         → push answer turn, return { type: "answer" }
+ *                                          (LoopReturn variant name stays "answer" — the schema
+ *                                          field is decoupled from the coordinator-facing tag.)
+ *        - command, final: true          → push candidate_command turn, return { type: "command" }
+ *        - command, final: false, low    → execute inline, push step turn, continue
+ *        - command, final: false, !low   → push candidate_command turn, return { type: "command" };
+ *                                          the coordinator hands it to the confirmation dialog and
+ *                                          re-enters pumpLoop via the submit-step-confirm hook.
  *   6. When budget reaches zero, return { type: "exhausted" }.
  *
  * Error propagation: `runRound` throws a typed `RoundError` carrying the
@@ -186,25 +189,32 @@ export async function* runLoop(
       return { type: "answer", content: response.content };
     }
 
-    if (response.type === "command") {
+    // response.type === "command"
+    const isNonFinalLow = response.final === false && response.risk_level === "low";
+
+    if (!isNonFinalLow) {
+      // Final commands (any risk) AND non-final med/high commands exit the
+      // generator so the coordinator can run the confirmation dialog. The
+      // distinction between "run" and "confirm-then-continue" is the
+      // coordinator's job — the runner just surfaces the response.
       transcript.push({ kind: "candidate_command", response });
       return { type: "command", response, round };
     }
 
-    // response.type === "probe"
+    // Non-final low: execute inline as an intermediate step and loop.
     if (isLastRound) {
-      // The last-round instruction asks the LLM not to probe; if it ignored
-      // us we break here without running the probe (matches old behaviour).
+      // The last-round instruction forbids final: false; if the model
+      // ignored us we stop here without running the step.
       return { type: "exhausted" };
     }
 
-    const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
+    const stepIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
     yield {
       type: "step-running",
       explanation: response.explanation || response.content,
-      icon: probeIcon,
+      icon: stepIcon,
     };
-    verbose(`Probe: ${response.content}`);
+    verbose(`Step: ${response.content}`);
 
     const stdinBlob =
       response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
@@ -214,7 +224,7 @@ export async function* runLoop(
     });
 
     // Orphan-turn prevention: same idea as the post-runRound check. Without
-    // this, an Esc during the probe await would still push the probe turn.
+    // this, an Esc during the step await would still push the step turn.
     if (options.signal?.aborted) return { type: "aborted" };
 
     round.exec_ms = exec.exec_ms;
@@ -223,24 +233,24 @@ export async function* runLoop(
       exit_code: exec.exitCode,
       shell: exec.shell,
     };
-    verbose(`Probe exited (${exec.exitCode})`);
+    verbose(`Step exited (${exec.exitCode})`);
 
-    let probeOutput = exec.stdout;
+    let stepOutput = exec.stdout;
     if (exec.stderr.trim()) {
-      probeOutput += (probeOutput.trim() ? "\n" : "") + exec.stderr;
+      stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
     }
-    if (probeOutput.length > options.maxCapturedOutput) {
-      const total = probeOutput.length;
-      probeOutput =
-        probeOutput.slice(0, options.maxCapturedOutput) +
+    if (stepOutput.length > options.maxCapturedOutput) {
+      const total = stepOutput.length;
+      stepOutput =
+        stepOutput.slice(0, options.maxCapturedOutput) +
         `\n[…truncated, showing first ${options.maxCapturedOutput} of ${total} chars]`;
     }
 
-    yield { type: "step-output", text: probeOutput };
+    yield { type: "step-output", text: stepOutput };
     transcript.push({
-      kind: "probe",
+      kind: "step",
       response,
-      output: probeOutput,
+      output: stepOutput,
       exitCode: exec.exitCode,
     });
   }

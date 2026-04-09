@@ -66,11 +66,12 @@ export function resetNotifications(): void {
  * no listener is subscribed (or when a subscribed listener delegates here).
  *
  * **`step-output` is intentionally dropped.** That kind carries the
- * post-truncated captured output of an intermediate command (a probe today,
- * a confirmed multi-step in the future). Its only consumer is the dialog's
- * output slot — there is no stderr fallback for it. Writing it to stderr
- * during `thinking` would flood the user's terminal with raw probe output
- * that was already fed to the LLM via the transcript.
+ * post-truncated captured output of an intermediate step — either an
+ * inline-executed non-final low or a user-confirmed non-final med/high.
+ * Its only consumer is the dialog's output slot (added by
+ * specs/multi-step.md step 5). There is no stderr fallback: writing step
+ * output to stderr during `thinking` would flood the user's terminal with
+ * raw discovery results that were already fed to the LLM via the transcript.
  */
 export function writeNotificationToStderr(n: Notification): void {
   switch (n.kind) {

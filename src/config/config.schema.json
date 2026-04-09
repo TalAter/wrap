@@ -8,7 +8,7 @@
     },
     "maxRounds": {
       "type": "integer",
-      "description": "Maximum number of LLM rounds (probes + error-fix attempts) per invocation. Default: 5.",
+      "description": "Maximum number of LLM rounds (non-final steps + error-fix attempts) per invocation. Default: 5.",
       "minimum": 1,
       "default": 5
     },

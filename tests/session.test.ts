@@ -83,12 +83,13 @@ describe("runSession — initial answer", () => {
 
 describe("runSession — exhausted", () => {
   test("loop exhaustion exits 1 with chrome notice", async () => {
-    const probe: CommandResponse = {
-      type: "probe",
+    const step: CommandResponse = {
+      type: "command",
+      final: false,
       content: "true",
       risk_level: "low",
-    } as CommandResponse;
-    const { provider } = makeProvider([probe, probe, probe]);
+    };
+    const { provider } = makeProvider([step, step, step]);
     const exit = await runSession("hmm", provider, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
@@ -137,11 +138,11 @@ describe("runSession — no TTY for medium command", () => {
   });
 });
 
-describe("runSession — multi-round probe → answer", () => {
-  test("probe followed by answer logs both rounds and exits 0", async () => {
+describe("runSession — multi-round step → reply", () => {
+  test("step followed by reply logs both rounds and exits 0", async () => {
     const { provider } = makeProvider([
-      { type: "probe", content: "echo hi", risk_level: "low" } as CommandResponse,
-      { type: "reply", content: "the answer", risk_level: "low" } as CommandResponse,
+      { type: "command", final: false, content: "echo hi", risk_level: "low" },
+      { type: "reply", final: true, content: "the answer", risk_level: "low" },
     ]);
     const exit = await runSession("test", provider, {
       cwd: "/tmp",
@@ -149,32 +150,31 @@ describe("runSession — multi-round probe → answer", () => {
     });
     expect(exit).toBe(0);
     expect(stdoutLines.join("")).toContain("the answer");
-    // Verify the log entry has BOTH rounds (the probe and the answer)
+    // Verify the log entry has BOTH rounds (the step and the reply)
     const { readFileSync } = await import("node:fs");
     const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
     expect(entry.rounds).toHaveLength(2);
-    expect(entry.rounds[0].parsed.type).toBe("probe");
+    expect(entry.rounds[0].parsed.type).toBe("command");
+    expect(entry.rounds[0].parsed.final).toBe(false);
     expect(entry.rounds[1].parsed.type).toBe("reply");
   });
 
-  test("captured probe output never lands on stderr (only the chrome explanation does)", async () => {
-    // Regression test: in the old loop, captured probe output went only to
-    // the LLM via input.messages. After the refactor, the runner yields a
-    // `step-output` event that the session forwards to the notification bus.
-    // `writeNotificationToStderr` MUST drop step-output (it's dialog-only),
-    // otherwise during `thinking` the user would see raw grep results
-    // streamed to their terminal. Pinned here so a future change to the
-    // bus / writeNotificationToStderr can't silently re-introduce it.
+  test("captured step output never lands on stderr (only the chrome explanation does)", async () => {
+    // Regression test: the runner yields a `step-output` event that the
+    // session forwards to the notification bus. `writeNotificationToStderr`
+    // MUST drop step-output (it's dialog-only), otherwise during `thinking`
+    // the user would see raw grep results streamed to their terminal.
     const SECRET = "OUTPUT_THAT_MUST_NOT_LEAK_TO_STDERR";
     const { provider } = makeProvider([
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: `echo ${SECRET}`,
         risk_level: "low",
         explanation: "Find the secret",
-      } as CommandResponse,
-      { type: "reply", content: "done", risk_level: "low" } as CommandResponse,
+      },
+      { type: "reply", final: true, content: "done", risk_level: "low" },
     ]);
     const exit = await runSession("test", provider, {
       cwd: "/tmp",

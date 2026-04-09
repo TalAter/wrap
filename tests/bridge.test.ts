@@ -94,11 +94,11 @@ describe("bridge — assemble mode", () => {
     const msgs = result.promptInput.messages;
     const lastMsg = msgs.at(-1);
     expect(lastMsg.role).toBe("user");
-    expect(lastMsg.content).toContain("do not probe");
+    expect(lastMsg.content).toContain("terminal response");
     // Instruction is separate from the user request
     const requestMsg = msgs.at(-2);
     expect(requestMsg.content).toContain("list files");
-    expect(requestMsg.content).not.toContain("do not probe");
+    expect(requestMsg.content).not.toContain("terminal response");
   });
 
   test("extraMessages appends conversation turns after initial prompt", async () => {
@@ -131,7 +131,7 @@ describe("bridge — assemble mode", () => {
     });
     const msgs = result.promptInput.messages;
     // Last message: last-round instruction
-    expect(msgs.at(-1).content).toContain("do not probe");
+    expect(msgs.at(-1).content).toContain("terminal response");
     // Second to last: probe output
     expect(msgs.at(-2).content).toContain("Probe output");
   });

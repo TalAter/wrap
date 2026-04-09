@@ -120,27 +120,6 @@ describe("runRound", () => {
     expect(transcript.length).toBe(before);
   });
 
-  test("retries once on a non-low probe and uses the second result", async () => {
-    const { provider, captured } = makeProvider([
-      { type: "probe", content: "rm -rf /", risk_level: "high" } as CommandResponse,
-      { type: "probe", content: "ls", risk_level: "low" } as CommandResponse,
-    ]);
-    const round = await runRound(provider, makeTranscript(), scaffold, {
-      isLastRound: false,
-      model: "test",
-      showSpinner: false,
-    });
-    expect(captured.calls).toBe(2);
-    expect(round.parsed?.type).toBe("probe");
-    expect((round.parsed as CommandResponse).content).toBe("ls");
-    // The retry call should have included the probeRiskInstruction text.
-    const userMessages = captured.lastInput?.messages.filter((m) => m.role === "user") ?? [];
-    const hasRetryDirective = userMessages.some(
-      (m) => m.content === promptConstants.probeRiskInstruction,
-    );
-    expect(hasRetryDirective).toBe(true);
-  });
-
   test("throws RoundError on empty content with the partial round attached", async () => {
     const { provider } = makeProvider([
       { type: "reply", content: "   ", risk_level: "low" } as CommandResponse,

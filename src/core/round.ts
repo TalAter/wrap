@@ -10,16 +10,6 @@ import { formatTempDirSection } from "./temp-dir.ts";
 import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
 
-/**
- * The exact text pushed when the loop refuses a non-low-risk probe. Held as
- * a single constant so the producer (probe-refusal branch in `runLoop`) and
- * any consumer can never drift. **TEMPORARY:** deleted entirely by
- * `specs/multi-step.md`, which removes the probe concept. Kept on the
- * post-refactor surface only because the refactor preserves the current
- * behaviour.
- */
-export const REFUSED_PROBE_INSTRUCTION = `${promptConstants.probeRiskRefusedPrefix} ${promptConstants.probeRiskInstruction}`;
-
 export function isStructuredOutputError(e: unknown): boolean {
   return (
     NoObjectGeneratedError.isInstance(e) ||
@@ -98,29 +88,26 @@ function verboseResponse(response: CommandResponse): void {
     verboseHighlight("LLM scratchpad: ", response._scratchpad.replace(/\n/g, " \\n "));
   }
   switch (response.type) {
-    case "command":
-      verboseHighlight(`LLM responded (command, ${response.risk_level}): `, response.content);
-      break;
+    case "command": {
+      const tag = response.final ? "command" : "step";
+      verboseHighlight(`LLM responded (${tag}, ${response.risk_level}): `, response.content);
+      return;
+    }
     case "reply":
       verbose(`LLM responded (reply, ${response.content.length} chars)`);
-      break;
-    case "probe":
-      verboseHighlight("LLM responded (probe): ", response.content);
-      break;
+      return;
   }
 }
 
 /**
- * Run a single LLM round. Handles in-round retries:
+ * Run a single LLM round. Handles one in-round retry:
  *   - structured-output parse failures (retried once with the broken text
  *     echoed back so the model can self-correct)
- *   - probe risk-level violations (a probe with risk_level !== "low" is
- *     retried once with the existing probeRiskInstruction text)
  *
  * Reads the transcript via `buildPromptInput(transcript, scaffold, directives)`.
  * Does NOT mutate the transcript — that's the caller's job. Meta-directives
- * like `isLastRound` and the probe-risk retry pair live ONLY inside the
- * local `directives` arg passed to `buildPromptInput`; they never enter the
+ * like `isLastRound` and the live-context block live ONLY inside the local
+ * `directives` arg passed to `buildPromptInput`; they never enter the
  * persistent transcript, so there is nothing to clean up after the call
  * returns.
  *
@@ -146,35 +133,6 @@ export async function runRound(
     };
     if (options.isLastRound) directives.isLastRound = true;
     response = await callWithRetry(provider, buildPromptInput(transcript, scaffold, directives));
-
-    // Probes must be low risk — retry once (same treatment as malformed JSON).
-    if (response.type === "probe" && response.risk_level !== "low") {
-      response = await callWithRetry(
-        provider,
-        buildPromptInput(transcript, scaffold, {
-          ...directives,
-          probeRiskRetry: { rejectedResponse: response },
-        }),
-      );
-    }
-
-    // High-risk destructive commands must carry a scratchpad so the reasoning
-    // is visible in logs and to anyone reviewing the confirm panel. Retry
-    // once if the model skipped it. A still-null retry is accepted — don't
-    // retry-storm; the confirm panel remains the final safety layer.
-    if (
-      response.type === "command" &&
-      response.risk_level === "high" &&
-      response._scratchpad == null
-    ) {
-      response = await callWithRetry(
-        provider,
-        buildPromptInput(transcript, scaffold, {
-          ...(directives ?? {}),
-          scratchpadRequiredRetry: { rejectedResponse: response },
-        }),
-      );
-    }
   } catch (e) {
     // Stop the spinner before logging so the error line lands on a clean row
     // instead of being glued to the trailing spinner frame.

@@ -12,21 +12,26 @@ export const CommandResponseSchema = z.object({
   // files or state. Skip for trivial read-only commands (ls, pwd, date).
   _scratchpad: z.string().nullable().optional(),
   type: z.enum([
-    // command = shell command to execute. Use when you know what command to run to achieve the user's request.
+    // command = a shell command to execute. Combined with `final`, this covers both terminal actions and intermediate discovery steps (see the `final` field).
     "command",
-    // probe = a safe, read-only discovery command to learn about the user's environment (e.g. what shell they use, what's installed) or to fetch the contents of a URL when the live page would ground your response (e.g. `curl -sL --max-time 10 URL`). The probe output will be fed back to you in the next round so you can then produce the final command or answer.
-    "probe",
     // reply = a direct text response. Use for general knowledge questions that don't need a shell command.
     "reply",
   ]),
-  // false = intermediate step; output captured and fed back next round.
-  // true (default) = terminal; command runs with inherit or reply prints.
+  // false = intermediate step; the command is executed and its captured
+  // output is fed back to you next round. Use this when you need to discover
+  // something about the user's environment or stage an artifact in
+  // $WRAP_TEMP_DIR before deciding the final action. Only valid for `command`
+  // — replies are always terminal.
+  // true (default) = terminal; the command runs with inherited stdio (user
+  // sees output) or the reply prints.
   final: z.boolean().default(true),
-  // Cross-round intent. Required for non-final steps — shown in the dialog
-  // under the explanation and echoed back to you next round so the chain of
-  // steps keeps a coherent plan. Leave null/omit for terminal responses.
+  // Cross-round intent. Required when `final` is false — a one-sentence
+  // description of the whole chain (e.g. "download, inspect, then run from
+  // the temp dir"). Shown to the user in the dialog and echoed back to you
+  // next round so each step stays coherent with the original plan. Leave
+  // null/omit for terminal responses.
   plan: z.string().nullable().optional(),
-  // The shell command (for command/probe) or text response (for reply)
+  // The shell command (for command) or text response (for reply)
   content: z.string(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),

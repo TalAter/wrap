@@ -9,6 +9,7 @@ const config: PromptConfig = {
   toolsScopeInstruction: "Tools are not exhaustive.",
   voiceInstructions: "Be concise.",
   tempDirPrinciple: "Use $WRAP_TEMP_DIR for intermediate artifacts.",
+  finalFlagInstruction: "Set final: false for non-terminal discovery steps.",
   fewShotExamples: [{ input: "list files", output: '{"type":"command","content":"ls"}' }],
   fewShotSeparator: "Now handle the following request.",
   sectionUserRequest: "## User's request",

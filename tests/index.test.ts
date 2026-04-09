@@ -236,10 +236,11 @@ describe("wrap", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  test("probe → command: executes probe then runs final command", async () => {
+  test("step → command: executes step then runs final command", async () => {
     const { exitCode, stdout } = await wrapMock("find image tools", [
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "echo found-sips",
         risk_level: "low",
         explanation: "Checking image tools",
@@ -251,10 +252,11 @@ describe("wrap", () => {
     expect(stdout).not.toContain("found-sips");
   });
 
-  test("probe: shows discovery indicator on stderr", async () => {
+  test("step: shows discovery indicator on stderr", async () => {
     const { stderr } = await wrapMock("find tools", [
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "echo test",
         risk_level: "low",
         explanation: "Checking available tools",
@@ -265,10 +267,11 @@ describe("wrap", () => {
     expect(stderr).toContain("Checking available tools");
   });
 
-  test("probe: shows web indicator on stderr for URL-fetching probes", async () => {
+  test("step: shows web indicator on stderr for URL-fetching steps", async () => {
     const { stderr } = await wrapMock("read the page", [
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "curl -sL https://example.com",
         risk_level: "low",
         explanation: "Reading example.com",
@@ -280,25 +283,33 @@ describe("wrap", () => {
     expect(stderr).toContain("Reading example.com");
   });
 
-  test("probe → answer: returns answer after probe", async () => {
+  test("step → reply: returns reply after step", async () => {
     const { exitCode, stdout } = await wrapMock("what shell am I using", [
-      { type: "probe", content: "echo /bin/zsh", risk_level: "low", explanation: "Checking shell" },
+      {
+        type: "command",
+        final: false,
+        content: "echo /bin/zsh",
+        risk_level: "low",
+        explanation: "Checking shell",
+      },
       { type: "reply", content: "You're using zsh", risk_level: "low" },
     ]);
     expect(exitCode).toBe(0);
     expect(stdout).toBe("You're using zsh\n");
   });
 
-  test("probe: multiple probes before final command", async () => {
+  test("step: multiple steps before final command", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("convert images", [
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "echo /usr/bin/sips",
         risk_level: "low",
         explanation: "Checking sips",
       },
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "echo png-support",
         risk_level: "low",
         explanation: "Checking PNG support",
@@ -311,12 +322,12 @@ describe("wrap", () => {
     expect(stderr).toContain("Checking PNG support");
   });
 
-  test("probe: budget exhaustion after all rounds are probes", async () => {
+  test("step: budget exhaustion after all rounds are steps", async () => {
     const { exitCode, stdout, stderr } = await wrapMock(
       "check tools",
       [
-        { type: "probe", content: "echo probe1", risk_level: "low" },
-        { type: "probe", content: "echo probe2", risk_level: "low" },
+        { type: "command", final: false, content: "echo step1", risk_level: "low" },
+        { type: "command", final: false, content: "echo step2", risk_level: "low" },
       ],
       { maxRounds: 2 },
     );
@@ -325,10 +336,11 @@ describe("wrap", () => {
     expect(stderr).toContain("rounds");
   });
 
-  test("probe: memory updates from probes are saved", async () => {
+  test("step: memory updates from steps are saved", async () => {
     const { exitCode, wrapHome } = await wrapMock("find tools", [
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "echo test",
         risk_level: "low",
         memory_updates: [{ fact: "sips is available", scope: "/" }],
@@ -344,11 +356,12 @@ describe("wrap", () => {
     );
   });
 
-  test("probe: failed probe (non-zero exit) still feeds back to LLM", async () => {
+  test("step: failed step (non-zero exit) still feeds back to LLM", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("check tools", [
       {
-        type: "probe",
-        content: "echo probe-ran >&2; exit 42",
+        type: "command",
+        final: false,
+        content: "echo step-ran >&2; exit 42",
         risk_level: "low",
         explanation: "Checking tool",
       },
@@ -357,17 +370,6 @@ describe("wrap", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toBe("done\n");
     expect(stderr).toContain("🔍");
-  });
-
-  test("probe: non-low risk probe triggers retry", async () => {
-    const { exitCode, stdout } = await wrapMock("delete tables", [
-      // First response: high-risk probe (triggers risk-level retry)
-      { type: "probe", content: "psql -c 'DROP TABLE'", risk_level: "high" },
-      // Retry response: corrected to a command
-      { type: "command", content: "echo corrected", risk_level: "low" },
-    ]);
-    expect(exitCode).toBe(0);
-    expect(stdout).toBe("corrected\n");
   });
 
   test("maxRounds=1: command succeeds on single-round budget", async () => {
@@ -496,11 +498,17 @@ describe("piped input", () => {
     expect(stdout).toBe("hello\n");
   });
 
-  test("pipe_stdin: true on probe — probe receives piped content", async () => {
+  test("pipe_stdin: true on step — step receives piped content", async () => {
     const { exitCode, stdout } = await wrapMock(
       "count lines",
       [
-        { type: "probe", content: "wc -l", risk_level: "low", pipe_stdin: true },
+        {
+          type: "command",
+          final: false,
+          content: "wc -l",
+          risk_level: "low",
+          pipe_stdin: true,
+        },
         { type: "reply", content: "3 lines", risk_level: "low" },
       ],
       undefined,

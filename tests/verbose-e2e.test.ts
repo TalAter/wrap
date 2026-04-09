@@ -60,20 +60,21 @@ describe("verbose e2e", () => {
     expect(stderr).toContain("Command exited (0)");
   });
 
-  test("--verbose shows probe execution", async () => {
+  test("--verbose shows step execution", async () => {
     const { stderr } = await wrapVerbose("find tools", [
       {
-        type: "probe",
+        type: "command",
+        final: false,
         content: "echo sips",
         risk_level: "low",
         explanation: "Checking tools",
       },
       { type: "command", content: "echo done", risk_level: "low" },
     ]);
-    expect(stderr).toContain("LLM responded (probe):");
+    expect(stderr).toContain("LLM responded (step, low):");
     expect(stderr).toContain("echo sips");
-    expect(stderr).toContain("Probe: echo sips");
-    expect(stderr).toContain("Probe exited (0)");
+    expect(stderr).toContain("Step: echo sips");
+    expect(stderr).toContain("Step exited (0)");
     expect(stderr).toContain("Round 2/");
   });
 
@@ -162,7 +163,7 @@ describe("verbose e2e", () => {
     const { stderr } = await wrapVerbose(
       "check tools",
       [
-        { type: "probe", content: "echo probe1", risk_level: "low" },
+        { type: "command", final: false, content: "echo step1", risk_level: "low" },
         { type: "command", content: "echo done", risk_level: "low" },
       ],
       { maxRounds: 2 },

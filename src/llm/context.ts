@@ -45,6 +45,7 @@ export function assemblePromptScaffold(
       toolsScopeInstruction: promptConstants.toolsScopeInstruction,
       voiceInstructions: promptConstants.voiceInstructions,
       tempDirPrinciple: promptConstants.tempDirPrinciple,
+      finalFlagInstruction: promptConstants.finalFlagInstruction,
       pipedInputInstruction: ctx.pipedInput ? promptConstants.pipedInputInstruction : undefined,
       fewShotExamples: promptOptimized.fewShotExamples,
       fewShotSeparator: promptConstants.fewShotSeparator,

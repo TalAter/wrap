@@ -20,21 +20,37 @@ function withPrefix(messages: PromptScaffold["prefixMessages"]): PromptScaffold 
 
 const cmdResponse: CommandResponse = {
   type: "command",
+  final: true,
   content: "ls -la",
   risk_level: "medium",
-} as CommandResponse;
+};
 
-const probeResponse: CommandResponse = {
-  type: "probe",
+const stepResponse: CommandResponse = {
+  type: "command",
+  final: false,
   content: "uname",
   risk_level: "low",
-} as CommandResponse;
+};
 
 const answerResponse: CommandResponse = {
   type: "reply",
+  final: true,
   content: "the answer",
   risk_level: "low",
-} as CommandResponse;
+};
+
+/** Mirror the builder's private `projectResponseForEcho` helper. */
+function project(r: CommandResponse): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    type: r.type,
+    final: r.final,
+    content: r.content,
+    risk_level: r.risk_level,
+  };
+  if (r.plan != null) out.plan = r.plan;
+  if (r.pipe_stdin) out.pipe_stdin = r.pipe_stdin;
+  return out;
+}
 
 describe("buildPromptInput", () => {
   test("empty transcript yields system + empty messages", () => {
@@ -49,17 +65,17 @@ describe("buildPromptInput", () => {
     expect(out.messages).toEqual([{ role: "user", content: "hi" }]);
   });
 
-  test("user + probe turn renders as user, assistant(JSON), user(captured output)", () => {
+  test("user + step turn renders as user, assistant(projected JSON), user(captured output)", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "probe", response: probeResponse, output: "out1", exitCode: 0 },
+      { kind: "step", response: stepResponse, output: "out1", exitCode: 0 },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages).toHaveLength(3);
     expect(out.messages[0]).toEqual({ role: "user", content: "hi" });
     expect(out.messages[1]).toEqual({
       role: "assistant",
-      content: JSON.stringify(probeResponse),
+      content: JSON.stringify(project(stepResponse)),
     });
     expect(out.messages[2]).toEqual({
       role: "user",
@@ -67,10 +83,60 @@ describe("buildPromptInput", () => {
     });
   });
 
-  test("probe with empty output renders the capturedNoOutput sentinel", () => {
+  test("confirmed_step renders identically to step", () => {
+    const confirmedCmd: CommandResponse = {
+      type: "command",
+      final: false,
+      content: "git stash",
+      risk_level: "medium",
+      plan: "Stash, test, then decide whether to pop.",
+    };
+    const transcript: Transcript = [
+      { kind: "user", text: "test clean" },
+      {
+        kind: "confirmed_step",
+        response: confirmedCmd,
+        output: "Saved working directory.",
+        exitCode: 0,
+      },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages).toHaveLength(3);
+    expect(out.messages[1]).toEqual({
+      role: "assistant",
+      content: JSON.stringify(project(confirmedCmd)),
+    });
+    expect(out.messages[2]?.content).toContain("Saved working directory.");
+  });
+
+  test("echo projection strips explanation, memory_updates, watchlist_additions", () => {
+    const richResponse: CommandResponse = {
+      type: "command",
+      final: true,
+      content: "ls",
+      risk_level: "low",
+      explanation: "this is user-facing",
+      memory_updates: [{ fact: "uses zsh", scope: "/" }],
+      memory_updates_message: "Noted: zsh",
+      watchlist_additions: ["eza"],
+    };
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "probe", response: probeResponse, output: "", exitCode: 0 },
+      { kind: "candidate_command", response: richResponse },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    const echoed = out.messages[1]?.content ?? "";
+    expect(echoed).not.toContain("this is user-facing");
+    expect(echoed).not.toContain("memory_updates");
+    expect(echoed).not.toContain("watchlist_additions");
+    expect(echoed).toContain('"type":"command"');
+    expect(echoed).toContain('"final":true');
+  });
+
+  test("step with empty output renders the capturedNoOutput sentinel", () => {
+    const transcript: Transcript = [
+      { kind: "user", text: "hi" },
+      { kind: "step", response: stepResponse, output: "", exitCode: 0 },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(
@@ -78,10 +144,10 @@ describe("buildPromptInput", () => {
     );
   });
 
-  test("probe with whitespace-only output and exit 0 renders the no-output sentinel", () => {
+  test("step with whitespace-only output and exit 0 renders the no-output sentinel", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "probe", response: probeResponse, output: "  \n  ", exitCode: 0 },
+      { kind: "step", response: stepResponse, output: "  \n  ", exitCode: 0 },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(
@@ -89,10 +155,10 @@ describe("buildPromptInput", () => {
     );
   });
 
-  test("probe output with trailing newline is trimmed in render", () => {
+  test("step output with trailing newline is trimmed in render", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "probe", response: probeResponse, output: "hi\n", exitCode: 0 },
+      { kind: "step", response: stepResponse, output: "hi\n", exitCode: 0 },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(`${promptConstants.sectionCapturedOutput}\nhi`);
@@ -152,57 +218,10 @@ describe("buildPromptInput", () => {
     });
   });
 
-  test("scratchpadRequiredRetry echoes rejected response with _scratchpad intact", () => {
-    const rejected: CommandResponse = {
-      _scratchpad: null,
-      type: "command",
-      content: "rm -rf node_modules",
-      risk_level: "high",
-    } as CommandResponse;
-    const transcript: Transcript = [{ kind: "user", text: "nuke deps" }];
-    const out = buildPromptInput(transcript, sys, {
-      scratchpadRequiredRetry: { rejectedResponse: rejected },
-    });
-    expect(out.messages).toHaveLength(3);
-    // Assistant echo must preserve _scratchpad (even null) so the model
-    // sees what it needs to fix — the one exception to the cross-round
-    // strip rule.
-    expect(out.messages[1]).toEqual({
-      role: "assistant",
-      content: JSON.stringify(rejected),
-    });
-    expect(out.messages[1]?.content).toContain("_scratchpad");
-    expect(out.messages[2]).toEqual({
-      role: "user",
-      content: promptConstants.scratchpadRequiredInstruction,
-    });
-  });
-
-  test("probeRiskRetry directive appends rejected echo + probeRiskInstruction", () => {
-    const rejected: CommandResponse = {
-      type: "probe",
-      content: "rm -rf /",
-      risk_level: "high",
-    } as CommandResponse;
-    const transcript: Transcript = [{ kind: "user", text: "danger" }];
-    const out = buildPromptInput(transcript, sys, {
-      probeRiskRetry: { rejectedResponse: rejected },
-    });
-    expect(out.messages).toHaveLength(3);
-    expect(out.messages[1]).toEqual({
-      role: "assistant",
-      content: JSON.stringify(rejected),
-    });
-    expect(out.messages[2]).toEqual({
-      role: "user",
-      content: promptConstants.probeRiskInstruction,
-    });
-  });
-
   test("does not mutate the input transcript", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "probe", response: probeResponse, output: "out", exitCode: 0 },
+      { kind: "step", response: stepResponse, output: "out", exitCode: 0 },
     ];
     const before = transcript.length;
     buildPromptInput(transcript, sys, { isLastRound: true });
@@ -232,62 +251,10 @@ describe("buildPromptInput", () => {
     expect(out.messages[2]).toEqual({ role: "user", content: "real" });
   });
 
-  test("strips _scratchpad from probe response before echoing as assistant turn", () => {
-    const probeWithScratchpad: CommandResponse = {
-      _scratchpad: "Need to check shell first.",
-      type: "probe",
-      content: "echo $SHELL",
-      risk_level: "low",
-    } as CommandResponse;
+  test("step output with non-zero exit code includes the exit code", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "probe", response: probeWithScratchpad, output: "zsh", exitCode: 0 },
-    ];
-    const out = buildPromptInput(transcript, sys);
-    const assistantMsg = out.messages[1];
-    expect(assistantMsg?.role).toBe("assistant");
-    expect(assistantMsg?.content).not.toContain("_scratchpad");
-    expect(assistantMsg?.content).not.toContain("Need to check shell first");
-    // Other fields still present
-    const parsed = JSON.parse(assistantMsg?.content ?? "{}");
-    expect(parsed.content).toBe("echo $SHELL");
-    expect(parsed.type).toBe("probe");
-  });
-
-  test("strips _scratchpad from candidate_command turn", () => {
-    const cmdWithScratchpad: CommandResponse = {
-      _scratchpad: "Listing files.",
-      type: "command",
-      content: "ls",
-      risk_level: "low",
-    } as CommandResponse;
-    const transcript: Transcript = [
-      { kind: "user", text: "hi" },
-      { kind: "candidate_command", response: cmdWithScratchpad },
-    ];
-    const out = buildPromptInput(transcript, sys);
-    expect(out.messages[1]?.content).not.toContain("_scratchpad");
-  });
-
-  test("strips _scratchpad from answer turn", () => {
-    const answerWithScratchpad: CommandResponse = {
-      _scratchpad: "Knowledge question.",
-      type: "answer",
-      content: "42",
-      risk_level: "low",
-    } as CommandResponse;
-    const transcript: Transcript = [
-      { kind: "user", text: "meaning of life?" },
-      { kind: "answer", response: answerWithScratchpad },
-    ];
-    const out = buildPromptInput(transcript, sys);
-    expect(out.messages[1]?.content).not.toContain("_scratchpad");
-  });
-
-  test("probe output with non-zero exit code includes the exit code", () => {
-    const transcript: Transcript = [
-      { kind: "user", text: "hi" },
-      { kind: "probe", response: probeResponse, output: "boom", exitCode: 2 },
+      { kind: "step", response: stepResponse, output: "boom", exitCode: 2 },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toContain("Exit code: 2");
