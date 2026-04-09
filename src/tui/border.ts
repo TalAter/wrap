@@ -120,6 +120,10 @@ function truncateToWidth(text: string, maxWidth: number): string | null {
   return cut.length > 0 ? `${cut}…` : null;
 }
 
+// Near-white text color for the status label so it pops against the dim
+// border. Matches the action-bar's primary text color in dialog.tsx.
+const STATUS_COLOR = "#d2d2e1";
+
 export function bottomBorderSegments(totalWidth: number, status?: string): BorderSegment[] {
   const color = colorHex(DIM_COLOR);
 
@@ -130,8 +134,8 @@ export function bottomBorderSegments(totalWidth: number, status?: string): Borde
   // Layout when status fits: ╰─ <status> ─...─╯
   // Padding (corners + 2 spaces + 1 leading dash) takes 5 cells, so the status
   // needs at least 1 trailing dash to keep the right corner from collapsing.
-  // The middle segment carries all whitespace inside one Text node so Ink
-  // can't strip spaces at segment boundaries.
+  // Spaces around the status live on the dim segments, not the white one,
+  // so the bright bar doesn't extend beyond the visible label.
   if (status) {
     const maxStatusWidth = totalWidth - 6;
     const fitted = truncateToWidth(status, maxStatusWidth);
@@ -139,7 +143,9 @@ export function bottomBorderSegments(totalWidth: number, status?: string): Borde
       const trailingDashes = totalWidth - 5 - stringWidth(fitted);
       return [
         { key: "bottom-left", text: "╰", color },
-        { key: "bottom-mid", text: `─ ${fitted} ${"─".repeat(trailingDashes)}`, color },
+        { key: "bottom-mid-lead", text: "─ ", color },
+        { key: "bottom-status", text: fitted, color: STATUS_COLOR },
+        { key: "bottom-mid-tail", text: ` ${"─".repeat(trailingDashes)}`, color },
         { key: "bottom-right", text: "╯", color },
       ];
     }

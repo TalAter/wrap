@@ -149,9 +149,19 @@ describe("bottomBorderSegments with status", () => {
     expect(stringWidth(plainText(border))).toBe(60);
   });
 
-  test("uses dim color throughout", () => {
+  test("status text is rendered in white, dashes/corners stay dim", () => {
+    // The dim border color makes the status text hard to read against the
+    // dialog background. The status segment must use a near-white color so
+    // the spinner + label stand out, while the surrounding dashes stay dim.
     const border = bottomBorderSegments(60, "⢎ Loading");
-    expect(border.every((segment) => segment.color === "#3c3c64")).toBe(true);
+    const statusSegment = border.find((s) => s.text.includes("Loading"));
+    expect(statusSegment).toBeDefined();
+    expect(statusSegment?.color).toBe("#d2d2e1");
+    // Corner segments still dim.
+    const left = border.find((s) => s.text === "╰");
+    const right = border.find((s) => s.text === "╯");
+    expect(left?.color).toBe("#3c3c64");
+    expect(right?.color).toBe("#3c3c64");
   });
 
   test("width stays constant across different status lengths", () => {
