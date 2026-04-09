@@ -110,16 +110,6 @@ The runner re-checks `options.signal?.aborted` IMMEDIATELY after every await (`r
 
 The two extra `if` statements close this race entirely; nothing else is needed. Pinned in `tests/runner.test.ts` as the "orphan-turn race" tests.
 
-### Concurrent pumpLoop drain (coordinator)
-
-When the user presses Esc during `processing` and immediately resubmits, a previous `pumpLoop` may still be draining (its `await generator.next()` is held by a provider that hasn't honoured the AbortSignal yet). Both pumpLoops can briefly coexist. The coordinator's identity check —
-
-```ts
-if (currentLoopAbort === ctrl) currentLoopAbort = null;
-```
-
-— in pumpLoop's `finally` prevents the stale loop from clobbering the new pumpLoop's controller. The stale one's `if (ctrl.signal.aborted) return;` guard drops its `loop-final` dispatch.
-
 ### Eager-log-then-throw
 
 `runRound` throws `RoundError` carrying the partial `Round`. `runLoop` catches it, yields `round-complete` with the partial round (so the consumer logs it), then re-throws. The consumer's `addRound(entry, round)` runs as it processes the yielded `round-complete` event BEFORE control returns to `await generator.next()`. The throw then surfaces on the next `.next()` call, by which time the partial round is already in `entry.rounds`. This preserves the eager-log-then-throw guarantee with an explicit mechanism, not a comment.

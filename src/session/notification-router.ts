@@ -1,8 +1,4 @@
-import {
-  type Notification,
-  notifications,
-  writeNotificationToStderr,
-} from "../core/notify.ts";
+import { type Notification, notifications, writeNotificationToStderr } from "../core/notify.ts";
 import type { DialogHost } from "./dialog-host.ts";
 
 /**
@@ -64,9 +60,7 @@ export type NotificationRouter = {
   teardownDialog(): void;
 };
 
-export function createNotificationRouter(
-  options: NotificationRouterOptions,
-): NotificationRouter {
+export function createNotificationRouter(options: NotificationRouterOptions): NotificationRouter {
   let dialog: DialogHost | null = null;
   const buffered: Notification[] = [];
 

@@ -4,6 +4,7 @@ import {
   DEFAULT_MAX_ROUNDS,
 } from "../config/config.ts";
 import { getWrapHome } from "../core/home.ts";
+import { notifications } from "../core/notify.ts";
 import { chrome } from "../core/output.ts";
 import {
   type LoopEvent,
@@ -23,7 +24,6 @@ import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
 import { type DialogHost, mountDialog, preloadDialogModules } from "./dialog-host.ts";
-import { notifications } from "../core/notify.ts";
 import { createNotificationRouter } from "./notification-router.ts";
 import { reduce } from "./reducer.ts";
 import { type AppEvent, type AppState, isDialogTag, type SessionOutcome } from "./state.ts";
@@ -295,13 +295,11 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   }
 
   try {
-    const generator = runLoop(
-      args.provider,
-      args.transcript,
-      args.scaffold,
-      args.loopState,
-      { ...args.baseLoopOptions, signal, showSpinner: isInitialLoop },
-    );
+    const generator = runLoop(args.provider, args.transcript, args.scaffold, args.loopState, {
+      ...args.baseLoopOptions,
+      signal,
+      showSpinner: isInitialLoop,
+    });
     let final: LoopReturn | undefined;
     while (true) {
       const { value, done } = await generator.next();
