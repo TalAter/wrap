@@ -138,13 +138,13 @@ export async function runSession(
     }
     if (state.tag === "processing") {
       // submit-followup just transitioned us. Push the user turn and reset
-      // the budget; the previous candidate_command turn already lives in the
-      // transcript (the loop pushed it before returning), so the LLM sees
-      // [..., candidate, user]. No stripStaleInstructions, no JSON, no
-      // message-history hygiene.
-      transcript.push({ kind: "user", text: state.draft });
+      // the budget; the previous candidate_command turn already lives in
+      // the transcript (the loop pushed it before returning), so the LLM
+      // sees [..., candidate, user]. No stripStaleInstructions needed.
+      const followupText = state.draft;
+      transcript.push({ kind: "user", text: followupText });
       loopState.budgetRemaining = maxRounds;
-      void pumpLoop();
+      startPumpLoop({ isInitialLoop: false, followupText });
     }
   };
 
@@ -180,81 +180,21 @@ export async function runSession(
     }
   }
 
-  async function pumpLoop(): Promise<void> {
+  function startPumpLoop(opts: { isInitialLoop: boolean; followupText: string | undefined }): void {
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
-    let firstRoundComplete = true;
-    const isInitialLoop = state.tag === "thinking";
-    // Captured at entry time. The only path to pumpLoop from non-thinking
-    // is the submit-followup post-transition hook, which lands us in
-    // `processing` with the user's text in `state.draft`.
-    const followupText = state.tag === "processing" ? state.draft : undefined;
-
-    function handleLoopEvent(event: LoopEvent): void {
-      switch (event.type) {
-        case "round-complete":
-          if (firstRoundComplete && followupText !== undefined) {
-            event.round.followup_text = followupText;
-          }
-          firstRoundComplete = false;
-          addRound(entry, event.round);
-          return;
-        case "step-running":
-          notifications.emit({
-            kind: "chrome",
-            text: event.explanation,
-            icon: event.icon,
-          });
-          return;
-        case "step-output":
-          notifications.emit({ kind: "step-output", text: event.text });
-          return;
-      }
-    }
-
-    try {
-      const generator = runLoop(provider, transcript, scaffold, loopState, {
-        ...baseLoopOptions,
-        signal: ctrl.signal,
-        showSpinner: isInitialLoop,
-      });
-      let final: LoopReturn | undefined;
-      while (true) {
-        const { value, done } = await generator.next();
-        if (ctrl.signal.aborted) return;
-        if (done) {
-          final = value;
-          break;
-        }
-        handleLoopEvent(value);
-      }
-      if (!ctrl.signal.aborted && final) {
-        // No-TTY interception: a medium/high command can't be confirmed
-        // without a dialog. Dispatch `block` instead so the reducer routes
-        // to `exiting{blocked}`. Only intercept on the initial loop;
-        // follow-up loops always have a dialog already mounted.
-        if (
-          final.type === "command" &&
-          final.response.risk_level !== "low" &&
-          isInitialLoop &&
-          !process.stderr.isTTY
-        ) {
-          chrome(`Command requires confirmation (no TTY available): ${final.response.content}`);
-          dispatch({ type: "block", command: final.response.content });
-        } else {
-          dispatch({ type: "loop-final", result: final });
-        }
-      }
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const err = e instanceof Error ? e : new Error(String(e));
-      dispatch({ type: "loop-error", error: err });
-    } finally {
-      // Identity check: only clear if WE are still the active loop. A second
-      // pumpLoop started during our drain may have set currentLoopAbort to
-      // its own ctrl already.
-      if (currentLoopAbort === ctrl) currentLoopAbort = null;
-    }
+    void pumpLoop({
+      provider,
+      transcript,
+      scaffold,
+      loopState,
+      baseLoopOptions,
+      signal: ctrl.signal,
+      isInitialLoop: opts.isInitialLoop,
+      followupText: opts.followupText,
+      onRound: (round) => addRound(entry, round),
+      dispatch,
+    });
   }
 
   const unsubscribe = router.subscribe();
@@ -267,7 +207,7 @@ export async function runSession(
 
   let exitCode = 1;
   try {
-    void pumpLoop();
+    startPumpLoop({ isInitialLoop: true, followupText: undefined });
     const outcome = await exitDeferred.promise;
     // Unmount the dialog BEFORE running the run-side-effect so the alt
     // screen is gone when the exec'd command writes to inherited stdio.
@@ -293,6 +233,105 @@ function appendLogEntryIgnoreErrors(wrapHome: string, entry: LogEntry): void {
     appendLogEntry(wrapHome, entry);
   } catch {
     // Logging must never break the tool.
+  }
+}
+
+type PumpLoopArgs = {
+  provider: Provider;
+  transcript: Transcript;
+  scaffold: ReturnType<typeof assemblePromptScaffold>;
+  loopState: LoopState;
+  baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner">;
+  signal: AbortSignal;
+  isInitialLoop: boolean;
+  /** User text that triggered this pump, stamped on the first round only.
+   *  Undefined for the initial loop (which is attributed to `entry.prompt`). */
+  followupText: string | undefined;
+  /** Called per `round-complete`. The session passes a closure that
+   *  `addRound`s into its log entry. */
+  onRound: (round: import("../logging/entry.ts").Round) => void;
+  /** The session's dispatch closure — pumpLoop calls it with `loop-final`,
+   *  `loop-error`, or `block` once the loop returns. */
+  dispatch: (event: AppEvent) => void;
+};
+
+/**
+ * Drain a `runLoop` generator and route its events back to the session.
+ *
+ * Free function (not a closure over runSession state) so the coupling
+ * between coordinator and runner is the explicit args list — no scope
+ * read of `state.tag` / `state.draft`. Returns void; the result lands via
+ * `dispatch` (loop-final / loop-error / block).
+ *
+ * `followupText` is stamped on the first `round-complete` only — even if
+ * that round is a probe and the resulting command lands several rounds
+ * later. Subsequent rounds in the same call leave it unset so the log can
+ * faithfully reconstruct which user message kicked off which sequence.
+ */
+async function pumpLoop(args: PumpLoopArgs): Promise<void> {
+  const { signal, isInitialLoop, followupText, onRound, dispatch } = args;
+  let firstRoundComplete = true;
+
+  function handleLoopEvent(event: LoopEvent): void {
+    switch (event.type) {
+      case "round-complete":
+        if (firstRoundComplete && followupText !== undefined) {
+          event.round.followup_text = followupText;
+        }
+        firstRoundComplete = false;
+        onRound(event.round);
+        return;
+      case "step-running":
+        notifications.emit({
+          kind: "chrome",
+          text: event.explanation,
+          icon: event.icon,
+        });
+        return;
+      case "step-output":
+        notifications.emit({ kind: "step-output", text: event.text });
+        return;
+    }
+  }
+
+  try {
+    const generator = runLoop(
+      args.provider,
+      args.transcript,
+      args.scaffold,
+      args.loopState,
+      { ...args.baseLoopOptions, signal, showSpinner: isInitialLoop },
+    );
+    let final: LoopReturn | undefined;
+    while (true) {
+      const { value, done } = await generator.next();
+      if (signal.aborted) return;
+      if (done) {
+        final = value;
+        break;
+      }
+      handleLoopEvent(value);
+    }
+    if (final === undefined) return;
+    // No-TTY interception: a medium/high command can't be confirmed without
+    // a dialog. Dispatch `block` instead so the reducer routes to
+    // `exiting{blocked}`. Only intercept on the initial loop; follow-up
+    // loops always have a dialog already mounted.
+    if (
+      final.type === "command" &&
+      final.response.risk_level !== "low" &&
+      isInitialLoop &&
+      !process.stderr.isTTY
+    ) {
+      chrome(`Command requires confirmation (no TTY available): ${final.response.content}`);
+      dispatch({ type: "block", command: final.response.content });
+      return;
+    }
+    dispatch({ type: "loop-final", result: final });
+  } catch (e) {
+    if (signal.aborted) return;
+    const err = e instanceof Error ? e : new Error(String(e));
+    dispatch({ type: "loop-error", error: err });
   }
 }
 
