@@ -16,11 +16,10 @@ type DialogModules = {
 let cached: DialogModules | null = null;
 
 /**
- * Lazy-load the Ink + React + Dialog modules. Idempotent — first call does
- * the dynamic imports and caches them; subsequent calls resolve immediately.
- * The session calls this once at startup (in parallel with the first LLM
- * call) so by the time the first dialog mount is needed, the modules are
- * already loaded. Allows `mountDialog` itself to be synchronous.
+ * Lazy-load Ink + React + Dialog. Idempotent. The session kicks this off
+ * in parallel with the first LLM call so by the time the first dialog
+ * mount is needed, the modules are already loaded — `mountDialog` is then
+ * synchronous.
  */
 export async function preloadDialogModules(): Promise<void> {
   if (cached) return;
@@ -33,18 +32,8 @@ export async function preloadDialogModules(): Promise<void> {
 }
 
 /**
- * Synchronously mount the Ink dialog. Enters alt screen, renders, returns
- * a host handle. Caller (the session) owns the lifecycle.
- *
- * MUST be called only after `preloadDialogModules()` has resolved at least
- * once — throws otherwise. The session enforces this via the `inkReady`
- * promise it awaits before the first mount.
- *
- * The session is responsible for the no-TTY case BEFORE calling — when
- * `runLoop` returns a medium/high command and `process.stderr.isTTY` is
- * false, the coordinator dispatches `block` instead of `loop-final`. The
- * reducer transitions `thinking → exiting{blocked}` and the dialog never
- * sees a dialog state. mountDialog itself is never called without a TTY.
+ * Mount the Ink dialog synchronously. Throws if `preloadDialogModules()`
+ * hasn't resolved at least once.
  */
 export function mountDialog(props: {
   state: AppState;

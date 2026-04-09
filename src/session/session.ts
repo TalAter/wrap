@@ -92,10 +92,9 @@ export async function runSession(
     pipedInput: options.pipedInput,
   };
 
-  // Lazy-load Ink in parallel with the first LLM call so the await before
-  // the first dialog mount is free in practice. A failed dynamic import
-  // is captured here so syncDialog can surface it via dispatch instead of
-  // hanging the session on an unhandled rejection.
+  // Kicked off in parallel with the first LLM call so the first-mount
+  // await is free in practice. The .catch surfaces a failed dynamic import
+  // as a session error instead of an unbounded hang on `exitDeferred`.
   const inkReady = process.stderr.isTTY
     ? preloadDialogModules().catch((e) => {
         const err = e instanceof Error ? e : new Error(String(e));
@@ -105,9 +104,8 @@ export async function runSession(
     : null;
 
   let state: AppState = { tag: "thinking" };
-  // Wrapped in a single-key object so TypeScript doesn't narrow `dialogHost`
-  // to `null` after the try block — closure assignments aren't tracked by
-  // control-flow analysis but a property mutation is opaque to it.
+  // Mutation through `hostRef.current` is opaque to TS control-flow analysis,
+  // so the finally block can read it without being narrowed to `null`.
   const hostRef: { current: DialogHost | null } = { current: null };
   let mountInProgress = false;
   let currentLoopAbort: AbortController | null = null;
@@ -122,14 +120,14 @@ export async function runSession(
 
   const dispatch = (event: AppEvent): void => {
     if (exited) return;
-    // Pre-transition: side effects that must precede reduce().
+    // Esc on `processing` aborts BEFORE the reducer transitions, so any
+    // in-flight LLM call is cancelled even if its result was about to land.
     if (event.type === "key-esc" && state.tag === "processing") {
       currentLoopAbort?.abort();
     }
     const next = reduce(state, event);
     if (next === state) return;
     state = next;
-    // Post-transition: side effects that follow from the new state.
     void syncDialog();
     if (state.tag === "exiting") {
       exited = true;
@@ -137,10 +135,9 @@ export async function runSession(
       return;
     }
     if (state.tag === "processing") {
-      // submit-followup just transitioned us. Push the user turn and reset
-      // the budget; the previous candidate_command turn already lives in
-      // the transcript (the loop pushed it before returning), so the LLM
-      // sees [..., candidate, user]. No stripStaleInstructions needed.
+      // submit-followup just landed. The previous `candidate_command` turn
+      // is already in the transcript, so pushing a user turn here gives the
+      // LLM `[..., candidate, user]` — no message-history hygiene needed.
       const followupText = state.draft;
       transcript.push({ kind: "user", text: followupText });
       loopState.budgetRemaining = maxRounds;
@@ -163,9 +160,8 @@ export async function runSession(
       } finally {
         mountInProgress = false;
       }
-      // Re-sync in case state transitioned during the await (e.g., the user
-      // typed Esc while we were mounting). Subsequent recursion is sync from
-      // here forward — host is now set.
+      // State may have moved during the await (e.g. user Esc'd while we
+      // were mounting). The recursive call is sync from here — host is set.
       void syncDialog();
       return;
     }
@@ -209,18 +205,13 @@ export async function runSession(
   try {
     startPumpLoop({ isInitialLoop: true, followupText: undefined });
     const outcome = await exitDeferred.promise;
-    // Unmount the dialog BEFORE running the run-side-effect so the alt
-    // screen is gone when the exec'd command writes to inherited stdio.
-    // The notification listener stays subscribed through finaliseOutcome so
-    // verbose/chrome lines from the exec phase still route through the bus.
+    // Unmount before exec so the alt screen is gone when the inherited
+    // stdio command writes. The listener stays subscribed so verbose/chrome
+    // lines from the exec phase still route through the bus.
     teardownDialog();
     exitCode = await finaliseOutcome(outcome, entry, options.pipedInput);
   } finally {
     unsubscribe();
-    // Defensive: only fires if `await exitDeferred.promise` itself threw
-    // (currently unreachable — exitDeferred is only resolved by `dispatch`,
-    // which is sync). Both happy and error paths tear down above this point;
-    // this is cheap insurance against a future throw inside dispatch.
     teardownDialog();
     appendLogEntryIgnoreErrors(wrapHome, entry);
   }
@@ -244,29 +235,20 @@ type PumpLoopArgs = {
   baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner">;
   signal: AbortSignal;
   isInitialLoop: boolean;
-  /** User text that triggered this pump, stamped on the first round only.
-   *  Undefined for the initial loop (which is attributed to `entry.prompt`). */
+  /** Stamped on the first `round-complete` only — even if it's a probe
+   *  and the command lands several rounds later. Lets the log reconstruct
+   *  which user message kicked off which sequence. Undefined for the
+   *  initial loop (attributed to `entry.prompt`). */
   followupText: string | undefined;
-  /** Called per `round-complete`. The session passes a closure that
-   *  `addRound`s into its log entry. */
   onRound: (round: import("../logging/entry.ts").Round) => void;
-  /** The session's dispatch closure — pumpLoop calls it with `loop-final`,
-   *  `loop-error`, or `block` once the loop returns. */
   dispatch: (event: AppEvent) => void;
 };
 
 /**
- * Drain a `runLoop` generator and route its events back to the session.
- *
- * Free function (not a closure over runSession state) so the coupling
- * between coordinator and runner is the explicit args list — no scope
- * read of `state.tag` / `state.draft`. Returns void; the result lands via
- * `dispatch` (loop-final / loop-error / block).
- *
- * `followupText` is stamped on the first `round-complete` only — even if
- * that round is a probe and the resulting command lands several rounds
- * later. Subsequent rounds in the same call leave it unset so the log can
- * faithfully reconstruct which user message kicked off which sequence.
+ * Drain a `runLoop` generator and route its events back to the session via
+ * `dispatch` (`loop-final` / `loop-error` / `block`). Free function so the
+ * coupling between coordinator and runner is the explicit args list —
+ * nothing read through scope.
  */
 async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   const { signal, isInitialLoop, followupText, onRound, dispatch } = args;
@@ -311,10 +293,8 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
       handleLoopEvent(value);
     }
     if (final === undefined) return;
-    // No-TTY interception: a medium/high command can't be confirmed without
-    // a dialog. Dispatch `block` instead so the reducer routes to
-    // `exiting{blocked}`. Only intercept on the initial loop; follow-up
-    // loops always have a dialog already mounted.
+    // A medium/high command can't be confirmed without a dialog, and the
+    // initial loop is the only one without a dialog already mounted.
     if (
       final.type === "command" &&
       final.response.risk_level !== "low" &&
@@ -354,10 +334,9 @@ async function finaliseOutcome(
       entry.outcome = "cancelled";
       return 1;
     case "error":
-      // Throw rather than return — main.ts catches and renders via chrome,
-      // matching the original `runQuery` contract. The throw runs AFTER the
-      // finally block writes the log entry, so the error round is on disk
-      // with `outcome: "error"` regardless of what main.ts does next.
+      // Throw rather than return — main.ts catches and renders via chrome.
+      // The throw runs AFTER the finally writes the log, so the failure
+      // round is on disk regardless of what main.ts does next.
       entry.outcome = "error";
       throw new Error(outcome.message);
     case "run": {
@@ -368,7 +347,8 @@ async function finaliseOutcome(
         mode: "inherit",
         stdinBlob,
       });
-      // In-place mutation: the round is already in entry.rounds (eager-logged).
+      // The round is the same reference held in `entry.rounds` (eager-logged
+      // by pumpLoop), so this in-place mutation lands in the JSONL flush.
       outcome.round.exec_ms = exec.exec_ms;
       outcome.round.execution = {
         command: outcome.command,
