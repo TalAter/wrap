@@ -4,7 +4,21 @@
 
 > **Status:** Planned. Not yet implemented.
 
-> **Prerequisite:** read `specs/follow-up.md` first. This spec references `runRoundsUntilFinal`, `LoopState`, `LoopResult`, the dialog state machine (`confirming` / `editing-command` / `composing-followup` / `processing-followup`), `setCommand/setRiskLevel/setExplanation`, `output-sink.ts`, the low-risk dialog gradient, and the bottom-border status slot by name without reintroduction.
+> **Prerequisites:**
+> - `specs/follow-up.md` — supplies the UX vocabulary (the four-state dialog machine, follow-up flow, low-risk dialog gradient, bottom-border status slot).
+> - `specs/coordinator-refactor.md` — **lands BEFORE this spec** and replaces the architecture this spec was originally written against. After the refactor:
+>   - `runRoundsUntilFinal` → `runLoop` (an async generator in `src/core/runner.ts`)
+>   - `LoopResult` → `LoopReturn` (same variants minus `aborted`, which the generator handles natively via its consumer's signal check)
+>   - `LoopState` keeps its name; `RoundsOptions` → `LoopOptions`
+>   - `createFollowupHandler` (the closure in `query.ts`) → a coordinator post-transition hook on the `submit-followup` event in `src/session/session.ts`. The "second closure" this spec adds (`onConfirmStep`) becomes a parallel post-transition hook on a new `submit-step-confirm` event — it shares the coordinator's `driveLoop` primitive with the follow-up hook.
+>   - `output-sink.ts` (single-slot interception) → `src/session/notify.ts` (multi-listener typed bus). `writeStepOutput` becomes `notifications.emit({ kind: "step-output", text })`; the dialog reads it via the reducer (`notification` → `state.outputSlot`), not via a `subscribeChrome` callback.
+>   - Dialog `setCommand/setRiskLevel/setExplanation` (local React state) → reducer transitions; the dialog is now `(state, dispatch) → JSX` with no application `useState`.
+>   - The dialog state machine names: `editing-command` → `editing`, `composing-followup` → `composing`, `processing-followup` → `processing`. `confirming` is unchanged. `executing-step` is the new state this spec adds.
+>   - `maxProbeOutput*`, `sectionProbeOutput`, `probeNoOutput` — already renamed in the refactor to `maxCapturedOutput*`, `sectionCapturedOutput`, `capturedNoOutput`. The "Removals" table below should now be read as deletions only (the renames already happened).
+>   - `REFUSED_PROBE_INSTRUCTION`, `probeRiskInstruction`, `probeRiskRefusedPrefix`, the probe-risk retry block, and `verboseResponse`'s probe case are STILL present after the refactor — they live in `src/core/round.ts` / `src/core/runner.ts`. This spec's step 4 deletes them.
+>   - `stripStaleInstructions` is STILL present after the refactor (in `src/core/round.ts`) but only handles refused-probe pairs — `lastRoundInstruction` is now push/popped within `runRound` itself, so the cross-call cleanup of that constant is gone. This spec's step 4 simplifies it further (deletes the refused-probe branch when the probe concept goes away).
+>
+> When this spec refers to file paths or function names that the refactor moves, the post-refactor name is authoritative — read `specs/coordinator-refactor.md` if anything below seems out of date.
 
 ---
 
@@ -125,14 +139,14 @@ Row 3 is today's probe, generalised. Rows 1–2 are today's `command`. Row 4 is 
 
 **Dialog-open rule (load-bearing).** The dialog is either open or closed for the rest of the loop — no flicker. It **opens** the first time anything needs confirmation (any medium/high). Before that, non-final low commands run silently and surface via chrome lines in scrollback. Once open, it **stays open** until the loop exits: subsequent non-final lows run inside its lifecycle (their captured output reaches the output slot via the sink fan-out described below); subsequent final lows render in `confirming` with the low-risk gradient rather than auto-executing, matching the follow-up branch's post-follow-up low-risk behaviour.
 
-### `runRoundsUntilFinal` updates
+### `runLoop` updates
 
-The function already has the right shape (`LoopState`, discriminated `LoopResult`, abort signal, per-round logging). Changes:
+After the refactor, the loop is the `runLoop` async generator in `src/core/runner.ts`. It already has the right shape (`LoopState`, `LoopOptions`, `LoopEvent`, `LoopReturn`, abort via signal, per-round events the coordinator logs). Changes:
 
-- Replace `if (response.type === "probe") { ... }` with `if (!response.final && response.risk_level === "low") { ... }`. The body is the same as today's probe branch (capture, post-process, push echo+output onto `input.messages`, continue) with one addition: it also calls `writeStepOutput(outputText)` on the sink so an open dialog's output slot can update reactively.
-- Remove the `"probe" && risk_level !== "low"` retry/refusal block entirely. Non-final non-low commands fall through to the existing return path — `addRound(entry, round); return { type: "command", response, round };` — and the caller dispatches them through the dialog.
+- Replace the probe branch with `if (!response.final && response.risk_level === "low") { ... }`. The body is the same as today's probe branch (capture via `executeShellCommand`, post-process, push echo+output onto `input.messages`, yield `step-output`, continue). The existing `step-running`/`step-output` events now fire for any non-final-low — the dialog's output slot already subscribes to `step-output` via the notification bus through the coordinator → reducer → `state.outputSlot` path.
+- Remove the `"probe" && risk_level !== "low"` retry/refusal block entirely (lives in `src/core/round.ts` after the refactor). Non-final non-low commands fall through to the existing return path — `runLoop` returns `{ type: "command", response, round }` — and the coordinator dispatches them through the dialog.
 - Capture uses the existing `executeShellCommand(content, { mode: "capture", stdinBlob })`.
-- Output post-processing is unchanged from today's probe path: combine stdout+stderr, append `\nExit code: N` on non-zero, truncate to `maxCapturedOutput` chars. Empty output → `capturedNoOutput` placeholder. The dialog's tail-3-rows display reads the same post-truncation string pushed to the LLM.
+- Output post-processing is unchanged from today's probe path: combine stdout+stderr, append `\nExit code: N` on non-zero, truncate to `maxCapturedOutput` chars. Empty output → `capturedNoOutput` placeholder. The dialog's tail-3-rows display reads the same post-truncation string emitted via `step-output`.
 - `verboseResponse` collapses the `command`/`probe` cases; the log line carries a `final`/`step` label derived from `response.final` (presentation only, not a schema enum value):
   ```
   LLM responded (command, final, medium): rm -rf node_modules
@@ -142,13 +156,14 @@ The function already has the right shape (`LoopState`, discriminated `LoopResult
 
 ### Control flow: non-final medium/high
 
-This is the subtlest part of the refactor. The split:
+This is the subtlest part of the refactor. After the coordinator refactor, control flow is expressed as dispatch hooks on the `runSession` coordinator, not as closures. The split:
 
-- **`runRoundsUntilFinal` handles non-final low inline** (as described above) — does NOT return to the caller. Captured output reaches any open dialog via `writeStepOutput`'s fan-out to the sink interceptor the dialog registered at mount; the coupling is asymmetric — `runRoundsUntilFinal` doesn't know whether a dialog is listening, same as chrome events today.
-- **`runRoundsUntilFinal` returns to the caller for everything else** — final any-risk, non-final medium/high, reply, exhausted, aborted. The existing `LoopResult` variants (`command`, `answer`, `exhausted`, `aborted`) stay as-is — the `answer` variant carries `type: reply` responses despite the schema rename. Renaming the variant is optional cleanup; the spec doesn't require it.
-- **The dialog handles non-final medium/high** via a new closure `onConfirmStep(response, signal)`, registered at mount alongside the existing `onFollowup`. `onConfirmStep` runs the confirmed step in capture mode, calls `writeStepOutput` with the post-processed output, pushes the `projectForEcho(response)` assistant echo + a user turn with the output onto `input.messages`, and re-enters `runRoundsUntilFinal`. It returns the resulting `LoopResult` wrapped in the same discriminated union `onFollowup` returns — the dialog dispatches on the result the same way for both closures.
-- **Two closures, not one.** Inputs differ (text vs a `CommandResponse`) and message-assembly differs (appended user turn vs echo+output); a merged closure would branch on input type internally. Keep them separate.
-- **`runQuery` dispatch** on the initial `LoopResult` is trivial: final-low → inherit-exec + exit; final-medium/high → mount dialog + register closures; non-final-medium/high → mount dialog + register closures (same path, dialog opens for an intermediate step); reply → stdout + exit 0; exhausted/aborted → as today.
+- **`runLoop` handles non-final low inline** (as described above) — does NOT return to the consumer. Captured output reaches any open dialog via `step-output` events that the coordinator forwards to the notification bus, which the coordinator's listener routes to the reducer (`state.outputSlot`).
+- **`runLoop` returns to the consumer for everything else** — final any-risk, non-final medium/high, reply, exhausted. The existing `LoopReturn` variants (`command`, `answer`, `exhausted`) stay as-is — the `answer` variant carries `type: reply` responses despite the schema rename. The generator handles abort natively (consumer's signal-check pattern), so no `aborted` variant exists post-refactor.
+- **The coordinator handles non-final medium/high via a new post-transition hook on `submit-step-confirm`.** This is the multi-step parallel of today's `submit-followup` post-transition hook. On `submit-step-confirm`, the hook runs the confirmed step in capture mode, emits `step-output` via `notifications.emit`, pushes the `projectForEcho(response)` assistant echo + a user turn with the output onto `input.messages`, and calls the coordinator's existing `driveLoop()` primitive. The resulting events flow through the same handler the follow-up restart uses. The two hooks share `driveLoop` — they only differ in which messages they push beforehand.
+- **Two post-transition hooks, not one.** Inputs differ (text vs a `CommandResponse`) and message-assembly differs (appended user turn vs echo+output); a merged hook would branch on input type internally. Keep them separate.
+- **The reducer adds an `executing-step` tag** entered from `confirming` on `key-action run` when the current command is non-final medium/high (instead of `exiting{run}`). The coordinator notices `state.tag === "executing-step"` and triggers the `submit-step-confirm` flow. (Or, equivalently, dispatches a fresh `submit-step-confirm` event that the reducer transitions to `executing-step` on. Pick whichever is cleaner during implementation.)
+- **Initial dispatch** on the first `loop-final`: final-low → `exiting{run}` (skip dialog, inherit-exec); final-medium/high → `confirming` (dialog opens); non-final-medium/high → `confirming` for the intermediate step (dialog opens for the first time on a step); reply → `exiting{answer}`; exhausted → `exiting{exhausted}`.
 
 ### Echo projection
 
@@ -159,7 +174,7 @@ When echoing a prior response into `input.messages` for the next round, project 
 
 `explanation` is user-facing, not model-facing — replaying it wastes tokens and invites the model to use it as scratchpad. `plan` stays because cross-round continuity is its purpose. `_scratchpad` strips per `specs/scratchpad.md`. The rest are user-facing chrome already actioned by Wrap.
 
-Implementation: a `projectForEcho(response)` helper next to `runRoundsUntilFinal`. Swap it in at every `JSON.stringify(response)` call site in the loop and in `createFollowupHandler`. Single helper, single source of truth.
+Implementation: a `projectForEcho(response)` helper next to `runLoop` in `src/core/runner.ts`. Swap it in at every `JSON.stringify(response)` call site — inside the loop's probe-echo push and inside the coordinator's `submit-followup` and `submit-step-confirm` dispatch hooks. Single helper, single source of truth.
 
 ### `lastRoundInstruction` rewrite
 
@@ -302,9 +317,11 @@ Entered by `confirming --(y, command, final: false, medium/high)---> executing-s
 
 Output slot source: the post-truncation string pushed to the LLM (single source of truth). Tail-3-rows is computed after Ink's soft-wrapping to dialog width. Replacement, not accumulation — each new step replaces the slot; older outputs live in real scrollback via the sink.
 
-### Output sink — new channel
+### Step output — new notification kind
 
-Add `writeStepOutput(text)` to `src/core/output-sink.ts`. It writes to stderr immediately (so the full output lands in scrollback on alt-screen release) and, when an interception is active, fans the text to the dialog handler so the output slot updates. Symmetric with how `writeLine` fans chrome events today. Step output is NOT chrome, NOT verbose, and MUST NOT reach stdout — stdout remains reserved for final-command `inherit` output and final-reply text per `CLAUDE.md`.
+Post-refactor, `output-sink.ts` is gone — replaced by `src/session/notify.ts`'s typed multi-listener bus, which already carries a `step-output` notification kind (added in the refactor for the `runLoop` generator's inline-step events). Multi-step adds nothing new to the bus itself; it just wires the dialog's output slot to react to `step-output` notifications by routing them through the coordinator's notification listener into the reducer (`state.outputSlot`).
+
+Step output is NOT chrome, NOT verbose, and MUST NOT reach stdout — stdout remains reserved for final-command `inherit` output and final-reply text per `CLAUDE.md`. The bus's default-handler fallback writes step output to stderr when no session listener is subscribed (which is only the case during init/teardown — never during the actual step run).
 
 ### Icon heuristic (kept)
 
@@ -334,18 +351,18 @@ Read `.claude/skills/editing-prompts.md` before touching the prompt files — th
 
 ## Removals
 
-Code paths deleted or renamed:
+Code paths deleted or renamed (post-coordinator-refactor file paths):
 
-- `REFUSED_PROBE_INSTRUCTION` in `src/core/query.ts` — deleted
-- `stripStaleInstructions` — refused-probe pair-stripping branch deleted; only last-round stripping remains
-- `runRoundsUntilFinal` probe risk-level retry block and refusal-continuation branch — deleted
+- `REFUSED_PROBE_INSTRUCTION` in `src/core/round.ts` — deleted
+- `stripStaleInstructions` in `src/core/round.ts` — refused-probe branch deleted. After this step, the helper has no behaviour left (the refactor already moved `lastRoundInstruction` push/pop into `runRound`). DELETE the helper entirely once the refused-probe branch is gone, AND delete its sole call site in the `submit-followup` post-transition hook in `src/session/session.ts` (the hook still runs the assistant-echo + user-turn push, just without the prior `stripStaleInstructions(input.messages)` call).
+- `runRound`'s probe risk-level retry block (in `src/core/round.ts`) — deleted
+- `runLoop`'s refused-probe continuation branch (in `src/core/runner.ts`) — deleted
 - `verboseResponse`'s `case "probe"` — folded into `case "command"`
 - `fetchesUrl` — kept (icon heuristic)
-- `DEFAULT_MAX_PROBE_OUTPUT_CHARS` → `DEFAULT_MAX_CAPTURED_OUTPUT_CHARS`
-- `RoundsOptions.maxProbeOutput` → `maxCapturedOutput`
-- `maxProbeOutputChars` in `src/config/config.schema.json` → `maxCapturedOutputChars` (breaking change for any existing config; acceptable per § Backwards Compatibility)
-- `maxRounds` description in `src/config/config.schema.json` — drop the "(probes + error-fix attempts)" parenthetical
+- The `maxRounds` description in `src/config/config.schema.json` — drop the "(probes + error-fix attempts)" parenthetical
 - `seed.jsonl` probe assertions → `type: command, final: false`; `eval/bridge.ts` and `eval/dspy/metric.py` follow wherever they match on `type: "probe"`
+
+Note: the `maxProbeOutput*` / `sectionProbeOutput` / `probeNoOutput` renames the original draft of this spec listed are already done by the coordinator refactor. They are no longer in scope for this spec.
 
 ---
 
@@ -420,7 +437,7 @@ None. Wrap is pre-release; the single user accepts that pre-refactor entries in 
 
 ## Implementation order
 
-**Prerequisite.** The follow-up branch must be merged to main before starting. This spec references `runRoundsUntilFinal`, `LoopState`, `createFollowupHandler`, `stripStaleInstructions`, the dialog state machine, and the output sink as if they already exist.
+**Prerequisite.** The follow-up branch AND the coordinator refactor (`specs/coordinator-refactor.md`) must be merged to main before starting. This spec references the post-refactor names (`runLoop`, `runRound`, the coordinator's `submit-followup` / `submit-step-confirm` dispatch hooks, `runSession`, `src/session/notify.ts`, the reducer-driven dialog) as if they already exist.
 
 Each step leaves the tree green. Step 4 is a coherent merge — splitting it would leave the loop inconsistent.
 
