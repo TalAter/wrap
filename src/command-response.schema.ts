@@ -19,6 +19,13 @@ export const CommandResponseSchema = z.object({
     // reply = a direct text response. Use for general knowledge questions that don't need a shell command.
     "reply",
   ]),
+  // false = intermediate step; output captured and fed back next round.
+  // true (default) = terminal; command runs with inherit or reply prints.
+  final: z.boolean().default(true),
+  // Cross-round intent. Required for non-final steps — shown in the dialog
+  // under the explanation and echoed back to you next round so the chain of
+  // steps keeps a coherent plan. Leave null/omit for terminal responses.
+  plan: z.string().nullable().optional(),
   // The shell command (for command/probe) or text response (for reply)
   content: z.string(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible

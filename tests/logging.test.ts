@@ -198,6 +198,7 @@ describe("serializeEntry", () => {
         type: "command",
         content: "ls",
         risk_level: "low",
+        final: true,
       },
       execution: { command: "ls", exit_code: 0, shell: "/bin/zsh" },
     });

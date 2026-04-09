@@ -186,26 +186,42 @@ describe("CommandResponseSchema", () => {
     expect(CommandResponseSchema.parse(input).pipe_stdin).toBe(false);
   });
 
-  test("parses response with _scratchpad", () => {
-    const input = {
-      _scratchpad: "User wants files modified today. Use find with -mtime 0.",
-      type: "command",
-      content: "find . -name '*.ts' -mtime 0",
-      risk_level: "low",
-    };
-    const result = CommandResponseSchema.parse(input);
-    expect(result._scratchpad).toBe("User wants files modified today. Use find with -mtime 0.");
-  });
-
-  test("allows _scratchpad to be omitted", () => {
+  test("final defaults to true when omitted", () => {
     const input = { type: "command", content: "ls", risk_level: "low" };
     const result = CommandResponseSchema.parse(input);
-    expect(result._scratchpad).toBeUndefined();
+    expect(result.final).toBe(true);
   });
 
-  test("allows _scratchpad to be null", () => {
-    const input = { type: "command", content: "ls", risk_level: "low", _scratchpad: null };
+  test("parses non-final command with plan", () => {
+    const input = {
+      type: "command",
+      content: "curl -fsSL https://example.com/installer.sh -o $WRAP_TEMP_DIR/installer.sh",
+      risk_level: "low",
+      final: false,
+      plan: "Download the installer, inspect it, then run the exact bytes we inspected.",
+    };
     const result = CommandResponseSchema.parse(input);
-    expect(result._scratchpad).toBeNull();
+    expect(result.final).toBe(false);
+    expect(result.plan).toBe(
+      "Download the installer, inspect it, then run the exact bytes we inspected.",
+    );
+  });
+
+  test("allows plan to be null or omitted", () => {
+    const base = { type: "command", content: "ls", risk_level: "low", final: false };
+    expect(CommandResponseSchema.parse(base).plan).toBeUndefined();
+    expect(CommandResponseSchema.parse({ ...base, plan: null }).plan).toBeNull();
+  });
+
+  test("reply with explicit final: true round-trips", () => {
+    const input = {
+      type: "reply",
+      content: "42",
+      risk_level: "low",
+      final: true,
+    };
+    const result = CommandResponseSchema.parse(input);
+    expect(result.type).toBe("reply");
+    expect(result.final).toBe(true);
   });
 });

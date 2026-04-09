@@ -103,6 +103,7 @@ describe("testProvider", () => {
           type: "command",
           content: "echo hi",
           risk_level: "low",
+          final: true,
         });
       } finally {
         if (prev === undefined) delete process.env.WRAP_TEST_RESPONSE;
