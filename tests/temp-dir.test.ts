@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { executeShellCommand } from "../src/core/shell.ts";
 import { createTempDir, formatTempDirSection } from "../src/core/temp-dir.ts";
 
 describe("createTempDir", () => {
@@ -31,6 +32,26 @@ describe("createTempDir", () => {
     const b = createTempDir();
     expect(a).not.toBe(b);
     rmSync(a, { recursive: true, force: true });
+  });
+
+  test("executeShellCommand inherits WRAP_TEMP_DIR into the spawned shell", async () => {
+    // Regression: Bun.spawn does NOT inherit process.env unless you pass
+    // `env` explicitly. executeShellCommand pipes process.env through;
+    // this test pins that contract so a future refactor can't silently
+    // break env inheritance for the temp dir or anything else.
+    const prevShell = process.env.SHELL;
+    process.env.SHELL = "/bin/sh";
+    try {
+      const path = createTempDir();
+      const exec = await executeShellCommand('printf %s "$WRAP_TEMP_DIR"', {
+        mode: "capture",
+      });
+      expect(exec.exitCode).toBe(0);
+      expect(exec.stdout).toBe(path);
+    } finally {
+      if (prevShell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = prevShell;
+    }
   });
 });
 

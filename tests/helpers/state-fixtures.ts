@@ -28,6 +28,7 @@ export function makeConfirming(overrides: Partial<ConfirmingState> = {}): Confir
     tag: "confirming",
     response,
     round: overrides.round ?? makeRound(response),
+    outputSlot: overrides.outputSlot,
   };
 }
 
@@ -38,6 +39,7 @@ export function makeEditing(overrides: Partial<EditingState> = {}): EditingState
     response,
     round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? response.content,
+    outputSlot: overrides.outputSlot,
   };
 }
 
@@ -48,6 +50,7 @@ export function makeComposing(overrides: Partial<ComposingState> = {}): Composin
     response,
     round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? "",
+    outputSlot: overrides.outputSlot,
   };
 }
 

@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import type { AppEvent } from "../src/session/state.ts";
-import { Dialog } from "../src/tui/dialog.tsx";
+import { Dialog, formatOutputSlot, OUTPUT_SLOT_EMPTY } from "../src/tui/dialog.tsx";
 import {
   makeComposing,
   makeConfirming,
   makeEditing,
+  makeExecutingStep,
   makeProcessing,
   makeResponse,
 } from "./helpers/state-fixtures.ts";
@@ -260,5 +261,89 @@ describe("Dialog — rerender behaviour", () => {
     rerender(<Dialog state={state2} dispatch={dispatch} />);
     await tick();
     expect(stripAnsi(lastFrame() ?? "")).toContain("second cmd");
+  });
+});
+
+describe("formatOutputSlot", () => {
+  test("returns the empty sentinel for blank output", () => {
+    expect(formatOutputSlot("")).toBe(OUTPUT_SLOT_EMPTY);
+    expect(formatOutputSlot("   \n  \n")).toBe(OUTPUT_SLOT_EMPTY);
+  });
+
+  test("returns the body as-is when it fits the tail window", () => {
+    expect(formatOutputSlot("a\nb\nc")).toBe("a\nb\nc");
+    expect(formatOutputSlot("only one line")).toBe("only one line");
+  });
+
+  test("tails to the last 3 rows when output is longer", () => {
+    const out = formatOutputSlot("1\n2\n3\n4\n5\n");
+    expect(out).toBe("3\n4\n5");
+  });
+});
+
+describe("Dialog — multi-step slots", () => {
+  test("renders the output slot when set", () => {
+    const state = makeConfirming({
+      response: makeResponse({ content: "echo done" }),
+      outputSlot: "discovered sips at /usr/bin/sips",
+    });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(<Dialog state={state} dispatch={dispatch} />);
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("Output:");
+    expect(text).toContain("discovered sips");
+  });
+
+  test("renders (no output) sentinel for an empty step body", () => {
+    const state = makeConfirming({
+      response: makeResponse({ content: "echo done" }),
+      outputSlot: "",
+    });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(<Dialog state={state} dispatch={dispatch} />);
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain(OUTPUT_SLOT_EMPTY);
+  });
+
+  test("omits the output slot entirely before any step has run", () => {
+    const state = makeConfirming({
+      response: makeResponse({ content: "echo done" }),
+    });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(<Dialog state={state} dispatch={dispatch} />);
+    expect(stripAnsi(lastFrame() ?? "")).not.toContain("Output:");
+  });
+
+  test("renders the plan slot when response.plan is present", () => {
+    const state = makeConfirming({
+      response: makeResponse({
+        content: "bash $WRAP_TEMP_DIR/install.sh",
+        final: false,
+        risk_level: "medium",
+        plan: "Download, inspect, then run the exact bytes we read.",
+      }),
+    });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(<Dialog state={state} dispatch={dispatch} />);
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("Plan:");
+    expect(text).toContain("Download, inspect");
+  });
+
+  test("executing-step renders the command, output slot, and abort hint", () => {
+    const state = makeExecutingStep({
+      response: makeResponse({
+        content: "git stash",
+        final: false,
+        risk_level: "medium",
+      }),
+      outputSlot: "Saved working directory.",
+    });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(<Dialog state={state} dispatch={dispatch} />);
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("git stash");
+    expect(text).toContain("Saved working directory.");
+    expect(text).toContain("abort step");
   });
 });

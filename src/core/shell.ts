@@ -61,6 +61,7 @@ export async function executeShellCommand(
       stdout: "pipe",
       stderr: "pipe",
       stdin: options.stdinBlob,
+      env: process.env as Record<string, string>,
     });
     const [exitCode, stdoutText, stderrText] = await Promise.all([
       proc.exited,
@@ -81,6 +82,7 @@ export async function executeShellCommand(
     stdout: "inherit",
     stderr: "inherit",
     stdin: options.stdinBlob ?? "inherit",
+    env: process.env as Record<string, string>,
   });
   const exitCode = await proc.exited;
   return {
