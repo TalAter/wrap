@@ -5,6 +5,7 @@ import {
   makeComposing,
   makeConfirming,
   makeEditing,
+  makeExecutingStep,
   makeProcessing,
   makeResponse,
   makeRound,
@@ -328,6 +329,117 @@ describe("reduce — processing", () => {
       error: new Error("boom"),
     });
     expect(next.tag).toBe("exiting");
+  });
+});
+
+describe("reduce — executing-step", () => {
+  const nonFinalMed = makeResponse({
+    final: false,
+    risk_level: "medium",
+    content: "git stash",
+    plan: "stash, test, pop",
+  });
+
+  test("confirming + key-action run on non-final med → executing-step", () => {
+    const state = makeConfirming({ response: nonFinalMed });
+    const next = reduce(state, { type: "key-action", action: "run" });
+    expect(next.tag).toBe("executing-step");
+    if (next.tag === "executing-step") {
+      expect(next.response).toBe(nonFinalMed);
+    }
+  });
+
+  test("confirming + key-action run on final-low → exiting (not executing-step)", () => {
+    const state = makeConfirming({
+      response: makeResponse({ risk_level: "low", final: true }),
+    });
+    const next = reduce(state, { type: "key-action", action: "run" });
+    expect(next.tag).toBe("exiting");
+  });
+
+  test("step-output notification while executing-step updates outputSlot", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "step-output", text: "captured body" },
+    });
+    if (next.tag === "executing-step") {
+      expect(next.outputSlot).toBe("captured body");
+    } else {
+      throw new Error(`expected executing-step, got ${next.tag}`);
+    }
+  });
+
+  test("step-output notification while processing updates outputSlot", () => {
+    const state = makeProcessing();
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "step-output", text: "processing-body" },
+    });
+    if (next.tag === "processing") {
+      expect(next.outputSlot).toBe("processing-body");
+    } else {
+      throw new Error(`expected processing, got ${next.tag}`);
+    }
+  });
+
+  test("loop-final command from executing-step → confirming, preserves outputSlot", () => {
+    const state = makeExecutingStep({ response: nonFinalMed, outputSlot: "prior step out" });
+    const nextResponse = makeResponse({ final: true, content: "echo done" });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "command", response: nextResponse, round: makeRound(nextResponse) },
+    });
+    if (next.tag === "confirming") {
+      expect(next.response).toBe(nextResponse);
+      expect(next.outputSlot).toBe("prior step out");
+    } else {
+      throw new Error(`expected confirming, got ${next.tag}`);
+    }
+  });
+
+  test("loop-final reply from executing-step → exiting{answer}", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "answer", content: "the answer" },
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag === "exiting") {
+      expect(next.outcome.kind).toBe("answer");
+    }
+  });
+
+  test("key-esc from executing-step → confirming (keeps prior state)", () => {
+    const state = makeExecutingStep({ response: nonFinalMed, outputSlot: "so far" });
+    const next = reduce(state, { type: "key-esc" });
+    if (next.tag === "confirming") {
+      expect(next.response).toBe(nonFinalMed);
+      expect(next.outputSlot).toBe("so far");
+    } else {
+      throw new Error(`expected confirming, got ${next.tag}`);
+    }
+  });
+
+  test("editing + submit-edit on non-final med → executing-step with edited content", () => {
+    const state = makeEditing({ response: nonFinalMed });
+    const next = reduce(state, { type: "submit-edit", text: "git stash -u" });
+    if (next.tag === "executing-step") {
+      expect(next.response.content).toBe("git stash -u");
+      expect(next.response.final).toBe(false);
+    } else {
+      throw new Error(`expected executing-step, got ${next.tag}`);
+    }
+  });
+
+  test("dialog-open rule: loop-final with final-low from processing → confirming (no auto-exec)", () => {
+    const state = makeProcessing();
+    const finalLow = makeResponse({ risk_level: "low", final: true, content: "ls" });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "command", response: finalLow, round: makeRound(finalLow) },
+    });
+    expect(next.tag).toBe("confirming");
   });
 });
 

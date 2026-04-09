@@ -4,13 +4,15 @@ import type { LoopReturn } from "../core/runner.ts";
 import type { Round } from "../logging/entry.ts";
 
 /** All states the session can be in. The dialog is mounted iff `tag` is one
- *  of the dialog tags (confirming, editing, composing, processing). */
+ *  of the dialog tags (confirming, editing, composing, processing,
+ *  executing-step). */
 export type AppState =
   | ThinkingState
   | ConfirmingState
   | EditingState
   | ComposingState
   | ProcessingState
+  | ExecutingStepState
   | ExitingState;
 
 /** Pre-dialog: chrome spinner is showing while we wait for the LLM's first
@@ -34,6 +36,11 @@ export type ConfirmingState = {
   /** The eagerly-logged round for this command — kept on state so the
    *  exiting{run} hook can mutate `exec_ms`/`execution` on it after exec. */
   round: Round;
+  /** Last step's captured output (post-truncation), rendered in the output
+   *  slot between the top border and the command strip. Persists across
+   *  transitions within one dialog lifecycle — reset only when the dialog
+   *  unmounts. Undefined before any step has run. */
+  outputSlot?: string;
 };
 
 /** User editing the command in place. */
@@ -44,6 +51,7 @@ export type EditingState = {
   /** Live edit buffer. The "discard to original" Esc behaviour reads from
    *  `response.content` (no separate `original` field needed). */
   draft: string;
+  outputSlot?: string;
 };
 
 /** User typing a follow-up. */
@@ -53,6 +61,7 @@ export type ComposingState = {
   round: Round;
   /** Live follow-up text. Preserved into processing and back. */
   draft: string;
+  outputSlot?: string;
 };
 
 /** Follow-up call in flight, dialog visible with status. */
@@ -64,6 +73,21 @@ export type ProcessingState = {
   draft: string;
   /** Latest chrome line, shown in the bottom border. */
   status?: string;
+  outputSlot?: string;
+};
+
+/**
+ * A non-final medium/high step the user confirmed is running in capture
+ * mode. The dialog stays mounted: spinner on, previous output slot still
+ * visible, new step-output notifications replace `outputSlot`. The
+ * submit-step-confirm post-transition hook kicks off the capture + re-
+ * enters pumpLoop when the state lands on this tag.
+ */
+export type ExecutingStepState = {
+  tag: "executing-step";
+  response: CommandResponse;
+  round: Round;
+  outputSlot?: string;
 };
 
 /** Terminal: about to do the side-effect (run / print / fail) and exit. */
@@ -126,5 +150,20 @@ export type AppEvent =
 
 /** True if the session state should have a dialog mounted. */
 export function isDialogTag(tag: AppState["tag"]): boolean {
-  return tag === "confirming" || tag === "editing" || tag === "composing" || tag === "processing";
+  return (
+    tag === "confirming" ||
+    tag === "editing" ||
+    tag === "composing" ||
+    tag === "processing" ||
+    tag === "executing-step"
+  );
 }
+
+/**
+ * Add a `submit-step-confirm` event to the reducer surface? No — the
+ * confirmation event is the existing `key-action run` on `confirming`
+ * with a non-final med/high `response`. The reducer distinguishes that
+ * case and transitions to `executing-step`; the coordinator drives the
+ * capture + re-pump via a post-transition hook parallel to
+ * `submit-followup`.
+ */

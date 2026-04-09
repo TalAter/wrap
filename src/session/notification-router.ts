@@ -3,20 +3,22 @@ import type { DialogHost } from "./dialog-host.ts";
 
 /**
  * Routes notifications between three sinks based on whether the dialog is
- * mounted and whether the session is in `processing`:
+ * mounted and whether the session is in a "live" dialog state:
  *
  *   - **No dialog**: write straight to stderr. This is the path for
  *     `thinking`, `exiting`, and any state where the dialog hasn't mounted
  *     yet or has already unmounted. Chrome lines from the initial loop's
- *     probes/memory updates land in real scrollback as they happen.
+ *     steps/memory updates land in real scrollback as they happen.
  *
  *   - **Dialog mounted**: buffer for replay after unmount. Without buffering,
  *     stderr writes during alt-screen would land in the alt buffer and
  *     disappear on exit.
  *
- *   - **Dialog mounted AND in `processing`**: ALSO call `onProcessingChrome`
- *     so the coordinator can dispatch a `notification` event for the live
- *     bottom-border status.
+ *   - **Dialog mounted AND `isDialogLive()` (i.e. `processing` or
+ *     `executing-step`)**: ALSO call `onDialogNotification` so the
+ *     coordinator can dispatch a `notification` event. In `processing`,
+ *     the reducer routes chrome → bottom-border status and step-output →
+ *     output slot. In `executing-step`, only step-output is meaningful.
  *
  * The router holds the dialog handle and the buffer; the coordinator hands
  * it the dialog after mount and clears it before flush.
@@ -33,17 +35,19 @@ import type { DialogHost } from "./dialog-host.ts";
  */
 export type NotificationRouterOptions = {
   /**
-   * Called for chrome notifications that land while the dialog is in the
-   * `processing` state. The coordinator dispatches an AppEvent so the
-   * reducer can update the bottom-border status.
+   * Called for every notification that lands while the dialog is mounted
+   * AND `isDialogLive()` returns true. The coordinator dispatches an
+   * AppEvent so the reducer can update `status` (chrome) or `outputSlot`
+   * (step-output). Other notification kinds are ignored by the reducer.
    */
-  onProcessingChrome: (n: Notification) => void;
+  onDialogNotification: (n: Notification) => void;
   /**
-   * Called once per emit to ask whether the session is currently in
-   * `processing`. Pulled rather than pushed so the router doesn't have to
-   * mirror the coordinator's state.
+   * Called once per emit to ask whether the session is in a state that
+   * wants live notification updates — currently `processing` or
+   * `executing-step`. Pulled rather than pushed so the router doesn't
+   * have to mirror the coordinator's state.
    */
-  isProcessing: () => boolean;
+  isDialogLive: () => boolean;
 };
 
 export type NotificationRouter = {
@@ -86,8 +90,8 @@ export function createNotificationRouter(options: NotificationRouterOptions): No
           return;
         }
         buffered.push(n);
-        if (n.kind === "chrome" && options.isProcessing()) {
-          options.onProcessingChrome(n);
+        if (options.isDialogLive()) {
+          options.onDialogNotification(n);
         }
       });
     },

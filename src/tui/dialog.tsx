@@ -46,9 +46,30 @@ const COMPOSE_HINTS = [
   { combo: "Esc", label: "to cancel" },
 ] as const;
 const PROCESS_HINTS = [{ combo: "Esc", label: "to abort" }] as const;
+const EXECUTING_STEP_HINTS = [{ combo: "Esc", label: "to abort step" }] as const;
 
 /** Border status shown while a follow-up call is in flight before any chrome event arrives. */
 export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
+/** Status shown while a confirmed non-final step is running in capture mode. */
+export const EXECUTING_STEP_STATUS = "Running step...";
+/** Sentinel rendered in the output slot when a step produced no output. */
+export const OUTPUT_SLOT_EMPTY = "(no output)";
+/** Number of trailing rows shown in the output slot. Spec pins this. */
+const OUTPUT_SLOT_TAIL_ROWS = 3;
+
+/**
+ * Format a captured step body for the dialog's output slot: tail to the
+ * last `OUTPUT_SLOT_TAIL_ROWS` lines, or render the empty sentinel when
+ * the body is blank. Ink soft-wraps within the inner width, so we pass
+ * rows as-is and let the layout handle wrapping.
+ */
+export function formatOutputSlot(text: string): string {
+  const trimmed = text.trimEnd();
+  if (trimmed.length === 0) return OUTPUT_SLOT_EMPTY;
+  const lines = trimmed.split("\n");
+  if (lines.length <= OUTPUT_SLOT_TAIL_ROWS) return lines.join("\n");
+  return lines.slice(-OUTPUT_SLOT_TAIL_ROWS).join("\n");
+}
 
 export function Dialog({ state, dispatch }: DialogProps) {
   const { columns: termCols, rows: termRows } = useRenderSize();
@@ -90,14 +111,17 @@ export function Dialog({ state, dispatch }: DialogProps) {
   const command = dialogResponse?.content ?? "";
   const riskLevel = dialogResponse?.risk_level ?? "low";
   const explanation = dialogResponse?.explanation ?? undefined;
+  const plan = dialogResponse?.plan ?? undefined;
   const draft = "draft" in state ? state.draft : "";
   const status = state.tag === "processing" ? state.status : undefined;
+  const outputSlot = "outputSlot" in state ? state.outputSlot : undefined;
 
   // Width calculation
   const showFollowupInput = state.tag === "composing" || state.tag === "processing";
   const natural = Math.max(
     stringWidth(command),
     explanation ? stringWidth(explanation) : 0,
+    plan ? stringWidth(plan) : 0,
     showFollowupInput ? stringWidth(draft) : 0,
     MIN_INNER_WIDTH,
   );
@@ -208,11 +232,22 @@ export function Dialog({ state, dispatch }: DialogProps) {
     { isActive: state.tag === "processing" },
   );
 
-  const spinnerFrame = useSpinner(state.tag === "processing");
+  // Executing-step Esc → confirming (coordinator aborts the in-flight capture).
+  useInput(
+    (_input, key) => {
+      if (key.escape) dispatch({ type: "key-esc" });
+    },
+    { isActive: state.tag === "executing-step" },
+  );
+
+  const spinnerActive = state.tag === "processing" || state.tag === "executing-step";
+  const spinnerFrame = useSpinner(spinnerActive);
   const bottomStatus =
     state.tag === "processing"
       ? `${spinnerFrame ?? ""} ${status ?? FOLLOWUP_FALLBACK_STATUS}`
-      : undefined;
+      : state.tag === "executing-step"
+        ? `${spinnerFrame ?? ""} ${EXECUTING_STEP_STATUS}`
+        : undefined;
 
   return (
     <Box width={termCols} height={termRows} justifyContent="center" alignItems="center">
@@ -235,6 +270,17 @@ export function Dialog({ state, dispatch }: DialogProps) {
             paddingTop={1}
             paddingBottom={1}
           >
+            {outputSlot !== undefined && (
+              <>
+                <Box paddingLeft={1}>
+                  <Text color="#73738c">Output:</Text>
+                </Box>
+                <Box paddingLeft={1}>
+                  <Text color="#9a9ab4">{formatOutputSlot(outputSlot)}</Text>
+                </Box>
+                <Text> </Text>
+              </>
+            )}
             {state.tag === "editing" ? (
               <TextInput
                 value={state.draft}
@@ -252,6 +298,14 @@ export function Dialog({ state, dispatch }: DialogProps) {
                 <Text> </Text>
                 <Box paddingLeft={1}>
                   <Text color="#87879b">{explanation}</Text>
+                </Box>
+              </>
+            )}
+            {plan && (
+              <>
+                <Text> </Text>
+                <Box paddingLeft={1}>
+                  <Text color="#6f8fb4">Plan: {plan}</Text>
                 </Box>
               </>
             )}
@@ -281,6 +335,8 @@ export function Dialog({ state, dispatch }: DialogProps) {
               <KeyHints items={COMPOSE_HINTS} />
             ) : state.tag === "processing" ? (
               <KeyHints items={PROCESS_HINTS} />
+            ) : state.tag === "executing-step" ? (
+              <KeyHints items={EXECUTING_STEP_HINTS} />
             ) : (
               <ActionBar selectedIndex={selectedIndex} />
             )}

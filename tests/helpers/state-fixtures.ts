@@ -4,12 +4,14 @@ import type {
   ComposingState,
   ConfirmingState,
   EditingState,
+  ExecutingStepState,
   ProcessingState,
 } from "../../src/session/state.ts";
 
 export function makeResponse(overrides: Partial<CommandResponse> = {}): CommandResponse {
   return {
     type: "command",
+    final: true,
     content: "ls -la",
     risk_level: "medium" as RiskLevel,
     ...overrides,
@@ -57,5 +59,16 @@ export function makeProcessing(overrides: Partial<ProcessingState> = {}): Proces
     round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? "be safer",
     status: overrides.status,
+    outputSlot: overrides.outputSlot,
+  };
+}
+
+export function makeExecutingStep(overrides: Partial<ExecutingStepState> = {}): ExecutingStepState {
+  const response = overrides.response ?? makeResponse({ final: false });
+  return {
+    tag: "executing-step",
+    response,
+    round: overrides.round ?? makeRound(response),
+    outputSlot: overrides.outputSlot,
   };
 }

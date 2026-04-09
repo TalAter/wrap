@@ -21,17 +21,27 @@ export function reduce(state: AppState, event: AppEvent): AppState {
       return reduceComposing(state, event);
     case "processing":
       return reduceProcessing(state, event);
+    case "executing-step":
+      return reduceExecutingStep(state, event);
     case "exiting":
       return state;
   }
+}
+
+/** True if a non-final response needs the user-confirmation dialog. */
+function isNonFinalConfirm(response: { final: boolean; risk_level: string }): boolean {
+  return response.final === false && response.risk_level !== "low";
 }
 
 function reduceThinking(state: AppState & { tag: "thinking" }, event: AppEvent): AppState {
   if (event.type === "loop-final") {
     const r = event.result;
     if (r.type === "command") {
-      // Initial low-risk: skip the dialog and exec straight away.
-      if (r.response.risk_level === "low") {
+      // Initial final-low: skip the dialog and exec straight away. The
+      // `final` check guards against a non-final low ever reaching the
+      // reducer — runLoop handles those inline, but asserting it here
+      // keeps the asymmetric-dialog invariant honest.
+      if (r.response.risk_level === "low" && r.response.final !== false) {
         return {
           tag: "exiting",
           outcome: {
@@ -71,6 +81,18 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
   if (event.type === "key-action") {
     switch (event.action) {
       case "run":
+        // Non-final med/high: the user is confirming an intermediate step,
+        // not a terminal action. Route to `executing-step` so the dialog
+        // stays mounted while the coordinator captures output and re-
+        // enters the loop. The `submit-step-confirm` hook drives this.
+        if (isNonFinalConfirm(state.response)) {
+          return {
+            tag: "executing-step",
+            response: state.response,
+            round: state.round,
+            outputSlot: state.outputSlot,
+          };
+        }
         return {
           tag: "exiting",
           outcome: {
@@ -89,6 +111,7 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
           response: state.response,
           round: state.round,
           draft: state.response.content,
+          outputSlot: state.outputSlot,
         };
       case "followup":
         return {
@@ -96,6 +119,7 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
           response: state.response,
           round: state.round,
           draft: "",
+          outputSlot: state.outputSlot,
         };
       case "describe":
       case "copy":
@@ -106,14 +130,39 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
   if (event.type === "key-esc") {
     return { tag: "exiting", outcome: { kind: "cancel" } };
   }
+  if (event.type === "notification" && event.notification.kind === "step-output") {
+    // A late step-output arriving after we already transitioned to
+    // confirming (e.g. a racing notification flush) still lands in the
+    // slot so the dialog keeps showing the latest step output.
+    return { ...state, outputSlot: event.notification.text };
+  }
   return state;
 }
 
 function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): AppState {
   if (event.type === "key-esc") {
-    return { tag: "confirming", response: state.response, round: state.round };
+    return {
+      tag: "confirming",
+      response: state.response,
+      round: state.round,
+      outputSlot: state.outputSlot,
+    };
   }
   if (event.type === "submit-edit") {
+    // User-override on a non-final med/high step: route into `executing-step`
+    // with a response that carries the edited bytes, so the coordinator
+    // captures the same way as a model-authored step. The round's audit log
+    // still holds `round.parsed.content` (the original model bytes) and
+    // `round.execution.command` (what actually ran), so auditors can tell
+    // them apart.
+    if (isNonFinalConfirm(state.response)) {
+      return {
+        tag: "executing-step",
+        response: { ...state.response, content: event.text },
+        round: state.round,
+        outputSlot: state.outputSlot,
+      };
+    }
     return {
       tag: "exiting",
       outcome: {
@@ -133,7 +182,12 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
 
 function reduceComposing(state: AppState & { tag: "composing" }, event: AppEvent): AppState {
   if (event.type === "key-esc") {
-    return { tag: "confirming", response: state.response, round: state.round };
+    return {
+      tag: "confirming",
+      response: state.response,
+      round: state.round,
+      outputSlot: state.outputSlot,
+    };
   }
   if (event.type === "draft-change") {
     return { ...state, draft: event.text };
@@ -145,6 +199,7 @@ function reduceComposing(state: AppState & { tag: "composing" }, event: AppEvent
       round: state.round,
       draft: event.text,
       status: undefined,
+      outputSlot: state.outputSlot,
     };
   }
   return state;
@@ -157,11 +212,15 @@ function reduceProcessing(state: AppState & { tag: "processing" }, event: AppEve
       response: state.response,
       round: state.round,
       draft: state.draft,
+      outputSlot: state.outputSlot,
     };
   }
   if (event.type === "notification") {
     if (event.notification.kind === "chrome") {
       return { ...state, status: event.notification.text };
+    }
+    if (event.notification.kind === "step-output") {
+      return { ...state, outputSlot: event.notification.text };
     }
     return state;
   }
@@ -171,7 +230,12 @@ function reduceProcessing(state: AppState & { tag: "processing" }, event: AppEve
       // From processing, even a low-risk command opens the dialog —
       // distinct from `thinking` where low-risk skips the dialog. The
       // dialog is already mounted; the user is in the middle of refining.
-      return { tag: "confirming", response: r.response, round: r.round };
+      return {
+        tag: "confirming",
+        response: r.response,
+        round: r.round,
+        outputSlot: state.outputSlot,
+      };
     }
     if (r.type === "answer") {
       return { tag: "exiting", outcome: { kind: "answer", content: r.content } };
@@ -181,6 +245,63 @@ function reduceProcessing(state: AppState & { tag: "processing" }, event: AppEve
     }
     // r.type === "aborted" — the user's Esc already transitioned us to
     // composing; the late-arriving aborted return is dropped here.
+    return state;
+  }
+  if (event.type === "loop-error") {
+    return {
+      tag: "exiting",
+      outcome: { kind: "error", message: event.error.message },
+    };
+  }
+  return state;
+}
+
+/**
+ * `executing-step` is the mirror of `processing` for the confirmed
+ * multi-step branch: the dialog is mounted, the spinner is on, and the
+ * coordinator is driving a capture-mode exec of the confirmed command
+ * plus the next LLM round. Step-output notifications update the slot.
+ * `loop-final` routes the same way as `processing` — command lands back
+ * in `confirming`, reply/exhausted exit.
+ *
+ * Esc bails out to `confirming` so the user can re-review or cancel. The
+ * coordinator's Esc handler aborts the in-flight capture via the shared
+ * `currentLoopAbort` controller.
+ */
+function reduceExecutingStep(
+  state: AppState & { tag: "executing-step" },
+  event: AppEvent,
+): AppState {
+  if (event.type === "key-esc") {
+    return {
+      tag: "confirming",
+      response: state.response,
+      round: state.round,
+      outputSlot: state.outputSlot,
+    };
+  }
+  if (event.type === "notification") {
+    if (event.notification.kind === "step-output") {
+      return { ...state, outputSlot: event.notification.text };
+    }
+    return state;
+  }
+  if (event.type === "loop-final") {
+    const r = event.result;
+    if (r.type === "command") {
+      return {
+        tag: "confirming",
+        response: r.response,
+        round: r.round,
+        outputSlot: state.outputSlot,
+      };
+    }
+    if (r.type === "answer") {
+      return { tag: "exiting", outcome: { kind: "answer", content: r.content } };
+    }
+    if (r.type === "exhausted") {
+      return { tag: "exiting", outcome: { kind: "exhausted" } };
+    }
     return state;
   }
   if (event.type === "loop-error") {

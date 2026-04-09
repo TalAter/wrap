@@ -27,11 +27,11 @@ function makeFakeDialog(): DialogHost & { unmounted: boolean } {
   return host;
 }
 
-function makeRouter(opts?: { isProcessing?: boolean }) {
+function makeRouter(opts?: { isDialogLive?: boolean }) {
   const seen: Notification[] = [];
   const router = createNotificationRouter({
-    onProcessingChrome: (n) => seen.push(n),
-    isProcessing: () => opts?.isProcessing ?? false,
+    onDialogNotification: (n) => seen.push(n),
+    isDialogLive: () => opts?.isDialogLive ?? false,
   });
   return { router, seen };
 }
@@ -105,35 +105,40 @@ describe("createNotificationRouter", () => {
     unsub();
   });
 
-  test("isProcessing=true: chrome notifications also call onProcessingChrome", () => {
-    let processing = false;
+  test("isDialogLive=true: all notifications call onDialogNotification", () => {
+    let live = false;
     const seen: Notification[] = [];
     const router = createNotificationRouter({
-      onProcessingChrome: (n) => seen.push(n),
-      isProcessing: () => processing,
+      onDialogNotification: (n) => seen.push(n),
+      isDialogLive: () => live,
     });
     const unsub = router.subscribe();
     router.setDialog(makeFakeDialog());
 
-    processing = false;
+    live = false;
     notifications.emit({ kind: "chrome", text: "ignored" });
     expect(seen).toHaveLength(0);
 
-    processing = true;
-    notifications.emit({ kind: "chrome", text: "live" });
-    expect(seen).toHaveLength(1);
-    expect(seen[0]).toEqual({ kind: "chrome", text: "live" });
+    live = true;
+    notifications.emit({ kind: "chrome", text: "chrome-live" });
+    notifications.emit({ kind: "step-output", text: "step-live" });
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toEqual({ kind: "chrome", text: "chrome-live" });
+    expect(seen[1]).toEqual({ kind: "step-output", text: "step-live" });
 
     unsub();
   });
 
-  test("non-chrome notifications never call onProcessingChrome", () => {
-    const { router, seen } = makeRouter({ isProcessing: true });
+  test("step-output is forwarded to onDialogNotification when live", () => {
+    // Regression: multi-step needs step-output to reach the reducer while
+    // the dialog is in processing OR executing-step. The old router only
+    // forwarded chrome; step-output was dropped silently.
+    const { router, seen } = makeRouter({ isDialogLive: true });
     const unsub = router.subscribe();
     router.setDialog(makeFakeDialog());
-    notifications.emit({ kind: "verbose", line: "ignored\n" });
-    notifications.emit({ kind: "step-output", text: "also ignored" });
-    expect(seen).toHaveLength(0);
+    notifications.emit({ kind: "step-output", text: "captured body" });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual({ kind: "step-output", text: "captured body" });
     unsub();
   });
 

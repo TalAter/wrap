@@ -108,8 +108,8 @@ export async function runSession(
   let currentLoopAbort: AbortController | null = null;
 
   const router = createNotificationRouter({
-    isProcessing: () => state.tag === "processing",
-    onProcessingChrome: (n) => dispatch({ type: "notification", notification: n }),
+    isDialogLive: () => state.tag === "processing" || state.tag === "executing-step",
+    onDialogNotification: (n) => dispatch({ type: "notification", notification: n }),
   });
 
   const exitDeferred = Promise.withResolvers<SessionOutcome>();
@@ -117,11 +117,16 @@ export async function runSession(
 
   const dispatch = (event: AppEvent): void => {
     if (exited) return;
-    // Esc on `processing` aborts BEFORE the reducer transitions, so any
-    // in-flight LLM call is cancelled even if its result was about to land.
-    if (event.type === "key-esc" && state.tag === "processing") {
+    // Esc on `processing` or `executing-step` aborts BEFORE the reducer
+    // transitions, so any in-flight LLM call or capture-mode step is
+    // cancelled even if its result was about to land.
+    if (
+      event.type === "key-esc" &&
+      (state.tag === "processing" || state.tag === "executing-step")
+    ) {
       currentLoopAbort?.abort();
     }
+    const prevTag = state.tag;
     const next = reduce(state, event);
     if (next === state) return;
     state = next;
@@ -131,7 +136,8 @@ export async function runSession(
       exitDeferred.resolve(state.outcome);
       return;
     }
-    if (state.tag === "processing") {
+    const entered = state.tag !== prevTag;
+    if (entered && state.tag === "processing") {
       // submit-followup just landed. The previous `candidate_command` turn
       // is already in the transcript, so pushing a user turn here gives the
       // LLM `[..., candidate, user]` — no message-history hygiene needed.
@@ -140,7 +146,50 @@ export async function runSession(
       loopState.budgetRemaining = maxRounds;
       startPumpLoop({ isInitialLoop: false, followupText });
     }
+    if (entered && state.tag === "executing-step") {
+      // submit-step-confirm hook: the user just confirmed a non-final
+      // med/high step (or finished editing one). Capture its output,
+      // emit step-output through the bus, push a confirmed_step turn,
+      // reset budget, then re-enter pumpLoop for the next round.
+      void runConfirmedStep(state.response);
+    }
   };
+
+  async function runConfirmedStep(
+    response: import("../command-response.schema.ts").CommandResponse,
+  ): Promise<void> {
+    const ctrl = new AbortController();
+    currentLoopAbort = ctrl;
+    const stdinBlob =
+      response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
+    try {
+      const exec = await executeShellCommand(response.content, { mode: "capture", stdinBlob });
+      if (ctrl.signal.aborted) return;
+      let stepOutput = exec.stdout;
+      if (exec.stderr.trim()) {
+        stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
+      }
+      if (stepOutput.length > maxCapturedOutput) {
+        const total = stepOutput.length;
+        stepOutput =
+          stepOutput.slice(0, maxCapturedOutput) +
+          `\n[…truncated, showing first ${maxCapturedOutput} of ${total} chars]`;
+      }
+      notifications.emit({ kind: "step-output", text: stepOutput });
+      transcript.push({
+        kind: "confirmed_step",
+        response,
+        output: stepOutput,
+        exitCode: exec.exitCode,
+      });
+      loopState.budgetRemaining = maxRounds;
+      startPumpLoop({ isInitialLoop: false, followupText: undefined });
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const err = e instanceof Error ? e : new Error(String(e));
+      dispatch({ type: "loop-error", error: err });
+    }
+  }
 
   async function syncDialog(): Promise<void> {
     const wantsDialog = isDialogTag(state.tag);
