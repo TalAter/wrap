@@ -92,8 +92,16 @@ export async function runSession(
   };
 
   // Lazy-load Ink in parallel with the first LLM call so the await before
-  // the first dialog mount is free in practice.
-  const inkReady = process.stderr.isTTY ? preloadDialogModules() : null;
+  // the first dialog mount is free in practice. A failed dynamic import
+  // is captured here so syncDialog can surface it via dispatch instead of
+  // hanging the session on an unhandled rejection.
+  const inkReady = process.stderr.isTTY
+    ? preloadDialogModules().catch((e) => {
+        const err = e instanceof Error ? e : new Error(String(e));
+        dispatch({ type: "loop-error", error: err });
+        throw err;
+      })
+    : null;
 
   let state: AppState = { tag: "thinking" };
   // Wrapped in a single-key object so TypeScript doesn't narrow `dialogHost`
@@ -182,7 +190,10 @@ export async function runSession(
     currentLoopAbort = ctrl;
     let firstRoundComplete = true;
     const isInitialLoop = state.tag === "thinking";
-    const followupText = isInitialLoop || state.tag !== "processing" ? undefined : state.draft;
+    // Captured at entry time. The only path to pumpLoop from non-thinking
+    // is the submit-followup post-transition hook, which lands us in
+    // `processing` with the user's text in `state.draft`.
+    const followupText = state.tag === "processing" ? state.draft : undefined;
 
     function handleLoopEvent(event: LoopEvent): void {
       switch (event.type) {
@@ -286,8 +297,8 @@ export async function runSession(
     const outcome = await exitDeferred.promise;
     // Unmount the dialog BEFORE running the run-side-effect so the alt
     // screen is gone when the exec'd command writes to inherited stdio.
-    // Same call lives in finally as a guard if the await above throws.
-    unsubscribe();
+    // The notification listener stays subscribed through finaliseOutcome so
+    // verbose/chrome lines from the exec phase still route through the bus.
     teardownDialog();
     exitCode = await finaliseOutcome(outcome, entry, options.pipedInput);
   } finally {
@@ -312,43 +323,50 @@ async function finaliseOutcome(
   entry: LogEntry,
   pipedInput: string | undefined,
 ): Promise<number> {
-  if (outcome.kind === "answer") {
-    console.log(outcome.content);
-    entry.outcome = "success";
-    return 0;
+  switch (outcome.kind) {
+    case "answer":
+      console.log(outcome.content);
+      entry.outcome = "success";
+      return 0;
+    case "exhausted":
+      chrome(`Could not resolve the request within ${entry.rounds.length} rounds.`);
+      entry.outcome = "max_rounds";
+      return 1;
+    case "blocked":
+      entry.outcome = "blocked";
+      return 1;
+    case "cancel":
+      entry.outcome = "cancelled";
+      return 1;
+    case "error":
+      // Throw rather than return — main.ts catches and renders via chrome,
+      // matching the original `runQuery` contract. The throw runs AFTER the
+      // finally block writes the log entry, so the error round is on disk
+      // with `outcome: "error"` regardless of what main.ts does next.
+      entry.outcome = "error";
+      throw new Error(outcome.message);
+    case "run": {
+      verbose("Executing command...");
+      const stdinBlob =
+        outcome.response.pipe_stdin && pipedInput ? new Blob([pipedInput]) : undefined;
+      const exec = await executeShellCommand(outcome.command, {
+        mode: "inherit",
+        stdinBlob,
+      });
+      // In-place mutation: the round is already in entry.rounds (eager-logged).
+      outcome.round.exec_ms = exec.exec_ms;
+      outcome.round.execution = {
+        command: outcome.command,
+        exit_code: exec.exitCode,
+        shell: exec.shell,
+      };
+      verbose(`Command exited (${exec.exitCode})`);
+      entry.outcome = exec.exitCode === 0 ? "success" : "error";
+      return exec.exitCode;
+    }
+    default: {
+      const _exhaustive: never = outcome;
+      throw new Error(`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`);
+    }
   }
-  if (outcome.kind === "exhausted") {
-    chrome(`Could not resolve the request within ${entry.rounds.length} rounds.`);
-    entry.outcome = "max_rounds";
-    return 1;
-  }
-  if (outcome.kind === "blocked") {
-    entry.outcome = "blocked";
-    return 1;
-  }
-  if (outcome.kind === "cancel") {
-    entry.outcome = "cancelled";
-    return 1;
-  }
-  if (outcome.kind === "error") {
-    entry.outcome = "error";
-    throw new Error(outcome.message);
-  }
-  // outcome.kind === "run"
-  verbose("Executing command...");
-  const stdinBlob = outcome.response.pipe_stdin && pipedInput ? new Blob([pipedInput]) : undefined;
-  const exec = await executeShellCommand(outcome.command, {
-    mode: "inherit",
-    stdinBlob,
-  });
-  // In-place mutation: the round is already in entry.rounds (eager-logged).
-  outcome.round.exec_ms = exec.exec_ms;
-  outcome.round.execution = {
-    command: outcome.command,
-    exit_code: exec.exitCode,
-    shell: exec.shell,
-  };
-  verbose(`Command exited (${exec.exitCode})`);
-  entry.outcome = exec.exitCode === 0 ? "success" : "error";
-  return exec.exitCode;
 }

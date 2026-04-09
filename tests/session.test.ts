@@ -136,3 +136,25 @@ describe("runSession — no TTY for medium command", () => {
     expect(stderr.text).toContain("requires confirmation");
   });
 });
+
+describe("runSession — multi-round probe → answer", () => {
+  test("probe followed by answer logs both rounds and exits 0", async () => {
+    const { provider } = makeProvider([
+      { type: "probe", content: "echo hi", risk_level: "low" } as CommandResponse,
+      { type: "answer", content: "the answer", risk_level: "low" } as CommandResponse,
+    ]);
+    const exit = await runSession("test", provider, {
+      cwd: "/tmp",
+      resolvedProvider: TEST_RESOLVED_PROVIDER,
+    });
+    expect(exit).toBe(0);
+    expect(stdoutLines.join("")).toContain("the answer");
+    // Verify the log entry has BOTH rounds (the probe and the answer)
+    const { readFileSync } = await import("node:fs");
+    const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");
+    const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
+    expect(entry.rounds).toHaveLength(2);
+    expect(entry.rounds[0].parsed.type).toBe("probe");
+    expect(entry.rounds[1].parsed.type).toBe("answer");
+  });
+});

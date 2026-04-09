@@ -63,18 +63,18 @@ describe("buildPromptInput", () => {
     });
     expect(out.messages[2]).toEqual({
       role: "user",
-      content: `${promptConstants.sectionProbeOutput}\nout1`,
+      content: `${promptConstants.sectionCapturedOutput}\nout1`,
     });
   });
 
-  test("probe with empty output renders the probeNoOutput sentinel", () => {
+  test("probe with empty output renders the capturedNoOutput sentinel", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
       { kind: "probe", response: probeResponse, output: "", exitCode: 0 },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(
-      `${promptConstants.sectionProbeOutput}\n${promptConstants.probeNoOutput}`,
+      `${promptConstants.sectionCapturedOutput}\n${promptConstants.capturedNoOutput}`,
     );
   });
 
@@ -85,7 +85,7 @@ describe("buildPromptInput", () => {
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(
-      `${promptConstants.sectionProbeOutput}\n${promptConstants.probeNoOutput}`,
+      `${promptConstants.sectionCapturedOutput}\n${promptConstants.capturedNoOutput}`,
     );
   });
 
@@ -95,7 +95,7 @@ describe("buildPromptInput", () => {
       { kind: "probe", response: probeResponse, output: "hi\n", exitCode: 0 },
     ];
     const out = buildPromptInput(transcript, sys);
-    expect(out.messages[2]?.content).toBe(`${promptConstants.sectionProbeOutput}\nhi`);
+    expect(out.messages[2]?.content).toBe(`${promptConstants.sectionCapturedOutput}\nhi`);
   });
 
   test("candidate_command + follow-up user turn renders both", () => {

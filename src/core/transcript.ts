@@ -74,7 +74,7 @@ function formatProbeBody(output: string, exitCode: number): string {
     body += `\nExit code: ${exitCode}`;
   }
   const trimmed = body.trim();
-  return `${promptConstants.sectionProbeOutput}\n${trimmed.length > 0 ? trimmed : promptConstants.probeNoOutput}`;
+  return `${promptConstants.sectionCapturedOutput}\n${trimmed.length > 0 ? trimmed : promptConstants.capturedNoOutput}`;
 }
 
 /**
