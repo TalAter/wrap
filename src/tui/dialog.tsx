@@ -1,18 +1,7 @@
-import {
-  Box,
-  type DOMElement,
-  measureElement,
-  Text,
-  useApp,
-  useInput,
-  useStdin,
-  useStdout,
-} from "ink";
+import { Box, type DOMElement, measureElement, Text, useInput, useStdin, useStdout } from "ink";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import stringWidth from "string-width";
-import type { RiskLevel } from "../command-response.schema.ts";
-import type { FollowupHandler, FollowupResult } from "../core/followup-types.ts";
-import type { SubscribeChrome } from "../core/output-sink.ts";
+import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import {
   type BorderSegment,
   bottomBorderSegments,
@@ -22,26 +11,10 @@ import {
 import { useSpinner } from "./spinner.ts";
 import { TextInput } from "./text-input.tsx";
 
-// Terminal results emitted by the dialog itself. `blocked` lives on
-// `DialogResult` (in render.ts) — it's only produced when there's no TTY,
-// before the dialog mounts.
-export type DialogOutput =
-  | { type: "run"; command: string }
-  | { type: "cancel"; command: string }
-  | { type: "answer"; content: string }
-  | { type: "exhausted" }
-  | { type: "error"; message: string };
-
 type DialogProps = {
-  initialCommand: string;
-  initialRiskLevel: RiskLevel;
-  initialExplanation?: string;
-  onResult: (result: DialogOutput) => void;
-  onFollowup: FollowupHandler;
-  subscribeChrome?: SubscribeChrome;
+  state: AppState;
+  dispatch: (event: AppEvent) => void;
 };
-
-type DialogState = "confirming" | "editing-command" | "composing-followup" | "processing-followup";
 
 // `id` is the stable handle for dispatch — labels are presentation only.
 // Convention: hotkey is the lowercased first letter of `label` so the action
@@ -53,8 +26,12 @@ const ACTION_ITEMS = [
   { id: "edit", label: "Edit", primary: false, hotkey: "e" },
   { id: "followup", label: "Follow-up", primary: false, hotkey: "f" },
   { id: "copy", label: "Copy", primary: false, hotkey: "c" },
-] as const;
-type ActionId = (typeof ACTION_ITEMS)[number]["id"];
+] as const satisfies ReadonlyArray<{
+  id: ActionId;
+  label: string;
+  primary: boolean;
+  hotkey: string;
+}>;
 const ACTION_BAR_WIDTH = 61;
 const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
 const DIALOG_MARGIN = 4;
@@ -73,59 +50,26 @@ const PROCESS_HINTS = [{ combo: "Esc", label: "to abort" }] as const;
 /** Border status shown while a follow-up call is in flight before any chrome event arrives. */
 export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
 
-export function Dialog({
-  initialCommand,
-  initialRiskLevel,
-  initialExplanation,
-  onResult,
-  onFollowup,
-  subscribeChrome,
-}: DialogProps) {
-  const { exit } = useApp();
+export function Dialog({ state, dispatch }: DialogProps) {
   const { columns: termCols, rows: termRows } = useRenderSize();
-  // Held as state so the follow-up flow can swap command/risk/explanation
-  // in place without remounting the dialog (which would flicker the alt screen).
-  const [command, setCommand] = useState(initialCommand);
-  const [riskLevel, setRiskLevel] = useState(initialRiskLevel);
-  const [explanation, setExplanation] = useState(initialExplanation);
+  // Local presentation state. Pure UI — no application state depends on it.
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [dialogState, setDialogState] = useState<DialogState>("confirming");
-  const [draft, setDraft] = useState(initialCommand);
-  const [followupText, setFollowupText] = useState("");
-  const [borderStatus, setBorderStatus] = useState<string | undefined>(undefined);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Live chrome events from the output sink update the bottom border so
-  // probes/memory writes during a follow-up are visible. Gating the
-  // subscription on dialogState ensures zombie events from a still-emitting
-  // aborted call (Esc → composing → resubmit) cannot bleed into the next
-  // processing window: the listener is unsubscribed for the duration of
-  // the gap. Verbose lines are not delivered here (output-sink only fans
-  // out chrome lines).
+  // Reset action-bar selection on transitions out of confirming so the user
+  // never sees a stale highlight when re-entering.
   useEffect(() => {
-    if (!subscribeChrome) return;
-    if (dialogState !== "processing-followup") return;
-    return subscribeChrome((event) => {
-      setBorderStatus(event.text);
-    });
-  }, [subscribeChrome, dialogState]);
+    if (state.tag !== "confirming") setSelectedIndex(0);
+  }, [state.tag]);
 
-  // After a follow-up command swap, the next entry into editing-command must
-  // show the swapped-in command, not the pre-swap text. Resyncing draft on
-  // command change keeps them in lockstep without conflicting with edit-mode
-  // typing (the user can only edit when command is stable).
-  useEffect(() => {
-    setDraft(command);
-  }, [command]);
-
-  // Drain any buffered stdin on state transitions. Without this, a stray
-  // keypress from the previous mode (e.g. typed before the LLM responded)
-  // could be processed by the new mode and accidentally advance the dialog.
-  // tui-approach.md §3 lists this as critical for safety. dialogState is in
-  // the deps as a transition marker even though the body doesn't read it —
-  // re-firing on every state change is the entire point.
+  // Drain any buffered stdin on first mount and on every transition. The
+  // reducer model fixes the case where a stray key lands in the wrong tag,
+  // but it does NOT fix the case where the user pressed Enter while waiting
+  // for the LLM and the keystroke is buffered in stdin BEFORE the dialog
+  // mounts. Without the drain, that buffered Enter reaches Ink's `useInput`
+  // on the very first frame and gets dispatched as `key-action run` against
+  // `confirming`, executing a dangerous command the user never confirmed.
   const { stdin } = useStdin();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dialogState is a transition marker
+  // biome-ignore lint/correctness/useExhaustiveDependencies: state.tag is a transition marker
   useEffect(() => {
     try {
       // Bounded so a misbehaving stream that never returns null can't hang
@@ -137,15 +81,24 @@ export function Dialog({
     } catch {
       // Test stdin streams may not implement read(); safe to ignore.
     }
-  }, [dialogState, stdin]);
+  }, [state.tag, stdin]);
+
+  // Pull display values from state. Outside of dialog tags the dialog is not
+  // mounted at all (the session decides), so these reads are always defined
+  // when this code runs — but TypeScript doesn't know that, hence the guards.
+  const dialogResponse = "response" in state ? state.response : undefined;
+  const command = dialogResponse?.content ?? "";
+  const riskLevel = dialogResponse?.risk_level ?? "low";
+  const explanation = dialogResponse?.explanation ?? undefined;
+  const draft = "draft" in state ? state.draft : "";
+  const status = state.tag === "processing" ? state.status : undefined;
 
   // Width calculation
-  const showFollowupInput =
-    dialogState === "composing-followup" || dialogState === "processing-followup";
+  const showFollowupInput = state.tag === "composing" || state.tag === "processing";
   const natural = Math.max(
     stringWidth(command),
     explanation ? stringWidth(explanation) : 0,
-    showFollowupInput ? stringWidth(followupText) : 0,
+    showFollowupInput ? stringWidth(draft) : 0,
     MIN_INNER_WIDTH,
   );
   const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - DIALOG_MARGIN);
@@ -161,7 +114,7 @@ export function Dialog({
       : 0;
   const followupLines =
     showFollowupInput && innerWidth > 0
-      ? Math.max(1, Math.ceil(stringWidth(` ${followupText}`) / innerWidth))
+      ? Math.max(1, Math.ceil(stringWidth(` ${draft}`) / innerWidth))
       : 0;
   // First-pass estimate only. Wrapped content can change the real height
   // after Ink layout runs (useLayoutEffect below corrects via measureElement).
@@ -182,7 +135,6 @@ export function Dialog({
   useLayoutEffect(() => {
     const node = middleRef.current;
     if (!node) return;
-    // The side borders must match Ink's actual wrapped layout, not our estimate above.
     const { height } = measureElement(node);
     if (height > 0 && height !== borderCount) {
       setBorderCount(height);
@@ -197,41 +149,26 @@ export function Dialog({
     key: `right-${index}`,
   }));
 
+  // Editing-mode Esc → discard back to confirming.
   useInput(
     (_input, key) => {
-      if (key.escape) {
-        setDialogState("confirming");
-        setDraft(command);
-      }
+      if (key.escape) dispatch({ type: "key-esc" });
     },
-    { isActive: dialogState === "editing-command" },
+    { isActive: state.tag === "editing" },
   );
 
-  const performAction = (id: ActionId) => {
-    if (id === "run") {
-      onResult({ type: "run", command });
-      exit();
-    } else if (id === "cancel") {
-      onResult({ type: "cancel", command });
-      exit();
-    } else if (id === "edit") {
-      setDialogState("editing-command");
-    } else if (id === "followup") {
-      setDialogState("composing-followup");
-    }
-    // describe, copy — no-op in phase 1
-  };
-
+  // Confirming-mode key handling: arrow nav (local), Enter on highlight,
+  // hotkeys, and Esc → cancel.
   useInput(
     (input, key) => {
       if (key.escape) {
-        performAction("cancel");
+        dispatch({ type: "key-esc" });
         return;
       }
       // q is an alias for cancel that doesn't fit the hotkey table (not the
       // first letter of any label).
       if (input === "q") {
-        performAction("cancel");
+        dispatch({ type: "key-action", action: "cancel" });
         return;
       }
       if (key.leftArrow) {
@@ -244,90 +181,37 @@ export function Dialog({
       }
       if (key.return) {
         const item = ACTION_ITEMS[selectedIndex];
-        if (item) performAction(item.id);
+        if (item) dispatch({ type: "key-action", action: item.id });
         return;
       }
       const hotkeyMatch = ACTION_ITEMS.find((a) => a.hotkey === input);
       if (hotkeyMatch) {
-        performAction(hotkeyMatch.id);
+        dispatch({ type: "key-action", action: hotkeyMatch.id });
       }
     },
-    { isActive: dialogState === "confirming" },
+    { isActive: state.tag === "confirming" },
   );
 
-  // Composing follow-up: TextInput handles typing; parent only intercepts Esc.
+  // Composing-mode Esc → confirming. (TextInput handles printable input.)
   useInput(
     (_input, key) => {
-      if (key.escape) {
-        setDialogState("confirming");
-        setFollowupText("");
-      }
+      if (key.escape) dispatch({ type: "key-esc" });
     },
-    { isActive: dialogState === "composing-followup" },
+    { isActive: state.tag === "composing" },
   );
 
-  // Processing follow-up: Esc aborts the in-flight call and returns to
-  // composing with the user's text preserved so they can refine it.
+  // Processing-mode Esc → composing (coordinator handles abort + transition).
   useInput(
     (_input, key) => {
-      if (key.escape) {
-        abortControllerRef.current?.abort();
-        setDialogState("composing-followup");
-      }
+      if (key.escape) dispatch({ type: "key-esc" });
     },
-    { isActive: dialogState === "processing-followup" },
+    { isActive: state.tag === "processing" },
   );
 
-  const handleEditSubmit = (value: string) => {
-    if (value.trim() === "") return;
-    onResult({ type: "run", command: value });
-    exit();
-  };
-
-  const handleFollowupSubmit = async (text: string) => {
-    if (text.trim() === "") return;
-    // Batched with setDialogState so the first render in the new processing
-    // window shows the fallback, not stale chrome from the previous call's
-    // last probe (the listener-gating effect runs after commit, too late
-    // to prevent that initial render).
-    setBorderStatus(undefined);
-    setDialogState("processing-followup");
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    let result: FollowupResult;
-    try {
-      result = await onFollowup(text, controller.signal);
-    } catch (e) {
-      if (controller.signal.aborted) return;
-      onResult({
-        type: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-      exit();
-      return;
-    }
-    // Stale result after Esc-abort: drop it; user is back in composing.
-    if (controller.signal.aborted) return;
-    if (result.type === "command") {
-      setCommand(result.command);
-      setRiskLevel(result.riskLevel);
-      setExplanation(result.explanation);
-      setFollowupText("");
-      setDialogState("confirming");
-      return;
-    }
-    // Defensive: aborted should always be paired with signal.aborted (caught
-    // above), but if a handler returns it without aborting the signal we
-    // still drop it — there's no meaningful state for the dialog to land in.
-    if (result.type === "aborted") return;
-    onResult(result);
-    exit();
-  };
-
-  const spinnerFrame = useSpinner(dialogState === "processing-followup");
+  const spinnerFrame = useSpinner(state.tag === "processing");
   const bottomStatus =
-    dialogState === "processing-followup"
-      ? `${spinnerFrame ?? ""} ${borderStatus ?? FOLLOWUP_FALLBACK_STATUS}`
+    state.tag === "processing"
+      ? `${spinnerFrame ?? ""} ${status ?? FOLLOWUP_FALLBACK_STATUS}`
       : undefined;
 
   return (
@@ -351,8 +235,15 @@ export function Dialog({
             paddingTop={1}
             paddingBottom={1}
           >
-            {dialogState === "editing-command" ? (
-              <TextInput value={draft} onChange={setDraft} onSubmit={handleEditSubmit} />
+            {state.tag === "editing" ? (
+              <TextInput
+                value={state.draft}
+                onChange={(t) => dispatch({ type: "draft-change", text: t })}
+                onSubmit={(t) => {
+                  if (t.trim() === "") return;
+                  dispatch({ type: "submit-edit", text: t });
+                }}
+              />
             ) : (
               <TextInput value={command} readOnly />
             )}
@@ -364,28 +255,31 @@ export function Dialog({
                 </Box>
               </>
             )}
-            {(dialogState === "composing-followup" || dialogState === "processing-followup") && (
+            {(state.tag === "composing" || state.tag === "processing") && (
               <>
                 <Text> </Text>
-                {dialogState === "composing-followup" ? (
+                {state.tag === "composing" ? (
                   <TextInput
-                    value={followupText}
-                    onChange={setFollowupText}
-                    onSubmit={handleFollowupSubmit}
+                    value={state.draft}
+                    onChange={(t) => dispatch({ type: "draft-change", text: t })}
+                    onSubmit={(t) => {
+                      if (t.trim() === "") return;
+                      dispatch({ type: "submit-followup", text: t });
+                    }}
                     placeholder="actually..."
                   />
                 ) : (
-                  <TextInput value={followupText} readOnly />
+                  <TextInput value={state.draft} readOnly />
                 )}
               </>
             )}
             <Text> </Text>
             <Text> </Text>
-            {dialogState === "editing-command" ? (
+            {state.tag === "editing" ? (
               <KeyHints items={EDIT_HINTS} />
-            ) : dialogState === "composing-followup" ? (
+            ) : state.tag === "composing" ? (
               <KeyHints items={COMPOSE_HINTS} />
-            ) : dialogState === "processing-followup" ? (
+            ) : state.tag === "processing" ? (
               <KeyHints items={PROCESS_HINTS} />
             ) : (
               <ActionBar selectedIndex={selectedIndex} />
@@ -408,14 +302,12 @@ export function Dialog({
 }
 
 function useRenderSize(): { columns: number; rows: number } {
-  // Ink owns the render stream; rerender on resize from that stream.
   const { stdout } = useStdout();
   const fallbackColumns = 80;
   const fallbackRows = 24;
   const snapshot = useSyncExternalStore(
     (onChange) => {
       stdout.on("resize", onChange);
-
       return () => {
         stdout.off("resize", onChange);
       };

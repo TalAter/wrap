@@ -12,9 +12,9 @@
       "minimum": 1,
       "default": 5
     },
-    "maxProbeOutputChars": {
+    "maxCapturedOutputChars": {
       "type": "integer",
-      "description": "Maximum characters of probe command output sent to the LLM. Longer output is truncated. Default: 200000 (~200KB).",
+      "description": "Maximum characters of captured intermediate command output sent to the LLM. Longer output is truncated. Default: 200000 (~200KB).",
       "minimum": 1000,
       "default": 200000
     },

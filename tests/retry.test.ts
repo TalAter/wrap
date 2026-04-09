@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
-import { extractFailedText, fetchesUrl, isStructuredOutputError } from "../src/core/query.ts";
+import { extractFailedText, isStructuredOutputError } from "../src/core/round.ts";
+import { fetchesUrl } from "../src/core/runner.ts";
 import { SPINNER_TEXT } from "../src/core/spinner.ts";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
@@ -107,7 +108,7 @@ describe("extractFailedText", () => {
   });
 });
 
-describe("round retry in runQuery", () => {
+describe("round retry in runSession", () => {
   const originalConsoleLog = console.log;
   let stdoutOutput: string[];
   let stderr: MockStderr;
@@ -129,7 +130,7 @@ describe("round retry in runQuery", () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { runQuery } = await import("../src/core/query.ts");
+    const { runSession } = await import("../src/session/session.ts");
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
@@ -146,7 +147,7 @@ describe("round retry in runQuery", () => {
       },
     };
 
-    const exitCode = await runQuery("test", provider, {
+    const exitCode = await runSession("test", provider, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
@@ -159,7 +160,7 @@ describe("round retry in runQuery", () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { runQuery } = await import("../src/core/query.ts");
+    const { runSession } = await import("../src/session/session.ts");
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
@@ -173,7 +174,7 @@ describe("round retry in runQuery", () => {
     };
 
     try {
-      await runQuery("test", provider, {
+      await runSession("test", provider, {
         cwd: "/tmp",
         resolvedProvider: TEST_RESOLVED_PROVIDER,
       });
@@ -186,12 +187,12 @@ describe("round retry in runQuery", () => {
   test("wraps LLM errors with attempted provider/model label", async () => {
     // Anthropic's 404 body literally is `{"message":"model: gpt-4o-mini"}` —
     // the bare SDK message gives no clue which provider rejected which model.
-    // runQuery must wrap thrown errors with the resolved provider label so the
+    // runSession must wrap thrown errors with the resolved provider label so the
     // user sees what was actually attempted.
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { runQuery } = await import("../src/core/query.ts");
+    const { runSession } = await import("../src/session/session.ts");
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
     writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
@@ -204,7 +205,7 @@ describe("round retry in runQuery", () => {
 
     let thrown: Error | undefined;
     try {
-      await runQuery("test", provider, {
+      await runSession("test", provider, {
         cwd: "/tmp",
         resolvedProvider: { name: "anthropic", model: "gpt-4o-mini" },
       });
@@ -237,7 +238,7 @@ describe("chrome spinner around LLM call", () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { runQuery } = await import("../src/core/query.ts");
+    const { runSession } = await import("../src/session/session.ts");
     const { resetVerbose } = await import("../src/core/verbose.ts");
 
     resetVerbose();
@@ -250,7 +251,7 @@ describe("chrome spinner around LLM call", () => {
       runPrompt: async () => ({ type: "answer", content: "ok", risk_level: "low" }),
     };
 
-    await runQuery("test", provider, {
+    await runSession("test", provider, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
@@ -265,7 +266,7 @@ describe("chrome spinner around LLM call", () => {
     const { mkdtempSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { runQuery } = await import("../src/core/query.ts");
+    const { runSession } = await import("../src/session/session.ts");
     const { resetVerbose } = await import("../src/core/verbose.ts");
 
     resetVerbose();
@@ -278,7 +279,7 @@ describe("chrome spinner around LLM call", () => {
       runPrompt: async () => ({ type: "answer", content: "ok", risk_level: "low" }),
     };
 
-    await runQuery("test", provider, {
+    await runSession("test", provider, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });

@@ -6,11 +6,7 @@ import type { PromptInput, Provider } from "../llm/types.ts";
 import type { Round } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
-import {
-  type AttemptDirectives,
-  buildPromptInput,
-  type Transcript,
-} from "./transcript.ts";
+import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
 
 /**

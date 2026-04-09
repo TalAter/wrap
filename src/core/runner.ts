@@ -56,7 +56,11 @@ export type LoopEvent =
   | { type: "step-output"; text: string };
 
 export type LoopReturn =
-  | { type: "command"; response: import("../command-response.schema.ts").CommandResponse; round: Round }
+  | {
+      type: "command";
+      response: import("../command-response.schema.ts").CommandResponse;
+      round: Round;
+    }
   | { type: "answer"; content: string }
   | { type: "exhausted" }
   /**
@@ -193,7 +197,11 @@ export async function* runLoop(
     }
 
     const probeIcon = fetchesUrl(response.content) ? "🌐" : "🔍";
-    yield { type: "step-running", explanation: response.explanation || response.content, icon: probeIcon };
+    yield {
+      type: "step-running",
+      explanation: response.explanation || response.content,
+      icon: probeIcon,
+    };
     verbose(`Probe: ${response.content}`);
 
     const stdinBlob =

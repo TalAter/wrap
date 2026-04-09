@@ -1,18 +1,13 @@
 import type { CommandResponse } from "../../src/command-response.schema.ts";
-import type { RoundsOptions } from "../../src/core/query.ts";
+import type { LoopOptions } from "../../src/core/runner.ts";
 import { TEST_RESOLVED_PROVIDER } from "../../src/llm/providers/test.ts";
-import {
-  type ConversationMessage,
-  formatProvider,
-  type PromptInput,
-  type Provider,
-} from "../../src/llm/types.ts";
+import { formatProvider, type Provider } from "../../src/llm/types.ts";
 import { createLogEntry, type LogEntry } from "../../src/logging/entry.ts";
 
 /**
- * Test fixtures shared by tests that exercise `runRoundsUntilFinal` or
- * `createFollowupHandler` directly. Kept here so the two test files don't
- * drift on the basics (provider stub, input shape, default options).
+ * Test fixtures shared by tests that exercise `runLoop` or `runSession`
+ * directly. Kept here so the test files don't drift on the basics
+ * (provider stub, log-entry shape, default options).
  */
 
 export function makeProvider(responses: CommandResponse[]): {
@@ -36,13 +31,6 @@ export function makeProvider(responses: CommandResponse[]): {
   };
 }
 
-export function makeInput(extraMessages: ConversationMessage[] = []): PromptInput {
-  return {
-    system: "system",
-    messages: [{ role: "user", content: "test" }, ...extraMessages],
-  };
-}
-
 export function makeEntry(): LogEntry {
   return createLogEntry({
     prompt: "test",
@@ -52,14 +40,15 @@ export function makeEntry(): LogEntry {
   });
 }
 
-export function makeOptions(overrides: Partial<RoundsOptions> = {}): RoundsOptions {
+export function makeOptions(overrides: Partial<LoopOptions> = {}): LoopOptions {
   return {
     cwd: "/tmp",
     wrapHome: "/tmp",
     model: formatProvider(TEST_RESOLVED_PROVIDER),
     maxRounds: 5,
-    maxProbeOutput: 10000,
+    maxCapturedOutput: 10000,
     pipedInput: undefined,
+    showSpinner: false,
     ...overrides,
   };
 }

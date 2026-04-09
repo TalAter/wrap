@@ -4,7 +4,6 @@ import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
-import { runQuery } from "./core/query.ts";
 import { initVerbose, verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
@@ -13,6 +12,7 @@ import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
 import { formatProvider } from "./llm/types.ts";
 import { ensureMemory } from "./memory/memory.ts";
+import { runSession } from "./session/session.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 
 const MODIFIER_SPECS: readonly ModifierSpec[] = [
@@ -70,7 +70,7 @@ export async function main() {
     }
 
     process.exit(
-      await runQuery(prompt, provider, {
+      await runSession(prompt, provider, {
         memory,
         cwd,
         resolvedProvider: resolved,
@@ -78,7 +78,7 @@ export async function main() {
         cwdFiles,
         pipedInput,
         maxRounds: config.maxRounds,
-        maxProbeOutputChars: config.maxProbeOutputChars,
+        maxCapturedOutputChars: config.maxCapturedOutputChars,
         maxPipedInputChars: config.maxPipedInputChars,
       }),
     );

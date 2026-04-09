@@ -67,10 +67,7 @@ function reduceThinking(state: AppState & { tag: "thinking" }, event: AppEvent):
   return state;
 }
 
-function reduceConfirming(
-  state: AppState & { tag: "confirming" },
-  event: AppEvent,
-): AppState {
+function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEvent): AppState {
   if (event.type === "key-action") {
     switch (event.action) {
       case "run":
@@ -134,10 +131,7 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
   return state;
 }
 
-function reduceComposing(
-  state: AppState & { tag: "composing" },
-  event: AppEvent,
-): AppState {
+function reduceComposing(state: AppState & { tag: "composing" }, event: AppEvent): AppState {
   if (event.type === "key-esc") {
     return { tag: "confirming", response: state.response, round: state.round };
   }
@@ -156,10 +150,7 @@ function reduceComposing(
   return state;
 }
 
-function reduceProcessing(
-  state: AppState & { tag: "processing" },
-  event: AppEvent,
-): AppState {
+function reduceProcessing(state: AppState & { tag: "processing" }, event: AppEvent): AppState {
   if (event.type === "key-esc") {
     return {
       tag: "composing",

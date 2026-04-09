@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import configSchema from "../src/config/config.schema.json";
 import {
+  DEFAULT_MAX_CAPTURED_OUTPUT_CHARS,
   DEFAULT_MAX_PIPED_INPUT_CHARS,
-  DEFAULT_MAX_PROBE_OUTPUT_CHARS,
   DEFAULT_MAX_ROUNDS,
   loadConfig,
 } from "../src/config/config.ts";
@@ -223,20 +223,20 @@ describe("loadConfig", () => {
     });
   });
 
-  describe("maxProbeOutputChars", () => {
+  describe("maxCapturedOutputChars", () => {
     test("reads from config file", () => {
       const dir = tempDir();
-      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxProbeOutputChars: 50000 }));
+      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxCapturedOutputChars: 50000 }));
       const config = loadConfig({ WRAP_HOME: dir });
-      expect(config.maxProbeOutputChars).toBe(50000);
+      expect(config.maxCapturedOutputChars).toBe(50000);
     });
 
     test("reads from WRAP_CONFIG", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ maxProbeOutputChars: 100000 }),
+        WRAP_CONFIG: JSON.stringify({ maxCapturedOutputChars: 100000 }),
       });
-      expect(config.maxProbeOutputChars).toBe(100000);
+      expect(config.maxCapturedOutputChars).toBe(100000);
     });
 
     test("undefined when not set", () => {
@@ -244,7 +244,7 @@ describe("loadConfig", () => {
         WRAP_HOME: tempDir(),
         WRAP_CONFIG: JSON.stringify({}),
       });
-      expect(config.maxProbeOutputChars).toBeUndefined();
+      expect(config.maxCapturedOutputChars).toBeUndefined();
     });
   });
 
@@ -278,10 +278,10 @@ describe("loadConfig", () => {
       expect(mr.minimum).toBe(1);
     });
 
-    test("configSchema includes maxProbeOutputChars with default 200000", () => {
-      const mp = configSchema.properties.maxProbeOutputChars;
+    test("configSchema includes maxCapturedOutputChars with default 200000", () => {
+      const mp = configSchema.properties.maxCapturedOutputChars;
       expect(mp.type).toBe("integer");
-      expect(mp.default).toBe(DEFAULT_MAX_PROBE_OUTPUT_CHARS);
+      expect(mp.default).toBe(DEFAULT_MAX_CAPTURED_OUTPUT_CHARS);
       expect(mp.minimum).toBe(1000);
     });
 

@@ -1,15 +1,13 @@
 import type { CommandResponse, RiskLevel } from "../../src/command-response.schema.ts";
+import type { Round } from "../../src/logging/entry.ts";
 import type {
   ComposingState,
   ConfirmingState,
   EditingState,
   ProcessingState,
 } from "../../src/session/state.ts";
-import type { Round } from "../../src/logging/entry.ts";
 
-export function makeResponse(
-  overrides: Partial<CommandResponse> = {},
-): CommandResponse {
+export function makeResponse(overrides: Partial<CommandResponse> = {}): CommandResponse {
   return {
     type: "command",
     content: "ls -la",
