@@ -7,7 +7,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Core Query Loop
 
 - [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
-- [ ] `truncateToLine()` utility — line-aware truncation for LLM context (see `specs/piped-input.md` § Truncation). Replace naive `slice()` in probe output truncation (`query.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
+- [ ] `truncateToLine()` utility — line-aware truncation for LLM context (see `specs/piped-input.md` § Truncation). Replace naive `slice()` in captured-output truncation (`runner.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
 
 ## Input & Invocation
 
@@ -30,7 +30,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] `[C]opy` option — copy command to clipboard
 - [ ] Responsive action bar — shrink/abbreviate action buttons when dialog is narrow to avoid sprawling layout
 - [ ] Arrow key shortcuts in dialog — Up enters edit mode, Down exits (same as Esc)
-- [ ] Input buffer flush before rendering dialog
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
@@ -50,8 +49,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
-- [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the display label lives separately on `ResolvedProvider` and is computed via the `formatProvider(resolved)` helper. Code that holds a `Provider` and wants to display the model has to be passed the resolved provider too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `formatProvider(resolved)`, and update test fixtures (~10 inline `Provider` literals across `tests/retry.test.ts`, `tests/ensure-memory.test.ts`, `tests/rounds.test.ts`) to set `label: "test / test"`. After this lands, drop the sub-todo below.
-  - [ ] `src/core/query.ts` `RoundsOptions` currently carries a `model: string` field threaded down from `runQuery` (`formatProvider(options.resolvedProvider)`) so the per-round verbose log and the wrapped error message can show the provider/model. Once `Provider.label` exists, drop the `model` field from `RoundsOptions`, drop the `formatProvider` call in `runQuery`, and use `provider.label` directly inside `runRoundsUntilFinal` (verbose `Calling ${provider.label}...` and the wrapped `LLM error (${provider.label}): ...`).
+- [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the display label lives separately on `ResolvedProvider` and is computed via `formatProvider(resolved)`. Code that holds a `Provider` and wants to display the model has to be passed the resolved provider too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `formatProvider(resolved)`, and update test fixtures to set `label: "test / test"`. After this lands, drop the `model` field from `LoopOptions` / `RunRoundOptions` and read `provider.label` directly inside `runRound` and `runLoop`.
 
 ## Memory System
 

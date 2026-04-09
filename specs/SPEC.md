@@ -560,7 +560,7 @@ Merge behavior: **shallow merge** — `WRAP_CONFIG` overrides top-level keys fro
 
   // LLM round budget
   "maxRounds": 5,
-  "maxProbeOutputChars": 200000,  // ~200KB cap on probe output fed to LLM
+  "maxCapturedOutputChars": 200000,  // ~200KB cap on captured intermediate command output fed to LLM
   "maxPipedInputChars":  200000,  // ~200KB cap on piped stdin fed to LLM
 
   // Safety (NOT YET IMPLEMENTED — see specs/safety.md)

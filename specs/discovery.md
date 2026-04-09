@@ -144,7 +144,7 @@ Parse common config files and include a summary alongside the listing (`package.
 
 ## LLM Probes
 
-> **Status:** Implemented. Core loop in `src/core/query.ts`. Prompt strings in `src/prompt.constants.json`. Config: `maxRounds`, `maxProbeOutputChars`. Eval support: `extra_messages` and `last_round` fields in bridge + optimizer + seed samples.
+> **Status:** Implemented. Core loop in `src/core/runner.ts` (with `runRound` in `src/core/round.ts` and the semantic transcript in `src/core/transcript.ts`). Prompt strings in `src/prompt.constants.json`. Config: `maxRounds`, `maxCapturedOutputChars`. Eval support: `extra_messages` and `last_round` fields in bridge + optimizer + seed samples.
 
 The LLM can return `type: "probe"` to run a safe, read-only discovery command before generating the final command. Probe results are fed back as conversation turns (assistant + user message pairs), building context across rounds.
 
@@ -200,7 +200,7 @@ Probes and error-fix rounds share a unified `maxRounds` budget. The LLM should b
 
 ## Web Reading
 
-> **Status:** Implemented. URL-fetch detection (`fetchesUrl`) and 🌐 indicator in `src/core/query.ts`. Tool defaults (`wget`, `textutil`, `lynx`, `w3m`) in `src/discovery/init-probes.ts`. Grounding rule in `src/prompt.optimized.json` instruction (mirrored in the DSPy seed at `eval/dspy/optimize.py`). Schema comment in `src/command-response.schema.ts`. Eval samples in `eval/examples/seed.jsonl`.
+> **Status:** Implemented. URL-fetch detection (`fetchesUrl`) and 🌐 indicator in `src/core/runner.ts`. Tool defaults (`wget`, `textutil`, `lynx`, `w3m`) in `src/discovery/init-probes.ts`. Grounding rule in `src/prompt.optimized.json` instruction (mirrored in the DSPy seed at `eval/dspy/optimize.py`). Schema comment in `src/command-response.schema.ts`. Eval samples in `eval/examples/seed.jsonl`.
 
 ### Problem
 
@@ -263,7 +263,7 @@ No structured safety template — the LLM responds in its natural voice, coverin
 
 URL-fetching probes display `🌐` on stderr instead of the default `🔍`. The text after the emoji comes from the LLM's `explanation` field (free-form — phrasing isn't enforced).
 
-Detection: `fetchesUrl()` in `src/core/query.ts` checks that the probe content starts with `curl`/`wget` and contains `http(s)://`. Simple heuristic; ambiguous cases fall back to `🔍`.
+Detection: `fetchesUrl()` in `src/core/runner.ts` checks that the probe content starts with `curl`/`wget` and contains `http(s)://`. Simple heuristic; ambiguous cases fall back to `🔍`.
 
 **Fetch only, never execute.** URL probes only download content — they never pipe a fetched script through a shell. The existing probe safety check (probes must be `risk_level: "low"`) enforces this; the grounding rule reinforces it for the script-analysis case ("read the script as a probe and *analyze* it as an answer").
 

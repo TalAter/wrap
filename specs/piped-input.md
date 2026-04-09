@@ -58,7 +58,7 @@ Both piped input and probe output truncation will use a shared `truncateToLine(t
 
 ```jsonc
 {
-  "maxPipedInputChars": 200000  // ~200KB. Same unit as maxProbeOutputChars.
+  "maxPipedInputChars": 200000  // ~200KB. Same unit as maxCapturedOutputChars.
 }
 ```
 

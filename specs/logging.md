@@ -168,7 +168,7 @@ Output goes to stdout (it's useful output, not Wrap chrome).
 
 ### Where logging hooks in
 
-Logging wraps the query loop in `runQuery` (`src/core/query.ts`):
+Logging wraps the session in `runSession` (`src/session/session.ts`):
 
 1. **Entry created** at start with invocation-level fields (prompt, cwd, memory, version, provider, prompt_hash)
 2. **Round populated** during LLM call and execution — timing via `performance.now()` deltas
