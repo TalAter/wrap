@@ -230,9 +230,7 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(captured.calls).toBe(2);
-    expect(round.parsed?._scratchpad).toBe(
-      "Destructive: blow away deps for a clean install.",
-    );
+    expect(round.parsed?._scratchpad).toBe("Destructive: blow away deps for a clean install.");
     // The retry call must include the scratchpadRequiredInstruction
     const userMessages = captured.lastInput?.messages.filter((m) => m.role === "user") ?? [];
     const hasDirective = userMessages.some(
