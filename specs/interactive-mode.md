@@ -1,39 +1,42 @@
 # Interactive Mode
 
-**Status:** Future (TUI library selected: Ink — see `specs/tui-approach.md`)
-**Date:** 2026-03-26
+**Status:** Unbuilt. TUI library selected: Ink (see `specs/tui-approach.md`). The dialog TUI for confirmations exists; the no-arg entry TUI does not.
 
-## Overview
+## Purpose
 
-When the user runs `wrap` or `w` with no arguments and stdin is a TTY, Wrap enters interactive mode — a free-text input area for composing prompts without shell quoting, escaping, or single-line constraints.
+When `w` is run with no user prompt on a TTY, Wrap enters a free-text input area for composing a prompt without shell quoting, escaping, or single-line constraints. Today this path shows help — interactive mode replaces that.
 
-## Behavior
+## Design
 
-- **Trigger:** No arguments, stdin is a TTY. (Currently this shows help; interactive mode replaces that.)
-- **Single-shot:** After the user submits, Wrap processes the prompt exactly as if it were passed as CLI arguments, then exits. No REPL loop.
-- **Future:** A REPL/conversation mode may be added later as a separate feature (likely tied to threads).
+- **Trigger:** no CLI args AND stdin is a TTY. Piped stdin does not trigger it (see Open Questions).
+- **Single-shot:** after submit, Wrap tears down the TUI and processes the text exactly as if it had been passed as CLI args, then exits. No REPL loop — a conversational mode is a separate future feature, likely tied to threads.
+- **Input area:** multiline editor. Enter submits, Shift-Enter inserts a newline. Ctrl-G opens `$EDITOR` with current buffer; on save the text returns to the prompt for review. Empty/discarded editor file cancels the editor handoff, not the session. Ctrl-C exits.
+- **Output rules:** since it is single-shot, no special handling is needed. The TUI collects input, tears down, then execution proceeds under the normal stdout-is-useful-output rule — command stdout to stdout, chrome to stderr.
 
-## Input Area
+## Why single-shot first
 
-- Multiline free-text editor. No quoting or escaping needed.
-- **Submit:** Enter. **Newline:** Shift-Enter.
-- **Ctrl-G:** Opens `$EDITOR` with the current input. On save and close, text returns to the prompt area for review before submitting. Empty/discarded file cancels.
-- **Ctrl-C:** Cancels and exits.
-- Prompt chrome (hints, decorations, logo) deferred to implementation — let the TUI lib inform what feels right.
+Keeps the mental model identical to `w <prompt>`: the TUI is just an input method, not a new execution mode. Avoids entangling with thread/continuation design. A REPL can be layered on later without reworking this path.
 
-## Output Rules
+## Constraints on the TUI library
 
-Since this is single-shot, no special handling needed. The TUI prompt collects input, then tears down. Execution proceeds identically to `w <prompt>` — command stdout goes to stdout, Wrap chrome to stderr, per existing rules.
+Interactive mode is the primary driver for the TUI library choice. Requirements:
+
+- Multiline text input with rebindable Enter vs Shift-Enter.
+- External editor integration (suspend → `$EDITOR` → resume with updated buffer).
+- Clean teardown before handing the terminal to a child process (the executed command may be interactive — vim, less, fzf).
+- Never writes to stdout. All TUI paint goes to stderr or `/dev/tty`.
+
+Ink satisfies these; see `specs/tui-approach.md` for the rationale.
 
 ## Open Questions
 
-- **Piped stdin interaction:** When stdin is piped (`echo "context" | w`), should that be treated as the prompt text, as context for the prompt, or something else? Needs decision before implementation.
+- **Piped stdin + no args:** `echo "context" | w` has no prompt and non-TTY stdin. Is the piped text the prompt, context for a prompt collected interactively, or an error? Decide before implementation. Current lean: treat as the prompt (skip interactive mode when stdin is piped, even with no args), because entering a TUI on piped stdin is impossible anyway.
+- **Chrome inside the input area** (hints, logo, decorations): deferred until implementation — let the library inform what feels right.
 
-## TUI Library Requirements
+## TODO
 
-This feature is the primary driver for choosing a TUI library. The library must support:
-
-- Multiline text input with key rebinding (Enter vs Shift-Enter)
-- External editor integration (Ctrl-G → `$EDITOR` → return text)
-- Clean teardown before handing the terminal back to a child process
-- Writing chrome to stderr or `/dev/tty` (not stdout)
+- Detect the no-args + TTY case in the entry path and route to interactive mode instead of help.
+- Build the Ink input component (multiline, key bindings, `$EDITOR` handoff).
+- Ensure teardown fully releases the terminal before the executed command runs.
+- Resolve the piped-stdin open question.
+- Tests: snapshot of the input component, a TTY-detection routing test, and an end-to-end test that submitted text reaches the query path identically to CLI args.

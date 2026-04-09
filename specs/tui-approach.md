@@ -1,142 +1,111 @@
 # TUI Approach
 
-## Decision: Ink 5+ (lazy-loaded) + existing chrome utilities
+How Wrap renders interactive UI. Dialog-specific layout and keybindings live in `specs/dialog-impl.md`.
 
-We use **Ink** (React for CLI) as our TUI framework for all interactive UI. Non-interactive output continues to use Wrap's existing `chrome()` / `chromeRaw()` utilities in `src/core/output.ts`, which write to stderr.
+## Framework: Ink 5+, lazy-loaded
 
-Ink is lazy-loaded via `await import("ink")` so it only adds cost when interactive UI is actually needed. Most Wrap invocations (low-risk commands) never load Ink.
+Ink (React for CLIs) handles every interactive surface: the confirmation dialog, the config wizard, interactive mode. Non-interactive output stays on the `chrome()` / `chromeRaw()` utilities in `src/core/output.ts`.
 
-**Requires Ink 5+** — earlier versions have WASM/compilation issues with `bun build --compile`.
+**Why Ink**
+- Flexbox/Yoga layout, built-in wrapping, `useInput`/`useStdin`, `measureElement`. Everything we'd otherwise hand-roll.
+- Production-proven in Bun: Anthropic's own Claude Code CLI ships as a Bun-compiled Ink binary.
+- Ink 5+ required. Earlier versions have WASM/compile issues with `bun build --compile`. Yoga 3.2.x (Ink's layout engine) ships as embedded base64 WASM — no native bindings, works with `bun build --compile` (bun#6567, fixed June 2025).
+
+**Why lazy-loaded.** Ink + React + Yoga adds ~1MB to the compiled binary and ~50–100ms of init. The common path — a low-risk command — never needs interactive UI, so Ink must not be paid for on every invocation. Load is kicked off by `preloadDialogModules()` in `src/session/dialog-host.ts`, which runs in parallel with the first LLM call. By the time a dialog is needed the modules are cached and `mountDialog()` is synchronous.
 
 ## Three output tiers
 
-All Wrap UI ("chrome") goes to **stderr** or **/dev/tty**. Never stdout. This is a hard rule throughout the codebase (see `SPEC.md`).
+All Wrap chrome goes to **stderr** or **/dev/tty**. Never stdout. This is a hard rule (see `SPEC.md`).
 
-**Tier 1 — Static chrome.** `chrome()` and `chromeRaw()` from `src/core/output.ts`. Simple text to stderr. Error messages, status lines, post-execution summaries. Already exists, no changes needed.
+1. **Static chrome** — `chrome()` / `chromeRaw()`. Plain text to stderr. Errors, status lines, post-exec summaries.
+2. **Animated chrome** — spinners, streaming tokens. `chromeRaw()` + `setInterval` + cursor control. No Ink. See `src/core/spinner.ts`.
+3. **Interactive UI** — Ink. Dialog, config wizard, interactive mode, error recovery.
 
-**Tier 2 — Animated chrome.** Spinners, streaming text, progress indicators. Still lightweight, no Ink. Built on `chromeRaw()` with `setInterval` and cursor control (`\r`, hide/show cursor). A small spinner utility or `nanospinner` (tiny, supports custom streams). This tier covers "waiting for LLM response" indication.
+Tier 2 exists specifically so the "thinking..." indicator doesn't force an Ink load. Once we're paying for Ink anyway (e.g. dialog up), in-dialog animation uses a React hook (`useSpinner` in `src/tui/spinner.ts`) driven off the same frame table.
 
-**Tier 3 — Interactive UI (Ink).** Anything that captures user input or has dynamic layout: dialogs, config wizard forms, interactive mode text input, error-recovery prompts. Loaded via `await import("ink")` only when triggered.
+## Ink configuration constraints
 
-## How Ink is configured
+### Render to stderr
 
-Wrap has two hard constraints that require specific Ink configuration:
+`render(<Component />, { stdout: process.stderr, patchConsole: false })`. Redirects all Ink layout and re-render output to stderr. Stdout stays clean for command output. `patchConsole: false` because Wrap's own stderr sink (see "Stderr routing while Ink is mounted" below) is the coordination point — we don't want Ink to also intercept `console.log`.
 
-### 1. Render to stderr, not stdout
+### Input when stdin is piped
 
-Ink's `render()` accepts a `stdout` option. Pass `process.stderr`:
+Wrap supports `cat file | w explain this`, so `process.stdin` is often consumed by the pipe. The Unix-standard fix is to open `/dev/tty` directly (same pattern fzf/sudo/less use). Bun supports this.
 
-```ts
-render(<Component />, { stdout: process.stderr, stdin: ttyStream });
-```
+<!-- FLAG: code currently passes only `stdout` to `render()`. `/dev/tty` fallback for piped-stdin interactive mode is spec'd but the dialog-host wiring doesn't show an explicit `stdin:` option yet. Verify during piped-input interactive-mode work. -->
 
-This redirects **all** Ink rendering (layout, re-renders, cursor management) to stderr. Stdout remains untouched for command output.
+### Input buffer flush on mount
 
-### 2. Read input from /dev/tty when stdin is piped
+Before the dialog becomes interactive, drain any buffered stdin. A stray Enter that the user hit while waiting for the LLM must not auto-confirm a dangerous command. The dialog component drains `stdin.read()` on first mount and on every state-tag transition (see `src/tui/dialog.tsx`). The drain is bounded (1024 reads) so a misbehaving stream can't hang the render.
 
-Wrap supports `cat file | w explain this` — stdin is consumed by the pipe, so interactive prompts can't read from `process.stdin`. The standard Unix pattern (used by fzf, sudo, less) is to open `/dev/tty` directly:
+This is a safety invariant, not a nice-to-have.
 
-```ts
-import { createReadStream } from "fs";
-const ttyInput = createReadStream("/dev/tty");
-render(<Component />, { stdout: process.stderr, stdin: ttyInput });
-```
+### Cursor restore
 
-When stdin is NOT piped, `process.stdin` can be used directly. The Ink entry point should detect this and choose accordingly.
+Bun has a known bug (bun#26642) where the cursor disappears after an Ink app exits on macOS. `dialog-host.ts` writes `SHOW_CURSOR` on unmount. `src/core/spinner.ts` also installs a one-time process-exit guard that unconditionally writes `SHOW_CURSOR`, covering Ctrl-C and uncaught throws. Cheap insurance even after the Bun bug is fixed.
 
-Bun supports opening `/dev/tty` as a file/stream. Bun also supports `process.stdin.setRawMode(true)` for raw key capture, and `process.stdout.columns` / `process.stdout.rows` for terminal dimensions.
+### Clean teardown before exec
 
-### 3. Input buffer flush
+Before Wrap spawns the confirmed child command, Ink must be fully unmounted: alt-screen exited, cursor restored, raw mode released. The terminal must be in normal state before the child inherits the tty.
 
-Before rendering any interactive prompt, flush/discard any buffered terminal input. This prevents a stray Enter keypress (pressed while the user was waiting for the LLM response) from accidentally confirming a dangerous command. This is critical for safety.
+`dialog-host.ts` wraps mount with `ENTER_ALT_SCREEN` and unmount with `EXIT_ALT_SCREEN` + `SHOW_CURSOR`. The notification router (`src/session/notification-router.ts`) is the single caller of `teardownDialog()` and guarantees it runs before exec.
 
-### 4. Cursor restore
+**Why the alt screen at all:** rendering in the alternate screen buffer means resize artifacts and Ink re-renders can't corrupt the user's main scrollback. On unmount we drop back to the main buffer with history intact.
 
-Bun has a known bug where the cursor disappears after an Ink app exits on macOS (bun#26642). Wrap must explicitly restore cursor visibility (`\x1B[?25h`) on Ink unmount and in signal handlers (SIGINT, SIGTERM). This is cheap insurance even after the bug is fixed.
+### `useInput` on Bun
 
-### 5. Clean teardown
+Ink 5 had trouble with `useInput` on Bun (bun#6862) because Bun's `process.stdin` didn't match Ink's expectations. Ink 6.8 rewrote `useInput` on top of `useStdin`, which works. The dialog uses `useInput` directly. If a future Bun/Ink regression breaks this, fall back to raw `useStdin` + `setRawMode(true)`.
 
-Ink provides `unmount()` and `waitUntilExit()`. Before Wrap spawns a child process (the confirmed command), Ink must be fully unmounted: no alternate screen, no cursor artifacts, no lingering raw mode. The terminal must be back to normal before the child process runs.
+## Stderr routing while Ink is mounted
 
-## Bun compatibility
+Ink owns the stderr screen region while it's rendering. Uncoordinated `chrome()` / `chromeRaw()` writes during that window corrupt the display and, worse, land in the alt-screen buffer that vanishes on exit — so the user never sees them at all.
 
-**Bun + Ink works in production.** Anthropic's Claude Code CLI ships as a Bun-compiled binary using Ink + React for its TUI (they use a custom fork with heavier modifications, but vanilla Ink 5+ works for Wrap's needs).
+**Solution:** a notification router (`src/session/notification-router.ts`) subscribes to the global notification bus and dispatches each notification based on two questions:
 
-**Yoga layout (Ink's flexbox engine):** Ink 5+ depends on `yoga-layout` 3.2.x, which ships as base64-encoded WASM embedded in a JS module. No native bindings. Confirmed working with `bun build --compile` (bun#6567, fixed June 2025).
+| Dialog mounted? | In `processing`? | Where it goes |
+|---|---|---|
+| no | — | straight to stderr |
+| yes | no | buffered, flushed on unmount (after `EXIT_ALT_SCREEN`) |
+| yes | yes | buffered **and** forwarded to the dialog for bottom-border status |
 
-**`useInput` + Bun (bun#6862, still open):** Ink's `useInput` hook doesn't work reliably with Bun because Bun doesn't handle `process.stdin` the way Ink expects. **Workaround:** use Ink's `useStdin` hook with `setRawMode: true` for input capture instead of relying on `useInput` directly. This is the standard pattern until the Bun issue is fixed.
+The router is the single source of truth for "is a dialog up?" — the coordinator reads through `isDialogMounted()` rather than tracking its own copy. Flush happens after `EXIT_ALT_SCREEN` so buffered chrome lines land in real scrollback, not the alt buffer that's about to disappear.
 
-## Where Ink gets used
+See `specs/follow-up.md` §"Stderr message routing" for the in-processing case.
 
-**Dialog** — when the LLM generates a medium or high-risk command. See `SPEC.md` for full keybinding spec and risk tiers. Basic dialog implemented: renders command, risk level, explanation, tiered keybindings (medium: Enter=run; high: y+Enter=run). Falls back gracefully when no TTY is available.
+## Where Ink is used
 
-**Config wizard** — first-run setup and `w config`. Provider selection (radio/select), API key entry (masked text input), model selection. Standard form UI. Ink has component libraries for these: `ink-select-input`, `ink-text-input`.
-
-**Interactive mode** — `w` with no args. Multiline text editor with Enter to submit, Shift+Enter for newline. Most complex Ink usage. See `specs/interactive-mode.md`.
-
-**Error recovery** — if a confirmed command fails, prompting "Retry? Edit? Explain?" This is a simpler variant of the dialog.
-
-### Ink + chromeRaw coordination
-
-While Ink is mounted, it owns stderr rendering. `chrome()` and `chromeRaw()` must NOT write to stderr concurrently — Ink manages its own screen region and uncoordinated writes corrupt the display.
-
-For async dialog states (describe, follow-up) that trigger LLM calls while Ink is mounted, both `chrome()` and `verbose()` route through a shared stderr sink that buffers messages and forwards them to a dialog listener. On dialog unmount the buffer is flushed to stderr (after `EXIT_ALT_SCREEN`). See `specs/follow-up.md` §"Stderr message routing".
+- **Dialog** — medium/high-risk command confirmation. Layout, borders, action bar, follow-up compose, edit, processing spinner. See `specs/dialog-impl.md`.
+- **Config wizard** — first-run and `w config`. Provider select, masked API-key entry, model select.
+- **Interactive mode** — `w` with no args. Multiline editor. See `specs/interactive-mode.md`.
+- **Error recovery** — "Retry? Edit? Explain?" after a failed command. Simpler variant of the dialog.
 
 ## Where Ink is NOT used
 
-**Answer rendering** (terminal markdown) — purely formatted text output to stdout (when TTY) or plain text (when piped). No interactivity.
+- **Answer rendering** — markdown-formatted text to stdout (TTY) or plain (piped). No interactivity.
+- **Streaming LLM responses** — Tier 2, stderr.
+- **Spinners / progress** — Tier 2 (Ink's `useSpinner` hook is only used once the dialog is already mounted).
+- **Status, errors, post-exec summaries** — Tier 1 `chrome()`.
 
-**Streaming LLM responses** — Tier 2 animated chrome. Appending text to stderr as chunks arrive.
+## Dialog visual design (high-level)
 
-**Spinners / progress** — Tier 2.
+Concrete layout and ANSI construction in `specs/dialog-impl.md`. Reference rendering in `specs/dialog-style.sh`.
 
-**Simple status messages, errors, post-execution output** — Tier 1 `chrome()`.
+**Aesthetic.** Synthwave gradient border that shifts hue by risk level. Rounded corners (`╭╮╰╯`), thin lines. No heavy-rounded variant exists in Unicode. Left border and top border carry the gradient; right and bottom fade to a dim neutral `[60,60,100]`. Command sits on a tinted background strip (code-block feel). Risk badge pill embedded in the top-right border (`─── ⚠ medium ──╮`).
 
-## Bundle size and startup
+**Risk palettes** (also used by `border.ts`):
+- **Low** — teal → blue → dim. Green `✔ low risk` badge. (Low-risk commands usually skip the dialog entirely, but the palette exists for the `--always-confirm` path.)
+- **Medium** — pink → purple → dim. Amber badge on warm bg.
+- **High** — red → magenta → purple → dim. Red badge on dark red bg.
 
-Ink + React + Yoga adds ~1MB to the compiled binary (measured). The lazy-load pattern means init costs are only paid when interactive UI is needed. Low-risk command execution (the common path) never imports Ink.
+**Action bar** — `Run command?  Yes  No  │  Describe  Edit  Follow-up  Copy`. Y/N primary (warm accent), secondary actions (D/E/F/C, cool accent) separated by a dim `│`. Shortcut letter is bold + underlined; rest of word dim. Arrow keys navigate, Enter activates the highlighted item, hotkeys fire directly.
 
-React initialization adds roughly 50-100ms. For the dialog this happens after the LLM response arrives (500-2000ms), so the user never perceives it. For interactive mode (`w` with no args) Ink is the first thing rendered — 100ms is below perception threshold for cold-start.
+**Keybindings (both risk levels, unified).** `y` run · `n`/`q`/`Esc` cancel · `d` describe · `e` edit · `f` follow-up · `c` copy · `←`/`→` navigate · `Enter` activate. The unified scheme replaces the earlier tiered scheme in SPEC.md where high-risk required `y+Enter`; the dialog's explicit selection + confirmation model already provides the safety that the extra keystroke was buying.
 
-## Dialog visual design
+## Companion libraries (suggestions, not mandates)
 
-The dialog uses a **synthwave gradient** border that shifts hue based on risk level. See `specs/dialog-style.sh` for the exact ANSI reference rendering (run `bash specs/dialog-style.sh` to preview).
-
-**Layout:**
-- Rounded corners (`╭╮╰╯`), thin lines (`─│`). No heavy border (Unicode has no heavy rounded corners).
-- Left-aligned, content-fitted width. Long commands wrap within the box.
-- Gradient flows from bright accent (top-left corner) → dim neutral (bottom-right). Both the top edge and left edge carry the gradient; right edge and bottom are dim neutral.
-- Command displayed on a **tinted background** strip (subtle code-block feel, ~`rgb(35,35,50)`).
-- Explanation text below command, slightly dimmer than body text.
-- **No separator line** between command area and action bar — just breathing room (blank lines).
-- **Risk badge** pill embedded in the top-right border: `─── ⚠ medium ──╮`. Pill has a tinted background matching the risk color.
-
-**Risk-level color palettes:**
-- **Medium:** pink→purple synthwave. Border starts `rgb(255,100,200)`, fades through purple to `rgb(60,60,100)`. Badge: amber text `rgb(255,200,80)` on dark warm bg `rgb(80,60,30)`.
-- **High:** red→purple synthwave. Border starts `rgb(255,60,80)`, fades through magenta/purple to `rgb(60,60,100)`. Badge: red text `rgb(255,100,100)` on dark red bg `rgb(80,25,25)`.
-
-**Syntax highlighting** for the command: command names in warm orange, flags in cyan/blue, strings/values in pink. Use a shell highlighting library (`cli-highlight` or similar) or hand-color based on simple token rules.
-
-**Action bar:**
-- Format: `Run command?  Yes  No  │  Describe  Edit  Follow-up  Copy`
-- Y/N are the primary actions, separated from secondary actions (D/E/F/C) by a dim vertical bar `│`.
-- Shortcut keys are the **first letter** of each word, styled: **bold + underlined + accent color**. Y/N keys use a warmer accent `rgb(245,200,100)`, secondary keys use a cooler `rgb(170,170,195)`. The rest of each word is dim `rgb(115,115,140)`.
-- Same Y/N keybinding for both medium and high risk (simplified from the original tiered Enter/y+Enter scheme).
-
-**Keybindings (both risk levels):**
-- `y` = run the command
-- `n`, `q`, or `Esc` = cancel
-- `d` = describe (LLM explanation)
-- `e` = edit (editable command field)
-- `f` = follow-up (text input for refinement)
-- `c` = copy to clipboard
-
-## Useful companion libraries
-
-- **Syntax highlighting** for shell commands in the dialog: `highlight.js` or `cli-highlight`
-- **Terminal markdown rendering** for answer mode: `marked-terminal`
-- **Tiny color library** if `src/core/ansi.ts` needs extending: `picocolors` (7KB, 14x smaller than chalk, no deps). Wrap's existing `ansi.ts` already covers bold, dim, 24-bit RGB, and gradients — may not need anything else.
-- **Spinner** for Tier 2: `nanospinner` or hand-roll on `chromeRaw()` (~20 lines)
-- **Box drawing**: Ink's `<Box borderStyle="round">` handles this natively for Tier 3. For Tier 1/2, Unicode box characters written via `chromeRaw()`.
-
-These libraries are just suggestions. Do not limit yourself to these.
+- `string-width` — width of wrapped content (used explicitly; also a transitive Ink dep).
+- `cli-highlight` / `highlight.js` — shell syntax highlighting for the command (deferred to phase 2).
+- `marked-terminal` — answer-mode markdown rendering.
+- `picocolors` — only if `src/core/ansi.ts` needs extending. It currently covers bold, dim, 24-bit RGB, gradients.
+- `nanospinner` — or the hand-rolled `~20 LOC` in `src/core/spinner.ts` (we chose the latter).

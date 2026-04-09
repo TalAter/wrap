@@ -1,176 +1,123 @@
 # Dialog Implementation
 
-Implementation plan for the styled dialog. Visual design defined in `tui-approach.md` (section "Dialog visual design") and `dialog-style.sh` (ANSI reference mockup).
+Architecture reference for the dialog (the interactive Ink TUI that handles command confirmation, edit, follow-up, and processing). Visual design and risk palettes live in `tui-approach.md`; `dialog-style.sh` is the ANSI reference mockup. Canonical TUI vocabulary (dialog, action bar, risk badge, dialog state) lives in `SPEC.md` §Glossary.
 
-## Architecture: 3-Column Layout
+Code: `src/tui/dialog.tsx`, `src/tui/border.ts`, `src/session/dialog-host.ts`, `src/session/notification-router.ts`.
 
-The dialog is a vertical stack: top border, 3-column row, bottom border.
+## 3-column layout
 
-**Why this approach:** Ink's native `<Box borderStyle="round">` only supports a single border color — no gradient, no badge-in-border. Ink's `<Transform>` can't contain `<Box>` children (throws at runtime — Transform is a text node). The 3-column layout lets us use standard Ink components for all interior content (wrapping, flexbox, state) while rendering custom gradient borders as separate elements.
+The dialog is a vertical stack: top border, 3-column row (left gradient border / middle content / right dim border), bottom border.
 
-```tsx
-<Box flexDirection="column" width={totalWidth}>
-  <Text>{gradientTopBorder(totalWidth, riskLevel)}</Text>
+**Why custom borders instead of Ink's `borderStyle="round"`:** Ink's native border supports only one color per side — no vertical gradient, no in-border risk badge. Ink's `<Transform>` can't wrap `<Box>` children (Transform is a text node, throws at runtime). The 3-column split lets the middle column use standard Ink flexbox for wrapping and state while left/right/top/bottom are rendered as plain `<Text>` runs with per-glyph colors.
 
-  <Box flexDirection="row">
-    {/* Left border: gradient │ per line */}
-    <Box flexDirection="column" width={2}>
-      {Array(borderCount).fill(0).map((_, i) => (
-        <Text key={i} color={interpolateGradient(i, borderCount, riskLevel)}>│ </Text>
-      ))}
-    </Box>
+The middle column uses standard Ink components only. Ink handles word-boundary wrapping for command, explanation, and action bar. No manual text wrapping anywhere.
 
-    {/* Middle: full Ink layout, Ink handles all wrapping */}
-    <Box ref={middleRef} flexDirection="column" flexGrow={1}>
-      {/* command, explanation, action bar — see "Middle column content" */}
-    </Box>
+Left border is an array of `<Text>` lines, each with a gradient color from `interpolateGradient(row, borderCount, riskLevel)`. Right border is the same shape but all dim `#3c3c64`.
 
-    {/* Right border: all dim */}
-    <Box flexDirection="column" width={2}>
-      {Array(borderCount).fill(0).map((_, i) => (
-        <Text key={i} color="#3c3c64"> │</Text>
-      ))}
-    </Box>
-  </Box>
+### Width
 
-  <Text>{gradientBottomBorder(totalWidth, riskLevel)}</Text>
-</Box>
+```
+innerWidth  = totalWidth - 4           (2 border columns * 2 cells)
+totalWidth  = min(natural + 4, termCols - 4)
+natural     = max(stringWidth(command), stringWidth(explanation), stringWidth(draft?), MIN_INNER_WIDTH)
 ```
 
-The middle column uses standard Ink components. Ink handles word-boundary wrapping for commands, explanations, and action bar automatically. No manual text wrapping.
-
-The left and right border columns are arrays of `<Text>` elements (one per line). Left column carries the gradient (each `<Text>` gets a different hex color). Right column is all dim `[60,60,100]`.
-
-### Width calculation
-
-```ts
-const ACTION_BAR_WIDTH = 57; // "Run command?  Yes  No  │  Describe  Edit  Follow-up  Copy"
-const MIN_WIDTH = ACTION_BAR_WIDTH + 4; // border + padding
-const natural = Math.max(stringWidth(command), stringWidth(explanation), MIN_WIDTH);
-const totalWidth = Math.min(natural + 4, process.stderr.columns - 4);
-```
-
-`totalWidth` is set on the outer `<Box>`. Middle column gets `flexGrow={1}`, filling `totalWidth - 4`.
-
-If the terminal is narrower than `MIN_WIDTH + 4` (~65 cols), the action bar wraps naturally — Ink handles this. The height sync re-render adjusts the borders to match.
+`MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4`, so on ordinary terminals the action bar never wraps. On narrow terminals Ink wraps it naturally and the height-sync loop (below) grows the borders to match.
 
 ### Height sync
 
-The border columns need the same number of `│` characters as the middle column's rendered height.
+The border columns need exactly as many `│` rows as the middle column's rendered height. We compute a first-pass estimate from content (line counts for command / explanation / follow-up draft / action bar / padding) so the initial render is usually correct in one pass. A `useLayoutEffect` then calls `measureElement(middleRef)` and, if the real height differs, updates `borderCount` — one extra render, Ink swaps the frame.
 
-```ts
-const middleRef = useRef<DOMElement>(null); // DOMElement from ink
-// 7 = empty + command + explanation + empty + empty + action bar + empty
-const [borderCount, setBorderCount] = useState(7);
+**Why not `measureElement` alone (no estimate):** earlier drafts ran into feedback loops where the measured height re-triggered layout. Seeding state with a content-derived estimate keeps the first frame stable and makes the effect a pure correction step.
 
-useEffect(() => {
-  const { height } = measureElement(middleRef);
-  if (height !== borderCount) setBorderCount(height);
-}, [command, explanation, totalWidth]); // totalWidth changes on resize → content re-wraps
-```
+## Borders (`src/tui/border.ts`)
 
-Common case: content doesn't wrap, 7 lines, no re-render. If content wraps on a narrow terminal, `useEffect` detects the mismatch and triggers one re-render. Ink replaces the frame (~33ms at 30fps default). Only the new `│` characters differ visually.
+`topBorderSegments()` and `bottomBorderSegments()` return arrays of styled text segments (`{ text, color?, backgroundColor?, bold? }`) rendered by a small `<BorderLine>` wrapper. Segments — not ANSI strings — so Ink owns all styling.
 
-## Top and bottom borders
+**Top border** embeds the risk badge pill near the right end: `╭─────── ⚠ medium risk ──╮`. Each `─` / corner gets its color from `interpolateGradient(charIndex, totalWidth, riskLevel)` (horizontal gradient, same stops as the vertical left border). The badge is a single segment with tinted bg + risk-colored bold fg, per-level definitions co-located in the `RISK` table in `border.ts`. Colocation is deliberate: tuning a risk level's look touches one place.
 
-Pre-built ANSI strings rendered as `<Text>{string}</Text>` with no `color` prop (ANSI codes are embedded in the string). Built character-by-character using `fg()` from `ansi.ts` — do NOT use the `gradient()` helper, which skips spaces (the border has spaces around the badge pill that need coloring).
-
-**Top border** with embedded risk badge:
-
-```
-╭─────────────────────────── ⚠ medium ──╮
-```
-
-Construction: iterate `totalWidth` characters. Each `─` and corner gets its color from `interpolateGradient(charIndex, totalWidth, riskLevel)` (left-to-right gradient, same palette as the left border but horizontal). The badge pill is inserted near the right end at position `totalWidth - badgeVisualWidth - 3` (3 = space + `─` + `╮`): tinted background + risk-colored bold text (badge colors per risk level defined in `tui-approach.md`). The `╭` at position 0 gets the brightest color; `╮` at the end gets the dim end color.
-
-**Bottom border:**
-
-```
-╰───────────────────────────────────────╯
-```
-
-All dim end color `[60,60,100]` — the gradient has fully faded by the bottom.
+**Bottom border** is all dim (`[60,60,100]`). When a `bottomStatus` is provided (spinner + chrome text during `processing`), it renders as `╰─ <status> ─...─╯` with the status in near-white `#d2d2e1`. If the status is wider than `totalWidth - 6` it's truncated with an ellipsis; if even that can't fit, the status is dropped and the border collapses to plain dashes. Spaces around the status are part of the dim segments so the white run doesn't extend past the visible label.
 
 ### Gradient interpolation
 
-Both borders and the left edge use the same function:
+`interpolateGradient(index, total, risk)` maps `index / (total - 1)` to a position in the risk-specific stops and returns a hex color. Used by both the left border (index = row, total = borderCount) and the top border (index = char, total = totalWidth). The stops are reused by ANSI helpers elsewhere, so `interpolate()` and the `Color` type are exported from `src/core/ansi.ts`.
 
-```ts
-function interpolateGradient(index: number, total: number, riskLevel: "medium" | "high"): string {
-  const t = total > 1 ? index / (total - 1) : 0; // 0..1
-  const stops = riskLevel === "medium" ? MEDIUM_STOPS : HIGH_STOPS;
-  const [r, g, b] = interpolate(stops, t); // reuse interpolate() from ansi.ts (currently private, export it)
-  return `#${hex(r)}${hex(g)}${hex(b)}`;
-}
-```
+## Dialog states and state-driven rendering
 
-For the left border: `index` = row index, `total` = borderCount. For the top border: `index` = char position, `total` = totalWidth.
+The dialog is mounted iff `AppState.tag` is a dialog tag: `confirming`, `editing`, `composing`, or `processing` (see `src/session/state.ts`, `isDialogTag`). The reducer is the single source of truth for which tag we're in; the dialog is pure presentation and dispatches `AppEvent`s.
 
-## Middle column content
+The middle column's content below the command row switches on `state.tag`:
 
-All standard Ink components. Ink handles layout and wrapping.
+| Tag | Middle content | Bottom-row slot |
+|---|---|---|
+| `confirming` | command (read-only), explanation | `<ActionBar>` |
+| `editing` | editable `<TextInput>` bound to `state.draft` | edit key hints (`⏎ to run`, `Esc to discard`) |
+| `composing` | command, explanation, follow-up `<TextInput>` (placeholder `actually...`) | compose key hints |
+| `processing` | command, explanation, follow-up text (read-only) | process key hints (`Esc to abort`), spinner + status in bottom border |
 
-- **Command**: `<Text backgroundColor="#232332">` — tinted background strip spanning the full inner width. Ink's `backgroundColor` only colors behind text characters, so pad the command string with trailing spaces to fill the row: `command.padEnd(totalWidth - 4)` where `totalWidth - 4` is the middle column width. No syntax highlighting in phase 1.
-- **Explanation**: `<Text color="#87879b">` — dimmer than body text (`rgb(135,135,155)` per mockup).
-- **Empty lines**: `<Text> </Text>` for breathing room between sections.
-- **Action bar**: See below.
-
-## Action bar
-
-Format: `Run command?  Yes  No  │  Describe  Edit  Follow-up  Copy`
-
-Each action word has its shortcut letter styled **bold + underline + accent color**, rest of word is dim. Y/N use warm accent `#f5c864`, secondary keys (D/E/F/C) use cool accent `#aaaac3`. Dim text is `#73738c`. Separator `│` is `#414150`.
-
-Action bar items are navigable with left/right arrow keys. Track `selectedIndex` in component state (default: 0 = Yes). The selected item gets brighter text or a subtle background tint. Pressing Enter activates the selected item (same as pressing its shortcut key). Each item is a `<Text>` with conditional styling based on whether it's selected.
-
-## Gradient palettes
-
-From `tui-approach.md` and `dialog-style.sh`:
-
-**Medium risk** (pink → purple → dim):
-```
-[255,100,200] → [220,100,225] → [160,100,250] → [100,100,220] → [70,80,150] → [60,60,100]
-```
-
-**High risk** (red → purple → dim):
-```
-[255,60,80] → [230,65,130] → [185,75,190] → [125,85,210] → [80,80,155] → [60,60,100]
-```
-
-Left border interpolates through these stops top-to-bottom. Top border interpolates left-to-right. Right and bottom borders use the dim end color `[60,60,100]`.
+`selectedIndex` for the action bar is local presentation state. It resets to 0 on every transition out of `confirming` so re-entering never shows a stale highlight.
 
 ## Input
 
-Keep `useInput` for now. `tui-approach.md` warns about `useInput` + Bun (bun#6862), but that was written for Ink 5. Ink 6.8 rewrote `useInput` to use `useStdin` internally. Verify it works with Bun during implementation; switch to raw `useStdin` only if it doesn't.
+`useInput` is used, gated by `{ isActive: state.tag === "<tag>" }` so each handler only fires for its own state. Four handlers: editing (Esc only), confirming (arrows, Enter, Esc, hotkeys, `q`), composing (Esc), processing (Esc). Printable keys in editing/composing go through `<TextInput>`, which owns the draft buffer.
 
-Single-key bindings, same for both risk levels. This replaces the tiered keybinding scheme in SPEC.md (medium: Enter, high: y+Enter) — see `tui-approach.md` "Keybindings" section for rationale. SPEC.md should be updated to match.
+**Why custom `text-input.tsx` instead of `ink-text-input`:** `ink-text-input` can't be styled with `backgroundColor` (it renders its own internal `<Text>`, so the dark `#232332` strip wouldn't span wrapped lines) and lacks word-jump, Home/End, and kill-to-start. Our implementation wraps a `Cursor` abstraction (`src/tui/cursor.ts`) with full control over styling and keyboard. Edit-mode keybindings: Ctrl+A/E (home/end), Ctrl+U/K (kill-to-start / kill-to-end), Ctrl+Y (yank killed text), Alt+B/F or Alt+←/→ (word jump), Alt+Backspace (delete word left), Enter to submit (empty blocked).
+
+**Stdin drain on every tag transition.** The dialog reads up to 1024 bytes from stdin on mount and on every `state.tag` change. This kills buffered keystrokes that the user pressed while waiting for the LLM — without it, a stray Enter pressed during `thinking` lands on the first confirming frame and dispatches `run` against a dangerous command the user never confirmed. The reducer-based state machine prevents events from reaching the wrong tag, but it cannot prevent keystrokes the terminal buffered before the dialog mounted. The 1024 cap is insurance against a misbehaving stream that never returns null.
+
+### Action bar
+
+`ACTION_ITEMS` is a const table of `{ id, label, primary, hotkey }`. `id` is the stable `ActionId` used in `key-action` dispatches; `label` is presentation-only. **Convention:** each hotkey is `label[0].toLowerCase()`, so the bar can underline the first letter as the shortcut hint without a separate field. `q` is a hardcoded alias for `cancel` because it doesn't match any label's first letter.
+
+Keybindings (identical for every risk level — simplified from the earlier tiered scheme in SPEC.md):
 
 | Key | Action |
-|-----|--------|
-| `y` | Run the command |
-| `n`, `q`, `Esc` | Cancel |
-| `d` | Describe — no-op in phase 1 (ignore keypress, no visual feedback) |
-| `e` | Edit — no-op in phase 1 |
-| `f` | Follow-up — no-op in phase 1 |
-| `c` | Copy — no-op in phase 1 |
-| `←` `→` | Navigate action bar |
-| `Enter` | Activate selected action bar item |
+|---|---|
+| `y` | run |
+| `n`, `q`, `Esc` | cancel |
+| `d` | describe (no-op in phase 1) |
+| `e` | edit |
+| `f` | follow-up |
+| `c` | copy (no-op in phase 1) |
+| `←` `→` | move `selectedIndex` |
+| `Enter` | activate the selected item |
 
-## File structure
+## Host lifecycle (`src/session/dialog-host.ts`)
 
-- **`src/tui/dialog.tsx`** — `Dialog` component (layout, state, input), `ActionBar` component
-- **`src/tui/border.ts`** — `gradientTopBorder()`, `gradientBottomBorder()`, gradient color interpolation, risk palettes
-- **`src/tui/render.ts`** — existing orchestration, minor type updates for new keybinding actions
-- **`src/core/ansi.ts`** — export the existing `interpolate()` function and `Color` type (currently private). No new helpers needed — `underline()`, `bg()`, etc. are handled by Ink's `<Text>` props inside the component.
+Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off in parallel with the first LLM call so `mountDialog()` is synchronous by the time the session needs it. `mountDialog` writes `ENTER_ALT_SCREEN`, calls `ink.render(..., { stdout: process.stderr, patchConsole: false })`, and returns a `{ rerender, unmount }` handle. `unmount` writes `EXIT_ALT_SCREEN + SHOW_CURSOR`.
 
-## Dependencies
+**Stderr, not stdout.** Ink is rendered to `process.stderr` because stdout is reserved for useful output (hard rule — see CLAUDE.md / SPEC.md). `patchConsole: false` because Wrap has its own stderr sink (the notification router, below).
 
-- `string-width` — add as explicit dep (`bun add string-width`). Already an Ink transitive dep but importing transitive deps directly is fragile.
-- `measureElement` — import from `ink` (e.g., `import { measureElement } from "ink"`).
-- No other new deps in phase 1.
+**Cursor restore on unmount** guards against bun#26642 (cursor stays hidden on macOS after Ink exits). Cheap insurance even once that bug lands.
 
-## Deferred to phase 2
+## Notification router (`src/session/notification-router.ts`)
 
-- Syntax highlighting for commands (shell tokenizer)
-- `d`/`c` handler implementations (`e` is implemented; `f` is implemented in `specs/follow-up.md`)
-- Responsive action bar — shrink button labels or abbreviate when dialog width is narrow (currently they wrap, which looks sprawling)
+The router is the **single source of truth for "is the dialog up?"** The coordinator does not track its own `dialogMounted` flag; it asks the router via `isDialogMounted()` / `getDialog()`. This keeps mount lifecycle and notification routing from drifting apart.
+
+Routing rules for each notification emitted on the global bus:
+
+1. **No dialog** → write straight to stderr (chrome lines from initial probes / memory updates land in scrollback as they happen).
+2. **Dialog mounted** → buffer for replay on unmount. Stderr writes during alt-screen would otherwise land in the alt buffer and vanish on exit.
+3. **Dialog mounted AND session is in `processing`** → additionally call `onProcessingChrome(n)` so the coordinator can dispatch a `notification` event and the reducer can surface the latest chrome line in the bottom border.
+
+`teardownDialog()` unmounts (writing `EXIT_ALT_SCREEN` first) and then flushes the buffer to real stderr, so replayed lines land in scrollback rather than the alt buffer that's about to disappear. Idempotent.
+
+`isProcessing` is pulled (callback) rather than pushed — the router doesn't mirror the coordinator's state, it just asks.
+
+## File map
+
+- `src/tui/dialog.tsx` — `Dialog`, `ActionBar`, `KeyHints`, `BorderLine`, `useRenderSize`, action item table
+- `src/tui/border.ts` — gradient interpolation, risk palettes + badges, top/bottom border segment builders
+- `src/tui/text-input.tsx` — editable text field used by editing / composing
+- `src/tui/spinner.ts` — spinner frame hook for the bottom-border status
+- `src/session/dialog-host.ts` — lazy module load + mount/rerender/unmount
+- `src/session/notification-router.ts` — stderr sink, buffer, "is dialog up?" authority
+- `src/session/state.ts` — `AppState`, `AppEvent`, `ActionId`, `isDialogTag`
+- `src/session/reducer.ts` — pure state machine driving the dialog
+- `src/core/ansi.ts` — exports `interpolate()` and `Color`
+
+## Deferred
+
+- Syntax highlighting for the command row (shell tokenizer).
+- `describe` and `copy` handler implementations. (`edit` done; `followup` done — see `specs/follow-up.md`.)
+- Responsive action bar: shrink labels or abbreviate on narrow terminals instead of wrapping.

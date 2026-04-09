@@ -1,215 +1,98 @@
 # Verbose Mode
 
 > **Status:** Implemented
-> **Date:** 2026-03-31
 
 ## Purpose
 
-`--verbose` surfaces Wrap's internal pipeline in real-time on stderr so users can see what's happening: config loading, tool probing, LLM calls, retries, command execution. Useful for debugging slow responses, unexpected behavior, or understanding how Wrap works.
+`--verbose` surfaces Wrap's internal pipeline in real-time on stderr so users can see what's happening: config loading, tool probing, LLM calls, retries, command execution. It's for debugging slow responses, unexpected behavior, or understanding how Wrap works.
+
+Verbose shows the **narrative**; the structured log (`~/.wrap/logs/wrap.jsonl`, see `specs/logging.md`) holds the **data**. Verbose is a curated, human-friendly subset — raw responses, prompt hashes, full memory snapshots stay in the log.
 
 ## Enabling
 
-Two ways to enable verbose mode:
+Two equivalent paths:
+- Flag: `w --verbose <prompt>` (leading position, like other modifiers)
+- Config: `verbose: true` in `~/.wrap/config.jsonc`
 
-1. **Flag:** `w --verbose <prompt>` — leading position only (before the prompt, consistent with other flags).
-2. **Config:** `verbose: true` in `~/.wrap/config.jsonc`.
+No `-v` shorthand. No env var. `w --verbose` with no prompt shows help, same as `w` alone.
 
-No `-v` shorthand. No env var.
+## Modifier, not subcommand
 
-The flag and config are equivalent — Wrap behaves identically regardless of which enabled verbose. `w --verbose` with no prompt shows help, same as `w` alone.
+`--verbose` is a **modifier**: extracted from leading argv before `parseInput` runs, so it can precede prompts, flags, or nothing. Modifier specs live in `main.ts` (`MODIFIER_SPECS`); `src/core/input.ts` has no built-in knowledge of which modifiers exist. Other modifiers (`--model`, `--provider`) share the same mechanism.
 
-## Input Parsing: Modifier Extraction
+## The verbose module
 
-`--verbose` is a **modifier**, not a subcommand. It's the first modifier flag in Wrap; the design supports future modifiers (e.g. `--yolo`, `--dry-run`).
+`src/core/verbose.ts` — set-once, import-anywhere:
 
-A new `extractModifiers(argv)` phase runs before `parseInput()`:
+- `initVerbose(enabled)` — called once from `main.ts` after config loads. Captures `performance.now()` as the baseline for elapsed timestamps. Throws if called twice (guards against re-entry).
+- `verbose(msg)` — no-op if disabled; otherwise emits a `verbose` notification through the bus (see `specs/logging.md`).
+- `verboseHighlight(msg, highlight)` — same, but renders `highlight` at normal brightness against a dimmed prefix. Used for LLM response lines where the command/probe content needs to stand out.
 
-```
-argv: ["--verbose", "find", "files"]
-         ↓
-extractModifiers(argv)  →  { modifiers: { verbose: true }, remaining: ["find", "files"] }
-         ↓
-parseInput(remaining)   →  { type: "prompt", prompt: "find files" }
-```
+Why set-once + module-level: mirrors `chrome()` — any module calls `verbose()` without threading an `enabled` flag through every function signature.
 
-```
-argv: ["--verbose", "--help"]
-         ↓
-extractModifiers(argv)  →  { modifiers: { verbose: true }, remaining: ["--help"] }
-         ↓
-parseInput(remaining)   →  { type: "flag", flag: "--help", args: [] }
-```
+Why emit through the notification bus instead of writing stderr directly: keeps all user-facing output funneling through one sink, so tests and alternate frontends (TUI) can intercept.
 
-```
-argv: ["--verbose"]
-         ↓
-extractModifiers(argv)  →  { modifiers: { verbose: true }, remaining: [] }
-         ↓
-parseInput(remaining)   →  { type: "none" }  →  shows help
-```
+## Output format
 
-`extractModifiers` scans leading args, peels off known modifiers, returns the rest. `parseInput` stays unchanged — it never sees modifiers. The `Modifiers` type starts as `{ verbose: boolean }` and grows as new modifiers are added.
+`» [+{elapsed}s] {message}` — guillemet prefix, elapsed seconds with two decimals, dimmed. LLM response content is the only part rendered at normal brightness (via `verboseHighlight`).
 
-## The verbose Module
+All verbose lines go to **stderr** — never stdout (hard rule). Non-TTY stderr still gets output; the flag means "I want to see this" regardless of terminal. ANSI dim codes are always emitted; filtering tools handle them.
 
-A dedicated `src/core/verbose.ts` module with set-once initialization:
-
-- `initVerbose(enabled: boolean)` — called once from `main.ts` after config loads (or after modifier extraction, whichever is earlier). Records start time for elapsed timestamps.
-- `verbose(msg: string)` — emits a formatted line to stderr if enabled; no-op if disabled. Any module can import and call this without threading state.
-
-This follows the same pattern as `chrome()` in `output.ts` — a module-level function importable anywhere — except it's conditional.
-
-### Timer
-
-`initVerbose` captures `performance.now()` as the start time. Each `verbose()` call computes elapsed time from that baseline.
-
-## Output Format
-
-All verbose lines go to **stderr** (never stdout — per the hard stdout rule).
-
-Format: `» [+{elapsed}s] {message}`
-
-- **`»`** — guillemet prefix, consistent across all verbose lines.
-- **`[+{elapsed}s]`** — seconds elapsed since Wrap started, two decimal places (e.g. `+0.03s`, `+1.24s`).
-- **`{message}`** — the step description.
-
-The entire line is rendered in **dim** text (ANSI dim). Exception: in the LLM response line, the command/answer content is rendered at normal brightness for contrast.
-
-Example full output:
+Example:
 
 ```
-» [+0.00s] Config loaded (anthropic)
-» [+0.01s] Memory: 5 facts (2 global, 3 scoped)
+» [+0.00s] Config loaded (anthropic claude-sonnet-4-latest)
 » [+0.03s] Tools: 28/34 available
-» [+0.04s] CWD: 47 files listed
 » [+0.05s] Calling claude-sonnet-4-latest...
-» [+1.24s] LLM responded (command, low risk): find . -name '*.ts' -mtime 0
+» [+1.24s] LLM responded (command, low): find . -name '*.ts' -mtime 0
 » [+1.25s] Executing command...
 » [+1.31s] Command exited (0)
 ```
 
-## Steps Reported
+## Steps reported
 
-Every step in the pipeline is reported. Fast steps (<1ms) are still shown — verbose means verbose.
+Every pipeline step is reported. Fast steps (<1ms) are still shown — verbose means verbose.
 
-### Startup phase
+### Startup (main.ts)
+- `Config loaded ({provider label})`
+- `Provider initialized ({provider label})`
+- `Tools: {available}/{total} available` (only when probing ran)
+- `CWD: {N} files listed` (only when listing ran)
 
-| Step | Message format | When |
-|------|---------------|------|
-| Config | `Config loaded ({provider type})` | After `loadConfig()` returns |
-| Provider | `Provider initialized ({model})` | After `initProvider()` — include model name if configured |
-| Memory | `Memory: {N} facts ({G} global, {S} scoped)` | After `ensureMemory()` returns (non-init path) |
-| Tools | `Tools: {available}/{total} available` | After `probeTools()` returns |
-| CWD files | `CWD: {N} files listed` | After `listCwdFiles()` returns |
+### Memory (memory.ts)
+- `Memory: {N} facts ({G} global, {S} scoped)` — normal path
+- `Init: probing OS and shell...` / `Init: calling LLM to extract system facts...` / `Init: {N} facts extracted` — first-run init path, **instead of** the normal Memory line
 
-### First-run init (inside ensureMemory)
+### Query loop (runner.ts, round.ts)
+- `Round {N}/{maxRounds}` — at the start of each round after the first
+- `Final round: must return command or answer` — when one round remains
+- `Calling {model}...`
+- `LLM parse error, retrying...` — on structured-output retry
+- `LLM responded (command, {risk_level}): {content}` — content highlighted
+- `LLM responded (answer, {N} chars)` — content not echoed (it goes to stdout)
+- `LLM responded (probe): {content}` — content highlighted
+- `LLM error: {message}` — on provider failure (network, auth, empty)
+- `Probe: {command}` / `Probe exited ({code})`
+- `Memory updated: {N} facts` (after successful response with memory_updates)
+- `Watchlist: added {tools}` (when watchlist_additions present)
 
-When no `memory.json` exists, verbose shows the init sub-steps:
+### Execution (session.ts)
+- `Executing command...`
+- `Command exited ({code})`
 
-| Step | Message format |
-|------|---------------|
-| Init probes | `Init: probing OS and shell...` |
-| Init LLM | `Init: calling LLM to extract system facts...` |
-| Init done | `Init: {N} facts extracted` |
+## Edge cases
 
-These appear _instead of_ the normal "Memory: N facts" line.
+- **`w --verbose` alone:** modifier extracted, input type is `none`, help is shown. `initVerbose` is never called (config never loads in that branch) — fine, help needs no verbose.
+- **`w --verbose --help`:** modifier extracted, `--help` dispatched as subcommand. Verbose doesn't activate — subcommands exit before the query pipeline and don't call `initVerbose`.
+- **Provider errors:** `LLM error: {message}` is emitted before the chrome error message.
+- **Empty response:** `LLM responded (command, low): ` (empty content) appears, then chrome error "LLM returned an empty response."
 
-### Piped input (see `specs/piped-input.md`)
+## TODO
 
-Reported after stdin is read, before config loading.
+Steps defined in this spec but not yet wired (add `verbose()` calls when their features land):
 
-| Step | Message format |
-|------|---------------|
-| Detected | `Piped input: {size}` (human-friendly: bytes, KB, or MB) |
-| Truncated | `Piped input truncated: showing ~{truncated_size} of {total_size}` (only when exceeding `maxPipedTokens`) |
-| Re-piped | `Re-piping {size} to command stdin` (when `pipe_stdin: true` in response) |
-
-Empty pipes (whitespace-only) are treated as no pipe — no verbose line emitted.
-
-### Query phase
-
-| Step | Message format |
-|------|---------------|
-| Context | `Context: {N} memory facts, {T} tools, {F} CWD files` |
-| LLM call | `Calling {model}...` |
-| LLM retry | `LLM parse error, retrying...` (only on structured output failure) |
-| Scratchpad (planned, see `specs/scratchpad.md`) | `_scratchpad: {text}` — emitted before the LLM response line whenever the model returned a non-null `_scratchpad`. Newlines collapsed to ` \n ` inline so each scratchpad is one verbose line. |
-| LLM response (command) | `LLM responded (command, {risk}): {command content}` — command content at normal brightness |
-| LLM response (answer) | `LLM responded (answer, {length} chars)` — don't echo content (it goes to stdout) |
-| LLM response (probe) | `LLM responded (probe): {probe command}` |
-| LLM error | `LLM error: {message}` |
-
-### Multi-round loop (see `specs/discovery.md` §LLM Probes)
-
-When the LLM returns `type: "probe"` or a command fails and triggers error-retry, the query enters a multi-round loop. Verbose tracks rounds against the budget.
-
-| Step | Message format |
-|------|---------------|
-| Probe executing | `Probe: {command}` |
-| Probe result | `Probe exited ({code})` |
-| Error retry | `Command failed ({code}), feeding error to LLM...` |
-| Round count | `Round {N}/{maxRounds}` (shown at the start of each round after the first) |
-| Last round | `Final round: must return command or answer` (when only 1 round remains) |
-
-### Risk classification (see `specs/safety.md`)
-
-When the local rule engine escalates the LLM's risk level, verbose shows the override.
-
-| Step | Message format |
-|------|---------------|
-| Escalation | `Risk escalated: {LLM level} → {effective level} (matched: {pattern description})` |
-
-Only shown when the rule engine actually escalates. When LLM and rule engine agree, no extra line — the risk is already visible in the LLM response line.
-
-### Execution phase
-
-| Step | Message format |
-|------|---------------|
-| Execute | `Executing command...` |
-| Exit | `Command exited ({code})` |
-
-### Memory/watchlist updates
-
-| Step | Message format |
-|------|---------------|
-| Memory update | `Memory updated: {N} facts` |
-| Watchlist | `Watchlist: added {tools}` |
-
-### Extended example: multi-round with probe
-
-```
-» [+0.00s] Config loaded (anthropic)
-» [+0.01s] Piped input: 12.4MB
-» [+0.01s] Piped input truncated: showing ~200KB of 12.4MB
-» [+0.02s] Memory: 8 facts (3 global, 5 scoped)
-» [+0.04s] Tools: 31/38 available
-» [+0.05s] CWD: 23 files listed
-» [+0.06s] Calling claude-sonnet-4-latest...
-» [+1.10s] LLM responded (probe): sed -n '12570000p'
-» [+1.10s] Re-piping 12.4MB to command stdin
-» [+1.10s] Probe: sed -n '12570000p'
-» [+1.15s] Probe exited (0)
-» [+1.15s] Round 2/5
-» [+1.15s] Calling claude-sonnet-4-latest...
-» [+2.30s] LLM responded (answer, 245 chars)
-```
-
-### Extended example: risk escalation
-
-```
-» [+0.05s] Calling claude-sonnet-4-latest...
-» [+1.20s] LLM responded (command, low): chmod 777 /etc/hosts
-» [+1.20s] Risk escalated: low → medium (matched: chmod)
-```
-
-## Relationship to Structured Logging
-
-Verbose output is a **curated, human-friendly subset** of what the structured logger captures. The log file (`~/.wrap/logs/wrap.jsonl`) remains the source of truth for full diagnostic detail (raw responses, prompt hashes, full memory snapshots). Verbose shows the narrative; the log has the data.
-
-## Edge Cases
-
-- **Non-TTY stderr:** Verbose still outputs if enabled. The flag/config means "I want to see this" regardless of terminal. ANSI dim codes are included — filtering tools handle them.
-- **`w --verbose` alone:** Shows help (type "none" after modifier extraction). Verbose doesn't activate because initVerbose hasn't been called yet (config hasn't loaded). This is fine — help doesn't need verbose.
-- **`w --verbose --log`:** Modifier extracted, then `--log` dispatched as subcommand. Verbose doesn't activate for subcommands (they exit before the query pipeline).
-- **Provider errors:** If the LLM call throws (network failure, auth error), verbose shows the `LLM error: {message}` line before the chrome error message appears.
-- **Empty response:** Verbose shows `LLM responded (command, low risk):` with empty content, then the chrome error "LLM returned an empty response." appears.
+- **Piped input** (`specs/piped-input.md`): `Piped input: {size}`, `Piped input truncated: ...`, `Re-piping {size} to command stdin`. Empty pipes emit nothing.
+- **Context line**: `Context: {N} memory facts, {T} tools, {F} CWD files` before the first LLM call.
+- **Error retry**: `Command failed ({code}), feeding error to LLM...` when a failed command is fed back to the model.
+- **Risk escalation** (`specs/safety.md`): `Risk escalated: {llm} → {effective} (matched: {pattern})` — only when the local rule engine overrides the LLM's level.
+- **Scratchpad** (`specs/scratchpad.md`): `_scratchpad: {text}` before the LLM response line when the model returns a non-null `_scratchpad`. Newlines collapsed to ` \n ` so each scratchpad is one line.

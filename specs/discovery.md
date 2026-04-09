@@ -1,242 +1,193 @@
 # Discovery
 
-> How Wrap learns about its environment: init probes, runtime tool probes, tool watchlist, CWD context, and LLM probes.
+> How Wrap learns about its environment: init probes, tool probes, tool watchlist, CWD files, and LLM probes.
+
+See `specs/SPEC.md` §Glossary for canonical definitions of each term.
 
 ---
 
 ## Overview
 
-Wrap has four discovery mechanisms, each operating at a different timescale:
+Four discovery mechanisms, each at a different timescale:
 
 | Mechanism | When | Persists | Cost |
 |-----------|------|----------|------|
-| **Init probes** | First run | Global memory facts | One-time LLM call |
-| **Tool probe + watchlist** | Every invocation | Watchlist persists | ~5ms (local `which`) |
-| **CWD files** | Every invocation | No (ephemeral context) | Negligible (local readdir) |
-| **LLM probes** | On-demand during query loop | Scoped memory facts (when appropriate) | 1 round per probe |
+| Init probes | First run | Global memory facts | One-time LLM call |
+| Tool probe + watchlist | Every invocation | Watchlist persists | ~5ms (`which`) |
+| CWD files | Every invocation | No (ephemeral context) | Negligible (local readdir) |
+| LLM probes | On-demand during query loop | Scoped memory facts when appropriate | 1 round per probe |
 
-> **Status:** All four mechanisms are implemented.
+Init and tool probes are cheap pre-query setup. CWD files and LLM probes operate during the query itself. A frequently-used install builds up rich scoped memory — a first invocation in a new project might need 1–2 LLM probes, subsequent ones zero.
 
-The **tool watchlist** extends the tool probe over time — it's not a separate mechanism but a persistent layer that grows the set of tools the tool probe checks.
-
-Init probes and tool probes are cheap pre-query setup. CWD files and LLM probes operate during the query itself. Over time, a frequently-used Wrap installation builds up rich scoped memory — a first invocation in a new project might need 1-2 LLM probes; subsequent invocations in the same project need zero.
-
-The tool watchlist is a persistent extension of the tool probe. As the LLM discovers tool domains relevant to the user (image editing, video processing, PDF manipulation, etc.), it nominates tools to watch — and those tools are checked via `which` on every future invocation. This means Wrap's tool awareness grows organically to match the user's actual work, without requiring anyone to predefine categories or maintain static tool lists.
+The tool watchlist is not a separate mechanism but a persistent layer that grows the set of tools the tool probe checks. As the LLM encounters new domains (image editing, video, PDFs) it nominates tools; future invocations `which` them automatically. Awareness grows organically to match the user's work without predefined categories or static lists.
 
 ---
 
 ## Init Probes
 
-> **Status:** Implemented.
+On first run, Wrap probes locally (OS, shell, distro, shell config files), sends raw output to the LLM to parse into concise facts, and saves them as global (`/` scope) memory. See `specs/memory.md` for scoping.
 
-On first run, Wrap probes the system locally (OS, shell, distro, config file locations), sends raw output to the LLM to parse into concise facts, and saves them as global (`/` scope) memory facts. See `specs/memory.md` for storage format and scoping.
+**Why LLM parsing.** Init covers things that rarely change and benefit from semantic interpretation — "Darwin" → "macOS", "arm64" → "Apple Silicon". Tool availability is deliberately *not* in init (see below).
 
-Init only covers things that rarely change and benefit from LLM semantic parsing (e.g. inferring "macOS" from "Darwin", "Apple Silicon" from "arm64"). Tool availability is handled separately by the runtime tool probe.
+**Plain-text prompt, not the command schema.** The init LLM call returns one fact per line — it's a parsing task, not a command generation task, so the Zod response schema doesn't apply.
 
-The LLM parses raw probe output using a plain-text prompt (not the Zod command response schema) — one fact per line. If the LLM call fails → error and exit (if we can't reach the LLM for init, we can't reach it for the query either).
+**Fail closed.** If the init LLM call fails → error and exit. If we can't reach the LLM for init, we can't reach it for the query either, so there's no point pretending otherwise.
 
 ---
 
-## Runtime Tool Probe
+## Tool Probe
 
-> **Status:** Implemented.
+Runs before every query. Merges the static `PROBED_TOOLS` default list with the tool watchlist, runs a single `which`, and returns `{ available, unavailable }` — or `null` if `which` fails entirely (the section is then omitted rather than sent as garbage).
 
-Runs before every query. Merges a static default list (`PROBED_TOOLS`) with the tool watchlist, runs a single `which` call, and returns `{ available, unavailable }` or `null` if `which` fails entirely (tool context is omitted from the prompt rather than sending garbage). Tool names are validated against a regex before shell interpolation to prevent command injection.
+**Why every run, not init.** Installed tools change (`brew install`, `apt install`), and version managers (nvm, fnm, pyenv) switch paths per directory. Persisting tool facts would go stale; `which` is ~5ms and always accurate.
 
-### Why every run, not init?
+**What's in `PROBED_TOOLS`.** Package managers, core dev tools, modern CLI alternatives, HTML→text extractors for web reading, and clipboard utilities. See `src/discovery/init-probes.ts` for the current list.
 
-Installed tools change over time (`brew install`, `apt install`). Version managers (nvm, fnm, pyenv) switch tool paths per directory. Storing tool availability as memory facts would go stale — a `which` call is ~5ms and always accurate.
+**Prompt format.**
+- `## Detected tools` — available tools with full paths, one per line. The path is an implicit signal about install method.
+- `## Unavailable tools` — comma-separated single line. Token-efficient versus one "not found" line per tool.
+- Either section is omitted when empty.
 
-### What gets probed
+**Parsing `which`.** Lines beginning with `/` are resolved paths; everything else (shell noise, "not found" messages, MOTD) is ignored. This is shell-uniform: bash silently omits missing tools, zsh/fish print messages, but only real paths matter.
 
-Package managers (brew, apt, dnf, pacman, yum), core dev tools (git, docker, kubectl, python3, node, bun, curl, jq), modern CLI alternatives (tldr, rg, fd, bat, eza), and clipboard utilities (pbcopy, pbpaste, xclip, xsel, wl-copy, wl-paste).
-
-### Prompt format
-
-Two sections in the user message:
-
-- **`## Detected tools`** — available tools listed with full paths (one per line). Full paths are an implicit signal about how tools were installed.
-- **`## Unavailable tools`** — comma-separated single line. Token-efficient compared to one "not found" line per tool.
-
-Either section is omitted when empty.
+**Injection safety.** Tool names are validated against `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` before being interpolated into the `which` command. The watchlist file is a persistence point a compromised LLM response or a user edit could poison, so validation is load-bearing.
 
 ---
 
 ## Tool Watchlist
 
-> **Status:** Implemented. Not yet wired to logging — see `specs/logging.md` for the planned `tools_available`/`tools_unavailable` invocation-level fields and `watchlist_additions` round field.
-
 ### Why
 
-The default `PROBED_TOOLS` list is static — ~30 common tools baked into the binary. Without the watchlist, the LLM has to spend a probe round on `which` every time for domain-specific tools — even if the user does this kind of work regularly.
+`PROBED_TOOLS` is static — ~30 tools baked in. Without the watchlist, the LLM burns a probe round on `which` every time for domain-specific tools, even for work the user does regularly.
 
 ### Design
 
-Any LLM response (probe, command, or answer) can include `watchlist_additions` — tool names to check via `which` on every future invocation. Stored in `~/.wrap/tool-watchlist.json`, separate from memory. On startup, the tool probe merges defaults + watchlist and runs a single `which`.
+Any LLM response (probe, command, or answer) may include `watchlist_additions` — tool names to `which` on every future invocation. Stored in `~/.wrap/tool-watchlist.json` as a flat array of `{tool, added}` entries. The `added` date is refreshed on each re-nomination (for future pruning). The tool probe merges defaults + watchlist into one `which` call on startup.
 
-**Why "watchlist" and not "discovered tools":** the list contains tools to *repeatedly check*, not tools confirmed to exist. Knowing "convert is not installed" saves a probe round just as much as knowing "sips is installed."
+**Name: "watchlist" not "discovered tools".** The list holds tools to *repeatedly check*, not tools confirmed to exist. "`convert` is not installed" saves a probe round just as much as "`sips` is installed."
+
+**Separate from memory.** Watchlist entries are tool names fed to `which` (always global), not scoped text shown to the LLM. Different lifecycle, different storage.
 
 ### Comprehensive Nominations (Avoiding Steering)
 
-When returning `watchlist_additions`, the LLM must include **all well-known tools for the domain on this OS** — not just the one it plans to use. This instruction appears both as a schema comment and in eval examples.
+When returning `watchlist_additions`, the LLM must nominate **all well-known tools for the domain on this OS**, not just the one it plans to use. Enforced via schema comment and eval examples.
 
-Without this, the LLM would only nominate the tool it plans to use (e.g. `sips`), creating information asymmetry that steers future invocations toward that tool even when better alternatives exist and are installed. Nominating the full set (e.g. `sips`, `convert`, `pngquant`, `optipng`, `cwebp`) gives balanced visibility.
+**Why.** If the LLM only nominated the tool it picked (e.g. `sips`), future invocations would only ever see `sips` in `## Detected tools` — creating information asymmetry that steers subsequent runs toward that tool even when better alternatives (e.g. `pngquant` for lossy PNG) are installed. Nominating the full domain (`sips`, `convert`, `magick`, `pngquant`, `optipng`, `cwebp`, …) gives balanced visibility.
 
-### Storage
+### Probe Content vs Watchlist Additions
 
-`~/.wrap/tool-watchlist.json` — flat JSON array of `{tool, added}` entries. The `added` date is updated on each re-nomination (useful for future pruning). File created on first addition, not on init. Tool names are validated to prevent command injection. Separate from memory: watchlist entries are tool names fed to `which` (always global), not scoped text shown to the LLM.
+Two different axes:
+
+- **Probe content is tactical** — check only what's needed *now*. "Convert GIF to PNG" → `which sips convert magick`.
+- **`watchlist_additions` is strategic** — nominate the full domain for future runs. Same request → the broader image-tool set.
+
+The tool probe runs once at startup and does not re-run mid-invocation. Within a single invocation, the LLM learns from its own probe output; on the next invocation, the watchlist surfaces everything without any probe at all.
 
 ### Lifecycle
 
-- **Growth:** LLM responses with `watchlist_additions`. Re-nominations update the date.
-- **No shrinkage (v1):** manual editing only. Future pruning can use the `added` date.
-- **Scale:** even 150+ tools complete `which` in well under 50ms.
-
-### Probe Content vs. Watchlist Additions
-
-- **Probe content** is **tactical** — checks only what the LLM needs *right now*. "Convert GIF to PNG" only needs `which sips convert magick`.
-- **`watchlist_additions`** is **strategic** — nominates the full domain for future invocations. "Convert GIF to PNG" suggests the user works with images, so nominate: `sips`, `convert`, `magick`, `mogrify`, `pngquant`, `optipng`, `cwebp`, `gifsicle`.
-
-The `## Detected tools` section is computed once at startup and does **not** update mid-invocation. Within the same invocation, the LLM learns from its own probe output. On the next invocation, the watchlist kicks in and the LLM sees the updated tools without probing.
-
-### Example Flow
-
-```
-$ w convert all gifs in this dir to pngs
-```
-
-**Round 1** — No image tools in `## Detected tools`. LLM returns a tactical probe + strategic watchlist:
-```json
-{
-  "type": "probe",
-  "content": "which sips convert magick",
-  "watchlist_additions": ["sips", "convert", "magick", "mogrify", "pngquant", "optipng", "cwebp", "gifsicle"],
-  "risk_level": "low",
-  "explanation": "Checking available image conversion tools"
-}
-```
-
-Wrap saves all eight tools to the watchlist, runs the probe, feeds output (`/usr/bin/sips`) back as a conversation turn.
-
-**Round 2** — LLM sees sips is available, produces the command.
-
-**Weeks later** — `probeTools()` checks defaults + the eight image tools. The LLM sees `sips` in detected tools. Zero probe rounds needed. If the user later installs `pngquant`, it appears automatically.
+- **Growth:** LLM `watchlist_additions`. Re-nominations refresh `added`.
+- **No shrinkage (v1):** manual edit only. Future pruning can key off `added` date.
+- **Scale:** even 150+ tools complete in one `which` call in well under 50ms.
 
 ---
 
 ## CWD Files
 
-> **Status:** Implemented.
+Every LLM request includes a listing of the current working directory under `## Files in CWD`. Immediate filesystem awareness without spending a probe round — the LLM sees `package.json`, `Makefile`, `node_modules/`, etc. and infers project tooling.
 
-Every LLM request includes a listing of files in the current working directory (`## Files in CWD`). This gives the LLM immediate filesystem awareness without spending a probe round — it can see `package.json`, `Makefile`, `node_modules/`, etc. and infer project tooling.
+**Format.** Depth-1 readdir, sorted by mtime. Hard cap of 50 entries: oldest 20 + newest 30 when truncated, with a gap marker and a "(showing X of Y)" footer. No exclusions — a `node_modules/` directory *is* a useful signal. Empty/unreadable directories → section omitted.
 
-**Format:** depth-1 readdir, hard cap at 50 entries (oldest 20 + newest 30 by mtime, with gap line when truncated). No exclusions — `node_modules/` as a directory name is a useful signal. Returns `undefined` for empty/unreadable directories (section omitted).
+**Why oldest + newest.** Pure newest misses stable project files (lockfiles, config) that haven't been touched recently. Pure oldest misses active work. Splitting captures both.
 
-### Eval
-
-New discovery features must be accompanied by eval support: the bridge must pass the new field through to `formatContext()`, the Python optimizer must thread it through the pipeline, and `seed.jsonl` should include samples demonstrating the feature's effect on LLM behavior. The CWD files implementation is the reference pattern.
-
-### Future Enhancement Idea
-
-Parse common config files and include a summary alongside the listing (`package.json` → script names, `Makefile` → target names). This would let the LLM skip a probe round that reads the file, at the cost of slightly more tokens per request.
+**No globbing / no content reads in v1.** A future enhancement could parse common config files and include a summary (`package.json` → script names, `Makefile` → targets) to skip a probe round at the cost of more tokens per request. Deferred.
 
 ---
 
 ## LLM Probes
 
-> **Status:** Implemented. Core loop in `src/core/runner.ts` (with `runRound` in `src/core/round.ts` and the semantic transcript in `src/core/transcript.ts`). Prompt strings in `src/prompt.constants.json`. Config: `maxRounds`, `maxCapturedOutputChars`. Eval support: `extra_messages` and `last_round` fields in bridge + optimizer + seed samples.
+The LLM can return `type: "probe"` to run a safe read-only discovery command before generating the final command. Probe results are appended to the conversation as assistant+user turn pairs, building context across rounds.
 
-The LLM can return `type: "probe"` to run a safe, read-only discovery command before generating the final command. Probe results are fed back as conversation turns (assistant + user message pairs), building context across rounds.
+Core loop in `src/core/runner.ts`; `runRound` in `src/core/round.ts`; semantic transcript in `src/core/transcript.ts`. Prompt strings in `src/prompt.constants.json`. Config: `maxRounds`, `maxProbeOutputChars`.
 
 ### Behavior
 
-- Probes execute silently (output captured, not shown on stdout)
-- `🔍` indicator with explanation on stderr
-- Probe results become conversation turns (multi-turn context)
-- Probes count toward the unified round budget (`maxRounds`, configurable, default 5)
-- Memory updates and watchlist additions from probe responses are persisted immediately (to disk)
-- Probe output is capped at `maxProbeOutputChars` (configurable, default ~200KB) with a truncation note
+- Probes execute silently — output captured, never written to stdout.
+- Status indicator on stderr: `🔍` (default) or `🌐` for URL fetches (see Web Reading).
+- Probes count against the unified `maxRounds` budget (default 5) shared with error-fix rounds.
+- Memory updates and `watchlist_additions` from probe responses are persisted immediately, so interruption doesn't lose work.
+- Probe output is truncated at `maxProbeOutputChars` (~200KB default) with a truncation note. Keeps pathological commands from blowing out context.
 
 ### Safety
 
-Probes must be `risk_level: "low"` — they are read-only discovery commands. If the LLM returns a non-low-risk probe:
-1. **Retry once** (within the same round) with guidance that probes must be safe, read-only commands
-2. **Refuse** if still non-low after retry — the probe is not executed, the LLM is told it was refused, and a round is consumed
+Probes must be `risk_level: "low"` — read-only by definition.
+
+1. **Retry once** within the same round with guidance that probes must be safe read-only commands.
+2. **Refuse** if still non-low — probe not executed, LLM told it was refused, round consumed.
+
+The round cost on refusal is intentional: it prevents infinite adversarial retries and makes the LLM conservative about what it labels a probe.
 
 ### Conversation Structure
 
-Each round appends to the same messages array. A probe round adds:
-- Assistant turn: the probe response (full JSON)
-- User turn: `## Probe output\n{captured stdout + stderr}`
+Each round appends to a single messages array. A probe round adds:
+- Assistant turn: the probe response JSON.
+- User turn: `## Probe output\n{captured stdout + stderr}`.
 
-Non-zero exit codes are included in the output. Context (memory, tools, CWD files) is assembled once before the loop and not rebuilt — the LLM already knows what it discovered.
+Non-zero exits are included in the output (the LLM often needs the error to decide next steps). Context (memory, tools, CWD files) is assembled once before the loop — not rebuilt per round, because the LLM already knows what it discovered.
 
-### Tool Discovery
+### Tool Discovery Philosophy
 
-- **Prompt guidance is intentionally general.** The system prompt says "use a probe to gather more context first" without prescribing specific tactics. The LLM decides what to probe — `which`, `--help`, `cat`, filesystem listing, etc.
-- **Few-shot examples** (via DSPy) are the primary mechanism for teaching discovery patterns.
+- **Prompt guidance is intentionally general.** The system prompt says "use a probe to gather more context first" without prescribing `which` / `--help` / `cat` / etc. Tactics are learned from few-shot examples, not hardcoded.
+- **Few-shot examples (DSPy) are the primary teaching mechanism.** Discovery patterns (`cat package.json | jq '.scripts'` for "run the tests", shell-config lookup for "add an alias", etc.) live in eval samples, not the prompt.
 - **Memory prevents redundant probing.** Discovered facts are saved to scoped memory and included in future requests.
-- **Tool probe + watchlist eliminate repeat tool-checking probes.** The first probe grows the watchlist; subsequent invocations already have that information.
-
-### Example Discovery Patterns
-
-| Scenario | Likely probe(s) |
-|----------|-----------------|
-| "run the tests" | `cat package.json \| jq '.scripts'` or `cat Makefile` |
-| "add an alias to my shell config" | `echo $SHELL`, `ls ~/.zshrc ~/.bashrc 2>/dev/null` |
-| "show me my Claude skills" | `ls ~/.claude/` or `find ~/.claude -name '*.md'` |
-| "deploy this" | `ls deploy* scripts/ bin/ 2>/dev/null` |
+- **Tool probe + watchlist eliminate repeat tool-checking probes.** First probe grows the watchlist; subsequent invocations already have the info.
 
 ### Round Budget
 
-Probes and error-fix rounds share a unified `maxRounds` budget. The LLM should be efficient:
-- **Batch related checks:** `cat package.json | jq '.scripts'` gets everything in one round.
-- **Leverage memory:** don't re-probe known facts.
-- **Tool probe and CWD files often eliminate the need** for probe rounds entirely.
+Probes and error-fix rounds share `maxRounds`. The LLM is pushed to be efficient:
+- Batch related checks into one command (`cat package.json | jq '.scripts'`).
+- Don't re-probe known facts.
 
-**Last-round constraint:** On the last available round, Wrap appends a "do not probe" instruction. This fires even when `maxRounds=1` (single-shot mode). The constraint only appears when it matters — no round-budget information is sent on earlier rounds.
+**Last-round constraint.** On the final available round, Wrap appends a "do not probe" instruction. This fires even at `maxRounds=1` (single-shot mode). The constraint only appears when it matters — no round-budget info leaks into earlier rounds, to avoid biasing behavior when budget is plentiful.
 
 ---
 
 ## Web Reading
 
-> **Status:** Implemented. URL-fetch detection (`fetchesUrl`) and 🌐 indicator in `src/core/runner.ts`. Tool defaults (`wget`, `textutil`, `lynx`, `w3m`) in `src/discovery/init-probes.ts`. Grounding rule in `src/prompt.optimized.json` instruction (mirrored in the DSPy seed at `eval/dspy/optimize.py`). Schema comment in `src/command-response.schema.ts`. Eval samples in `eval/examples/seed.jsonl`.
+URL-fetching reuses the probe loop — no new response type, no schema changes. Detection via `fetchesUrl()` in `src/core/runner.ts`, HTML extraction tools (`wget`, `textutil`, `lynx`, `w3m`) in `PROBED_TOOLS`, grounding rule in the system prompt (mirrored in the DSPy seed).
 
 ### Problem
 
-When the user's request involves a URL, the LLM tends to answer from training data instead of reading the actual content. Four failure modes:
+When a request involves a URL, LLMs tend to answer from training data instead of reading the actual content. Four failure modes:
 
-1. **"Install X as explained at URL"** — the LLM ignores the URL and generates an install command from its weights. Instructions at the URL may differ from what the LLM assumes.
-2. **"Install X as explained on their website"** — the LLM knows the URL from training, generates an install command from memory, never visits the site. Training data goes stale: install methods change, URLs move, flags get deprecated.
-3. **"What does this do: curl URL | sh"** — the LLM explains `curl` flags from memory instead of fetching and analyzing the actual script.
-4. **"Is this safe? curl URL | sh"** — the LLM gives a generic "pipe-to-sh is risky" answer instead of reading the script and providing a grounded safety assessment.
+1. **"Install X as explained at URL"** — LLM ignores the URL, generates an install command from its weights. Actual instructions may differ.
+2. **"Install X as explained on their website"** — LLM knows the URL from training, generates from memory, never visits. Training data goes stale; install methods change.
+3. **"What does this do: `curl URL | sh`"** — LLM explains `curl` flags from memory instead of fetching and analyzing the script.
+4. **"Is this safe? `curl URL | sh`"** — generic "pipe-to-sh is risky" answer instead of a grounded read of the actual script.
 
-### Solution: The Grounding Rule
+### The Grounding Rule
 
-A behavioral rule in the system prompt: **if you can read the real thing, read it instead of guessing.** It tells the LLM to probe-fetch URLs whose live content would improve the response, including the implicit case where the user names a known site without pasting a URL ("install ollama as explained on their website").
+A behavioral rule in the system prompt: **if you can read the real thing, read it instead of guessing.** The LLM probe-fetches URLs whose live content would improve the response, including the implicit case where the user names a known site without pasting a URL.
 
-This is a **prompt-level behavior**, not a new mechanism. The LLM reuses the existing probe loop to `curl` the URL; the multi-round loop feeds the content back as a conversation turn. No new response types, no schema changes — just the grounding rule, four extra entries in `PROBED_TOOLS`, and the indicator pick (🌐 vs 🔍).
+This is a prompt-level behavior, not a new mechanism. The existing probe loop `curl`s the URL and feeds content back as a conversation turn. The only supporting infrastructure is four extraction tools in `PROBED_TOOLS` and the `🌐` indicator.
 
-### When to Fetch vs. When Not To
+### When to Fetch vs Not
 
-The LLM judges this from request shape. The rule + few-shot examples teach the boundary:
+The LLM judges from request shape; the rule plus few-shot examples teach the boundary.
 
 | Request | Fetch? | Why |
 |---------|--------|-----|
-| `install ollama per https://ollama.com` | Yes | User explicitly points to URL for instructions |
-| `install ollama as explained on their site` | Yes | LLM resolves URL from knowledge, then fetches for current instructions |
-| `what does this do: curl URL \| sh` | Yes | Question is about the script's content |
-| `is this safe? curl URL \| sh` | Yes | Safety assessment requires reading the script |
-| `summarize https://example.com/article` | Yes | Question is explicitly about URL content |
-| `open https://github.com` | No | URL is an argument to `open` |
-| `what does curl do` | No | Question about the `curl` command, not a URL |
-| `ping example.com` | No | URL is a target for a command |
+| `install ollama per https://ollama.com` | Yes | Explicit URL for instructions |
+| `install ollama as explained on their site` | Yes | Implicit URL from LLM knowledge |
+| `what does this do: curl URL \| sh` | Yes | Question is about the script |
+| `is this safe? curl URL \| sh` | Yes | Safety needs the actual content |
+| `summarize https://example.com/article` | Yes | Question is about URL content |
+| `open https://github.com` | No | URL is an argument, not content |
+| `what does curl do` | No | About the command, not a URL |
+| `ping example.com` | No | URL is a target |
 
 ### HTML Extraction
 
-Web pages return HTML. The LLM handles raw HTML fine — it can parse structure, extract text, ignore markup. The concern is **size**: a typical marketing page is 50–200KB.
-
-**V1: LLM picks the extraction pipeline** based on detected tools:
+Pages return HTML. The LLM parses HTML natively; the concern is size (marketing pages: 50–200KB). V1: the LLM picks an extraction pipeline based on detected tools.
 
 | Tool | Platform | Pipeline |
 |------|----------|----------|
@@ -245,32 +196,22 @@ Web pages return HTML. The LLM handles raw HTML fine — it can parse structure,
 | `w3m` | Linux/macOS | `curl -sL URL \| w3m -dump -T text/html` |
 | *(none)* | any | `curl -sL URL` (raw HTML, LLM parses natively) |
 
-`wget`, `textutil`, `lynx`, `w3m` are in the default `PROBED_TOOLS` so the LLM sees their availability in `## Detected tools` and builds the right pipeline. Probe output truncation (`maxProbeOutputChars`, ~200KB) keeps giant pages from blowing up context.
+`maxProbeOutputChars` truncation keeps huge pages from blowing up context.
 
-### Future Enhancement: HTMLRewriter
-
-Bun ships `HTMLRewriter` as a built-in global — zero dependencies. A future enhancement could auto-strip `<script>`, `<style>`, `<svg>`, `<noscript>` from probe output that looks like HTML, guaranteeing clean text on any platform without external tools. Deferred — the LLM-picks-tool approach is sufficient for v1.
+**Future: `HTMLRewriter`.** Bun ships `HTMLRewriter` as a built-in global. An enhancement could auto-strip `<script>`, `<style>`, `<svg>`, `<noscript>` from HTML-shaped probe output for clean text on any platform without external tools. Deferred — LLM-picks-tool is sufficient for v1.
 
 ### Script Safety Analysis
 
-When the user asks about a `curl URL | sh` pattern, the LLM probe-fetches the script (the URL inside the `curl` command, not anything it might redirect to), reads it, and returns a free-form `answer` grounded in the actual content.
+For `curl URL | sh` requests, the LLM probe-fetches the top-level script, reads it, and returns a free-form `answer` grounded in the content. **Flag but not chase** secondary downloads: nested `curl`/`wget` calls are noted ("this script downloads a binary from X") but Wrap doesn't recursively fetch. The user sees what the top level does and decides.
 
-The LLM is prompted to **flag but not chase** secondary downloads: if the script contains nested `curl`/`wget` calls, the LLM notes it ("this script downloads a binary from X") but Wrap doesn't recursively fetch. The user sees what the top-level script does and can make an informed decision.
-
-No structured safety template — the LLM responds in its natural voice, covering what the script does, what it installs, what it modifies, and any concerns.
+No structured safety template — the LLM answers in its natural voice covering what the script does, what it installs/modifies, and concerns.
 
 ### Probe Indicator
 
-URL-fetching probes display `🌐` on stderr instead of the default `🔍`. The text after the emoji comes from the LLM's `explanation` field (free-form — phrasing isn't enforced).
+URL-fetching probes display `🌐` instead of `🔍`. Detection heuristic in `fetchesUrl()`: probe content starts with `curl`/`wget` and contains `http(s)://`. Ambiguous cases fall back to `🔍`. Explanation text after the emoji is the LLM's free-form `explanation` field.
 
-Detection: `fetchesUrl()` in `src/core/runner.ts` checks that the probe content starts with `curl`/`wget` and contains `http(s)://`. Simple heuristic; ambiguous cases fall back to `🔍`.
-
-**Fetch only, never execute.** URL probes only download content — they never pipe a fetched script through a shell. The existing probe safety check (probes must be `risk_level: "low"`) enforces this; the grounding rule reinforces it for the script-analysis case ("read the script as a probe and *analyze* it as an answer").
+**Fetch only, never execute.** URL probes download content — they never pipe a fetched script through a shell. The existing "probes must be `risk_level: low`" check enforces this; the grounding rule reinforces it for the script-analysis case ("read the script as a probe, *analyze* it as an answer").
 
 ### Dynamic Sites
 
-Sites that require JavaScript rendering won't return useful content via `curl`. Known limitation shared by all non-browser HTTP clients. Most documentation, install pages, and scripts are server-rendered and work fine.
-
-### Eval
-
-Probe-correctness samples in `eval/examples/seed.jsonl` cover positive cases (explicit URL, implicit "their website", script analysis, safety check, summarize), negative cases (`open URL`, `ping`, `what does curl do`), and extraction-pipeline selection (textutil on macOS, lynx on Linux, raw curl when no extractor is present). Multi-turn eval (quality of the answer *after* fetching) is deferred.
+JS-rendered sites won't return useful content via `curl`. Known limitation shared by all non-browser HTTP clients. Most docs, install pages, and scripts are server-rendered and work fine.

@@ -1,91 +1,73 @@
 # Subcommands
 
-> Subcommands use `--` flags to avoid colliding with natural language input.
+> Subcommand = CLI sub-action accessed via a `--` flag (see `SPEC.md` §Glossary).
 
-> **Status:** Implemented — registry, dispatch, `--help`, `--version`, `--log` all working.
+**Status:** Implemented.
 
 ---
 
-## Design
+## Why flags, not positional verbs
 
-Any `-` prefixed first arg is a flag — `w find files with --verbose` is NL because `--verbose` isn't first.
+Wrap's first positional arg is natural language. `w log me in` must be a NL query, not a log viewer. Any `-` prefix on the first arg disambiguates — a leading `-` never appears in real NL input.
 
-```
-w --log           # subcommand
-w --log 3         # subcommand with arg
-w -h              # short alias for --help
-w log me in       # natural language
-```
+Detection is strictly positional: `w find files --verbose` is NL because `--verbose` isn't first. Modifier flags (`--verbose`, `--model`, `--provider`) are stripped from the front of argv *before* this check (see `src/core/input.ts`).
 
-**Rules:**
-- Unknown flags error immediately with the specific flag name.
-- Subcommands **short-circuit** the main flow — they run before `loadConfig()` / `ensureMemory()` and handle their own prerequisites.
-- No args (`w` with nothing) → dispatches to `--help`.
-- Errors go to stderr, exit 1.
+---
+
+## Invariants
+
+- **Short-circuit.** Subcommands run before `loadConfig()`, provider init, `ensureMemory()`, cwd probing. They handle their own prerequisites and must not depend on NL-mode setup.
+- **Stdout discipline.** Each subcommand's "useful output" (help text, version string, log entries) goes to stdout. Everything else — errors, warnings, notices — uses `chrome()` (stderr/tty). See project-level stdout rule.
+- **No args → `--help`.** `w` with no argv and no piped stdin dispatches to help.
+- **Unknown flag → exit 1** with the specific flag name on stderr.
+- **Registry is the single source of truth.** `--help` output, per-subcommand help, and dispatch all read from `src/subcommands/registry.ts`. Adding a subcommand is one registry entry; no other file lists flags.
 
 ---
 
 ## Architecture
 
-### Registry Pattern
+Each `Subcommand` (`src/subcommands/types.ts`) is self-describing: `flag`, optional `aliases`, `description`, `usage`, optional long `help`, and `run(args)`. `dispatch()` matches flag-or-alias against the registry and passes remaining args through untouched — per-subcommand arg parsing is each command's job. There is no shared arg-schema layer; commands are few enough that a framework would be overkill.
 
-Each subcommand is a self-describing object with `flag`, `aliases`, `description`, `usage`, optional `help` (detailed text), and a `run(args)` function. All subcommands are registered in `src/subcommands/registry.ts`. `--help` is auto-generated from the registry — no hardcoded flag list.
-
-Each subcommand handles its own argument parsing from the `args` string array. The dispatcher (`src/subcommands/dispatch.ts`) matches the flag or any alias against the registry and passes remaining args through — no generic type checking per-subcommand.
-
-### Flow Position
+Flow position in `main.ts`:
 
 ```
-parseInput(argv)
-  │
-  ├─ first arg starts with -? ──→ dispatch(flag, args)  (exit)
-  ├─ no args? ──→ dispatch("--help", [])  (exit)
-  │
-  ├─ loadConfig()       // only for NL queries
-  ├─ initProvider()
-  ├─ ensureMemory()
-  └─ runQuery()
+parseArgs(argv)           // strips modifier flags
+  ├─ input.type === "flag" → dispatch(flag, args) → exit
+  ├─ no input + no pipe    → dispatch("--help", []) → exit
+  └─ otherwise             → loadConfig → provider → memory → runSession
 ```
 
 ---
 
-## Current Subcommands
+## Current subcommands
 
-### `--help`
+| Flag | Aliases | Notes |
+|---|---|---|
+| `--help` | `-h` | Auto-generated from the registry. TTY: animated gradient logo. Non-TTY: plain text. `w --help <name>` prints per-subcommand detail from the registry entry's `usage`/`description`/`help`. |
+| `--version` | `-v` | Reads `package.json`. Rejects extra args. |
+| `--log` | — | Unified log viewer. |
 
-Auto-generated from the registry. TTY-aware: animated gradient rendering when stdout is a TTY, plain text fallback when piped. `-h` is an alias.
+### `--log` behaviour
 
-Per-subcommand help: `w --help --log` (or `w --help log`) prints detailed help for that subcommand — usage line, description, and optional extra help text from the subcommand's `help` field.
-
-### `--version`
-
-Reads from `package.json`, prints to stdout. `-v` is an alias.
-
-### `--log`
-
-Unified log viewer — pretty by default, raw with `--raw` flag.
-
-```bash
-w --log              # all entries, pretty-printed (jq when available)
-w --log 5            # last 5 entries
-w --log "error" 3    # search for "error" in last 3 entries
-w --log --raw        # raw JSONL output
+```
+w --log              # all entries, pretty
+w --log 5            # last 5
+w --log "error" 3    # search, then last 3 of matches
+w --log --raw        # raw JSONL
 ```
 
-**Pretty output** adapts to environment:
-- TTY + jq installed → pipes through `jq -C .` (colorized + indented)
-- TTY, no jq → `JSON.stringify(entry, null, 2)` (indented, no color)
-- Piped → raw JSONL (same as `--raw`)
+Output mode picks itself:
 
-**Edge cases:**
-- No log file → stderr: `No log entries yet.`, exit 0
-- Corrupt JSONL lines → skipped with stderr warning, valid entries shown
-- Search reads all entries then filters; N limit applies after search
+- TTY + `jq` on PATH → piped through `jq -C .`
+- TTY, no `jq` → `JSON.stringify(_, null, 2)`
+- Non-TTY → raw JSONL (same as `--raw`)
+
+Edge cases: missing log file → `No log entries yet.` on stderr, exit 0. Corrupt JSONL lines are skipped and counted; a stderr warning reports the skip count after valid entries print. When searching, all entries are read first and the `N` limit applies *after* the filter; without a search term `N` is applied at read time for efficiency.
 
 ---
 
-## Out of Scope
+## Out of scope
 
-- `--config` — manual reconfigure (reuses config wizard when built)
-- `--memory` — view/manage memory
-- "Did you mean?" fuzzy matching for unknown flag typos
+- `--config` — reuses the config wizard once that exists.
+- `--memory` — view/manage memory store.
+- Fuzzy "did you mean?" for unknown-flag typos.

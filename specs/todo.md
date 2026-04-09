@@ -59,7 +59,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
-- [ ] `cancelled` outcome type (blocked on dialog + signal handling)
 - [ ] `expires` field + retention pruning (future)
 - [ ] Document in help/README that logs contain full LLM exchanges
 

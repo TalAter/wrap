@@ -1,18 +1,20 @@
 # Multi-Provider Config
 
-> `config.jsonc` carries a `providers` map plus a `defaultProvider`, so users can configure multiple LLM providers and switch the default one without losing other providers' credentials.
+> `config.jsonc` carries a `providers` map plus a `defaultProvider`. Users keep credentials for several LLM providers side by side and switch the default without losing the others.
 
 > **Status:** Implemented.
 
 ---
 
-## Motivation
+## Why
 
-Originally the config had a single `provider` block. Switching providers meant rewriting it from scratch — the previous provider's API key was lost. Users want:
+The original config had a single `provider` block. Switching providers meant rewriting it and losing the old API key. The map shape lets users:
 
-1. Persist credentials for several providers in one place.
+1. Persist credentials for several providers at once.
 2. Switch the persistent default provider/model.
-3. Use a different provider for a single run without touching the file.
+3. Override provider/model for a single run without editing the file.
+
+**Why model lives inside the provider entry.** A model is only meaningful paired with the provider that serves it. Co-locating them makes file-level drift structurally impossible — switching `defaultProvider` switches its model in lockstep. Wrap never picks a model; the user does, once per provider they configure. Runtime `--model` overrides can still pair a provider with a transient model the API rejects — handled at § Resolution.
 
 ---
 
@@ -21,7 +23,6 @@ Originally the config had a single `provider` block. Switching providers meant r
 ```jsonc
 {
   "$schema": "./config.schema.json",
-
   "providers": {
     "anthropic":   { "apiKey": "$ANTHROPIC_API_KEY", "model": "claude-haiku-4-5" },
     "openai":      { "apiKey": "$OPENAI_API_KEY",    "model": "gpt-4o-mini" },
@@ -29,40 +30,38 @@ Originally the config had a single `provider` block. Switching providers meant r
     "claude-code": { "model": "sonnet" },
     "groq":        { "baseURL": "https://api.groq.com/openai/v1", "apiKey": "$GROQ_KEY", "model": "llama-3.1-70b-versatile" }
   },
-
   "defaultProvider": "anthropic"
 }
 ```
 
-Two top-level keys replace the old `provider` block:
+- **`providers`** — map keyed by user-facing provider name. Each value is a `ProviderEntry` (`apiKey?`, `baseURL?`, `model?`). Allowed/required fields depend on the name (see registry).
+- **`defaultProvider`** — which entry to use when no override is set.
 
-- **`providers`** — map keyed by user-facing provider name. Each value is a `ProviderEntry` whose allowed fields depend on the name (see below). Every entry carries its own `model`.
-- **`defaultProvider`** — name of the entry in `providers` to use when no `--model` override is set.
-
-**Why model lives inside the provider entry:** A model only makes sense paired with the provider that serves it. Storing them together makes file-level drift structurally impossible — switching `defaultProvider` switches its model in lockstep. The wizard (out of scope) writes a per-provider model when the user picks one. Wrap still never *picks* a model — the user does, once per provider they configure. (Runtime overrides via `--model` can still pair a provider with a transient model the API rejects — see § Resolution.)
+`apiKey` resolution (`$VAR`, omitted, literal) is shared with `specs/llm-sdk.md` § AI SDK Provider.
 
 ---
 
-## Provider Names
+## Provider Taxonomy
 
-The map key is the user-facing provider name. Wrap's source maps each known name to an internal SDK factory — that mapping is invisible to the user.
+`src/llm/providers/registry.ts` is the single source of truth. `KNOWN_PROVIDERS` maps name → `{ kind, validate? }`. `kind` selects the runtime SDK family; unknown names default to `openai-compat`.
 
-### Known providers (v1)
+| Name          | Allowed fields                  | `kind`          | Dispatches to                          |
+|---------------|---------------------------------|-----------------|----------------------------------------|
+| `anthropic`   | `apiKey?`, `baseURL?`, `model`  | `anthropic`     | AI SDK anthropic factory               |
+| `openai`      | `apiKey?`, `baseURL?`, `model`  | `openai-compat` | AI SDK openai factory                  |
+| `ollama`      | `baseURL` *(required)*, `model` | `openai-compat` | AI SDK openai factory, placeholder key |
+| `claude-code` | `model`                         | `claude-code`   | `claude` CLI subprocess                |
+| *any other*   | `baseURL`, `apiKey`, `model` *(all required)* | `openai-compat` | AI SDK openai factory  |
 
-| Name          | Allowed fields                          | Internal binding                          |
-|---------------|-----------------------------------------|-------------------------------------------|
-| `anthropic`   | `apiKey?`, `baseURL?`, `model`          | ai-sdk anthropic                          |
-| `openai`      | `apiKey?`, `baseURL?`, `model`          | ai-sdk openai                             |
-| `ollama`      | `baseURL` *(required)*, `model`         | ai-sdk openai-compat, placeholder apiKey  |
-| `claude-code` | `model`                                 | `claude` CLI subprocess                   |
+The user-facing name **is** the discriminant — there is no `type` field. The name → SDK mapping is invisible to users.
 
-`apiKey` resolution rules unchanged from `specs/llm-sdk.md` § AI SDK Provider — `$VAR` reads env, omitted reads provider's default env var, literal used as-is.
+**Why unknown providers require `apiKey`.** Without one, the call would silently send a placeholder string against a real billed endpoint. Failing early is safer than a mystery auth error on a billed request.
 
-The internal `test` provider is **not** user-facing. It is selected by setting `WRAP_TEST_RESPONSE`, which short-circuits `resolveProvider` and bypasses the providers map entirely. See § Test Provider.
+**Adding a built-in** = one entry in `KNOWN_PROVIDERS`. **Adding a new SDK family** = a new `kind`, a new branch in `initProvider`, a new factory file — all obvious.
 
-### Unknown providers (escape hatch)
+### Test provider
 
-Any other key is treated as an OpenAI-compatible endpoint. The user picks the name (`groq`, `together`, `fireworks`, …). **Required:** `baseURL`, `apiKey`, and `model`. Without `apiKey`, the call would silently use a placeholder string against a real billed endpoint — runtime rejects the entry.
+The `test` provider is not user-facing and not in the providers map. `resolveProvider` short-circuits on `WRAP_TEST_RESPONSE` / `WRAP_TEST_RESPONSES` and returns `TEST_RESOLVED_PROVIDER`; `initProvider` routes that sentinel to `testProvider()`. Config is not consulted at all, so tests don't need a providers block.
 
 ---
 
@@ -70,12 +69,14 @@ Any other key is treated as an OpenAI-compatible endpoint. The user picks the na
 
 Layered precedence (lowest → highest):
 
-1. **`config.jsonc`** in `WRAP_HOME`
-2. **`WRAP_CONFIG`** env var — top-level shallow merge over file
-3. **`WRAP_MODEL`** env var — overrides which provider and/or which model is used for this run
-4. **`--model`** CLI flag — same semantics as `WRAP_MODEL`, wins over env
+1. `config.jsonc` in `WRAP_HOME`
+2. `WRAP_CONFIG` env var — **top-level shallow merge** over file
+3. `WRAP_MODEL` env var — overrides provider and/or model for one run
+4. `--model` / `--provider` CLI flag — same semantics, wins over env
 
-Shallow merge (layer 2) is consistent across all top-level keys. Each top-level key (`providers`, `defaultProvider`, `maxRounds`, …) is independently overridable. **Nested objects are replaced wholesale, not deep-merged** — this is the gotcha:
+### Shallow-merge gotcha
+
+Nested objects are replaced wholesale, not deep-merged:
 
 ```
 file:        providers={anthropic:{...}, openai:{...}}, defaultProvider=anthropic
@@ -83,152 +84,112 @@ WRAP_CONFIG: {"providers":{"openai":{"apiKey":"$NEW","model":"gpt-4o"}}}
 result:      providers={openai:{apiKey:"$NEW",model:"gpt-4o"}}  ← anthropic is GONE
 ```
 
-Setting `providers` from `WRAP_CONFIG` replaces the **entire** map. To override just which provider/model is used without redefining the map, use `WRAP_MODEL` or `--model`.
+This is deliberate: a single, consistent merge rule across all top-level keys beats a special case for `providers`. To tweak just the active provider/model without redefining the map, use `WRAP_MODEL` or `--model`.
 
-If both `WRAP_MODEL` and `--model` are set, `--model` wins entirely — values are not field-merged.
+### Override value parsing
 
-### `--model` / `--provider` value parsing
+`--provider` is an alias for `--model`. Both flags and `WRAP_MODEL` share one parser. `--model` is canonical because the smart-resolution path most often receives a model name; `--provider` reads better when the value is a provider name.
 
-`--provider` is an alias for `--model`. Both flags accept the same values and parse identically. (`--model` is the canonical flag because the bare-string smart resolution path is most often a model name; `--provider` reads better when the value is a provider name. They're interchangeable.) `WRAP_MODEL` uses the same parsing rules.
-
-A "transient" model below means: used for this run only, not written back to the config file.
+"Transient" model = used for this run only, not written back.
 
 ```
---model anthropic:claude-opus-4-5   → use anthropic, with transient model claude-opus-4-5
---model anthropic                   → use anthropic, with anthropic.model from config
---model :claude-opus-4-5            → use defaultProvider, with transient model claude-opus-4-5
---model claude-opus-4-5             → smart: matches anthropic.model in config → use anthropic
---model gpt-9999                    → smart: matches no configured provider/model → defaultProvider with transient
+--model anthropic:claude-opus-4-5   → anthropic, transient model claude-opus-4-5
+--model anthropic                   → anthropic, with anthropic.model from config
+--model :claude-opus-4-5            → defaultProvider, transient claude-opus-4-5
+--model claude-opus-4-5             → smart: matches anthropic.model in config → anthropic
+--model gpt-9999                    → smart: no match → defaultProvider with transient
 ```
 
-Parsing rules:
-- Split on the **first** `:` only. `--model openai:gpt-4o:turbo` → provider=`openai`, model=`gpt-4o:turbo`.
-- Empty value (`--model ""` / `WRAP_MODEL=""`) or bare `:` → `Config error: --model value is empty.`
-- No `:` → **smart resolution**, in order:
-  1. Match against keys of the merged `providers` map → provider override (use that entry's stored model).
-  2. Match against `providers[*].model` values across the merged map → if exactly one entry has it, use that entry. If multiple entries share the model string, error: `Config error: model "X" is configured for multiple providers; use provider:model.`
+Rules:
+- Split on the **first** `:` only (`openai:gpt-4o:turbo` → `openai` / `gpt-4o:turbo`).
+- Empty or bare `:` → `Config error: --model value is empty.`
+- No `:` → smart resolution in order:
+  1. Match against merged `providers` keys → provider override (use that entry's stored model).
+  2. Match against `providers[*].model` values → if exactly one hit, use that entry. Multiple hits → error: `model "X" is configured for multiple providers; use provider:model.`
   3. No match → model override on `defaultProvider` (transient).
-- Provider override naming a **known** built-in that is **not configured** (e.g. `--model openai` when openai is absent from `providers`) → `Config error: provider "openai" not found in config.` Smart resolution looks at *configured* names, not built-in names.
+- Naming a **known built-in** that is **not configured** (`--model openai` with no openai entry) → `provider "openai" not found in config.` Smart resolution only looks at *configured* names, never built-in names.
 
-Smart resolution is purely local — it inspects the merged config map and never queries any provider's API.
-
-If a transient model isn't supported by the resolved provider (e.g. `--model :gpt-4o` while `defaultProvider` is `anthropic`), Wrap passes it through to the SDK. The SDK rejects the call; the error is wrapped with a Wrap-prefixed message before printing, so users don't see raw SDK chrome on stderr.
-
-`WRAP_MODEL` and `--model` resolve against the **merged** providers map (file ⊕ `WRAP_CONFIG`). The override layer never sees the raw file map alone.
+Smart resolution is purely local — it never queries any provider's API. It always runs against the **merged** map (file ⊕ `WRAP_CONFIG`); the override layer never sees the raw file map.
 
 ### Override scope
 
-The flag/env override **only** swaps which provider entry and which model are used. `apiKey` and `baseURL` always come from the resolved entry in `providers`. There is no flag for ad-hoc credentials — edit config or set env vars.
+Overrides swap *which* entry is used and optionally *which* model. `apiKey` and `baseURL` always come from the resolved entry. There is no flag for ad-hoc credentials — edit config or set env vars. Omitted `apiKey` on a known provider still falls back to the SDK's default env var (e.g. `ANTHROPIC_API_KEY`) whether the entry was reached via `defaultProvider` or via override.
 
-Omitted `apiKey` on a known provider continues to fall back to the SDK's default env var (e.g. `ANTHROPIC_API_KEY`) whether the entry was reached via `defaultProvider` or via override. The override path doesn't disable the fallback.
+A transient model the resolved provider's API rejects is passed through to the SDK. The SDK's error is wrapped with a Wrap-prefixed message so users never see raw SDK chrome on stderr.
 
 ---
 
-## Internal Architecture
+## Architecture
 
-Two layers, with a pure resolver in between:
+Two layers with a pure resolver between:
 
-1. **`loadConfig`** (`src/config/config.ts`) returns the file/env-merged `Config` (owns `Config` and `ProviderEntry` types).
-2. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure function: takes `Config` + an `override` string + an `env` map, returns a `ResolvedProvider`.
-3. **`initProvider`** (`src/llm/index.ts`) dispatches the `ResolvedProvider` to the right factory via the registry's `kind`.
+1. **`loadConfig`** (`src/config/config.ts`) — owns `Config` and `ProviderEntry` types; returns file ⊕ `WRAP_CONFIG`.
+2. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure: `(Config, override, env) → ResolvedProvider`. Parses the override, applies smart resolution, runs per-entry validation via the registry, produces the final tuple.
+3. **`initProvider`** (`src/llm/index.ts`) — dispatches `ResolvedProvider` to the right factory via the registry's `kind`.
 
 ```ts
 type ResolvedProvider = {
-  name:     string;   // e.g. 'anthropic', 'ollama', 'groq'
+  name:     string;   // 'anthropic', 'ollama', 'groq', …
   model:    string;
   apiKey?:  string;
   baseURL?: string;
 };
 ```
 
-Flag parsing lives in `src/core/input.ts` (`parseArgs`), which treats `--model`/`--provider` as value-taking modifiers. The caller (`main.ts`) picks `override` from `Modifiers.values.get("modelOverride")` if set, else `process.env.WRAP_MODEL`, else `undefined`. `resolveProvider` parses it (split on first colon, smart-resolve bare values), applies the override on top of `defaultProvider`, validates the entry via the registry, and returns the final tuple. The user-facing name *is* the discriminant — there's no `type` field.
-
-### Provider registry
-
-`src/llm/providers/registry.ts` is the single source of truth for provider taxonomy. Each known provider is one entry in `KNOWN_PROVIDERS` mapping name → `{ kind, validate? }`. `kind` distinguishes the runtime SDK family:
-
-- `anthropic` → ai-sdk anthropic factory
-- `openai-compat` → ai-sdk openai factory (covers `openai`, `ollama`, and any unknown OpenAI-compatible endpoint)
-- `claude-code` → `claude` CLI subprocess
-
-`validate` is an optional per-entry structural check (e.g. ollama requires `baseURL`). Unknown provider names default to `openai-compat` and must supply `baseURL`, `apiKey`, and `model` — without an apiKey the call would silently send a placeholder against a real billed endpoint.
-
-Adding a built-in = one entry in `KNOWN_PROVIDERS`. Adding a brand-new SDK family = a new `kind`, a new branch in `initProvider`, and a new factory file.
-
-### Test Provider
-
-The `test` provider is for the test suite only and is not in the user-facing `providers` map. Selection: if `WRAP_TEST_RESPONSE` or `WRAP_TEST_RESPONSES` is set, `resolveProvider` short-circuits and returns a `TEST_RESOLVED_PROVIDER` sentinel that `initProvider` routes to the test provider — config is not consulted at all. Tests don't need a providers block; setting the env var alone selects the test provider.
+`parseArgs` in `src/core/input.ts` treats `--model`/`--provider` as value-taking modifiers. `main.ts` picks `modifiers.values.get("modelOverride") ?? process.env.WRAP_MODEL` and hands it to `resolveProvider`.
 
 ---
 
 ## Errors
 
-**Config-resolution failure** — single generic message when no LLM can be resolved from the file/env state (any of: `providers` missing/empty, `defaultProvider` unset, `defaultProvider` not in `providers`, resolved entry has no `model`):
+**Config-resolution failure** — single generic message when no LLM can be resolved (any of: `providers` missing/empty, `defaultProvider` unset or not in map, resolved entry has no `model`):
 
 ```
 Config error: no LLM configured. Edit ~/.wrap/config.jsonc.
 ```
 
-Single message is deliberate — the wizard (out of scope) will diagnose causes interactively.
+One message is deliberate: the config wizard (out of scope) will diagnose causes interactively.
 
-**Per-entry validation** (config-time, surfaced before resolution):
+**Per-entry validation** (runs before the no-model check so a structurally invalid entry reports the actionable error):
 
-- Unknown provider name with `baseURL`, `apiKey`, or `model` missing → `Config error: provider "xyz" requires baseURL, apiKey, and model.`
-- `ollama` entry with no `baseURL` → `Config error: provider "ollama" requires baseURL.`
+- Unknown provider name missing `baseURL`/`apiKey`/`model` → `provider "xyz" requires baseURL, apiKey, and model.`
+- `ollama` without `baseURL` → `provider "ollama" requires baseURL.`
 
-**Override-flag failures** (CLI/env path, distinct from config-failure):
+**Override-path errors** (distinct from the generic one — when the user used a flag, pointing them at the file is misdirection):
 
-- `--model` value naming a provider not in the merged providers map → `Config error: provider "xyz" not found in config.`
-- `--model` empty value → `Config error: --model value is empty.`
-- `--model anthropic` (or any provider override) where the resolved entry has no `model` → `Config error: provider "anthropic" has no model set in config.` (Distinct from the generic config error because the user used a flag — pointing them at the file is misdirection.)
-- `--model` smart-resolution match against multiple providers' configured models → `Config error: model "X" is configured for multiple providers; use provider:model.`
+- `--model` names a provider not in the merged map → `provider "xyz" not found in config.`
+- `--model` empty → `--model value is empty.`
+- `--model anthropic` where the resolved entry has no `model` → `provider "anthropic" has no model set in config.`
+- `--model` smart match hits multiple providers' models → `model "X" is configured for multiple providers; use provider:model.`
 
-Duplicate keys inside `providers` (legal in JSONC) resolve via jsonc-parser's last-wins rule. Not flagged as an error.
+Duplicate keys inside `providers` are legal in JSONC; jsonc-parser resolves last-wins. Not flagged.
 
 ---
 
 ## JSON Schema
 
-Loose validation. The schema documents top-level shape and the `ProviderEntry` shape, but does not enumerate known provider names — the runtime registry is the source of truth.
+Loose. `config.schema.json` documents the top-level shape and `ProviderEntry` shape but does **not** enumerate known provider names — the runtime registry is the source of truth. Per-provider field requirements (`ollama` needs `baseURL`, unknown providers need all three) are enforced at runtime, not in the schema, because they depend on the registry.
 
-```jsonc
-{
-  "providers": {
-    "type": "object",
-    "additionalProperties": {
-      "type": "object",
-      "properties": {
-        "apiKey":  { "type": "string" },
-        "baseURL": { "type": "string" },
-        "model":   { "type": "string" }
-      },
-      "additionalProperties": false
-    }
-  },
-  "defaultProvider": { "type": "string" }
-}
-```
-
-The old `oneOf` provider variants are removed. Per-provider field requirements (e.g. `ollama` needs `baseURL`, every entry needs `model`) are enforced at runtime, not in the schema, because they depend on the runtime provider registry.
+The old `oneOf` provider variants are gone.
 
 ---
 
 ## Logging
 
-Two verbose log lines in `src/main.ts`:
+Two verbose lines in `src/main.ts`:
 
 ```
 Config loaded (anthropic / claude-haiku-4-5)
 Provider initialized (anthropic / claude-haiku-4-5)
 ```
 
-Both show the resolved tuple (provider name + model), reflecting any override. No separate "overridden" indicator. `formatProvider()` in `src/llm/types.ts` produces this label.
+Both show the resolved tuple — any override is already baked in, so there is no separate "overridden" indicator. `formatProvider()` in `src/llm/types.ts` produces the label.
 
 ---
 
 ## Out of Scope
 
-- **Configuration wizard.** First-run UX, model listing via `/v1/models`, "recommended" model selection. Tracked separately. Wizard will be the supported path for editing config; this spec only ensures the file shape supports it.
-- **`--config` subcommand family.** Listing/setting/getting config from CLI. Future addition.
+- **Config wizard.** First-run UX, `/v1/models` listing, recommended-model picks. Will be the supported path for editing config; this spec only ensures the shape supports it.
+- **`--config` subcommand family.** Listing/setting/getting config from CLI.
 - **Ad-hoc credential override flags.** No `--api-key` / `--base-url`.
 - **Migration from old `provider` shape.** Pre-1.0; users restart.

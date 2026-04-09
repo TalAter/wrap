@@ -1,69 +1,63 @@
 # Memory System
 
-> **Status:** Implemented (2026-03-25)
->
-> Part of the top-level flow in `specs/ARCHITECTURE.md`. Behavioral spec in `specs/SPEC.md` section 10.
+> **Status:** Implemented. Part of the top-level flow in `specs/ARCHITECTURE.md`. Behavioral spec in `specs/SPEC.md` section 10. Canonical terms (Memory, Scope, Fact) defined in `specs/SPEC.md` §Glossary.
 
 ---
 
-## Overview
+## Purpose
 
-Memory lets Wrap learn and remember facts about the user's environment. Facts are persisted to disk and included in every LLM request, so the LLM can generate better commands without redundant probes.
+Wrap learns Facts about the user's environment, persists them, and injects them into every LLM request so the model can skip redundant probes and generate better commands.
 
-Each fact has a **scope** — a directory it applies to. Facts scoped to `/` are global and always sent. Facts scoped to a specific directory are only sent when CWD is that directory or a subdirectory. This lets Wrap learn per-project knowledge — tooling, test commands, build systems — without polluting every request.
+Each Fact has a **Scope** — an absolute directory. `/` is global and always included. A directory Scope is included only when CWD is at or below it. This keeps per-project knowledge (tooling, test commands, build systems) out of unrelated requests.
 
-On first run, Wrap probes the system (OS, shell, distro, config files), sends raw output to the LLM to parse into concise facts, and saves them as global facts. Subsequent runs load memory from disk. Project-specific facts emerge organically during use — the LLM discovers project tooling (lockfiles, config files) and returns memory updates with the appropriate scope.
+### Why Scopes (not tags or a flat list)
 
-Tool availability (package managers, dev tools, clipboard utilities) is **not** stored in memory. It is probed fresh on every run via `which` and injected directly into the prompt. This avoids stale facts — installed tools change over time and may differ by cwd (e.g. nvm, fnm, pyenv do per-directory version switching).
+Directory-as-scope is the natural unit for CLI work: the user's intent is almost always about "here and below". Prefix-matching on CWD gives free, deterministic filtering with no classifier and no LLM judgment call at read time.
+
+### Why tool availability is NOT stored
+
+Package managers, clipboard utils, and version-managed tools (nvm, fnm, pyenv) change over time and vary by directory. Storing them risks stale facts. Instead, they are probed fresh every run via `which` and injected as `## Detected tools` (see `specs/discovery.md`). Memory holds only stable facts (OS, shell, project conventions).
 
 ---
 
 ## Storage
 
 - **File:** `~/.wrap/memory.json` (alongside `config.jsonc`, resolved via `getWrapHome()`)
-- **Directory creation:** `~/.wrap/` is created lazily on first write.
+- **Directory:** `~/.wrap/` created lazily on first write.
+- **Schema:** `Record<scope, Fact[]>`, validated with Zod on load. `Fact` is an object `{fact: string}`, not a plain string, so future fields (e.g. `expires`) can be added without a migration.
+- **Keys:** resolved absolute paths. `/` denotes global.
+- **On corrupt/invalid file:** single actionable error using `prettyPath` — user is told to delete and rerun. No auto-recovery (silent data loss is worse than a clear failure).
 
-### Format
-
-Map of scope (resolved absolute path) → fact objects, validated with Zod on load:
+Example:
 
 ```json
 {
-  "/": [
-    {"fact": "Runs macOS Darwin 25.3.0 on arm64 (Apple Silicon)"},
-    {"fact": "Default shell is zsh, config at ~/.zshrc"}
-  ],
-  "/Users/tal/monorepo": [
-    {"fact": "Uses bun"},
-    {"fact": "Run tests with `bun run test`"}
-  ],
-  "/Users/tal/monorepo/packages/api": [
-    {"fact": "Uses postgres"},
-    {"fact": "Has a Makefile"}
-  ]
+  "/": [{"fact": "Runs macOS Darwin 25.3.0 on arm64"}],
+  "/Users/tal/monorepo": [{"fact": "Uses bun"}, {"fact": "Run tests with `bun run test`"}],
+  "/Users/tal/monorepo/packages/api": [{"fact": "Uses postgres"}]
 }
 ```
 
-`Fact` is an object (not a plain string) to support future fields like `expires`.
+### Write semantics & invariants
 
-On corrupt or invalid file, a single actionable error is shown using `prettyPath` for the file path.
-
-### Write semantics
-
-- **Append-only within each scope.** New facts are pushed to the end of the array for their scope.
-- **Newer facts (higher index) take precedence** over older contradicting facts. The LLM is told this in the system prompt.
-- **Keys sorted alphabetically on every write.** `/` comes first, then by path depth naturally. This order is preserved on read — no runtime sorting needed at prompt assembly time. More specific facts appear later in the prompt, closer to the user's request, leveraging the LLM's recency bias.
-- **Non-existent scopes discarded.** Scopes that don't resolve to an existing directory (via `resolvePath`) are silently dropped.
+- **Append-only within a Scope.** New Facts go to the end of the array.
+- **Newer Facts take precedence** over older contradicting ones. The system prompt tells the LLM this explicitly — recency bias is the conflict resolution strategy.
+- **Keys sorted alphabetically on every write.** `/` sorts first; deeper paths naturally follow. This order is preserved on read so prompt assembly needs no runtime sort, and more specific Facts land closer to the user's request (LLM recency bias again).
+- **Deduped on append.** `appendFacts` skips a Fact whose exact text already exists in that Scope (within one batch and against persisted state).
+- **Non-existent Scopes are silently dropped** on append. `resolvePath` returns null for paths that don't exist on disk; those updates are discarded. This prevents the LLM from polluting memory with hallucinated paths.
 
 ---
 
 ## Path Conventions
 
-Two utilities in `src/core/paths.ts`: `resolvePath` (canonical absolute path, null if non-existent) and `prettyPath` (substitutes `~` for homedir).
+Two utilities in `src/core/paths.ts`:
+- `resolvePath(path, cwd)` — canonical absolute path, or `null` if the path doesn't exist. Handles absolute paths, relative paths (`.`), and `~`.
+- `prettyPath(path)` — substitutes `~` for homedir.
 
-- **Storage and prompt injection:** always use resolved absolute paths.
-- **User-facing chrome messages:** always use `prettyPath`.
-- **CWD:** resolved once at startup in `main.ts`, passed through as context.
+Rules:
+- **Storage and prompt injection:** resolved absolute paths.
+- **User-facing chrome:** `prettyPath`.
+- **CWD:** resolved once at startup in `main.ts` and threaded through as context.
 
 ---
 
@@ -71,13 +65,13 @@ Two utilities in `src/core/paths.ts`: `resolvePath` (canonical absolute path, nu
 
 | Boundary | Shape |
 |----------|-------|
-| On disk | `Memory` = `Record<FactScope, Fact[]>` — scope is the key |
-| main → query | Full `Memory` map + resolved CWD string |
-| query → context | `QueryContext.memory` (`Memory`, filtered in context.ts) |
-| LLM response | `memory_updates`: `{fact: string, scope: string}[]` |
-| context → prompt | Sectioned markdown text |
+| On disk | `Memory = Record<FactScope, Fact[]>` |
+| main → query | Full `Memory` + resolved CWD |
+| query → context | `QueryContext.memory`, filtered by CWD in `formatContext` |
+| LLM response | `memory_updates: {fact, scope}[]` |
+| context → prompt | Sectioned markdown |
 
-The full memory map flows from `main.ts` through `runQuery` to `assembleCommandPrompt`, where it's filtered by CWD. The LLM returns `{fact, scope}` pairs, which `appendFacts` resolves and persists, returning the updated map so the next LLM call in the same loop sees the new facts.
+The full map flows from `main.ts` through `runQuery` to prompt assembly, where `formatContext` filters by CWD. The LLM returns `{fact, scope}` pairs; `appendFacts` resolves scopes, persists, and returns the updated map so the next round in the same loop sees the new Facts.
 
 ---
 
@@ -85,52 +79,48 @@ The full memory map flows from `main.ts` through `runQuery` to `assembleCommandP
 
 ### Filtering
 
-For each scope in stored order (alphabetical), include it if CWD is at or below that directory. **Prefix match uses trailing slashes** to avoid false positives with sibling directories (e.g., `/monorepo` must not match `/monorepo-tools`).
+Iterate Scopes in stored (alphabetical) order. Include a Scope if CWD is at or below it. **Prefix match uses trailing slashes on both sides** — otherwise `/monorepo` would falsely match `/monorepo-tools`. Global (`/`) always passes because every CWD starts with `/`.
 
-Global facts are always included because every CWD starts with `/`.
+### Sections
 
-### Format
-
-- `/` scope → `## System facts`
-- All other scopes → `## Facts about {resolved_path}` (full absolute paths so the LLM can reference and return them)
-- Sections only appear if they have facts after filtering. If no facts match at all, the entire block is omitted.
-- After memory facts, before CWD: `## Detected tools` — runtime `which` output (see `specs/discovery.md`).
+- `/` → `## System facts`
+- Other Scopes → `## Facts about {absolute_path}` (full absolute path so the LLM can reference and return the exact Scope)
+- Empty sections are omitted. If nothing matches, the whole block disappears.
+- Followed by `## Detected tools` (runtime `which` output) then CWD — see `specs/discovery.md`.
 
 ### Recency
 
-The system prompt includes: *"When multiple memory facts contradict each other, the later (more recent) fact is more current and should take precedence."*
+System prompt: *"When multiple memory facts contradict each other, the later (more recent) fact is more current and should take precedence."*
 
 ---
 
 ## Init Flow
 
-> **See `specs/discovery.md`** for full init probe details: probe commands, LLM prompt, UX, and the complete `ensureMemory` flow diagram.
+On first run (empty memory), Wrap probes the system (OS, shell, distro, config files), sends raw output to the LLM, parses the response into Facts, and saves them as global. Subsequent runs just load from disk. LLM failure → error and exit (Wrap cannot function without baseline facts).
 
-Called from `main()` after `loadConfig()` and `initProvider()`. On first run, probes the system locally (OS, shell, distro, config files), sends raw output to the LLM to parse into concise global facts, and saves them. On subsequent runs, loads from disk. If the LLM call fails → error and exit.
+Full probe set, LLM prompt, UX, and the `ensureMemory` flow diagram live in `specs/discovery.md`.
 
 ---
 
 ## Runtime Memory Updates
 
-When the LLM returns `memory_updates` in a query response:
+When the LLM returns `memory_updates`:
 
-1. `appendFacts` resolves each scope via `resolvePath` (handles absolute paths, relative paths like `.`, and `~`). Non-existent paths are silently discarded. Facts are appended to the correct scope, keys are sorted, and the map is persisted.
-2. The in-memory state is updated so the next LLM call in the same loop sees the new facts.
-3. `memory_updates_message` is shown on stderr with a scope prefix for non-global facts: `🧠 (~/project) Noted: uses bun`. Global-only updates use the plain `🧠` prefix. When a batch contains multiple scopes, the deepest (most specific) resolved non-global scope is shown.
+1. `appendFacts` resolves each Scope (absolute, relative, or `~`), drops non-existent paths, dedupes, appends, sorts keys, persists.
+2. The returned in-memory map is threaded into the next round so it sees the new Facts immediately.
+3. `memory_updates_message` is shown on stderr with the `🧠` prefix. When the batch contains any non-global Scope, the **deepest resolved non-global Scope** is shown as a `(prettyPath)` prefix before the message. Global-only batches show the bare message. Picking the deepest keeps the UI honest about which project the fact belongs to when a single update touches multiple levels.
 
----
+### LLM Schema Coupling
 
-## LLM Response Schema
-
-Each `memory_updates` entry carries a `scope` field — an absolute directory path (or `/` for global). Inline comments in the Zod schema guide the LLM's scoping decisions (these comments are extracted into `SCHEMA_TEXT` and read by the LLM on every request).
+The `memory_updates` entry's `scope` field is an absolute directory path (or `/`). Inline comments in the Zod schema guide the LLM's scoping decisions — these comments are extracted into `SCHEMA_TEXT` and shipped to the LLM on every request. Editing the schema therefore edits the prompt; see `.claude/skills/editing-prompts.md`.
 
 ---
 
 ## Out of Scope
 
-- Memory TTL / expiry (storage format supports adding fields to fact objects)
-- Memory compaction / deduplication
-- `wrap memory` subcommand (separate feature)
-- Memory size limits / token budget warnings
-- Auto-probing CWD on first visit (project-specific facts emerge organically from use)
+- Memory TTL / expiry (schema leaves room to add it)
+- Compaction / deduplication beyond exact-match
+- `wrap memory` subcommand
+- Size limits / token budget warnings
+- Auto-probing a new CWD on first visit — project Facts emerge organically from use
 - Memory editing / deletion UI
