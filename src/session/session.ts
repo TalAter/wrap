@@ -236,9 +236,7 @@ type PumpLoopArgs = {
 
 /**
  * Drain a `runLoop` generator and route its events back to the session via
- * `dispatch` (`loop-final` / `loop-error` / `block`). Free function so the
- * coupling between coordinator and runner is the explicit args list —
- * nothing read through scope.
+ * `dispatch` (`loop-final` / `loop-error` / `block`).
  */
 async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   const { signal, isInitialLoop, followupText, onRound, dispatch } = args;

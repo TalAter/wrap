@@ -136,4 +136,62 @@ describe("createNotificationRouter", () => {
     expect(seen).toHaveLength(0);
     unsub();
   });
+
+  test("full lifecycle: stderr → buffered → flushed", () => {
+    // The exact sequence the coordinator drives over a session: subscribe
+    // first (no dialog yet → goes to stderr), then mount the dialog (next
+    // emit is buffered), then teardown (buffered emit flushes to stderr).
+    const { router } = makeRouter();
+    const unsub = router.subscribe();
+
+    notifications.emit({ kind: "chrome", text: "before-mount" });
+    expect(stderr.text).toContain("before-mount");
+    expect(stderr.text).not.toContain("during-mount");
+
+    router.setDialog(makeFakeDialog());
+    notifications.emit({ kind: "chrome", text: "during-mount" });
+    // Buffered, not yet on stderr.
+    expect(stderr.text).not.toContain("during-mount");
+
+    router.teardownDialog();
+    expect(stderr.text).toContain("during-mount");
+
+    // After teardown, the next emit goes to stderr again.
+    notifications.emit({ kind: "chrome", text: "after-teardown" });
+    expect(stderr.text).toContain("after-teardown");
+
+    unsub();
+  });
+
+  test("isDialogMounted reflects setDialog / teardownDialog", () => {
+    const { router } = makeRouter();
+    expect(router.isDialogMounted()).toBe(false);
+    router.setDialog(makeFakeDialog());
+    expect(router.isDialogMounted()).toBe(true);
+    router.teardownDialog();
+    expect(router.isDialogMounted()).toBe(false);
+  });
+
+  test("getDialog returns the mounted host or null", () => {
+    const { router } = makeRouter();
+    expect(router.getDialog()).toBeNull();
+    const host = makeFakeDialog();
+    router.setDialog(host);
+    expect(router.getDialog()).toBe(host);
+    router.teardownDialog();
+    expect(router.getDialog()).toBeNull();
+  });
+
+  test("step-output buffered during dialog window is dropped on flush, not leaked to stderr", () => {
+    // Captured probe output is dialog-only — `writeNotificationToStderr`
+    // makes step-output a no-op so a buffered step-output never lands in
+    // scrollback even after teardown.
+    const { router } = makeRouter();
+    const unsub = router.subscribe();
+    router.setDialog(makeFakeDialog());
+    notifications.emit({ kind: "step-output", text: "SECRET_OUTPUT" });
+    router.teardownDialog();
+    expect(stderr.text).not.toContain("SECRET_OUTPUT");
+    unsub();
+  });
 });
