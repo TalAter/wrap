@@ -414,27 +414,43 @@ export type LoopReturn =
  *
  * Per iteration:
  *   1. Check options.signal — if aborted, return `{ type: "aborted" }`.
- *      The consumer's `ctrl.signal.aborted` guard catches it as a backup,
- *      but the explicit return variant means the contract is unambiguous.
  *   2. Call runRound(provider, transcript, system, { isLastRound, model,
  *      showSpinner: options.showSpinner }). The runner forwards `showSpinner`
  *      from its options through to runRound; runRound owns the lifecycle.
- *   3. yield round-complete with the produced Round.
- *   4. Apply side effects of the parsed response:
+ *   3. **Re-check options.signal immediately after the await.** If aborted,
+ *      return `{ type: "aborted" }` WITHOUT pushing to the transcript or
+ *      yielding round-complete. See § Abort discipline below.
+ *   4. yield round-complete with the produced Round.
+ *   5. Apply side effects of the parsed response:
  *        - memory updates → write to disk + emit `notifications.emit({ kind: "chrome", ..., icon: "🧠" })`
  *        - watchlist additions → write to disk
- *   5. Route by response type:
+ *   6. Route by response type:
  *        - answer  → transcript.push({ kind: "answer", content }), return { type: "answer", ... }
  *        - command → transcript.push({ kind: "candidate_command", response }), return { type: "command", response, round }
  *        - probe   → execute inline:
  *            a) yield step-running with explanation + icon (fetchesUrl heuristic)
- *            b) executeShellCommand in capture mode
- *            c) post-process output (combine stdout+stderr, truncate, prepend
+ *            b) const exec = await executeShellCommand in capture mode
+ *            c) **Re-check options.signal immediately after the await.** If
+ *               aborted, return `{ type: "aborted" }` WITHOUT pushing the
+ *               probe turn or yielding step-output.
+ *            d) post-process output (combine stdout+stderr, truncate, prepend
  *               sectionCapturedOutput header, fall back to capturedNoOutput on empty)
- *            d) yield step-output with the post-processed text
- *            e) transcript.push({ kind: "probe", response, output, exitCode })
- *            f) continue loop
- *   6. When budget reaches zero, return { type: "exhausted" }.
+ *            e) yield step-output with the post-processed text
+ *            f) transcript.push({ kind: "probe", response, output, exitCode })
+ *            g) continue loop
+ *   7. When budget reaches zero, return { type: "exhausted" }.
+ *
+ * Abort discipline: a check fires (a) at the top of every iteration, (b)
+ * immediately after `await runRound`, (c) immediately after
+ * `await executeShellCommand`. The pattern is "every await is followed by an
+ * abort check before any side effect (yield or transcript push)." Without
+ * the post-await checks, the runner would push a turn for a call whose
+ * result the user already abandoned, and the next pumpLoop (a follow-up
+ * resubmit during the drain window) would see the orphan turn in its
+ * conversation history and confuse the LLM. Concretely: a slow provider
+ * that doesn't honour AbortSignal in-flight, plus a user who Esc-resubmits
+ * before the call resolves, would otherwise leave a `candidate_command`
+ * turn in the transcript that the user never approved.
  *
  * Error propagation: `runRound` throws a typed `RoundError` carrying the
  * partial `Round`. `runLoop` wraps the `runRound` call in a try/catch:
@@ -1034,7 +1050,9 @@ Key invariants the coordinator MUST preserve:
 - **`loop-final` produced by an aborted loop is dropped** by the same check. The reducer never sees stale results.
 - **Round logging happens in `handleLoopEvent`** as soon as a round-complete event arrives. This preserves today's eager-log guarantee: if `runRound` throws a `RoundError` carrying the partial round, the runner yields `round-complete` before re-throwing, so the partial round is in `entry.rounds` by the time the catch in `pumpLoop` dispatches `loop-error`.
 
-**Concurrent pumpLoop drain (corner case).** When the user presses Esc during `processing` and immediately resubmits, a previous `pumpLoop` may still be draining (its `await generator.next()` is held by a provider that hasn't honoured the AbortSignal yet). The `currentLoopAbort === ctrl` identity check in the previous pumpLoop's `finally` prevents it from clobbering the new pumpLoop's controller. Both pumpLoops can coexist briefly. The stale one's `if (ctrl.signal.aborted) return;` guard drops its `loop-final` dispatch. **Limitation:** the runner's iteration body that was in flight when the abort fired will still complete its current iteration BEFORE the next abort check, which means it MAY push a turn (probe / candidate_command / answer) to the transcript after the abort. The new pumpLoop sees that orphan turn in the transcript. In practice this is rare (most providers honour AbortSignal within milliseconds), and the orphan turn is at most one. If it bites in production, the fix is to snapshot `transcript.length` per iteration in the runner and truncate on abort detection. Out of scope for this refactor.
+**Concurrent pumpLoop drain.** When the user presses Esc during `processing` and immediately resubmits, a previous `pumpLoop` may still be draining (its `await generator.next()` is held by a provider that hasn't honoured the AbortSignal yet). The `currentLoopAbort === ctrl` identity check in the previous pumpLoop's `finally` prevents it from clobbering the new pumpLoop's controller. Both pumpLoops can coexist briefly. The stale one's `if (ctrl.signal.aborted) return;` guard drops its `loop-final` dispatch.
+
+**Orphan-turn prevention.** The runner re-checks `options.signal?.aborted` IMMEDIATELY after every await (`runRound` and `executeShellCommand`) and returns `{ type: "aborted" }` without pushing any transcript turn or yielding any event past the await. This guarantees that no turn pushed to the shared transcript belongs to a `pumpLoop` whose abort signal has fired. Without these post-await checks, a slow provider that doesn't honour AbortSignal in-flight, combined with a user who Esc-resubmits during the drain window, would leave an orphan `candidate_command` (or `answer` or `probe`) turn in the transcript that the new `pumpLoop`'s LLM call would see and treat as part of the live conversation. The two extra `if` statements close this race entirely; nothing else is needed.
 
 "Current command" location: the dialog states (`ConfirmingState`, `EditingState`, `ComposingState`, `ProcessingState`) carry `response: CommandResponse` and `round: Round` as type fields. The reducer threads them through every transition (e.g., `confirming → composing` copies `response`/`round` along with `command`/`risk`/`explanation`). The coordinator reads `state.response` when building the `SessionOutcome.run` (so the run outcome carries both the executed bytes and the original model response, supporting `source: "user_override"` audits). The followup post-transition hook does NOT read `state.response` — it just pushes a `followup` turn to the transcript; the prior `candidate_command` turn already in the transcript provides the LLM context. There is one source of truth (state for outcome data, transcript for conversation history) and no separate `CurrentCommand` bag.
 
@@ -1269,7 +1287,9 @@ The implementer MAY do steps 1–6 in any order that makes their tests easier to
 - Probe → command: yields `round-complete`, `step-running`, `step-output`, `round-complete`. After the probe, asserts the transcript has a new `probe` turn (with `response`/`output`/`exitCode`). After the final command, asserts the transcript has a new `candidate_command` turn. Returns `{ type: "command", ... }`.
 - Probe-risk retry inside a round: with the test provider returning a non-low probe first and a low probe second, asserts that `runRound` is called once (the retry is in-round), the second LLM call's messages contain the retry directive, and the transcript ends up with one `probe` turn (the final accepted one). No refused-probe pair leaks into the transcript.
 - Exhaustion: returns `{ type: "exhausted" }` when budget hits zero.
-- Abort: caller aborts mid-iteration; the next iteration check sees the abort and the generator returns `{ type: "aborted" }`. Caller's signal guard catches it as belt-and-braces.
+- Abort at top of iteration: caller aborts before the next iteration begins; the top-of-loop check sees the abort and the generator returns `{ type: "aborted" }` without calling runRound.
+- **Abort during `runRound` await (orphan-turn race).** Test provider returns a `command` response, but the caller aborts the AbortController BETWEEN the `await runRound(...)` resolving and the next runner instruction. Assert: generator returns `{ type: "aborted" }`, the transcript is UNCHANGED (no orphan `candidate_command` turn), no `round-complete` is yielded. Mechanically: the test wraps the test provider to call `controller.abort()` inside its `runPrompt` resolution, simulating "abort fired exactly as the provider returned."
+- **Abort during `executeShellCommand` await (probe orphan-turn race).** Test provider returns a `probe` response. Mock `executeShellCommand` to call `controller.abort()` before resolving. Assert: generator returns `{ type: "aborted" }`, the transcript has NO new `probe` turn, no `step-output` yield is emitted.
 - Generator throws if `runRound` throws; the error propagates AFTER the previously-yielded events have been consumed.
 - `followupText` from `LoopOptions` is stamped on the `round.followup_text` field of the FIRST round only. A two-round call (probe → command) has `followup_text` on the probe round, undefined on the command round.
 
