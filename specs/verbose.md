@@ -133,6 +133,7 @@ Empty pipes (whitespace-only) are treated as no pipe — no verbose line emitted
 | Context | `Context: {N} memory facts, {T} tools, {F} CWD files` |
 | LLM call | `Calling {model}...` |
 | LLM retry | `LLM parse error, retrying...` (only on structured output failure) |
+| Scratchpad (planned, see `specs/scratchpad.md`) | `_scratchpad: {text}` — emitted before the LLM response line whenever the model returned a non-null `_scratchpad`. Newlines collapsed to ` \n ` inline so each scratchpad is one verbose line. |
 | LLM response (command) | `LLM responded (command, {risk}): {command content}` — command content at normal brightness |
 | LLM response (answer) | `LLM responded (answer, {length} chars)` — don't echo content (it goes to stdout) |
 | LLM response (probe) | `LLM responded (probe): {probe command}` |

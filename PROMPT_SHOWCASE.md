@@ -93,3 +93,32 @@ sh /tmp/ollama-install.sh
 The user gets to confirm before anything runs. The script is on disk, inspectable, reproducible.
 
 Shows: security-aware workflow, LLM exercising judgment over fetched content, replacing a dangerous one-liner with a safer multi-step plan — all from one natural language sentence.
+
+---
+
+### Edit a shell alias you can't quite remember
+
+```
+$ w "my zsh has an alias for ll. I want to add --icons to the alias"
+```
+
+The user knows the alias exists but not what it expands to or which dotfile it lives in. The LLM doesn't either — so it probes the obvious dotfiles plus the iCloud Drive customizations directory in one shot:
+
+```
+probe → grep -r 'll' ~/.zshrc ~/.zprofile ~/Library/Mobile\ Documents/com~apple~CloudDocs/ 2>/dev/null | grep -i 'alias.*ll' | head -20
+```
+
+Finds the definition (`alias ll="eza -la --git"`) in an iCloud-synced zshrc — not where most tools would think to look. Generates a single in-place `sed` that appends `--icons` without clobbering the existing flags:
+
+```
+sed -i '' 's/alias ll="eza -la --git"/alias ll="eza -la --git --icons"/' \
+  "/Users/tal/Library/Mobile Documents/com~apple~CloudDocs/customizations/shell/.zshrc"
+```
+
+Run it a second time and the LLM probes again, sees `--icons` is already there, and skips the edit:
+
+```
+answer → "It already has --icons. You're good."
+```
+
+Shows: probing the live shell environment, finding config in non-standard locations (iCloud-synced dotfiles), surgical in-place edit that preserves existing flags, and idempotency by re-checking state instead of blindly re-running.
