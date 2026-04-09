@@ -303,6 +303,10 @@ export async function runSession(
     exitCode = await finaliseOutcome(outcome, entry, options.pipedInput);
   } finally {
     unsubscribe();
+    // Defensive: only fires if `await exitDeferred.promise` itself threw
+    // (currently unreachable — exitDeferred is only resolved by `dispatch`,
+    // which is sync). Both happy and error paths tear down above this point;
+    // this is cheap insurance against a future throw inside dispatch.
     teardownDialog();
     appendLogEntryIgnoreErrors(wrapHome, entry);
   }
