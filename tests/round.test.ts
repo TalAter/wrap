@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
 import { RoundError, runRound } from "../src/core/round.ts";
 import type { Transcript } from "../src/core/transcript.ts";
+import { initVerbose, resetVerbose } from "../src/core/verbose.ts";
 import type { PromptScaffold } from "../src/llm/build-prompt.ts";
 import type { Provider } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
@@ -17,10 +18,12 @@ let stderr: MockStderr;
 
 beforeEach(() => {
   stderr = mockStderr();
+  resetVerbose();
 });
 
 afterEach(() => {
   stderr.restore();
+  resetVerbose();
 });
 
 function makeTranscript(): Transcript {
@@ -166,6 +169,44 @@ describe("runRound", () => {
       expect(thrown.message).toContain("network down");
       expect(thrown.round.provider_error).toBe("network down");
     }
+  });
+
+  test("verbose prints _scratchpad line before the response line when present", async () => {
+    initVerbose(true);
+    const { provider } = makeProvider([
+      {
+        _scratchpad: "Need to plan first.\nSecond thought.",
+        type: "command",
+        content: "ls",
+        risk_level: "low",
+      } as CommandResponse,
+    ]);
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    // Newlines collapsed to " \n " (literal backslash-n, with surrounding spaces)
+    expect(stderr.text).toContain("LLM scratchpad: ");
+    expect(stderr.text).toContain("Need to plan first. \\n Second thought.");
+    // Scratchpad line appears before the LLM responded line
+    const scratchIdx = stderr.text.indexOf("LLM scratchpad");
+    const respondedIdx = stderr.text.indexOf("LLM responded");
+    expect(scratchIdx).toBeGreaterThanOrEqual(0);
+    expect(respondedIdx).toBeGreaterThan(scratchIdx);
+  });
+
+  test("verbose prints nothing when scratchpad is absent", async () => {
+    initVerbose(true);
+    const { provider } = makeProvider([
+      { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
+    ]);
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    expect(stderr.text).not.toContain("scratchpad");
   });
 
   test("retries once on a structured-output parse failure", async () => {

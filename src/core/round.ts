@@ -93,6 +93,9 @@ export class RoundError extends Error {
 }
 
 function verboseResponse(response: CommandResponse): void {
+  if (response._scratchpad) {
+    verboseHighlight("LLM scratchpad: ", response._scratchpad.replace(/\n/g, " \\n "));
+  }
   switch (response.type) {
     case "command":
       verboseHighlight(`LLM responded (command, ${response.risk_level}): `, response.content);
