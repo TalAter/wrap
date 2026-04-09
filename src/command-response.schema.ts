@@ -6,6 +6,11 @@ import { z } from "zod";
 // they guide the LLM on how to use each field and are read on every request.
 // SCHEMA_START
 export const CommandResponseSchema = z.object({
+  // _scratchpad: Brief plan (1-3 sentences). Use this for your thinking —
+  // it will not be shown to the user. Required for any non-trivial
+  // request — including anything that modifies, deletes, or destroys
+  // files or state. Skip for trivial read-only commands (ls, pwd, date).
+  _scratchpad: z.string().nullable().optional(),
   type: z.enum([
     // command = shell command to execute. Use when you know what command to run to achieve the user's request.
     "command",
@@ -18,7 +23,8 @@ export const CommandResponseSchema = z.object({
   content: z.string(),
   // low = read-only/safe, medium = modifies files or state, high = destructive or irreversible
   risk_level: z.enum(["low", "medium", "high"]),
-  // Brief description of what the command does or why this answer was given
+  // Brief description of what the command does or why this answer was given.
+  // Will be shown to the user. Never use to think.
   explanation: z.string().nullable().optional(),
   // Reusable facts learned about the user's environment.
   // These are saved and given to you in future requests.

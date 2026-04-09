@@ -176,4 +176,27 @@ describe("CommandResponseSchema", () => {
     const input = { type: "command", content: "ls", risk_level: "low", pipe_stdin: false };
     expect(CommandResponseSchema.parse(input).pipe_stdin).toBe(false);
   });
+
+  test("parses response with _scratchpad", () => {
+    const input = {
+      _scratchpad: "User wants files modified today. Use find with -mtime 0.",
+      type: "command",
+      content: "find . -name '*.ts' -mtime 0",
+      risk_level: "low",
+    };
+    const result = CommandResponseSchema.parse(input);
+    expect(result._scratchpad).toBe("User wants files modified today. Use find with -mtime 0.");
+  });
+
+  test("allows _scratchpad to be omitted", () => {
+    const input = { type: "command", content: "ls", risk_level: "low" };
+    const result = CommandResponseSchema.parse(input);
+    expect(result._scratchpad).toBeUndefined();
+  });
+
+  test("allows _scratchpad to be null", () => {
+    const input = { type: "command", content: "ls", risk_level: "low", _scratchpad: null };
+    const result = CommandResponseSchema.parse(input);
+    expect(result._scratchpad).toBeNull();
+  });
 });
