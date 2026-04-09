@@ -8,6 +8,7 @@ const config: PromptConfig = {
   memoryRecencyInstruction: "Later facts override earlier ones.",
   toolsScopeInstruction: "Tools are not exhaustive.",
   voiceInstructions: "Be concise.",
+  tempDirPrinciple: "Use $WRAP_TEMP_DIR for intermediate artifacts.",
   fewShotExamples: [{ input: "list files", output: '{"type":"command","content":"ls"}' }],
   fewShotSeparator: "Now handle the following request.",
   sectionUserRequest: "## User's request",
@@ -27,6 +28,11 @@ describe("buildPromptScaffold — system message", () => {
   test("contains tools scope instruction", () => {
     const result = buildPromptScaffold(config, "", "test");
     expect(result.system).toContain("Tools are not exhaustive.");
+  });
+
+  test("contains temp-dir principle", () => {
+    const result = buildPromptScaffold(config, "", "test");
+    expect(result.system).toContain("Use $WRAP_TEMP_DIR for intermediate artifacts.");
   });
 
   test("contains voice instructions", () => {

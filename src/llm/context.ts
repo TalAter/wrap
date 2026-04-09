@@ -44,6 +44,7 @@ export function assemblePromptScaffold(
       memoryRecencyInstruction: promptConstants.memoryRecencyInstruction,
       toolsScopeInstruction: promptConstants.toolsScopeInstruction,
       voiceInstructions: promptConstants.voiceInstructions,
+      tempDirPrinciple: promptConstants.tempDirPrinciple,
       pipedInputInstruction: ctx.pipedInput ? promptConstants.pipedInputInstruction : undefined,
       fewShotExamples: promptOptimized.fewShotExamples,
       fewShotSeparator: promptConstants.fewShotSeparator,

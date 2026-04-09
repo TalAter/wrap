@@ -7,6 +7,7 @@ export type PromptConfig = {
   memoryRecencyInstruction: string;
   toolsScopeInstruction: string;
   voiceInstructions: string;
+  tempDirPrinciple: string;
   pipedInputInstruction?: string;
   fewShotExamples: ReadonlyArray<{ readonly input: string; readonly output: string }>;
   fewShotSeparator: string;
@@ -47,6 +48,7 @@ export function buildPromptScaffold(
     config.memoryRecencyInstruction,
     config.toolsScopeInstruction,
     config.voiceInstructions,
+    config.tempDirPrinciple,
   ];
   if (config.pipedInputInstruction) {
     systemParts.push(config.pipedInputInstruction);

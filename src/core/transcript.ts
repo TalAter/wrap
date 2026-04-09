@@ -59,12 +59,13 @@ export type AttemptDirectives = {
    */
   probeRiskRetry?: { rejectedResponse: CommandResponse };
   /**
-   * For the in-round high-risk scratchpad retry: echo the rejected response
-   * (with its null `_scratchpad` preserved) as an assistant turn and append
-   * `scratchpadRequiredInstruction` as the user turn so the LLM can fill
-   * the missing field. Intra-round only.
+   * A pre-formatted block of context that changes between rounds (e.g. the
+   * current `$WRAP_TEMP_DIR` listing). Appended as a user turn after the
+   * transcript but before `probeRiskRetry` / `lastRoundInstruction`, so the
+   * LLM sees it with every decision without polluting the persistent
+   * transcript.
    */
-  scratchpadRequiredRetry?: { rejectedResponse: CommandResponse };
+  liveContext?: string;
 };
 
 /**
@@ -143,6 +144,9 @@ export function buildPromptInput(
         throw new Error(`unhandled transcript turn: ${(_exhaustive as { kind: string }).kind}`);
       }
     }
+  }
+  if (directives?.liveContext) {
+    messages.push({ role: "user", content: directives.liveContext });
   }
   if (directives?.probeRiskRetry) {
     // Intentional raw stringify — intra-round retry, the model must see its

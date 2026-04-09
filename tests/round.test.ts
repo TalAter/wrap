@@ -76,6 +76,20 @@ describe("runRound", () => {
     expect(round.parsed?.type).toBe("reply");
   });
 
+  test("the LLM sees a temp-dir listing as live context each round", async () => {
+    const { provider, captured } = makeProvider([
+      { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
+    ]);
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    const userMessages = captured.lastInput?.messages.filter((m) => m.role === "user") ?? [];
+    const hasTempDir = userMessages.some((m) => m.content.includes("$WRAP_TEMP_DIR"));
+    expect(hasTempDir).toBe(true);
+  });
+
   test("with isLastRound: true the LLM sees lastRoundInstruction", async () => {
     const { provider, captured } = makeProvider([
       { type: "command", content: "ls", risk_level: "low" } as CommandResponse,

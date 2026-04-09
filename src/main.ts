@@ -4,6 +4,7 @@ import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
+import { createTempDir } from "./core/temp-dir.ts";
 import { initVerbose, verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
@@ -51,6 +52,9 @@ export async function main() {
 
     const provider = initProvider(resolved);
     verbose(`Provider initialized (${label})`);
+
+    const tempDir = createTempDir();
+    verbose(`Temp dir: ${tempDir}`);
 
     const wrapHome = getWrapHome();
     const watchlist = loadWatchlist(wrapHome);

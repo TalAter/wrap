@@ -127,6 +127,20 @@ describe("buildPromptInput", () => {
     });
   });
 
+  test("liveContext directive appends it as a user turn before lastRoundInstruction", () => {
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const out = buildPromptInput(transcript, sys, {
+      liveContext: "## Temporary directory ($WRAP_TEMP_DIR)\n(empty)",
+      isLastRound: true,
+    });
+    expect(out.messages).toHaveLength(3);
+    expect(out.messages[1]).toEqual({
+      role: "user",
+      content: "## Temporary directory ($WRAP_TEMP_DIR)\n(empty)",
+    });
+    expect(out.messages[2]?.content).toBe(promptConstants.lastRoundInstruction);
+  });
+
   test("isLastRound directive appends a final user turn with the constant", () => {
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const directives: AttemptDirectives = { isLastRound: true };

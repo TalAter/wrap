@@ -50,6 +50,7 @@ const scaffold = buildPromptScaffold(
     memoryRecencyInstruction: promptConstants.memoryRecencyInstruction,
     toolsScopeInstruction: promptConstants.toolsScopeInstruction,
     voiceInstructions: promptConstants.voiceInstructions,
+    tempDirPrinciple: promptConstants.tempDirPrinciple,
     pipedInputInstruction: input.pipedInput ? promptConstants.pipedInputInstruction : undefined,
     fewShotExamples: input.fewShotExamples,
     fewShotSeparator: promptConstants.fewShotSeparator,

@@ -6,6 +6,7 @@ import type { PromptInput, Provider } from "../llm/types.ts";
 import type { Round } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
+import { formatTempDirSection } from "./temp-dir.ts";
 import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
 
@@ -140,9 +141,10 @@ export async function runRound(
   const stopSpinner = options.showSpinner ? startChromeSpinner(SPINNER_TEXT) : () => {};
   let response: CommandResponse;
   try {
-    const directives: AttemptDirectives | undefined = options.isLastRound
-      ? { isLastRound: true }
-      : undefined;
+    const directives: AttemptDirectives = {
+      liveContext: formatTempDirSection(),
+    };
+    if (options.isLastRound) directives.isLastRound = true;
     response = await callWithRetry(provider, buildPromptInput(transcript, scaffold, directives));
 
     // Probes must be low risk — retry once (same treatment as malformed JSON).
@@ -150,7 +152,7 @@ export async function runRound(
       response = await callWithRetry(
         provider,
         buildPromptInput(transcript, scaffold, {
-          ...(directives ?? {}),
+          ...directives,
           probeRiskRetry: { rejectedResponse: response },
         }),
       );

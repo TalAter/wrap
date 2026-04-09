@@ -20,5 +20,8 @@
   "scratchpadRequiredInstruction": "High-risk commands require a non-null `_scratchpad` explaining what the command does and why this approach. Re-emit the same response with `_scratchpad` filled. Do not change other fields unless your reasoning reveals a problem with the command.",
   "probeRiskRefusedPrefix": "This probe was not executed.",
   "sectionCapturedOutput": "## Captured output",
-  "capturedNoOutput": "(no output)"
+  "capturedNoOutput": "(no output)",
+  "sectionTempDir": "## Temporary directory ($WRAP_TEMP_DIR)",
+  "tempDirEmpty": "(empty)",
+  "tempDirPrinciple": "You have a per-invocation temp directory exposed as $WRAP_TEMP_DIR. Every shell you spawn inherits it. Use it to *store* intermediate artifacts — downloads, extracted archives, cloned repos, copies of files to inspect — so later steps can act on the exact bytes you already looked at. Writes confined to $WRAP_TEMP_DIR count as low risk. This is because the temp dir is for **storing** artifacts, not for **executing** arbitrary code. An operation that runs third-party code (installers, build recipes, package install scripts) is NOT low risk even when its outputs land inside $WRAP_TEMP_DIR — `pip install --target $WRAP_TEMP_DIR/lib foo`, `npm install --prefix $WRAP_TEMP_DIR foo`, `make -C $WRAP_TEMP_DIR/project`, `bash $WRAP_TEMP_DIR/installer.sh` all execute arbitrary code and must carry medium/high risk. Always refer to the directory by the `$WRAP_TEMP_DIR` variable in generated commands — never the literal absolute path."
 }
