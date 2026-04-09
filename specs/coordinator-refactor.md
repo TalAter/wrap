@@ -75,12 +75,14 @@ Five layers, one direction of data flow.
 
 **Layer C — Dialog.** A function of state. `Dialog({ state, dispatch })` in `src/tui/dialog.tsx`. Zero React `useState` for application state. The only local state allowed is layout (`borderCount` from `measureElement`) and the cursor position inside text inputs. Inputs dispatch `draft-change` / `submit-edit` / `submit-followup` / `key-action` / `key-esc` and let the reducer own the rest.
 
-**Layer D — Coordinator.** `runSession(prompt, provider, options) → Promise<exitCode>` in `src/session/session.ts`. The ONLY thing with side effects:
-1. Builds the initial state (`{ tag: "thinking" }`), the log entry, the input, the loop state, the notification bus subscription, the dialog host.
+**Layer D — Coordinator.** `runSession(prompt, provider, options) → Promise<exitCode>` in `src/session/session.ts`. The ONLY layer that touches the dialog, owns abort/restart of the loop, decides exit, and writes the final log entry. (Other layers have narrow I/O of their own — the runner spawns probe processes and writes memory/watchlist, the notification bus emits to stderr, the LLM provider makes network calls. The coordinator is not the only thing with I/O — it's the only orchestrator.) Concretely:
+1. Builds the initial state (`{ tag: "thinking" }`), the log entry, the transcript, the loop state, the notification bus subscription, the dialog host.
 2. Spawns the loop generator and pumps its events.
 3. Receives dialog events through a `dispatch` closure passed to the dialog as a prop.
 4. After every dispatch, syncs the dialog (mount / rerender / unmount based on state tag) and triggers side effects (restart loop on `processing`, abort loop on `key-esc`, finalise on `exiting`).
 5. On exit, runs the final side effect (run command with inherit, print answer, etc.) and returns the exit code.
+
+The honest division of labour: the runner does *narrow* I/O (LLM calls, probe execution, memory writes, notification emits) within its own scope. It does NOT touch the dialog, does NOT make routing decisions, does NOT mutate any state outside the transcript and the LogEntry. The coordinator does *orchestration* I/O — anything that requires knowing what the user is doing or what the dialog looks like. The reducer is pure.
 
 **Layer E — Notification bus.** Typed event emitter in `src/core/notify.ts` (deliberately in `core/`, not `session/`, so `chrome()` and `verbose()` can import it without `core/` reaching across into `session/`). Replaces `output-sink.ts`. `chrome()` and `verbose()` emit notifications. With no listener subscribed, the bus writes a default-formatted line to stderr. With a listener subscribed (the session), the listener decides what to do — buffer for later flush, dispatch to reducer for live display, or both. No claim/release lifecycle. No throws on double-claim. No `isOutputIntercepted()` flag.
 
@@ -245,7 +247,29 @@ export type RoundResult = Round;
 
 export type RunRoundOptions = {
   isLastRound: boolean;
+  /** Display label for the active provider, for the error message wrapper. */
+  model: string;
 };
+
+/**
+ * Typed error thrown by `runRound` on any failure that occurs after enough
+ * of a round shape exists to be loggable. Carries the partial `Round` (with
+ * `provider_error` populated) so the loop can yield it via `round-complete`
+ * BEFORE re-throwing — preserving today's eager-log guarantee.
+ *
+ * Thrown by:
+ *   - LLM call network/auth/model failures (the partial round has only
+ *     `llm_ms` and `provider_error` set)
+ *   - Empty response (the round has `parsed` set to whatever the model
+ *     returned, but the loop treats it as an error)
+ *   - Parse failures that survive the in-round retry
+ *
+ * The `message` field already includes the provider/model label so the
+ * user sees what was tried.
+ */
+export class RoundError extends Error {
+  constructor(message: string, readonly round: Round);
+}
 
 /**
  * Run a single LLM round. Handles in-round retries:
@@ -262,9 +286,12 @@ export type RunRoundOptions = {
  * `buildPromptInput` — they never enter the persistent transcript, so there
  * is nothing to clean up after the call returns.
  *
- * Throws on network errors, empty responses, or parse failures that survive
- * the in-round retry. The thrown error contains the model label so the user
- * can tell which provider rejected what.
+ * On success: returns a `Round` with `parsed` and `llm_ms` populated.
+ *
+ * On failure: throws a `RoundError` carrying the partial `Round` with
+ * `provider_error` populated. The loop catches it, yields `round-complete`
+ * with the partial round (so it gets logged), then re-throws to the
+ * coordinator. The coordinator dispatches `loop-error` to the reducer.
  */
 export async function runRound(
   provider: Provider,
@@ -344,14 +371,24 @@ export type LoopEvent =
 export type LoopReturn =
   | { type: "command"; response: CommandResponse; round: Round }
   | { type: "answer"; content: string }
-  | { type: "exhausted" };
+  | { type: "exhausted" }
+  /**
+   * The generator's signal-check fired and it bailed out before a final
+   * response. The consumer's `ctrl.signal.aborted` guard ALSO catches this
+   * (belt and braces), but the variant is here so the contract is explicit:
+   * "the generator returned without producing a result." Without it, the
+   * generator would have to return a sentinel of some other variant (e.g.
+   * a fake `exhausted`), which is misleading.
+   */
+  | { type: "aborted" };
 
 /**
  * Drive the round loop until a final-form response, exhaustion, or abort.
  *
  * Per iteration:
- *   1. Check options.signal — if aborted, return the sentinel `{ type: "exhausted" }`.
- *      The consumer's `ctrl.signal.aborted` guard drops it before acting on it.
+ *   1. Check options.signal — if aborted, return `{ type: "aborted" }`.
+ *      The consumer's `ctrl.signal.aborted` guard catches it as a backup,
+ *      but the explicit return variant means the contract is unambiguous.
  *   2. Call runRound(provider, transcript, system, { isLastRound }). On the
  *      FIRST iteration of the call, set `round.followup_text = options.followupText`
  *      (consume-once via a local variable cleared after the first round).
@@ -372,10 +409,21 @@ export type LoopReturn =
  *            f) continue loop
  *   6. When budget reaches zero, return { type: "exhausted" }.
  *
- * Throws if runRound throws. The consumer's try/catch sees the throw AFTER
- * all previously yielded events have been processed, so partial round logs
- * survive. The errored Round is yielded via round-complete BEFORE the throw
- * propagates (mirroring today's eager-log-then-throw guarantee).
+ * Error propagation: `runRound` throws a typed `RoundError` carrying the
+ * partial `Round`. `runLoop` wraps the `runRound` call in a try/catch:
+ *   try {
+ *     round = await runRound(...);
+ *   } catch (e) {
+ *     if (e instanceof RoundError) {
+ *       yield { type: "round-complete", round: e.round };
+ *     }
+ *     throw e;
+ *   }
+ * The consumer's `addRound(entry, e.round)` runs as it processes the yielded
+ * `round-complete` event BEFORE control returns to `await generator.next()`.
+ * The throw then surfaces on the next `.next()` call, by which time the
+ * partial round is already in `entry.rounds`. This preserves today's
+ * eager-log-then-throw guarantee with an explicit mechanism, not a comment.
  *
  * The function does NOT log rounds (the consumer does, in response to
  * `round-complete` events). Does NOT start a spinner. May call
@@ -395,8 +443,8 @@ export function fetchesUrl(content: string): boolean;
 ```
 
 Implementation notes:
-- Replace the current `runRoundsUntilFinal` body with this generator. The semantics are identical for all three `LoopReturn` cases (`command`, `answer`, `exhausted`). The change is that probe-running, probe-output, memory-update, and round-completion events become `yield`s instead of direct `chrome()`/`addRound()` calls.
-- The `aborted` `LoopResult` variant from the current code is GONE. The generator handles abort by returning a sentinel `{ type: "exhausted" }` (via `if (signal.aborted) return { type: "exhausted" };`). The consumer guards on `ctrl.signal.aborted` BEFORE acting on the return value, so the sentinel is dropped — it exists only to satisfy the typed `AsyncGenerator<LoopEvent, LoopReturn>` return type. A bare `return;` would make the inferred return type `LoopReturn | undefined`.
+- Replace the current `runRoundsUntilFinal` body with this generator. The semantics are identical for all four `LoopReturn` cases (`command`, `answer`, `exhausted`, `aborted`). The change is that probe-running, probe-output, memory-update, and round-completion events become `yield`s instead of direct `chrome()`/`addRound()` calls.
+- The `aborted` variant is preserved from the current code. The generator returns `{ type: "aborted" }` when the signal fires; the consumer's `ctrl.signal.aborted` guard catches it as belt-and-braces but the explicit variant is the primary contract.
 
 ### `src/core/notify.ts`
 
@@ -582,6 +630,14 @@ export type AppEvent =
    *  duplicate type. */
   | { type: "loop-final"; result: LoopReturn }
   | { type: "loop-error"; error: Error }
+  /**
+   * Dispatched by the coordinator when it would otherwise mount the dialog
+   * but `process.stderr.isTTY` is false. Carries the command that would
+   * have been confirmed so the reducer can route to `exiting{blocked}`.
+   * Only valid from `thinking` (a follow-up cannot reach `processing` if
+   * the dialog never mounted in the first place).
+   */
+  | { type: "block"; command: string }
   // ──── from the notification bus (relayed by the coordinator while in `processing`) ────
   | { type: "notification"; text: string }
   // ──── from the dialog ────
@@ -614,11 +670,13 @@ Transition table (the implementer's exhaustive reference; `*` means "any"):
 
 | state | event | next state | notes |
 |---|---|---|---|
-| `thinking` | `loop-final command low` | `exiting{run}` | initial low-risk: skip dialog, exec straight away |
+| `thinking` | `loop-final command low` | `exiting{run, source: "model"}` | initial low-risk: skip dialog, exec straight away |
 | `thinking` | `loop-final command medium/high` | `confirming` | mount dialog |
 | `thinking` | `loop-final answer` | `exiting{answer}` | print to stdout |
 | `thinking` | `loop-final exhausted` | `exiting{exhausted}` | |
+| `thinking` | `loop-final aborted` | `exiting{cancel}` | unreachable from `thinking` (no abort source); pin as a defensive no-op |
 | `thinking` | `loop-error` | `exiting{error}` | |
+| `thinking` | `block command` | `exiting{blocked, command}` | no TTY: chrome line printed by coordinator before exit |
 | `confirming` | `key-action run` | `exiting{run, source: "model"}` | unmount + exec the model's command unchanged |
 | `confirming` | `key-action cancel` | `exiting{cancel}` | |
 | `confirming` | `key-action edit` | `editing{ original=command, draft=command }` | |
@@ -637,6 +695,7 @@ Transition table (the implementer's exhaustive reference; `*` means "any"):
 | `processing` | `loop-final command *` | `confirming` with new command/risk/explanation | swap in place |
 | `processing` | `loop-final answer` | `exiting{answer}` | |
 | `processing` | `loop-final exhausted` | `exiting{exhausted}` | |
+| `processing` | `loop-final aborted` | `state` (no-op) | the user's Esc already transitioned to `composing`; the late-arriving aborted return is dropped here as a defensive no-op |
 | `processing` | `loop-error` | `exiting{error}` | |
 
 Default for any (state, event) pair not listed above: return `state` by reference (no-op). The reducer JSDoc captures this rule; the table only enumerates real transitions.
@@ -743,16 +802,14 @@ export async function runSession(prompt, provider, options): Promise<number> {
 
   // 3. Dialog sync — mount, rerender, or unmount based on state tag.
   // Async ONLY for the very first mount (to await the lazy import). Every
-  // subsequent rerender/unmount is sync. The dispatch caller awaits this
-  // when it returns a promise; otherwise treats it as sync.
+  // subsequent rerender/unmount is sync. By the time syncDialog runs for the
+  // first time, the no-TTY case has already been intercepted upstream in
+  // handleLoopEvent (which dispatches `block` instead of `loop-final` for
+  // medium/high commands when there's no TTY), so syncDialog is guaranteed
+  // to only see dialog tags when a TTY is available.
   async function syncDialog(): Promise<void> {
     const wantsDialog = isDialogTag(state.tag);
     if (wantsDialog && !dialogHost) {
-      // No TTY: dispatch a `blocked` outcome instead of mounting.
-      if (!process.stderr.isTTY || !inkReady) {
-        dispatch({ type: "loop-error", error: new NoTtyError(state.command) });
-        return;
-      }
       // First mount: await the lazy-loaded Ink modules (in practice already
       // resolved because the LLM call took longer), then mount synchronously.
       await inkReady;
@@ -795,7 +852,21 @@ export async function runSession(prompt, provider, options): Promise<number> {
       }
       stopSpin();
       if (!ctrl.signal.aborted && final) {
-        dispatch({ type: "loop-final", result: final });
+        // No-TTY interception: a medium/high command can't be confirmed
+        // without a dialog. Dispatch `block` instead so the reducer routes
+        // to `exiting{blocked}`. Only intercept on the FIRST loop call
+        // (state.tag === "thinking"); follow-up calls run with a dialog
+        // already mounted, so a TTY is guaranteed.
+        if (
+          final.type === "command" &&
+          final.response.risk_level !== "low" &&
+          state.tag === "thinking" &&
+          !process.stderr.isTTY
+        ) {
+          dispatch({ type: "block", command: final.response.content });
+        } else {
+          dispatch({ type: "loop-final", result: final });
+        }
       }
     } catch (e) {
       stopSpin();
@@ -860,7 +931,7 @@ Key invariants the coordinator MUST preserve:
 - **`loop-final` produced by an aborted loop is dropped** by the same check. The reducer never sees stale results.
 - **Round logging happens in `handleLoopEvent`** as soon as a round-complete event arrives. This preserves today's eager-log guarantee: if `runRound` throws, every round emitted before the throw is already in `entry.rounds` because the throw happens AFTER the yield.
 
-"Current command" location: the dialog states (`ConfirmingState`, `EditingState`, `ComposingState`, `ProcessingState`) carry `response: CommandResponse` and `round: Round` as type fields. The reducer threads them through every transition (e.g., `confirming → composing` copies `response`/`round` along with `command`/`risk`/`explanation`). The coordinator reads `state.response` directly in the `submit-followup` post-transition hook to echo it into `input.messages`. There is one source of truth — the state — and no separate `CurrentCommand` bag.
+"Current command" location: the dialog states (`ConfirmingState`, `EditingState`, `ComposingState`, `ProcessingState`) carry `response: CommandResponse` and `round: Round` as type fields. The reducer threads them through every transition (e.g., `confirming → composing` copies `response`/`round` along with `command`/`risk`/`explanation`). The coordinator reads `state.response` when building the `SessionOutcome.run` (so the run outcome carries both the executed bytes and the original model response, supporting `source: "user_override"` audits). The followup post-transition hook does NOT read `state.response` — it just pushes a `followup` turn to the transcript; the prior `candidate_command` turn already in the transcript provides the LLM context. There is one source of truth (state for outcome data, transcript for conversation history) and no separate `CurrentCommand` bag.
 
 ### `src/session/dialog-host.ts`
 
@@ -889,9 +960,11 @@ export function preloadDialogModules(): Promise<void>;
  * once — throws otherwise. The session enforces this via the `inkReady`
  * promise it awaits before the first mount.
  *
- * The session is responsible for the no-TTY case BEFORE calling — it checks
- * `process.stderr.isTTY` in `syncDialog` and dispatches a `blocked` outcome
- * instead of mounting.
+ * The session is responsible for the no-TTY case BEFORE calling — when
+ * `runLoop` returns a medium/high command and `process.stderr.isTTY` is
+ * false, the coordinator dispatches `block` instead of `loop-final`. The
+ * reducer transitions `thinking → exiting{blocked}` and syncDialog never
+ * sees a dialog state. mountDialog itself is never called without a TTY.
  */
 export function mountDialog(props: {
   state: AppState;
@@ -921,7 +994,7 @@ Rewrite rules:
 - ZERO `useState` for `command`/`risk`/`explanation`/`draft`/`borderStatus`/`dialogState`. Read everything from `state` props.
 - ZERO `subscribeChrome` prop. Border status comes from `state.status` (only present in `processing`).
 - ZERO `abortControllerRef`. Esc dispatches `key-esc` and the coordinator handles abort.
-- ZERO `useEffect` for stdin draining. Stale keys can no longer leak into the wrong state because every key press goes through `dispatch`, and the reducer is the only thing that decides what each state does with each event.
+- KEEP the stdin drain on first mount. The reducer model fixes the case where a stray key lands in the wrong dialog STATE (because every key goes through `dispatch` and the reducer decides how each state handles each event), but it does NOT fix the case where the user pressed Enter while waiting for the LLM and the keystroke is buffered in stdin BEFORE the dialog mounts. Without the drain, that buffered Enter reaches Ink's `useInput` on the very first frame and gets dispatched as `key-action run` against `confirming`, executing a dangerous command the user never confirmed. The drain MUST run on first mount; subsequent state transitions don't need it (no buffered keys can leak across in-process transitions).
 
 Allowed local state in the dialog:
 - `borderCount` from `useLayoutEffect` + `measureElement` (this is purely visual, not application state).
@@ -1089,7 +1162,7 @@ The implementer MAY do steps 1–6 in any order that makes their tests easier to
 - Probe → command: yields `round-complete`, `step-running`, `step-output`, `round-complete`. After the probe, asserts the transcript has a new `probe` turn (with `response`/`output`/`exitCode`). After the final command, asserts the transcript has a new `candidate_command` turn. Returns `{ type: "command", ... }`.
 - Probe-risk retry inside a round: with the test provider returning a non-low probe first and a low probe second, asserts that `runRound` is called once (the retry is in-round), the second LLM call's messages contain the retry directive, and the transcript ends up with one `probe` turn (the final accepted one). No refused-probe pair leaks into the transcript.
 - Exhaustion: returns `{ type: "exhausted" }` when budget hits zero.
-- Abort: caller aborts mid-iteration; the next iteration check sees the abort and the generator returns the sentinel `{ type: "exhausted" }`. Caller drops it via the signal guard.
+- Abort: caller aborts mid-iteration; the next iteration check sees the abort and the generator returns `{ type: "aborted" }`. Caller's signal guard catches it as belt-and-braces.
 - Generator throws if `runRound` throws; the error propagates AFTER the previously-yielded events have been consumed.
 - `followupText` from `LoopOptions` is stamped on the `round.followup_text` field of the FIRST round only. A two-round call (probe → command) has `followup_text` on the probe round, undefined on the command round.
 
