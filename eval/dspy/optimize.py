@@ -422,7 +422,7 @@ def save_eval_results(
         _trial_scores.items(),
         key=lambda x: sum(s for s, _ in x[1]) / len(x[1]),
     ):
-        query, cwd, piped, _cwd_files, _extra_msg_hash, _assertions_hash = key
+        query, cwd, piped, _cwd_files, _extra_msg_hash, _assertions_hash, piped_input = key
         total = len(entries)
         perfect = sum(1 for s, _ in entries if s >= 1.0)
         avg = sum(s for s, _ in entries) / total
