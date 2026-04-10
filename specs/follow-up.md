@@ -88,13 +88,13 @@ Both `composing` and `processing` carry `draft`. On `composing` it's the live ed
 
 ## Transcript and the round loop
 
-The persistent conversation state is `Transcript` (`src/core/transcript.ts`) — an array of semantic turns (`user | probe | candidate_command | answer`), not provider-shaped messages. `buildPromptInput` projects the transcript into a `PromptInput` per round, applying ephemeral `AttemptDirectives` (`isLastRound`, `probeRiskRetry`) for one call only.
+The persistent conversation state is `Transcript` (`src/core/transcript.ts`) — an array of semantic turns (`user | step | confirmed_step | candidate_command | answer`), not provider-shaped messages. `buildPromptInput` projects the transcript into a `PromptInput` per round, applying ephemeral `AttemptDirectives` (`isLastRound`, `liveContext`) for one call only.
 
 The two reasons the transcript is semantic rather than a `messages` array:
-- Meta-instructions (`lastRoundInstruction`, `probeRiskInstruction`) live **only** in the local scope of one `runRound` call. They never pollute persistent state, so there is no "strip stale instructions" step when a follow-up loop restarts.
+- Meta-instructions (`lastRoundInstruction`, live-context blocks like the `$WRAP_TEMP_DIR` listing) live **only** in the local scope of one `runRound` call. They never pollute persistent state, so there is no "strip stale instructions" step when a follow-up loop restarts.
 - New turn kinds are a small change here; everywhere else is oblivious.
 
-`runLoop(provider, transcript, scaffold, state, options)` in `src/core/runner.ts` is an async generator. It drives rounds until a final-form response, exhaustion, or abort, yielding `round-complete | step-running | step-output` and returning `LoopReturn` (`command | answer | exhausted | aborted`). It does **not** execute final commands — the session does that in `finaliseOutcome`. Probes are executed inline because they're part of "until final".
+`runLoop(provider, transcript, scaffold, state, options)` in `src/core/runner.ts` is an async generator. It drives rounds until a final-form response, exhaustion, or abort, yielding `round-complete | step-running | step-output` and returning `LoopReturn` (`command | answer | exhausted | aborted`). It does **not** execute final commands — the session does that in `finaliseOutcome`. Non-final low-risk steps are executed inline because they're part of "until final"; non-final medium/high exits to the coordinator so the dialog can confirm before the step runs (see `specs/multi-step.md`).
 
 The runner is oblivious to follow-ups. It takes a transcript and drains its round budget. A follow-up is just "the coordinator bumps `budgetRemaining` back up, appends a new user turn, and starts a new `runLoop`".
 
@@ -124,9 +124,9 @@ A late `loop-final` that arrives after the user already Esc'd is dropped by `red
 
 The runner checks `budgetRemaining === 0` (post-decrement) as its "last round" sentinel rather than comparing `roundNum` to `maxRounds` — otherwise "last round" would trigger once for the whole session instead of once per call. Example with `maxRounds=5`:
 
-- Rounds 1–2: initial probe + command (budget: 3 → 0 via the in-between)
+- Rounds 1–2: initial non-final step + command (budget: 3 → 0 via the in-between)
 - User follows up → budget resets to 5
-- Rounds 3–6: follow-up probes + new command
+- Rounds 3–6: follow-up steps + new command
 - User follows up → budget resets to 5
 - Rounds 7+: …
 
@@ -140,7 +140,7 @@ When the follow-up path runs, the transcript already contains a `candidate_comma
 
 Each `Round` records the parsed response, execution details, and timing — not the transcript. Follow-up rounds are structurally indistinguishable from any other round.
 
-To make follow-ups visible in logs (and to support `w --followup`), `Round` carries `followup_text?: string` (`src/logging/entry.ts`). `pumpLoop` stamps it on the **first** `round-complete` of each non-initial loop, even if that round is a probe and the command lands several rounds later. Subsequent rounds in the same call leave it unset. The first user turn of an entry is **not** a follow-up — it lives on `LogEntry.prompt`.
+To make follow-ups visible in logs (and to support `w --followup`), `Round` carries `followup_text?: string` (`src/logging/entry.ts`). `pumpLoop` stamps it on the **first** `round-complete` of each non-initial loop, even if that round is a non-final step and the command lands several rounds later. Subsequent rounds in the same call leave it unset. The first user turn of an entry is **not** a follow-up — it lives on `LogEntry.prompt`.
 
 The reason logs stay per-round instead of storing the full transcript: (a) system prompt / memory / context would duplicate across every entry, and (b) per-round shape is what eval and feedback-signal extraction consume today. `followup_text` gives the same attribution without the bloat.
 

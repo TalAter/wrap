@@ -89,7 +89,7 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 | Term | Definition |
 |------|-----------|
 | **Discovery** | The ongoing process of learning about the environment (init probes, tool probes, LLM probes, memory updates) |
-| **Probe** | An individual command run for discovery (init probe = first-run, tool probe = before every query, LLM probe = mid-query triggered by LLM) |
+| **Probe** | A command run for *discovery* (init probe = first-run, tool probe = before every query). The old "LLM probe" schema type was replaced by non-final commands — see `specs/multi-step.md`. |
 | **Tool watchlist** | Persistent list of tool names to check via `which` on every run, grown by LLM responses via `watchlist_additions` |
 | **Memory** | A collection of scoped facts learned about the user or their machine |
 | **Scope** | The directory a fact belongs to in the file system |
@@ -100,7 +100,7 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 | Term | Definition |
 |------|-----------|
 | **Mode** | How you invoke Wrap (default, yolo, force-cmd, force-answer, confirm-all). Only `default` is currently implemented — see `safety.md`. |
-| **Response type** | What the LLM responds with: command, probe, or answer |
+| **Response type** | What the LLM responds with: `command` (terminal or intermediate depending on `final`) or `reply` (text) |
 | **Continuation** | Resuming a previous conversation thread in a new invocation (planned) |
 | **Follow-up** | In-dialog refinement within one invocation. Distinct from continuation. See `follow-up.md`. |
 | **Subcommand** | CLI sub-action accessed via flag (`--log`, `--help`, `--version`) |
@@ -220,7 +220,7 @@ Not every non-zero exit code means Wrap should retry. A command can run correctl
 
 **Command-not-found memory updates:** the LLM — not client-side rules — decides whether to remember. A missing `brew` is a system-level fact; a missing `run-tests` is probably a project script and not worth remembering.
 
-Error-fix rounds share the `maxRounds` budget with probes. See `session.md` for the round-budget machinery.
+Error-fix rounds share the `maxRounds` budget with non-final steps. See `session.md` for the round-budget machinery.
 
 ---
 

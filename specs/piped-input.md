@@ -70,7 +70,7 @@ Current implementation uses a naive `slice()`. A shared line-aware utility is de
 
 Top-level optional boolean on `CommandResponse`. When `true` and piped input exists, Wrap spawns the command with `stdin: new Blob([pipedInput])`. Otherwise: `stdin: "inherit"` for commands, `undefined` for probes.
 
-- Present on all response types; only meaningful for `command` and `probe`.
+- Present on all response types; only meaningful for `command` and non-final steps.
 - No special safety treatment — `risk_level` already covers danger.
 - **Naming invariant:** `pipe_stdin` (snake_case) in the LLM schema and logs; `pipedInput` (camelCase) in TS internals.
 - **Consumed stdin:** after Wrap reads to EOF, child processes that inherit stdin get an empty pipe, not a TTY. Standard Unix behavior.

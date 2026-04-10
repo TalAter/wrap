@@ -18,7 +18,7 @@ When the LLM returns a malformed response, Wrap shows a terse error and exits. W
 | System prompt | Hash only | Per-invocation context is full; the static prompt toolset is a SHA-256 hex for reproducibility without bloat. Match to prompt version in git. |
 | Memory | Full snapshot | Entire `Memory` logged, not CWD-filtered. `cwd` is in the entry so the reader can reconstruct which scopes matched. Avoids duplicating filtering logic. |
 | Timing | Per-round durations | `llm_ms`/`exec_ms` are `performance.now()` deltas, not absolute timestamps. Total derived by summing. |
-| Round retries vs rounds | Nested | Transient parse-failure retries nest inside the round as `retry`. Probes are separate rounds. Prevents conflating error recovery with conversation turns. |
+| Round retries vs rounds | Nested | Transient parse-failure retries nest inside the round as `retry`. Non-final steps are separate rounds. Prevents conflating error recovery with conversation turns. |
 | Threads / DSPy | Deferred | No `thread_id`; no automatic eval pipeline. Future cherry-pick workflow. |
 | Privacy | User's responsibility | Documented — no redaction of prompts or responses. |
 
@@ -57,7 +57,7 @@ Each line is one JSON object. **Fields with null/empty values are omitted.**
 | `execution` | Execution? | Omitted if no command was executed (answer, blocked, provider error). |
 | `llm_ms` | number? | Wall-clock ms for the LLM call. |
 | `exec_ms` | number? | Wall-clock ms for command execution. |
-| `followup_text` | string? | Set only on the **first** round produced by a follow-up call, so the log can reconstruct which user message kicked off which sequence. Subsequent rounds in the same follow-up (e.g. probe → command) leave it unset. The very first user turn of the entry lives on `LogEntry.prompt`, not here. |
+| `followup_text` | string? | Set only on the **first** round produced by a follow-up call, so the log can reconstruct which user message kicked off which sequence. Subsequent rounds in the same follow-up (e.g. step → command) leave it unset. The very first user turn of the entry lives on `LogEntry.prompt`, not here. |
 | `retry` | object? | (TODO) First-attempt failure when a round retry occurred: `{raw_response, parse_error, llm_ms}`. |
 
 ### Execution
@@ -82,7 +82,7 @@ Each line is one JSON object. **Fields with null/empty values are omitted.**
 | Provider subprocess crashes | Yes — `provider_error` | `error` |
 | Non-low-risk command, no TTY | Yes | `blocked` |
 | Non-low-risk command, user cancels | Yes | `cancelled` |
-| Probe | Yes — as a round with `execution` | — |
+| Non-final step | Yes — as a round with `execution` | — |
 | Round budget exhausted | Yes | `max_rounds` |
 | Provider init fails (e.g. unknown type) | No | — |
 | No args / `--help` / `--version` / config errors | No | — |

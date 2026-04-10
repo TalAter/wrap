@@ -4,7 +4,7 @@
 
 ## Scope & intent
 
-Personality applies **only to `answer` response types**. Commands and probes stay dry and accurate — they're machine-readable artifacts, not conversation.
+Personality applies **only to `reply` response types**. Commands and non-final steps stay dry and accurate — they're machine-readable artifacts, not conversation.
 
 Voice level is personality-forward: lead with the answer, follow with wit.
 
@@ -65,7 +65,7 @@ $ w who wrote hamlet | ...
 William Shakespeare
 ```
 
-Commands and probes already have no personality, so the override is a no-op for them.
+Commands and non-final steps already have no personality, so the override is a no-op for them.
 
 ## Architecture
 

@@ -24,7 +24,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] System prompt instruction: piped input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
 - [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
-- [ ] Show context indicators in dialog — piped input, probe results, etc. (user has no visibility into what informed the command)
+- [ ] Show context indicators in dialog — piped input, prior step output, etc. (user has no visibility into what informed the command)
 - [ ] Dialog styling — border, syntax-highlighted command, risk indicator
 - [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[C]opy` option — copy command to clipboard
@@ -33,10 +33,10 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
-## Discovery & Probes (see specs/discovery.md)
+## Discovery & Steps (see specs/discovery.md)
 
 - [ ] Future: parse package.json scripts / Makefile targets into CWD context summary
-- [ ] Investigate whether probe rounds should be able to read stdin.
+- [ ] Investigate whether non-final step rounds should be able to read stdin.
 
 ## Error Handling & Auto-Fix
 
@@ -53,7 +53,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Memory System
 
-- [ ] Lazy probing — on-demand discovery via agent loop probe commands (gets smarter over time)
+- [ ] Lazy probing — on-demand discovery via agent loop non-final step commands (gets smarter over time)
 
 ## Logging (see specs/logging.md for architecture)
 
@@ -106,7 +106,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Model-switching shorthand — e.g., `W` (uppercase) uses premium model, `w` uses default
 - [ ] Shell keybinding integration — keybinding reads raw line buffer (`$BUFFER` in zsh, `$READLINE_LINE` in bash) and sends to Wrap. Fully bypasses shell expansion (globs, `$()`, backticks). Aliases only protect against globs; this is the complete solution.
 - [ ] Speculative LLM call for large piped input — check if command can consume stdin directly
-- [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (probes still execute).
+- [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (non-final steps still execute).
 - [ ] Piped input: `--full` flag to send complete content to LLM without truncation
 - [ ] Piped input: temp-file buffering for very large inputs (avoid holding multi-GB strings in memory)
 - [ ] Piped input: `Bun.stdin.bytes()` for binary-safe re-piping (current `text()` corrupts non-UTF-8)

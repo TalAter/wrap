@@ -15,9 +15,9 @@ Four discovery mechanisms, each at a different timescale:
 | Init probes | First run | Global memory facts | One-time LLM call |
 | Tool probe + watchlist | Every invocation | Watchlist persists | ~5ms (`which`) |
 | CWD files | Every invocation | No (ephemeral context) | Negligible (local readdir) |
-| LLM probes | On-demand during query loop | Scoped memory facts when appropriate | 1 round per probe |
+| Non-final steps | On-demand during query loop | Scoped memory facts when appropriate | 1 round per step |
 
-Init and tool probes are cheap pre-query setup. CWD files and LLM probes operate during the query itself. A frequently-used install builds up rich scoped memory — a first invocation in a new project might need 1–2 LLM probes, subsequent ones zero.
+Init and tool probes are cheap pre-query setup. CWD files and non-final steps operate during the query itself. A frequently-used install builds up rich scoped memory — a first invocation in a new project might need 1–2 non-final steps, subsequent ones zero.
 
 The tool watchlist is not a separate mechanism but a persistent layer that grows the set of tools the tool probe checks. As the LLM encounters new domains (image editing, video, PDFs) it nominates tools; future invocations `which` them automatically. Awareness grows organically to match the user's work without predefined categories or static lists.
 
@@ -62,7 +62,7 @@ Runs before every query. Merges the static `PROBED_TOOLS` default list with the 
 
 ### Design
 
-Any LLM response (probe, command, or answer) may include `watchlist_additions` — tool names to `which` on every future invocation. Stored in `~/.wrap/tool-watchlist.json` as a flat array of `{tool, added}` entries. The `added` date is refreshed on each re-nomination (for future pruning). The tool probe merges defaults + watchlist into one `which` call on startup.
+Any LLM response (non-final step, command, or reply) may include `watchlist_additions` — tool names to `which` on every future invocation. Stored in `~/.wrap/tool-watchlist.json` as a flat array of `{tool, added}` entries. The `added` date is refreshed on each re-nomination (for future pruning). The tool probe merges defaults + watchlist into one `which` call on startup.
 
 **Name: "watchlist" not "discovered tools".** The list holds tools to *repeatedly check*, not tools confirmed to exist. "`convert` is not installed" saves a probe round just as much as "`sips` is installed."
 
@@ -74,14 +74,14 @@ When returning `watchlist_additions`, the LLM must nominate **all well-known too
 
 **Why.** If the LLM only nominated the tool it picked (e.g. `sips`), future invocations would only ever see `sips` in `## Detected tools` — creating information asymmetry that steers subsequent runs toward that tool even when better alternatives (e.g. `pngquant` for lossy PNG) are installed. Nominating the full domain (`sips`, `convert`, `magick`, `pngquant`, `optipng`, `cwebp`, …) gives balanced visibility.
 
-### Probe Content vs Watchlist Additions
+### Step Content vs Watchlist Additions
 
 Two different axes:
 
-- **Probe content is tactical** — check only what's needed *now*. "Convert GIF to PNG" → `which sips convert magick`.
+- **Step content is tactical** — check only what's needed *now*. "Convert GIF to PNG" → `which sips convert magick`.
 - **`watchlist_additions` is strategic** — nominate the full domain for future runs. Same request → the broader image-tool set.
 
-The tool probe runs once at startup and does not re-run mid-invocation. Within a single invocation, the LLM learns from its own probe output; on the next invocation, the watchlist surfaces everything without any probe at all.
+The tool probe runs once at startup and does not re-run mid-invocation. Within a single invocation, the LLM learns from its own step output; on the next invocation, the watchlist surfaces everything without any step at all.
 
 ### Lifecycle
 
@@ -103,57 +103,57 @@ Every LLM request includes a listing of the current working directory under `## 
 
 ---
 
-## LLM Probes
+## Non-Final Steps
 
-The LLM can return `type: "probe"` to run a safe read-only discovery command before generating the final command. Probe results are appended to the conversation as assistant+user turn pairs, building context across rounds.
+The LLM can return `type: "reply"` with `final: false` to run a safe read-only discovery command before generating the final command. Step results are appended to the conversation as assistant+user turn pairs, building context across rounds.
 
 Core loop in `src/core/runner.ts`; `runRound` in `src/core/round.ts`; semantic transcript in `src/core/transcript.ts`. Prompt strings in `src/prompt.constants.json`. Config: `maxRounds`, `maxProbeOutputChars`.
 
 ### Behavior
 
-- Probes execute silently — output captured, never written to stdout.
+- Non-final steps execute silently — output captured, never written to stdout.
 - Status indicator on stderr: `🔍` (default) or `🌐` for URL fetches (see Web Reading).
-- Probes count against the unified `maxRounds` budget (default 5) shared with error-fix rounds.
-- Memory updates and `watchlist_additions` from probe responses are persisted immediately, so interruption doesn't lose work.
-- Probe output is truncated at `maxProbeOutputChars` (~200KB default) with a truncation note. Keeps pathological commands from blowing out context.
+- Non-final steps count against the unified `maxRounds` budget (default 5) shared with error-fix rounds.
+- Memory updates and `watchlist_additions` from step responses are persisted immediately, so interruption doesn't lose work.
+- Step output is truncated at `maxProbeOutputChars` (~200KB default) with a truncation note. Keeps pathological commands from blowing out context.
 
 ### Safety
 
-Probes must be `risk_level: "low"` — read-only by definition.
+Non-final steps must be `risk_level: "low"` — read-only by definition.
 
-1. **Retry once** within the same round with guidance that probes must be safe read-only commands.
-2. **Refuse** if still non-low — probe not executed, LLM told it was refused, round consumed.
+1. **Retry once** within the same round with guidance that non-final steps must be safe read-only commands.
+2. **Refuse** if still non-low — step not executed, LLM told it was refused, round consumed.
 
-The round cost on refusal is intentional: it prevents infinite adversarial retries and makes the LLM conservative about what it labels a probe.
+The round cost on refusal is intentional: it prevents infinite adversarial retries and makes the LLM conservative about what it labels a non-final step.
 
 ### Conversation Structure
 
-Each round appends to a single messages array. A probe round adds:
-- Assistant turn: the probe response JSON.
-- User turn: `## Probe output\n{captured stdout + stderr}`.
+Each round appends to a single messages array. A non-final step round adds:
+- Assistant turn: the step response JSON.
+- User turn: `## Step output\n{captured stdout + stderr}`.
 
 Non-zero exits are included in the output (the LLM often needs the error to decide next steps). Context (memory, tools, CWD files) is assembled once before the loop — not rebuilt per round, because the LLM already knows what it discovered.
 
 ### Tool Discovery Philosophy
 
-- **Prompt guidance is intentionally general.** The system prompt says "use a probe to gather more context first" without prescribing `which` / `--help` / `cat` / etc. Tactics are learned from few-shot examples, not hardcoded.
+- **Prompt guidance is intentionally general.** The system prompt says "use a non-final step to gather more context first" without prescribing `which` / `--help` / `cat` / etc. Tactics are learned from few-shot examples, not hardcoded.
 - **Few-shot examples (DSPy) are the primary teaching mechanism.** Discovery patterns (`cat package.json | jq '.scripts'` for "run the tests", shell-config lookup for "add an alias", etc.) live in eval samples, not the prompt.
-- **Memory prevents redundant probing.** Discovered facts are saved to scoped memory and included in future requests.
-- **Tool probe + watchlist eliminate repeat tool-checking probes.** First probe grows the watchlist; subsequent invocations already have the info.
+- **Memory prevents redundant steps.** Discovered facts are saved to scoped memory and included in future requests.
+- **Tool probe + watchlist eliminate repeat tool-checking steps.** First step grows the watchlist; subsequent invocations already have the info.
 
 ### Round Budget
 
-Probes and error-fix rounds share `maxRounds`. The LLM is pushed to be efficient:
+Non-final steps and error-fix rounds share `maxRounds`. The LLM is pushed to be efficient:
 - Batch related checks into one command (`cat package.json | jq '.scripts'`).
-- Don't re-probe known facts.
+- Don't re-run known facts.
 
-**Last-round constraint.** On the final available round, Wrap appends a "do not probe" instruction. This fires even at `maxRounds=1` (single-shot mode). The constraint only appears when it matters — no round-budget info leaks into earlier rounds, to avoid biasing behavior when budget is plentiful.
+**Last-round constraint.** On the final available round, Wrap appends a "must be final" instruction. This fires even at `maxRounds=1` (single-shot mode). The constraint only appears when it matters — no round-budget info leaks into earlier rounds, to avoid biasing behavior when budget is plentiful.
 
 ---
 
 ## Web Reading
 
-URL-fetching reuses the probe loop — no new response type, no schema changes. Detection via `fetchesUrl()` in `src/core/runner.ts`, HTML extraction tools (`wget`, `textutil`, `lynx`, `w3m`) in `PROBED_TOOLS`, grounding rule in the system prompt (mirrored in the DSPy seed).
+URL-fetching reuses the non-final step loop — no new response type, no schema changes. Detection via `fetchesUrl()` in `src/core/runner.ts`, HTML extraction tools (`wget`, `textutil`, `lynx`, `w3m`) in `PROBED_TOOLS`, grounding rule in the system prompt (mirrored in the DSPy seed).
 
 ### Problem
 
@@ -198,19 +198,19 @@ Pages return HTML. The LLM parses HTML natively; the concern is size (marketing 
 
 `maxProbeOutputChars` truncation keeps huge pages from blowing up context.
 
-**Future: `HTMLRewriter`.** Bun ships `HTMLRewriter` as a built-in global. An enhancement could auto-strip `<script>`, `<style>`, `<svg>`, `<noscript>` from HTML-shaped probe output for clean text on any platform without external tools. Deferred — LLM-picks-tool is sufficient for v1.
+**Future: `HTMLRewriter`.** Bun ships `HTMLRewriter` as a built-in global. An enhancement could auto-strip `<script>`, `<style>`, `<svg>`, `<noscript>` from HTML-shaped step output for clean text on any platform without external tools. Deferred — LLM-picks-tool is sufficient for v1.
 
 ### Script Safety Analysis
 
-For `curl URL | sh` requests, the LLM probe-fetches the top-level script, reads it, and returns a free-form `answer` grounded in the content. **Flag but not chase** secondary downloads: nested `curl`/`wget` calls are noted ("this script downloads a binary from X") but Wrap doesn't recursively fetch. The user sees what the top level does and decides.
+For `curl URL | sh` requests, the LLM fetch-steps the top-level script, reads it, and returns a free-form `reply` grounded in the content. **Flag but not chase** secondary downloads: nested `curl`/`wget` calls are noted ("this script downloads a binary from X") but Wrap doesn't recursively fetch. The user sees what the top level does and decides.
 
 No structured safety template — the LLM answers in its natural voice covering what the script does, what it installs/modifies, and concerns.
 
-### Probe Indicator
+### Step Indicator
 
-URL-fetching probes display `🌐` instead of `🔍`. Detection heuristic in `fetchesUrl()`: probe content starts with `curl`/`wget` and contains `http(s)://`. Ambiguous cases fall back to `🔍`. Explanation text after the emoji is the LLM's free-form `explanation` field.
+URL-fetching steps display `🌐` instead of `🔍`. Detection heuristic in `fetchesUrl()`: step content starts with `curl`/`wget` and contains `http(s)://`. Ambiguous cases fall back to `🔍`. Explanation text after the emoji is the LLM's free-form `explanation` field.
 
-**Fetch only, never execute.** URL probes download content — they never pipe a fetched script through a shell. The existing "probes must be `risk_level: low`" check enforces this; the grounding rule reinforces it for the script-analysis case ("read the script as a probe, *analyze* it as an answer").
+**Fetch only, never execute.** URL steps download content — they never pipe a fetched script through a shell. The existing "non-final steps must be `risk_level: low`" check enforces this; the grounding rule reinforces it for the script-analysis case ("read the script as a non-final step, *analyze* it as a reply").
 
 ### Dynamic Sites
 

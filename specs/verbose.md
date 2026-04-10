@@ -71,9 +71,9 @@ Every pipeline step is reported. Fast steps (<1ms) are still shown — verbose m
 - `LLM scratchpad: {text}` — printed before the LLM response line whenever `_scratchpad` is non-null (see `specs/scratchpad.md`). Newlines collapsed to ` \n ` so each scratchpad is one line.
 - `LLM responded (command, {risk_level}): {content}` — content highlighted
 - `LLM responded (answer, {N} chars)` — content not echoed (it goes to stdout)
-- `LLM responded (probe): {content}` — content highlighted
+- `LLM responded (step, {risk_level}): {content}` — content highlighted
 - `LLM error: {message}` — on provider failure (network, auth, empty)
-- `Probe: {command}` / `Probe exited ({code})`
+- `Step: {command}` / `Step exited ({code})`
 - `Memory updated: {N} facts` (after successful response with memory_updates)
 - `Watchlist: added {tools}` (when watchlist_additions present)
 

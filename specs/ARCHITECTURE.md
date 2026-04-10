@@ -41,9 +41,9 @@ The heart of an interactive invocation lives in `src/session/`. The session owns
 
 The query loop itself (one round at a time) lives in `src/core/`:
 
-- `runner.ts` — generator over rounds; enforces `maxRounds`, injects "do not probe" on the last round.
+- `runner.ts` — generator over rounds; enforces `maxRounds`, injects the last-round instruction (forbids `final: false`) on the final iteration.
 - `round.ts` — a single round: call LLM, parse, classify, execute.
-- `transcript.ts` — semantic conversation turns (`user`, `probe`, `candidate_command`, `answer`) with an attempt directive attached to the latest turn.
+- `transcript.ts` — semantic conversation turns (`user`, `step`, `confirmed_step`, `candidate_command`, `answer`) with an attempt directive attached to the latest turn. Also owns `projectResponseForEcho`, the single place that decides which response fields the LLM sees in echoed turns.
 - `parse-response.ts`, `shell.ts`, `notify.ts`, `input.ts`, `output.ts`, `spinner.ts`, `piped-input.ts`, `verbose.ts`, `ansi.ts`, `paths.ts`, `home.ts` — pure-ish supporting modules.
 
 **Why session is separate from core:** `core` is "run one round, return a result"; `session` is "loop those rounds while a dialog may be mounted and events may be dispatched." Separating them keeps the pure loop testable in isolation from the Ink/React surface. See `session.md` for the full rationale (and the six problems that drove the refactor).

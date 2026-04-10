@@ -8,7 +8,7 @@
 
 ## Provider Interface
 
-All providers implement a single `runPrompt(input, schema?)` method. Without a Zod schema → plain text (used by memory init). With a schema → validated, typed object (used by the command/answer/probe flow).
+All providers implement a single `runPrompt(input, schema?)` method. Without a Zod schema → plain text (used by memory init). With a schema → validated, typed object (used by the command/reply flow).
 
 `runCommandPrompt` (`src/llm/index.ts`) is a thin convenience that calls `provider.runPrompt(input, CommandResponseSchema)`. Schema-awareness stays outside the provider: providers don't know about Wrap's command response format.
 
