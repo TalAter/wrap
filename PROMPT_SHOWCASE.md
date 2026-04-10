@@ -122,3 +122,15 @@ answer → "It already has --icons. You're good."
 ```
 
 Shows: probing the live shell environment, finding config in non-standard locations (iCloud-synced dotfiles), surgical in-place edit that preserves existing flags, and idempotency by re-checking state instead of blindly re-running.
+
+---
+
+### Redact API keys from config
+
+```
+$ w show me ~/.wrap/config.jsonc with apiKey redacted to just the first 5 chars. dont read the full file yourself
+```
+
+The user explicitly says not to read the file. So Wrap writes and runs a local script that does the redaction on the machine — API keys are truncated before they ever reach the LLM. The full config never leaves the computer.
+
+Shows: privacy-aware reasoning, generating code that runs locally instead of exfiltrating secrets, respecting explicit user constraints.
