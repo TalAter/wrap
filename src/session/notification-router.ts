@@ -64,7 +64,7 @@ export type NotificationRouter = {
   getDialog(): DialogHost | null;
   /**
    * Unmount the dialog (if any) and flush the buffered notifications to
-   * stderr. The unmount writes EXIT_ALT_SCREEN before the flush, so flushed
+   * stderr. The unmount exits the alt screen before the flush, so flushed
    * lines land in real scrollback rather than the alt buffer that's about
    * to disappear. Idempotent.
    */

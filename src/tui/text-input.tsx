@@ -1,4 +1,4 @@
-import { Box, Text, useInput, useStdin } from "ink";
+import { Box, Text, useInput } from "ink";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Cursor } from "./cursor.ts";
 
@@ -58,35 +58,20 @@ function EditableTextInput({ value, onChange, onSubmit, placeholder }: EditableP
     if (next.text !== cursor.text) onChange(next.text);
   };
 
-  // Ink maps both Mac backspace (\x7f) and forward delete (\x1b[3~) to
-  // key.delete. Track the raw sequence so we can distinguish them.
-  const isForwardDelete = useRef(false);
-  const { internal_eventEmitter } = useStdin();
-  useEffect(() => {
-    const onRaw = (data: string) => {
-      isForwardDelete.current = data === "\x1b[3~";
-    };
-    internal_eventEmitter?.on("input", onRaw);
-    return () => {
-      internal_eventEmitter?.off("input", onRaw);
-    };
-  }, [internal_eventEmitter]);
-
   useInput((input, key) => {
     if (key.return) {
       onSubmit(cursor.text);
       return;
     }
-    if ((key.backspace || key.delete) && key.meta) {
+    if (key.backspace && key.meta) {
       apply(cursor.deleteWord());
       return;
     }
-    if (key.delete && isForwardDelete.current) {
-      isForwardDelete.current = false;
+    if (key.delete) {
       apply(cursor.delete());
       return;
     }
-    if (key.backspace || key.delete) {
+    if (key.backspace) {
       apply(cursor.backspace());
       return;
     }

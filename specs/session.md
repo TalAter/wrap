@@ -68,7 +68,7 @@ One architectural shape fixes all six.
 - `AppEvent` is a union of everything that can happen: loop events, key events, draft changes, notifications, no-TTY block dispatch.
 - `reduce(state, event) → AppState` is pure. "Wrong" (state, event) pairs return `state` by reference (`===`) so the coordinator can short-circuit.
 
-**Layer C — Dialog.** A function of state. `Dialog({ state, dispatch })` in `src/tui/dialog.tsx`. Zero React `useState` for application state. Local state is limited to: action-bar selection (presentation only, reset on tag change), `borderCount` from `measureElement`, terminal dimensions, spinner frame, and `TextInput` cursor position. Inputs dispatch `draft-change` / `submit-edit` / `submit-followup` / `key-action` / `key-esc`; the reducer owns the rest.
+**Layer C — Dialog.** A function of state. `Dialog({ state, dispatch })` in `src/tui/dialog.tsx`. Zero React `useState` for application state. Local state is limited to: action-bar selection (presentation only, reset on tag change), `borderCount` from `useBoxMetrics`, terminal dimensions via `useWindowSize`, spinner frame via `useAnimation`, and `TextInput` cursor position. Inputs dispatch `draft-change` / `submit-edit` / `submit-followup` / `key-action` / `key-esc`; the reducer owns the rest.
 
 **Layer D — Coordinator.** `runSession(prompt, provider, options) → Promise<exitCode>` in `src/session/session.ts`. The only orchestrator: touches the dialog, owns abort/restart of the loop, decides exit, writes the final log entry. Other layers have narrow I/O of their own — the runner spawns probe processes and writes memory/watchlist, the notification bus emits to stderr, the LLM provider makes network calls. The coordinator is not the only thing with I/O — it's the only thing making routing decisions across layers.
 
@@ -135,7 +135,7 @@ The router subscribes to the bus and routes each notification based on whether a
 - **Dialog mounted** → buffer for replay. Without buffering, stderr writes during alt-screen would land in the alt buffer and disappear on exit.
 - **Dialog mounted AND `isProcessing()` AND `kind === "chrome"`** → also call `onProcessingChrome(n)`, which the coordinator wires to `dispatch({ type: "notification", ... })` so the reducer updates the bottom-border status live.
 
-`router.teardownDialog()` unmounts the dialog (which writes `EXIT_ALT_SCREEN`) and THEN flushes the buffer. Order is load-bearing: flushed lines must land in real scrollback, not the alt buffer that's about to disappear. Teardown is idempotent and is called both before exec and in the `finally`, so the session survives a mid-flight throw without leaving the alt screen up.
+`router.teardownDialog()` unmounts the dialog (Ink exits the alt screen automatically) and THEN flushes the buffer. Order is load-bearing: flushed lines must land in real scrollback, not the alt buffer that's about to disappear. Teardown is idempotent and is called both before exec and in the `finally`, so the session survives a mid-flight throw without leaving the alt screen up.
 
 The listener stays subscribed through `finaliseOutcome`, so `verbose("Executing command...")` and `verbose("Command exited (...)")` from the exec phase still route correctly.
 

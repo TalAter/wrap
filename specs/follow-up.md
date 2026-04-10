@@ -160,8 +160,7 @@ The visual-parity argument is why it's one component: any future styling change 
 
 Two consumers, two modules:
 
-- `src/tui/spinner.ts` — frames + interval constants + React `useSpinner(active)` hook, drives `bottomBorderSegments` during `processing`.
-- `src/core/spinner.ts` — `startChromeSpinner(text)` for stderr animation outside Ink (used for the pre-dialog LLM wait).
+- `src/core/spinner.ts` — `SPINNER_FRAMES` / `SPINNER_INTERVAL` constants + `startChromeSpinner(text)` for stderr animation outside Ink. In-dialog animation uses Ink's `useAnimation` hook with these constants.
 
 ```ts
 export const SPINNER_FRAMES = ["⢎ ", "⠎⠁", "⠊⠑", "⠈⠱", " ⡱", "⢀⡰", "⢄⡠", "⢆⡀"];

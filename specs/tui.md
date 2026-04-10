@@ -2,9 +2,9 @@
 
 How Wrap renders interactive UI, and how the confirmation dialog is built. Canonical TUI vocabulary (dialog, action bar, risk badge, dialog state) lives in `SPEC.md` §Glossary. `dialog-style.sh` is the ANSI reference mockup.
 
-Code: `src/tui/dialog.tsx`, `src/tui/border.ts`, `src/tui/text-input.tsx`, `src/tui/spinner.ts`, `src/session/dialog-host.ts`, `src/session/notification-router.ts`.
+Code: `src/tui/dialog.tsx`, `src/tui/border.ts`, `src/tui/text-input.tsx`, `src/session/dialog-host.ts`, `src/session/notification-router.ts`.
 
-## Framework: Ink 5+, lazy-loaded
+## Framework: Ink 7, lazy-loaded
 
 Ink (React for CLIs) handles every interactive surface: the confirmation dialog, the config wizard, interactive mode. Non-interactive output stays on the `chrome()` / `chromeRaw()` utilities in `src/core/output.ts`.
 
@@ -23,7 +23,7 @@ All Wrap chrome goes to **stderr** or **/dev/tty**. Never stdout. This is a hard
 2. **Animated chrome** — spinners, streaming tokens. `chromeRaw()` + `setInterval` + cursor control. No Ink. See `src/core/spinner.ts`.
 3. **Interactive UI** — Ink. Dialog, config wizard, interactive mode, error recovery.
 
-Tier 2 exists specifically so the "thinking..." indicator doesn't force an Ink load. Once we're paying for Ink anyway (e.g. dialog up), in-dialog animation uses a React hook (`useSpinner` in `src/tui/spinner.ts`) driven off the same frame table.
+Tier 2 exists specifically so the "thinking..." indicator doesn't force an Ink load. Once we're paying for Ink anyway (e.g. dialog up), in-dialog animation uses Ink's `useAnimation` hook driven off the same frame table (`SPINNER_FRAMES` / `SPINNER_INTERVAL` in `src/core/spinner.ts`).
 
 ## Ink configuration constraints
 
@@ -51,7 +51,7 @@ Bun has a known bug (bun#26642) where the cursor disappears after an Ink app exi
 
 Before Wrap spawns the confirmed child command, Ink must be fully unmounted: alt-screen exited, cursor restored, raw mode released. The terminal must be in normal state before the child inherits the tty.
 
-`dialog-host.ts` wraps mount with `ENTER_ALT_SCREEN` and unmount with `EXIT_ALT_SCREEN` + `SHOW_CURSOR`. The notification router (`src/session/notification-router.ts`) is the single caller of `teardownDialog()` and guarantees it runs before exec.
+`dialog-host.ts` passes `alternateScreen: true` to `ink.render()`, which handles entering and exiting the alt screen (plus cursor restore) automatically on mount/unmount. The notification router (`src/session/notification-router.ts`) is the single caller of `teardownDialog()` and guarantees it runs before exec.
 
 **Why the alt screen at all:** rendering in the alternate screen buffer means resize artifacts and Ink re-renders can't corrupt the user's main scrollback. On unmount we drop back to the main buffer with history intact.
 
@@ -71,7 +71,7 @@ Routing rules for each notification emitted on the global bus:
 2. **Dialog mounted, not in `processing`** → buffer for replay on unmount. Stderr writes during alt-screen would otherwise land in the alt buffer and vanish on exit.
 3. **Dialog mounted AND session is in `processing`** → buffer **and** additionally call `onProcessingChrome(n)` so the coordinator can dispatch a `notification` event and the reducer can surface the latest chrome line in the bottom border.
 
-`teardownDialog()` unmounts (writing `EXIT_ALT_SCREEN` first) and then flushes the buffer to real stderr, so replayed lines land in scrollback rather than the alt buffer that's about to disappear. Idempotent.
+`teardownDialog()` unmounts (Ink exits the alt screen automatically) and then flushes the buffer to real stderr, so replayed lines land in scrollback rather than the alt buffer that's about to disappear. Idempotent.
 
 `isProcessing` is pulled (callback) rather than pushed — the router doesn't mirror the coordinator's state, it just asks.
 
@@ -99,9 +99,7 @@ natural     = max(stringWidth(command), stringWidth(explanation), stringWidth(dr
 
 ### Height sync
 
-The border columns need exactly as many `│` rows as the middle column's rendered height. We compute a first-pass estimate from content (line counts for command / explanation / follow-up draft / action bar / padding) so the initial render is usually correct in one pass. A `useLayoutEffect` then calls `measureElement(middleRef)` and, if the real height differs, updates `borderCount` — one extra render, Ink swaps the frame.
-
-**Why not `measureElement` alone (no estimate):** earlier drafts ran into feedback loops where the measured height re-triggered layout. Seeding state with a content-derived estimate keeps the first frame stable and makes the effect a pure correction step.
+The border columns need exactly as many `│` rows as the middle column's rendered height. We compute a first-pass estimate from content (line counts for command / explanation / follow-up draft / action bar / padding) so the initial render is usually correct in one pass. Ink's `useBoxMetrics(middleRef)` then provides the measured height; if it differs from the estimate, the derived `borderCount` updates — one extra render, Ink swaps the frame.
 
 ### Borders (`src/tui/border.ts`)
 
@@ -157,7 +155,7 @@ Keybindings (identical for every risk level — simplified from the earlier tier
 
 ## Host lifecycle (`src/session/dialog-host.ts`)
 
-Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off in parallel with the first LLM call so `mountDialog()` is synchronous by the time the session needs it. `mountDialog` writes `ENTER_ALT_SCREEN`, calls `ink.render(..., { stdout: process.stderr, patchConsole: false })`, and returns a `{ rerender, unmount }` handle. `unmount` writes `EXIT_ALT_SCREEN + SHOW_CURSOR`.
+Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off in parallel with the first LLM call so `mountDialog()` is synchronous by the time the session needs it. `mountDialog` calls `ink.render(..., { stdout: process.stderr, patchConsole: false, alternateScreen: true })` and returns a `{ rerender, unmount }` handle. Ink handles alt-screen enter/exit and cursor restore automatically.
 
 **Stderr, not stdout.** Ink is rendered to `process.stderr` because stdout is reserved for useful output (hard rule — see CLAUDE.md / SPEC.md). `patchConsole: false` because Wrap has its own stderr sink (the notification router, above).
 
@@ -185,7 +183,7 @@ Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off 
 
 - **Answer rendering** — markdown-formatted text to stdout (TTY) or plain (piped). No interactivity.
 - **Streaming LLM responses** — Tier 2, stderr.
-- **Spinners / progress** — Tier 2 (Ink's `useSpinner` hook is only used once the dialog is already mounted).
+- **Spinners / progress** — Tier 2 (Ink's `useAnimation` hook is only used once the dialog is already mounted).
 - **Status, errors, post-exec summaries** — Tier 1 `chrome()`.
 
 ## Companion libraries (suggestions, not mandates)
@@ -198,10 +196,9 @@ Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off 
 
 ## File map
 
-- `src/tui/dialog.tsx` — `Dialog`, `ActionBar`, `KeyHints`, `BorderLine`, `useRenderSize`, action item table
+- `src/tui/dialog.tsx` — `Dialog`, `ActionBar`, `KeyHints`, `BorderLine`, action item table
 - `src/tui/border.ts` — gradient interpolation, risk palettes + badges, top/bottom border segment builders
 - `src/tui/text-input.tsx` — editable text field used by editing / composing
-- `src/tui/spinner.ts` — spinner frame hook for the bottom-border status
 - `src/session/dialog-host.ts` — lazy module load + mount/rerender/unmount
 - `src/session/notification-router.ts` — stderr sink, buffer, "is dialog up?" authority
 - `src/session/state.ts` — `AppState`, `AppEvent`, `ActionId`, `isDialogTag`

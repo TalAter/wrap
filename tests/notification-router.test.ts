@@ -84,9 +84,9 @@ describe("createNotificationRouter", () => {
   });
 
   test("flushed lines are written AFTER unmount (alt-screen ordering)", () => {
-    // The dialog's unmount writes EXIT_ALT_SCREEN to stderr; we mock that by
-    // recording the order. Flushed buffered lines must arrive after the
-    // unmount marker so they land in real scrollback.
+    // The dialog's unmount exits the alt screen (via Ink's alternateScreen
+    // option); we mock that by recording the order. Flushed buffered lines
+    // must arrive after the unmount marker so they land in real scrollback.
     const { router } = makeRouter();
     const unsub = router.subscribe();
     const host: DialogHost = {

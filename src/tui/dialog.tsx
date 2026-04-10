@@ -1,6 +1,16 @@
-import { Box, type DOMElement, measureElement, Text, useInput, useStdin, useStdout } from "ink";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  Box,
+  type DOMElement,
+  Text,
+  useAnimation,
+  useBoxMetrics,
+  useInput,
+  useStdin,
+  useWindowSize,
+} from "ink";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
+import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import {
   type BorderSegment,
@@ -8,7 +18,6 @@ import {
   interpolateGradient,
   topBorderSegments,
 } from "./border.ts";
-import { useSpinner } from "./spinner.ts";
 import { TextInput } from "./text-input.tsx";
 
 type DialogProps = {
@@ -72,7 +81,7 @@ export function formatOutputSlot(text: string): string {
 }
 
 export function Dialog({ state, dispatch }: DialogProps) {
-  const { columns: termCols, rows: termRows } = useRenderSize();
+  const { columns: termCols, rows: termRows } = useWindowSize();
   // Local presentation state. Pure UI — no application state depends on it.
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -153,17 +162,9 @@ export function Dialog({ state, dispatch }: DialogProps) {
     1 +
     1 +
     1;
-  const [borderCount, setBorderCount] = useState(initialBorderCount);
   const middleRef = useRef<DOMElement>(null);
-
-  useLayoutEffect(() => {
-    const node = middleRef.current;
-    if (!node) return;
-    const { height } = measureElement(node);
-    if (height > 0 && height !== borderCount) {
-      setBorderCount(height);
-    }
-  });
+  const { height: measuredHeight } = useBoxMetrics(middleRef as RefObject<DOMElement>);
+  const borderCount = measuredHeight > 0 ? measuredHeight : initialBorderCount;
 
   const leftBorderLines = Array.from({ length: borderCount }, (_, index) => ({
     key: `left-${index}`,
@@ -173,12 +174,19 @@ export function Dialog({ state, dispatch }: DialogProps) {
     key: `right-${index}`,
   }));
 
-  // Editing-mode Esc → discard back to confirming.
+  // Esc dispatches key-esc in every mode except confirming (which has its
+  // own handler below with arrow nav, hotkeys, etc.).
   useInput(
     (_input, key) => {
       if (key.escape) dispatch({ type: "key-esc" });
     },
-    { isActive: state.tag === "editing" },
+    {
+      isActive:
+        state.tag === "editing" ||
+        state.tag === "composing" ||
+        state.tag === "processing" ||
+        state.tag === "executing-step",
+    },
   );
 
   // Confirming-mode key handling: arrow nav (local), Enter on highlight,
@@ -216,32 +224,14 @@ export function Dialog({ state, dispatch }: DialogProps) {
     { isActive: state.tag === "confirming" },
   );
 
-  // Composing-mode Esc → confirming. (TextInput handles printable input.)
-  useInput(
-    (_input, key) => {
-      if (key.escape) dispatch({ type: "key-esc" });
-    },
-    { isActive: state.tag === "composing" },
-  );
-
-  // Processing-mode Esc → composing (coordinator handles abort + transition).
-  useInput(
-    (_input, key) => {
-      if (key.escape) dispatch({ type: "key-esc" });
-    },
-    { isActive: state.tag === "processing" },
-  );
-
-  // Executing-step Esc → confirming (coordinator aborts the in-flight capture).
-  useInput(
-    (_input, key) => {
-      if (key.escape) dispatch({ type: "key-esc" });
-    },
-    { isActive: state.tag === "executing-step" },
-  );
-
   const spinnerActive = state.tag === "processing" || state.tag === "executing-step";
-  const spinnerFrame = useSpinner(spinnerActive);
+  const { frame: spinnerIndex } = useAnimation({
+    interval: SPINNER_INTERVAL,
+    isActive: spinnerActive,
+  });
+  const spinnerFrame = spinnerActive
+    ? (SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length] ?? null)
+    : null;
   const bottomStatus =
     state.tag === "processing"
       ? `${spinnerFrame ?? ""} ${status ?? FOLLOWUP_FALLBACK_STATUS}`
@@ -355,27 +345,6 @@ export function Dialog({ state, dispatch }: DialogProps) {
       </Box>
     </Box>
   );
-}
-
-function useRenderSize(): { columns: number; rows: number } {
-  const { stdout } = useStdout();
-  const fallbackColumns = 80;
-  const fallbackRows = 24;
-  const snapshot = useSyncExternalStore(
-    (onChange) => {
-      stdout.on("resize", onChange);
-      return () => {
-        stdout.off("resize", onChange);
-      };
-    },
-    () => `${stdout.columns || fallbackColumns}:${stdout.rows || fallbackRows}`,
-    () => `${fallbackColumns}:${fallbackRows}`,
-  );
-
-  const [columnsText, rowsText] = snapshot.split(":");
-  const columns = Number(columnsText ?? fallbackColumns);
-  const rows = Number(rowsText ?? fallbackRows);
-  return { columns, rows };
 }
 
 function BorderLine({ segments }: { segments: BorderSegment[] }) {

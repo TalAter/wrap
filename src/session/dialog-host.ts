@@ -1,5 +1,3 @@
-import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, SHOW_CURSOR } from "../core/ansi.ts";
-import { chromeRaw } from "../core/output.ts";
 import type { AppEvent, AppState } from "./state.ts";
 
 export type DialogHost = {
@@ -43,10 +41,10 @@ export function mountDialog(props: {
     throw new Error("mountDialog: preloadDialogModules() must resolve first");
   }
   const { ink, react, Dialog } = cached;
-  chromeRaw(ENTER_ALT_SCREEN);
   const app = ink.render(react.createElement(Dialog, props), {
     stdout: process.stderr,
     patchConsole: false,
+    alternateScreen: true,
   });
   return {
     rerender(nextProps) {
@@ -54,7 +52,6 @@ export function mountDialog(props: {
     },
     unmount() {
       app.unmount();
-      chromeRaw(`${EXIT_ALT_SCREEN}${SHOW_CURSOR}`);
     },
   };
 }
