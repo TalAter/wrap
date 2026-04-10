@@ -67,6 +67,13 @@ export type AttemptDirectives = {
    * every decision without polluting the persistent transcript.
    */
   liveContext?: string;
+  /**
+   * For the in-round high-risk scratchpad retry: echo the rejected response
+   * (with its null `_scratchpad` preserved) as an assistant turn and append
+   * `scratchpadRequiredInstruction` as the user turn so the LLM can fill
+   * the missing field. Intra-round only.
+   */
+  scratchpadRequiredRetry?: { rejectedResponse: CommandResponse };
 };
 
 /**
@@ -161,6 +168,18 @@ export function buildPromptInput(
   }
   if (directives?.liveContext) {
     messages.push({ role: "user", content: directives.liveContext });
+  }
+  if (directives?.scratchpadRequiredRetry) {
+    // Intentional raw stringify — the whole point is to show the model that
+    // `_scratchpad` came back null so it knows what to fix.
+    messages.push({
+      role: "assistant",
+      content: JSON.stringify(directives.scratchpadRequiredRetry.rejectedResponse),
+    });
+    messages.push({
+      role: "user",
+      content: promptConstants.scratchpadRequiredInstruction,
+    });
   }
   if (directives?.isLastRound) {
     messages.push({
