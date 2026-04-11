@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bold, dim, fg, fgCode, gradient, stripAnsi } from "../src/core/ansi.ts";
+import { bold, dim, fg, fgCode, gradient, interpolate, stripAnsi } from "../src/core/ansi.ts";
 
 const ESC = "\x1b[";
 
@@ -71,10 +71,30 @@ describe("gradient", () => {
     const result = gradient("abcdefghij", stops);
     // First char should be near red (255,0,0)
     // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
-    expect(result).toMatch(/\x1b\[38;2;25[0-5];0;[0-9]{1,2}m/);
+    expect(result).toMatch(/\x1b\[38;2;25[0-5];\d{1,2};\d{1,2}m/);
     // Last char should be near blue (0,0,255)
     // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
-    expect(result).toMatch(/\x1b\[38;2;[0-9]{1,2};0;25[0-5]m/);
+    expect(result).toMatch(/\x1b\[38;2;\d{1,2};\d{1,2};25[0-5]m/);
+  });
+
+  test("mid-point of red→green is not muddy brown (OKLAB/perceptual)", () => {
+    const rg: [number, number, number][] = [
+      [255, 0, 0],
+      [0, 255, 0],
+    ];
+    // Midpoint char at index 2 of length 5 (t = 0.5)
+    const result = gradient("xxxxx", rg);
+    const strip = stripAnsi(result);
+    expect(strip).toBe("xxxxx");
+    // Pull every 38;2;R;G;B from the output and check the mid-color
+    const matches = [...result.matchAll(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g)];
+    expect(matches.length).toBeGreaterThanOrEqual(3);
+    const mid = matches[2] as RegExpMatchArray;
+    const [r, g, b] = [Number(mid[1]), Number(mid[2]), Number(mid[3])];
+    // RGB midpoint would be (127,127,0) — dull olive/brown.
+    // OKLAB midpoint is noticeably brighter and more saturated than the RGB average.
+    expect(r + g).toBeGreaterThan(300);
+    expect(b).toBeLessThan(40);
   });
 
   test("preserves spaces without color escapes", () => {
@@ -126,5 +146,36 @@ describe("gradient", () => {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
     expect(result).not.toMatch(/\x1b\[38;5;/);
     expect(stripAnsi(result)).toBe("hello");
+  });
+});
+
+describe("interpolate (OKLAB round-trip)", () => {
+  const cases: [number, number, number][] = [
+    [0, 0, 0],
+    [255, 255, 255],
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [128, 128, 128],
+  ];
+  for (const c of cases) {
+    test(`endpoint identity for ${c.join(",")}`, () => {
+      const out = interpolate([c, [0, 0, 0]], 0);
+      expect(out[0]).toBe(c[0]);
+      expect(out[1]).toBe(c[1]);
+      expect(out[2]).toBe(c[2]);
+    });
+  }
+
+  test("grayscale interpolation stays neutral", () => {
+    const mid = interpolate(
+      [
+        [40, 40, 40],
+        [200, 200, 200],
+      ],
+      0.5,
+    );
+    expect(Math.abs(mid[0] - mid[1])).toBeLessThanOrEqual(1);
+    expect(Math.abs(mid[1] - mid[2])).toBeLessThanOrEqual(1);
   });
 });
