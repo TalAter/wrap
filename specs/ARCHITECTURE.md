@@ -122,10 +122,10 @@ src/
     writer.ts                    JSONL append (failures swallowed)
 
   subcommands/                   see subcommands.md
-    registry.ts                  all subcommands declared here
-    dispatch.ts                  flag matching + dispatch
-    help.ts, version.ts, log.ts  individual subcommands
-    types.ts                     Subcommand type
+    registry.ts                  all commands + options declared here
+    dispatch.ts                  flag matching + dispatch (commands only)
+    help.ts, version.ts, log.ts  individual commands
+    types.ts                     CLIFlag type (Command | Option)
 ```
 
 Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`):
