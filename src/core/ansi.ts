@@ -163,20 +163,29 @@ export function fgCode(r: number, g: number, b: number, level = 3): string {
   return `${ESC}${nearest16(r, g, b)}m`;
 }
 
-export function gradient(
+/**
+ * Per-cell rendering — each element is either a single space or an ANSI
+ * SGR escape glued to its character. Diff-based repainters compare cells
+ * directly to find the minimal dirty range per row.
+ */
+export function gradientCells(
   text: string,
   stops: Color[],
   shinePos?: number,
   shineRadius = 4,
   level = 3,
-): string {
-  if (text.length === 0) return "";
-  if (level <= 0) return text;
-  let result = "";
+): string[] {
   const len = text.length;
+  if (len === 0) return [];
+  const cells: string[] = new Array(len);
   for (let i = 0; i < len; i++) {
-    if (text[i] === " ") {
-      result += " ";
+    const ch = text[i] as string;
+    if (ch === " ") {
+      cells[i] = " ";
+      continue;
+    }
+    if (level <= 0) {
+      cells[i] = ch;
       continue;
     }
     const t = len > 1 ? i / (len - 1) : 0;
@@ -191,8 +200,20 @@ export function gradient(
     }
 
     const [r, g, b] = oklabToRgb(lab);
-    result += `${fgCode(r, g, b, level)}${text[i]}`;
+    cells[i] = `${fgCode(r, g, b, level)}${ch}`;
   }
-  if (result !== "") result += RESET;
-  return result;
+  return cells;
+}
+
+export function gradient(
+  text: string,
+  stops: Color[],
+  shinePos?: number,
+  shineRadius = 4,
+  level = 3,
+): string {
+  const cells = gradientCells(text, stops, shinePos, shineRadius, level);
+  if (cells.length === 0) return "";
+  if (level <= 0) return cells.join("");
+  return cells.join("") + RESET;
 }

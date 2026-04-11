@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { bold, dim, fg, fgCode, gradient, interpolate, stripAnsi } from "../src/core/ansi.ts";
+import {
+  bold,
+  dim,
+  fg,
+  fgCode,
+  gradient,
+  gradientCells,
+  interpolate,
+  stripAnsi,
+} from "../src/core/ansi.ts";
 
 const ESC = "\x1b[";
 
@@ -146,6 +155,49 @@ describe("gradient", () => {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
     expect(result).not.toMatch(/\x1b\[38;5;/);
     expect(stripAnsi(result)).toBe("hello");
+  });
+});
+
+describe("gradientCells", () => {
+  const stops: [number, number, number][] = [
+    [255, 0, 0],
+    [0, 0, 255],
+  ];
+
+  test("returns one entry per character", () => {
+    expect(gradientCells("hello", stops).length).toBe(5);
+  });
+
+  test("spaces are plain single-space entries", () => {
+    const cells = gradientCells("a b", stops);
+    expect(cells[1]).toBe(" ");
+  });
+
+  test("each non-space cell contains its character", () => {
+    const cells = gradientCells("abc", stops);
+    const chars = ["a", "b", "c"];
+    for (let i = 0; i < 3; i++) {
+      expect(stripAnsi(cells[i] as string)).toBe(chars[i] as string);
+    }
+  });
+
+  test("level 0 returns plain characters with no escapes", () => {
+    const cells = gradientCells("abc", stops, undefined, undefined, 0);
+    expect(cells).toEqual(["a", "b", "c"]);
+  });
+
+  test("shine changes the cell under the beam", () => {
+    const without = gradientCells("abcdefghij", stops);
+    const withShine = gradientCells("abcdefghij", stops, 5);
+    expect(withShine[5]).not.toBe(without[5]);
+  });
+
+  test("cells outside shine radius are unchanged", () => {
+    const without = gradientCells("abcdefghij", stops);
+    const withShine = gradientCells("abcdefghij", stops, 5, 2);
+    // col 0 is far outside radius 2 around pos 5
+    expect(withShine[0]).toBe(without[0]);
+    expect(withShine[9]).toBe(without[9]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { bold, dim, fgCode, gradient, SHOW_CURSOR } from "../core/ansi.ts";
+import { bold, dim, fgCode, gradient, gradientCells, SHOW_CURSOR } from "../core/ansi.ts";
 import {
   chrome,
   chromeRaw,
@@ -31,7 +31,6 @@ const LOGO = [
 const LOGO_WIDTH = (LOGO[0] as string).length;
 // 2-space prefix + dashes to match logo width
 const BAR = `  ${"─".repeat(LOGO_WIDTH - 2)}`;
-const ART_LINE_COUNT = 1 + LOGO.length + 1; // bar + logo + bar
 
 function formatFlags(cmds: Subcommand[], colorize?: (text: string) => string): string[] {
   return cmds.map((c) => {
@@ -75,55 +74,108 @@ export function renderStyled(cmds: Subcommand[], level: ColorLevel = colorLevel(
   return `${lines.join("\n")}\n`;
 }
 
-function renderArtFrame(shinePos: number, level: ColorLevel): string {
-  const lines = [
-    gradient(BAR, SPECTRUM, shinePos, undefined, level),
-    ...LOGO.map((l) => gradient(l, SPECTRUM, shinePos, undefined, level)),
-    gradient(BAR, SPECTRUM, shinePos, undefined, level),
-  ];
-  return `${lines.join("\n")}\n`;
+const ART_LINES = [BAR, ...LOGO, BAR];
+const FRAMES = 16;
+const FRAME_DELAY = 60;
+const SHINE_RADIUS = 4;
+
+function smoothstep(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+function buildFrame(shinePos: number | undefined, level: ColorLevel): string[][] {
+  return ART_LINES.map((line) => gradientCells(line, SPECTRUM, shinePos, SHINE_RADIUS, level));
+}
+
+/**
+ * Emit only the cells that differ from `prev` for each row in `curr`,
+ * moving the cursor the minimum distance each time. Saves both bytes
+ * on the wire and the per-frame repaint flicker that full rewrites
+ * produce on slower terminals.
+ *
+ * Invariant: cursor enters and exits at column 0 of the first art row.
+ */
+/**
+ * Emit only the cells that differ from `prev` for each row in `curr`.
+ * Saves both bytes on the wire and per-frame flicker that full rewrites
+ * produce on slower terminals.
+ *
+ * Returns the escape string so callers can batch-write it or test it.
+ * Invariant: cursor enters and exits at column 0 of the first art row.
+ */
+export function buildDiffEscape(prev: string[][] | null, curr: string[][]): string {
+  let out = "";
+  let atRow = 0;
+  for (let row = 0; row < curr.length; row++) {
+    const currLine = curr[row] as string[];
+    const prevLine = prev?.[row];
+    let minCol = -1;
+    let maxCol = -1;
+    for (let c = 0; c < currLine.length; c++) {
+      if (!prevLine || prevLine[c] !== currLine[c]) {
+        if (minCol === -1) minCol = c;
+        maxCol = c;
+      }
+    }
+    if (minCol === -1) continue;
+
+    const dy = row - atRow;
+    if (dy > 0) out += `\x1b[${dy}B`;
+    out += "\r";
+    if (minCol > 0) out += `\x1b[${minCol}C`;
+    for (let c = minCol; c <= maxCol; c++) {
+      out += currLine[c] as string;
+    }
+    out += "\x1b[0m";
+    atRow = row;
+  }
+  if (atRow > 0) out += `\x1b[${atRow}A`;
+  out += "\r";
+  return out;
 }
 
 async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   const level = colorLevel();
   const styled = renderStyled(cmds, level);
-  // Cursor row after writing = number of \n chars in styled
-  const cursorRow = styled.split("\n").length - 1;
-  const artStart = 1; // art begins after leading blank line
-  const artEnd = artStart + ART_LINE_COUNT;
-  const frames = 12;
-  const frameDelay = 25;
 
-  // Write full output first so all content is visible immediately
+  // With no color, shine is invisible — skip the animation machinery
+  // entirely so we don't hide the cursor or waste ~1s of stdout.
+  if (level <= 0) {
+    process.stdout.write(styled);
+    return;
+  }
+
+  const totalRows = styled.split("\n").length - 1;
+  const artStart = 1;
+
   process.stdout.write(styled);
 
   const showCursor = () => chromeRaw(SHOW_CURSOR);
   const onSigint = () => {
     showCursor();
-    // During sleep, cursor is at artEnd — move to bottom before exiting
-    process.stdout.write(`\x1b[${cursorRow - artEnd}B\n`);
+    process.stdout.write(`\r\x1b[${totalRows - artStart}B\n`);
     process.exit(130);
   };
   process.on("SIGINT", onSigint);
 
   chromeRaw("\x1b[?25l");
   try {
-    // Move cursor from end of output up to art section
-    process.stdout.write(`\x1b[${cursorRow - artStart}A`);
+    process.stdout.write(`\x1b[${totalRows - artStart}A`);
 
-    for (let frame = 0; frame < frames; frame++) {
-      const shinePos = Math.round((frame / (frames - 1)) * (LOGO_WIDTH + 8)) - 4;
-      process.stdout.write(renderArtFrame(shinePos, level));
-      // Cursor is now at artEnd
-      await Bun.sleep(frameDelay);
-
-      if (frame < frames - 1) {
-        process.stdout.write(`\x1b[${ART_LINE_COUNT}A`);
-      }
+    // Baseline matches renderStyled's no-shine output, so frame 0 is a
+    // no-op diff but still consumes its delay — keeps total duration
+    // equal to FRAMES * FRAME_DELAY for predictable pacing.
+    let prev = buildFrame(undefined, level);
+    for (let frame = 0; frame < FRAMES; frame++) {
+      const t = smoothstep(frame / (FRAMES - 1));
+      const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+      const curr = buildFrame(shinePos, level);
+      process.stdout.write(buildDiffEscape(prev, curr));
+      prev = curr;
+      await Bun.sleep(FRAME_DELAY);
     }
 
-    // Move cursor back to end
-    process.stdout.write(`\x1b[${cursorRow - artEnd}B`);
+    process.stdout.write(`\x1b[${totalRows - artStart}B`);
   } finally {
     showCursor();
     process.removeListener("SIGINT", onSigint);

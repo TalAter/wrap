@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { renderPlain, renderStyled, renderSubcommandHelp } from "../src/subcommands/help.ts";
+import {
+  buildDiffEscape,
+  renderPlain,
+  renderStyled,
+  renderSubcommandHelp,
+} from "../src/subcommands/help.ts";
 import type { Subcommand } from "../src/subcommands/types.ts";
 import { wrap } from "./helpers.ts";
 
@@ -124,6 +129,56 @@ describe("renderSubcommandHelp", () => {
     };
     const lines = renderSubcommandHelp(cmd).trimEnd().split("\n");
     expect(lines.length).toBe(3); // usage, blank, description
+  });
+});
+
+describe("buildDiffEscape", () => {
+  test("identical frames emit no paints, cursor returns to origin", () => {
+    const frame = [["a", "b", "c"]];
+    const out = buildDiffEscape(frame, frame);
+    // Only the final `\r` to reset column — no cursor moves, no cells.
+    expect(out).toBe("\r");
+  });
+
+  test("null baseline paints every differing cell on changed rows", () => {
+    const curr = [
+      ["a", "b"],
+      ["c", "d"],
+    ];
+    const out = buildDiffEscape(null, curr);
+    // Both rows get a reset; we should see both chars written somewhere.
+    expect(out).toContain("a");
+    expect(out).toContain("d");
+    // Cursor return: ends with up-moves + \r
+    expect(out.endsWith("\r")).toBe(true);
+  });
+
+  test("only emits cells within the min/max diff range of each row", () => {
+    const prev = [["x", "x", "x", "x", "x"]];
+    const curr = [["x", "x", "Y", "x", "x"]];
+    const out = buildDiffEscape(prev, curr);
+    // Only Y should appear — the unchanged xs are skipped.
+    expect(out).not.toContain("x");
+    expect(out).toContain("Y");
+  });
+
+  test("skips unchanged rows entirely, no cursor motion for them", () => {
+    const prev = [
+      ["a", "b"],
+      ["c", "d"],
+      ["e", "f"],
+    ];
+    const curr = [
+      ["a", "b"],
+      ["c", "X"],
+      ["e", "f"],
+    ];
+    const out = buildDiffEscape(prev, curr);
+    expect(out).toContain("X");
+    // Should move down exactly 1 row to reach the dirty row, then up 1
+    expect(out).toContain("\x1b[1B");
+    expect(out).toContain("\x1b[1A");
+    expect(out).not.toContain("\x1b[2B");
   });
 });
 
