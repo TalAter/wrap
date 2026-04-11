@@ -15,11 +15,13 @@ import { formatProvider } from "./llm/types.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { runSession } from "./session/session.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
+import { options } from "./subcommands/registry.ts";
 
-const MODIFIER_SPECS: readonly ModifierSpec[] = [
-  { name: "verbose", flags: ["--verbose"], takesValue: false },
-  { name: "modelOverride", flags: ["--model", "--provider"], takesValue: true },
-];
+const MODIFIER_SPECS: readonly ModifierSpec[] = options.map((o) => ({
+  name: o.id,
+  flags: [o.flag, ...(o.aliases ?? [])],
+  takesValue: o.takesValue,
+}));
 
 export async function main() {
   try {

@@ -1,10 +1,12 @@
 import pkg from "../../package.json";
 import { chrome } from "../core/output.ts";
-import type { Subcommand } from "./types.ts";
+import type { Command } from "./types.ts";
 
-export const versionCmd: Subcommand = {
+export const versionCmd: Command = {
+  kind: "command",
   flag: "--version",
   aliases: ["-v"],
+  id: "version",
   description: "Show version",
   usage: "w --version",
   run: async (args) => {

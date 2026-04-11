@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getWrapHome } from "../core/home.ts";
 import { chrome, hasJq, isTTY } from "../core/output.ts";
-import type { Subcommand } from "./types.ts";
+import type { Command } from "./types.ts";
 
 type Writer = (parsed: object[]) => Promise<void>;
 
@@ -92,8 +92,10 @@ const writePretty: Writer = async (entries) => {
   process.stdout.write(`${entries.map((e) => JSON.stringify(e, null, 2)).join("\n\n")}\n`);
 };
 
-export const logCmd: Subcommand = {
+export const logCmd: Command = {
+  kind: "command",
   flag: "--log",
+  id: "log",
   description: "Show log entries",
   usage: "w --log [search] [N] [--raw]",
   help: [

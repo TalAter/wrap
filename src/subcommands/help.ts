@@ -1,6 +1,6 @@
 import { bold, dim, fg, gradient, SHOW_CURSOR } from "../core/ansi.ts";
 import { chrome, chromeRaw, isTTY } from "../core/output.ts";
-import type { Subcommand } from "./types.ts";
+import type { CLIFlag, Command } from "./types.ts";
 
 // ZX Spectrum rainbow
 const SPECTRUM: [number, number, number][] = [
@@ -26,8 +26,8 @@ const LOGO_WIDTH = (LOGO[0] as string).length;
 const BAR = `  ${"─".repeat(LOGO_WIDTH - 2)}`;
 const ART_LINE_COUNT = 1 + LOGO.length + 1; // bar + logo + bar
 
-function formatFlags(cmds: Subcommand[], colorize?: (text: string) => string): string[] {
-  return cmds.map((c) => {
+function formatFlags(flags: CLIFlag[], colorize?: (text: string) => string): string[] {
+  return flags.map((c) => {
     // Derive display hint from usage string: "w --flag [args]" → "--flag [args]"
     const hint = c.usage.replace(/^w\s+/, "");
     const flag = `  ${hint}`;
@@ -36,19 +36,22 @@ function formatFlags(cmds: Subcommand[], colorize?: (text: string) => string): s
   });
 }
 
-export function renderPlain(cmds: Subcommand[]): string {
+export function renderPlain(commands: CLIFlag[], options: CLIFlag[]): string {
   const lines = [
     "wrap - natural language shell commands",
     "",
     "Usage: w <prompt>         Run a natural language query",
     "",
-    "Flags:",
-    ...formatFlags(cmds),
+    "Commands:",
+    ...formatFlags(commands),
+    "",
+    "Options:",
+    ...formatFlags(options),
   ];
   return `${lines.join("\n")}\n`;
 }
 
-export function renderStyled(cmds: Subcommand[]): string {
+export function renderStyled(commands: CLIFlag[], options: CLIFlag[]): string {
   const lines: string[] = [
     "",
     gradient(BAR, SPECTRUM),
@@ -59,8 +62,11 @@ export function renderStyled(cmds: Subcommand[]): string {
     "",
     `  ${bold("Usage:")} w <prompt>`,
     "",
-    `  ${bold("Flags:")}`,
-    ...formatFlags(cmds, (f) => fg(f, ...FLAG_COLOR)),
+    `  ${bold("Commands:")}`,
+    ...formatFlags(commands, (f) => fg(f, ...FLAG_COLOR)),
+    "",
+    `  ${bold("Options:")}`,
+    ...formatFlags(options, (f) => fg(f, ...FLAG_COLOR)),
     "",
   ];
   return `${lines.join("\n")}\n`;
@@ -75,8 +81,8 @@ function renderArtFrame(shinePos: number): string {
   return `${lines.join("\n")}\n`;
 }
 
-async function renderAnimated(cmds: Subcommand[]): Promise<void> {
-  const styled = renderStyled(cmds);
+async function renderAnimated(commands: CLIFlag[], options: CLIFlag[]): Promise<void> {
+  const styled = renderStyled(commands, options);
   // Cursor row after writing = number of \n chars in styled
   const cursorRow = styled.split("\n").length - 1;
   const artStart = 1; // art begins after leading blank line
@@ -120,28 +126,30 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   }
 }
 
-export function renderSubcommandHelp(cmd: Subcommand): string {
-  const lines = [cmd.usage, "", `  ${cmd.description}`];
-  if (cmd.help) {
-    lines.push("", cmd.help);
+export function renderFlagHelp(flag: CLIFlag): string {
+  const lines = [flag.usage, "", `  ${flag.description}`];
+  if (flag.help) {
+    lines.push("", flag.help);
   }
   return `${lines.join("\n")}\n`;
 }
 
-export const helpCmd: Subcommand = {
+export const helpCmd: Command = {
+  kind: "command",
   flag: "--help",
   aliases: ["-h"],
+  id: "help",
   description: "Show this help",
-  usage: "w --help [subcommand]",
-  help: "With a subcommand name, show detailed help for that subcommand.",
+  usage: "w --help [command]",
+  help: "You already know this. You're here.\n\nRun it with a command name for help on that command, e.g. w --help log",
   run: async (args) => {
-    const { subcommands } = await import("./registry.ts");
+    const { commands, options } = await import("./registry.ts");
 
     if (args.length === 0) {
       if (isTTY()) {
-        await renderAnimated(subcommands);
+        await renderAnimated(commands, options);
       } else {
-        process.stdout.write(renderPlain(subcommands));
+        process.stdout.write(renderPlain(commands, options));
       }
       return;
     }
@@ -153,13 +161,14 @@ export const helpCmd: Subcommand = {
     }
 
     const name = (args[0] as string).replace(/^--/, "");
-    const cmd = subcommands.find((c) => c.flag === `--${name}`);
-    if (!cmd) {
-      chrome(`Unknown subcommand: ${args[0]}`);
+    const allFlags: CLIFlag[] = [...commands, ...options];
+    const flag = allFlags.find((f) => f.flag === `--${name}`);
+    if (!flag) {
+      chrome(`Unknown flag: ${args[0]}`);
       process.exit(1);
       return;
     }
 
-    process.stdout.write(renderSubcommandHelp(cmd));
+    process.stdout.write(renderFlagHelp(flag));
   },
 };
