@@ -1,6 +1,6 @@
-# Subcommands
+# CLI flags
 
-> Subcommand = CLI sub-action accessed via a `--` flag (see `SPEC.md` §Glossary).
+> CLIFlag = any `--` flag Wrap accepts, either a **command** (sub-action like `--log`) or an **option** (modifier like `--verbose`). See `SPEC.md` §Glossary.
 
 **Status:** Implemented.
 
@@ -10,28 +10,33 @@
 
 Wrap's first positional arg is natural language. `w log me in` must be a NL query, not a log viewer. Any `-` prefix on the first arg disambiguates — a leading `-` never appears in real NL input.
 
-Detection is strictly positional: `w find files --verbose` is NL because `--verbose` isn't first. Modifier flags (`--verbose`, `--model`, `--provider`) are stripped from the front of argv *before* this check (see `src/core/input.ts`).
+Detection is strictly positional: `w find files --verbose` is NL because `--verbose` isn't first. Options (`--verbose`, `--model`, `--provider`) are stripped from the front of argv *before* this check (see `src/core/input.ts`).
 
 ---
 
 ## Invariants
 
-- **Short-circuit.** Subcommands run before `loadConfig()`, provider init, `ensureMemory()`, cwd probing. They handle their own prerequisites and must not depend on NL-mode setup.
-- **Stdout discipline.** Each subcommand's "useful output" (help text, version string, log entries) goes to stdout. Everything else — errors, warnings, notices — uses `chrome()` (stderr/tty). See project-level stdout rule.
+- **Short-circuit.** Commands run before `loadConfig()`, provider init, `ensureMemory()`, cwd probing. They handle their own prerequisites and must not depend on NL-mode setup.
+- **Stdout discipline.** Each command's "useful output" (help text, version string, log entries) goes to stdout. Everything else — errors, warnings, notices — uses `chrome()` (stderr/tty). See project-level stdout rule.
 - **No args → `--help`.** `w` with no argv and no piped stdin dispatches to help.
 - **Unknown flag → exit 1** with the specific flag name on stderr.
-- **Registry is the single source of truth.** `--help` output, per-subcommand help, and dispatch all read from `src/subcommands/registry.ts`. Adding a subcommand is one registry entry; no other file lists flags.
+- **Registry is the single source of truth.** `--help` output, per-flag help, dispatch, and the modifier parser all read from `src/subcommands/registry.ts`. Adding a flag — command or option — is one registry entry; no other file lists flags.
 
 ---
 
 ## Architecture
 
-Each `Subcommand` (`src/subcommands/types.ts`) is self-describing: `flag`, optional `aliases`, `description`, `usage`, optional long `help`, and `run(args)`. `dispatch()` matches flag-or-alias against the registry and passes remaining args through untouched — per-subcommand arg parsing is each command's job. There is no shared arg-schema layer; commands are few enough that a framework would be overkill.
+`CLIFlag` (`src/subcommands/types.ts`) is a discriminated union with two variants, sharing `flag`, optional `aliases`, `id`, `description`, `usage`, and optional long `help`:
+
+- **`Command`** (`kind: "command"`) adds `run(args)`. Invoked by `dispatch()` when the first non-option argv is a known flag.
+- **`Option`** (`kind: "option"`) adds `takesValue`. Stripped from leading argv positions by `extractModifiers()` in `src/core/input.ts` before command dispatch or NL parsing. `id` becomes the key in the resulting `Modifiers` map (e.g. `--model` → `modelOverride`).
+
+`main.ts` derives the modifier parser input from the registry's `options` array, so adding an option to the registry automatically makes it parseable and visible in help. `dispatch()` reads `commands` and passes remaining args through untouched — per-command arg parsing is each command's job.
 
 Flow position in `main.ts`:
 
 ```
-parseArgs(argv)           // strips modifier flags
+parseArgs(argv)           // strips options (--verbose, --model, ...)
   ├─ input.type === "flag" → dispatch(flag, args) → exit
   ├─ no input + no pipe    → dispatch("--help", []) → exit
   └─ otherwise             → loadConfig → provider → memory → runSession
@@ -39,13 +44,22 @@ parseArgs(argv)           // strips modifier flags
 
 ---
 
-## Current subcommands
+## Current flags
+
+**Commands:**
 
 | Flag | Aliases | Notes |
 |---|---|---|
-| `--help` | `-h` | Auto-generated from the registry. TTY: animated gradient logo. Non-TTY: plain text. `w --help <name>` prints per-subcommand detail from the registry entry's `usage`/`description`/`help`. |
+| `--help` | `-h` | Auto-generated from the registry. TTY: animated gradient logo. Non-TTY: plain text. `w --help <name>` prints per-flag detail (command or option) from its registry entry. |
 | `--version` | `-v` | Reads `package.json`. Rejects extra args. |
 | `--log` | — | Unified log viewer. |
+
+**Options:**
+
+| Flag | Aliases | Value | Notes |
+|---|---|---|---|
+| `--model` | `--provider` | required | Override LLM provider/model for this invocation. Formats: `provider:model`, `provider`, `:model`, or bare `model` (smart match). See `llm.md`. |
+| `--verbose` | — | none | Enable real-time narrative debugging on stderr. See `verbose.md`. |
 
 ### `--log` behaviour
 

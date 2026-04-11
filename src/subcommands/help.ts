@@ -7,7 +7,7 @@ import {
   shouldAnimate,
   supportsColor,
 } from "../core/output.ts";
-import type { Subcommand } from "./types.ts";
+import type { CLIFlag, Command } from "./types.ts";
 
 // ZX Spectrum rainbow
 const SPECTRUM: [number, number, number][] = [
@@ -32,8 +32,8 @@ const LOGO_WIDTH = (LOGO[0] as string).length;
 // 2-space prefix + dashes to match logo width
 const BAR = `  ${"─".repeat(LOGO_WIDTH - 2)}`;
 
-function formatFlags(cmds: Subcommand[], colorize?: (text: string) => string): string[] {
-  return cmds.map((c) => {
+function formatFlags(flags: CLIFlag[], colorize?: (text: string) => string): string[] {
+  return flags.map((c) => {
     // Derive display hint from usage string: "w --flag [args]" → "--flag [args]"
     const hint = c.usage.replace(/^w\s+/, "");
     const flag = `  ${hint}`;
@@ -42,21 +42,29 @@ function formatFlags(cmds: Subcommand[], colorize?: (text: string) => string): s
   });
 }
 
-export function renderPlain(cmds: Subcommand[]): string {
+export function renderPlain(commands: CLIFlag[], options: CLIFlag[]): string {
   const lines = [
     "wrap - natural language shell commands",
     "",
     "Usage: w <prompt>         Run a natural language query",
     "",
-    "Flags:",
-    ...formatFlags(cmds),
+    "Commands:",
+    ...formatFlags(commands),
+    "",
+    "Options:",
+    ...formatFlags(options),
   ];
   return `${lines.join("\n")}\n`;
 }
 
-export function renderStyled(cmds: Subcommand[], level: ColorLevel = colorLevel()): string {
+export function renderStyled(
+  commands: CLIFlag[],
+  options: CLIFlag[],
+  level: ColorLevel = colorLevel(),
+): string {
   const flagPrefix = fgCode(...FLAG_COLOR, level);
   const flagReset = flagPrefix ? "\x1b[0m" : "";
+  const colorizeFlag = (f: string) => `${flagPrefix}${f}${flagReset}`;
   const lines: string[] = [
     "",
     gradient(BAR, SPECTRUM, undefined, undefined, level),
@@ -67,8 +75,11 @@ export function renderStyled(cmds: Subcommand[], level: ColorLevel = colorLevel(
     "",
     `  ${bold("Usage:")} w <prompt>`,
     "",
-    `  ${bold("Flags:")}`,
-    ...formatFlags(cmds, (f) => `${flagPrefix}${f}${flagReset}`),
+    `  ${bold("Commands:")}`,
+    ...formatFlags(commands, colorizeFlag),
+    "",
+    `  ${bold("Options:")}`,
+    ...formatFlags(options, colorizeFlag),
     "",
   ];
   return `${lines.join("\n")}\n`;
@@ -87,14 +98,6 @@ function buildFrame(shinePos: number | undefined, level: ColorLevel): string[][]
   return ART_LINES.map((line) => gradientCells(line, SPECTRUM, shinePos, SHINE_RADIUS, level));
 }
 
-/**
- * Emit only the cells that differ from `prev` for each row in `curr`,
- * moving the cursor the minimum distance each time. Saves both bytes
- * on the wire and the per-frame repaint flicker that full rewrites
- * produce on slower terminals.
- *
- * Invariant: cursor enters and exits at column 0 of the first art row.
- */
 /**
  * Emit only the cells that differ from `prev` for each row in `curr`.
  * Saves both bytes on the wire and per-frame flicker that full rewrites
@@ -134,9 +137,9 @@ export function buildDiffEscape(prev: string[][] | null, curr: string[][]): stri
   return out;
 }
 
-async function renderAnimated(cmds: Subcommand[]): Promise<void> {
+async function renderAnimated(commands: CLIFlag[], options: CLIFlag[]): Promise<void> {
   const level = colorLevel();
-  const styled = renderStyled(cmds, level);
+  const styled = renderStyled(commands, options, level);
 
   // With no color, shine is invisible — skip the animation machinery
   // entirely so we don't hide the cursor or waste ~1s of stdout.
@@ -182,33 +185,41 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
   }
 }
 
-export function renderSubcommandHelp(cmd: Subcommand): string {
-  const lines = [cmd.usage, "", `  ${cmd.description}`];
-  if (cmd.help) {
-    lines.push("", cmd.help);
+export function renderFlagHelp(flag: CLIFlag): string {
+  const lines = [flag.usage, "", `  ${flag.description}`];
+  if (flag.help) {
+    lines.push("", flag.help);
   }
   return `${lines.join("\n")}\n`;
 }
 
-export const helpCmd: Subcommand = {
+export const helpCmd: Command = {
+  kind: "command",
   flag: "--help",
   aliases: ["-h"],
+  id: "help",
   description: "Show this help",
-  usage: "w --help [subcommand]",
-  help: "With a subcommand name, show detailed help for that subcommand.",
+  usage: "w --help [command]",
+  help: [
+    "You already know this. You're here.",
+    "",
+    "Run it with a command name for help on that command, e.g. w --help log",
+    "",
+    "Pass --no-animation (or set WRAP_NO_MOTION=1) to skip the shine animation.",
+  ].join("\n"),
   run: async (args) => {
-    const { subcommands } = await import("./registry.ts");
+    const { commands, options } = await import("./registry.ts");
 
     const animationEnabled = !args.includes("--no-animation");
     const rest = args.filter((a) => a !== "--no-animation");
 
     if (rest.length === 0) {
       if (shouldAnimate({ enabled: animationEnabled })) {
-        await renderAnimated(subcommands);
+        await renderAnimated(commands, options);
       } else if (supportsColor()) {
-        process.stdout.write(renderStyled(subcommands));
+        process.stdout.write(renderStyled(commands, options));
       } else {
-        process.stdout.write(renderPlain(subcommands));
+        process.stdout.write(renderPlain(commands, options));
       }
       return;
     }
@@ -220,13 +231,14 @@ export const helpCmd: Subcommand = {
     }
 
     const name = (rest[0] as string).replace(/^--/, "");
-    const cmd = subcommands.find((c) => c.flag === `--${name}`);
-    if (!cmd) {
-      chrome(`Unknown subcommand: ${rest[0]}`);
+    const allFlags: CLIFlag[] = [...commands, ...options];
+    const flag = allFlags.find((f) => f.flag === `--${name}`);
+    if (!flag) {
+      chrome(`Unknown flag: ${rest[0]}`);
       process.exit(1);
       return;
     }
 
-    process.stdout.write(renderSubcommandHelp(cmd));
+    process.stdout.write(renderFlagHelp(flag));
   },
 };

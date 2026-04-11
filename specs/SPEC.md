@@ -60,7 +60,7 @@ Read the sub-spec for the area you care about. Each owns its architecture, reaso
 | Environment discovery, probes, tool watchlist, CWD files | [`discovery.md`](./discovery.md) |
 | Scoped memory facts | [`memory.md`](./memory.md) |
 | Piped stdin | [`piped-input.md`](./piped-input.md) |
-| Subcommands (`--log`, `--help`, `--version`) | [`subcommands.md`](./subcommands.md) |
+| CLI flags: subcommands (`--log`, `--help`, `--version`) and modifier options (`--verbose`, `--model`/`--provider`) | [`subcommands.md`](./subcommands.md) |
 | Verbose mode (stderr narrative) | [`verbose.md`](./verbose.md) |
 | Structured JSONL logging | [`logging.md`](./logging.md) |
 | Answer-mode voice | [`answer-voice.md`](./answer-voice.md) |
