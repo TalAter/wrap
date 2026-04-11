@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chrome, chromeRaw, shouldAnimate } from "../src/core/output.ts";
+import { chrome, chromeRaw, colorLevel, shouldAnimate } from "../src/core/output.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
 let stderr: MockStderr;
@@ -104,5 +104,62 @@ describe("shouldAnimate", () => {
 
   test("false when enabled=false", () => {
     expect(shouldAnimate({ enabled: false })).toBe(false);
+  });
+});
+
+describe("colorLevel", () => {
+  const envKeys = ["NO_COLOR", "COLORTERM", "TERM"];
+  let saved: Record<string, string | undefined>;
+  let origIsTTY: boolean | undefined;
+
+  beforeEach(() => {
+    saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
+    for (const k of envKeys) delete process.env[k];
+    origIsTTY = process.stdout.isTTY;
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+  });
+
+  afterEach(() => {
+    for (const k of envKeys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
+  });
+
+  test("0 (mono) when NO_COLOR", () => {
+    process.env.NO_COLOR = "1";
+    expect(colorLevel()).toBe(0);
+  });
+
+  test("0 when not a TTY", () => {
+    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+    expect(colorLevel()).toBe(0);
+  });
+
+  test("3 (truecolor) when COLORTERM=truecolor", () => {
+    process.env.COLORTERM = "truecolor";
+    process.env.TERM = "xterm-256color";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("3 when COLORTERM=24bit", () => {
+    process.env.COLORTERM = "24bit";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("2 (256) when TERM contains -256color", () => {
+    process.env.TERM = "xterm-256color";
+    expect(colorLevel()).toBe(2);
+  });
+
+  test("1 (16) when TERM=xterm with no extras", () => {
+    process.env.TERM = "xterm";
+    expect(colorLevel()).toBe(1);
+  });
+
+  test("0 when TERM=dumb", () => {
+    process.env.TERM = "dumb";
+    expect(colorLevel()).toBe(0);
   });
 });

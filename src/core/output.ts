@@ -15,6 +15,24 @@ export function supportsColor(): boolean {
 }
 
 /**
+ * 0 = no color, 1 = 16-color ANSI, 2 = 256-color, 3 = 24-bit truecolor.
+ *
+ * COLORTERM is the de-facto signal for truecolor but is dropped by
+ * ssh/sudo/tmux; fall back to parsing TERM for the 256-color suffix.
+ */
+export type ColorLevel = 0 | 1 | 2 | 3;
+
+export function colorLevel(): ColorLevel {
+  if (!supportsColor()) return 0;
+  const term = process.env.TERM ?? "";
+  if (term === "dumb") return 0;
+  const ct = process.env.COLORTERM;
+  if (ct === "truecolor" || ct === "24bit") return 3;
+  if (/-256(color)?/.test(term)) return 2;
+  return 1;
+}
+
+/**
  * Motion on top of color requires an interactive session where the
  * redraw is actually watched. CI logs replay frames as garbage, dumb
  * terminals can't move the cursor, and screen-reader / low-motion

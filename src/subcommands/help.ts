@@ -1,5 +1,12 @@
-import { bold, dim, fg, gradient, SHOW_CURSOR } from "../core/ansi.ts";
-import { chrome, chromeRaw, shouldAnimate, supportsColor } from "../core/output.ts";
+import { bold, dim, fgCode, gradient, SHOW_CURSOR } from "../core/ansi.ts";
+import {
+  chrome,
+  chromeRaw,
+  type ColorLevel,
+  colorLevel,
+  shouldAnimate,
+  supportsColor,
+} from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
 // ZX Spectrum rainbow
@@ -48,35 +55,38 @@ export function renderPlain(cmds: Subcommand[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-export function renderStyled(cmds: Subcommand[]): string {
+export function renderStyled(cmds: Subcommand[], level: ColorLevel = colorLevel()): string {
+  const flagPrefix = fgCode(...FLAG_COLOR, level);
+  const flagReset = flagPrefix ? "\x1b[0m" : "";
   const lines: string[] = [
     "",
-    gradient(BAR, SPECTRUM),
-    ...LOGO.map((l) => gradient(l, SPECTRUM)),
-    gradient(BAR, SPECTRUM),
+    gradient(BAR, SPECTRUM, undefined, undefined, level),
+    ...LOGO.map((l) => gradient(l, SPECTRUM, undefined, undefined, level)),
+    gradient(BAR, SPECTRUM, undefined, undefined, level),
     "",
     `  ${dim("natural language shell commands")}`,
     "",
     `  ${bold("Usage:")} w <prompt>`,
     "",
     `  ${bold("Flags:")}`,
-    ...formatFlags(cmds, (f) => fg(f, ...FLAG_COLOR)),
+    ...formatFlags(cmds, (f) => `${flagPrefix}${f}${flagReset}`),
     "",
   ];
   return `${lines.join("\n")}\n`;
 }
 
-function renderArtFrame(shinePos: number): string {
+function renderArtFrame(shinePos: number, level: ColorLevel): string {
   const lines = [
-    gradient(BAR, SPECTRUM, shinePos),
-    ...LOGO.map((l) => gradient(l, SPECTRUM, shinePos)),
-    gradient(BAR, SPECTRUM, shinePos),
+    gradient(BAR, SPECTRUM, shinePos, undefined, level),
+    ...LOGO.map((l) => gradient(l, SPECTRUM, shinePos, undefined, level)),
+    gradient(BAR, SPECTRUM, shinePos, undefined, level),
   ];
   return `${lines.join("\n")}\n`;
 }
 
 async function renderAnimated(cmds: Subcommand[]): Promise<void> {
-  const styled = renderStyled(cmds);
+  const level = colorLevel();
+  const styled = renderStyled(cmds, level);
   // Cursor row after writing = number of \n chars in styled
   const cursorRow = styled.split("\n").length - 1;
   const artStart = 1; // art begins after leading blank line
@@ -103,7 +113,7 @@ async function renderAnimated(cmds: Subcommand[]): Promise<void> {
 
     for (let frame = 0; frame < frames; frame++) {
       const shinePos = Math.round((frame / (frames - 1)) * (LOGO_WIDTH + 8)) - 4;
-      process.stdout.write(renderArtFrame(shinePos));
+      process.stdout.write(renderArtFrame(shinePos, level));
       // Cursor is now at artEnd
       await Bun.sleep(frameDelay);
 

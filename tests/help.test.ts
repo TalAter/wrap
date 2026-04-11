@@ -35,39 +35,52 @@ describe("renderPlain", () => {
 });
 
 describe("renderStyled", () => {
-  test("returns text with ANSI escape codes", () => {
-    const result = renderStyled(testCmds);
+  test("returns text with truecolor ANSI escape codes at level 3", () => {
+    const result = renderStyled(testCmds, 3);
     expect(result).toContain("\x1b[38;2;");
   });
 
+  test("returns 256-color indexed codes at level 2", () => {
+    const result = renderStyled(testCmds, 2);
+    expect(result).toContain("\x1b[38;5;");
+    expect(result).not.toContain("\x1b[38;2;");
+  });
+
+  test("returns basic 16-color codes at level 1", () => {
+    const result = renderStyled(testCmds, 1);
+    expect(result).not.toContain("\x1b[38;2;");
+    expect(result).not.toContain("\x1b[38;5;");
+    expect(result).toMatch(/\x1b\[3[0-7]m|\x1b\[9[0-7]m/);
+  });
+
   test("includes flags when stripped", () => {
-    const result = renderStyled(testCmds);
+    const result = renderStyled(testCmds, 3);
     const plain = stripAnsi(result);
     expect(plain).toContain("--foo");
     expect(plain).toContain("--bar [n]");
   });
 
   test("includes block character art", () => {
-    const result = renderStyled(testCmds);
+    const result = renderStyled(testCmds, 3);
     const plain = stripAnsi(result);
     expect(plain).toContain("█");
   });
 
   test("includes gradient bar", () => {
-    const result = renderStyled(testCmds);
+    const result = renderStyled(testCmds, 3);
     const plain = stripAnsi(result);
     expect(plain).toContain("─");
   });
 
   test("includes tagline", () => {
-    const result = renderStyled(testCmds);
+    const result = renderStyled(testCmds, 3);
     const plain = stripAnsi(result);
     expect(plain).toContain("natural language shell commands");
   });
 
   test("contains same flags as renderPlain", () => {
     const plain = renderPlain(testCmds);
-    const styled = stripAnsi(renderStyled(testCmds));
+    const styled = stripAnsi(renderStyled(testCmds, 3));
     // Every flag line from plain must appear in styled
     const flagLines = plain.split("\n").filter((l) => l.match(/^ {2}--/));
     expect(flagLines.length).toBe(testCmds.length);

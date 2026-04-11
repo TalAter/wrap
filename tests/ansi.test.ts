@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bold, dim, fg, gradient, stripAnsi } from "../src/core/ansi.ts";
+import { bold, dim, fg, fgCode, gradient, stripAnsi } from "../src/core/ansi.ts";
 
 const ESC = "\x1b[";
 
@@ -32,6 +32,27 @@ describe("stripAnsi", () => {
 
   test("returns plain text unchanged", () => {
     expect(stripAnsi("plain text")).toBe("plain text");
+  });
+});
+
+describe("fgCode", () => {
+  test("level 3 emits 24-bit truecolor", () => {
+    expect(fgCode(255, 0, 128, 3)).toBe(`${ESC}38;2;255;0;128m`);
+  });
+
+  test("level 2 emits 256-color indexed", () => {
+    const code = fgCode(255, 0, 0, 2);
+    expect(code).toMatch(/^\x1b\[38;5;\d+m$/);
+  });
+
+  test("level 1 emits basic 16-color SGR", () => {
+    // Pure red → nearest bright red (91) or red (31)
+    const code = fgCode(255, 0, 0, 1);
+    expect(code).toMatch(/^\x1b\[(3[0-7]|9[0-7])m$/);
+  });
+
+  test("level 0 emits empty string", () => {
+    expect(fgCode(255, 0, 0, 0)).toBe("");
   });
 });
 
@@ -90,6 +111,20 @@ describe("gradient", () => {
 
   test("shine preserves text content", () => {
     const result = gradient("hello", stops, 2);
+    expect(stripAnsi(result)).toBe("hello");
+  });
+
+  test("level 0 strips color entirely", () => {
+    const result = gradient("hello", stops, undefined, undefined, 0);
+    expect(result).toBe("hello");
+  });
+
+  test("level 1 emits only 16-color SGR codes", () => {
+    const result = gradient("hello", stops, undefined, undefined, 1);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
+    expect(result).not.toMatch(/\x1b\[38;2;/);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
+    expect(result).not.toMatch(/\x1b\[38;5;/);
     expect(stripAnsi(result)).toBe("hello");
   });
 });
