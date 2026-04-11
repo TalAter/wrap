@@ -55,6 +55,7 @@ describe("renderStyled", () => {
     const result = renderStyled(testCmds, 1);
     expect(result).not.toContain("\x1b[38;2;");
     expect(result).not.toContain("\x1b[38;5;");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape
     expect(result).toMatch(/\x1b\[3[0-7]m|\x1b\[9[0-7]m/);
   });
 

@@ -51,12 +51,14 @@ describe("fgCode", () => {
 
   test("level 2 emits 256-color indexed", () => {
     const code = fgCode(255, 0, 0, 2);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape
     expect(code).toMatch(/^\x1b\[38;5;\d+m$/);
   });
 
   test("level 1 emits basic 16-color SGR", () => {
     // Pure red → nearest bright red (91) or red (31)
     const code = fgCode(255, 0, 0, 1);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape
     expect(code).toMatch(/^\x1b\[(3[0-7]|9[0-7])m$/);
   });
 
@@ -96,6 +98,7 @@ describe("gradient", () => {
     const strip = stripAnsi(result);
     expect(strip).toBe("xxxxx");
     // Pull every 38;2;R;G;B from the output and check the mid-color
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
     const matches = [...result.matchAll(/\x1b\[38;2;(\d+);(\d+);(\d+)m/g)];
     expect(matches.length).toBeGreaterThanOrEqual(3);
     const mid = matches[2] as RegExpMatchArray;

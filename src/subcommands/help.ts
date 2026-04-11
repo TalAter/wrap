@@ -1,8 +1,8 @@
 import { bold, dim, fgCode, gradient, gradientCells, SHOW_CURSOR } from "../core/ansi.ts";
 import {
+  type ColorLevel,
   chrome,
   chromeRaw,
-  type ColorLevel,
   colorLevel,
   shouldAnimate,
   supportsColor,
