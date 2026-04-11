@@ -175,6 +175,20 @@ describe("--help", () => {
     expect(exitCode).toBe(1);
   });
 
+  test("--no-animation suppresses animation but still prints help", async () => {
+    const { exitCode, stdout } = await wrap("--help --no-animation");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Usage:");
+    expect(stdout).toContain("--help");
+  });
+
+  test("NO_COLOR yields plain output", async () => {
+    const { exitCode, stdout } = await wrap("--help", { NO_COLOR: "1" });
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain("\x1b[");
+    expect(stdout).toContain("Usage:");
+  });
+
   test("-h shows subcommand help", async () => {
     const { exitCode, stdout } = await wrap("-h --log");
     expect(exitCode).toBe(0);

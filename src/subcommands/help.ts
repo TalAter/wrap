@@ -1,5 +1,5 @@
 import { bold, dim, fg, gradient, SHOW_CURSOR } from "../core/ansi.ts";
-import { chrome, chromeRaw, isTTY } from "../core/output.ts";
+import { chrome, chromeRaw, shouldAnimate, supportsColor } from "../core/output.ts";
 import type { Subcommand } from "./types.ts";
 
 // ZX Spectrum rainbow
@@ -137,25 +137,30 @@ export const helpCmd: Subcommand = {
   run: async (args) => {
     const { subcommands } = await import("./registry.ts");
 
-    if (args.length === 0) {
-      if (isTTY()) {
+    const animationEnabled = !args.includes("--no-animation");
+    const rest = args.filter((a) => a !== "--no-animation");
+
+    if (rest.length === 0) {
+      if (shouldAnimate({ enabled: animationEnabled })) {
         await renderAnimated(subcommands);
+      } else if (supportsColor()) {
+        process.stdout.write(renderStyled(subcommands));
       } else {
         process.stdout.write(renderPlain(subcommands));
       }
       return;
     }
 
-    if (args.length > 1) {
+    if (rest.length > 1) {
       chrome("--help takes at most one argument.");
       process.exit(1);
       return;
     }
 
-    const name = (args[0] as string).replace(/^--/, "");
+    const name = (rest[0] as string).replace(/^--/, "");
     const cmd = subcommands.find((c) => c.flag === `--${name}`);
     if (!cmd) {
-      chrome(`Unknown subcommand: ${args[0]}`);
+      chrome(`Unknown subcommand: ${rest[0]}`);
       process.exit(1);
       return;
     }
