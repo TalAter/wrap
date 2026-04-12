@@ -1,4 +1,4 @@
-import { parse, type ParseError } from "jsonc-parser";
+import { type ParseError, parse } from "jsonc-parser";
 import { getWrapHome } from "../core/home.ts";
 import { readWrapFile } from "../core/home-dir.ts";
 
@@ -38,9 +38,7 @@ function loadFileConfig(wrapHome: string): Config {
   return parsed ?? {};
 }
 
-function loadEnvConfig(
-  env: Record<string, string | undefined>,
-): Config | undefined {
+function loadEnvConfig(env: Record<string, string | undefined>): Config | undefined {
   const raw = env.WRAP_CONFIG?.trim();
   if (!raw) return undefined;
 
@@ -51,9 +49,7 @@ function loadEnvConfig(
   }
 }
 
-export function loadConfig(
-  envOverrides: Record<string, string | undefined> = {},
-): Config {
+export function loadConfig(envOverrides: Record<string, string | undefined> = {}): Config {
   const env = { ...process.env, ...envOverrides };
   const wrapHome = getWrapHome(env);
   const fileConfig = loadFileConfig(wrapHome);

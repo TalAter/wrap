@@ -40,14 +40,14 @@ export function addToWatchlist(wrapHome: string, tools: string[]): void {
   const nominated = new Set(valid);
 
   // Update date for re-nominated tools, keep others unchanged
-  const updated = existing.map((
-    e,
-  ) => (nominated.has(e.tool) ? { ...e, added: today } : e));
+  const updated = existing.map((e) => (nominated.has(e.tool) ? { ...e, added: today } : e));
   const known = new Set(existing.map((e) => e.tool));
-  const additions = valid.filter((t) => !known.has(t)).map((tool) => ({
-    tool,
-    added: today,
-  }));
+  const additions = valid
+    .filter((t) => !known.has(t))
+    .map((tool) => ({
+      tool,
+      added: today,
+    }));
 
   writeWrapFile(
     WATCHLIST_FILE,

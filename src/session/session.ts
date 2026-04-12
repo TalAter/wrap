@@ -23,7 +23,7 @@ import { addRound, createLogEntry, type LogEntry } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
-import { mountDialog, preloadDialogModules } from "./dialog-host.ts";
+import { mountResponseDialog, preloadDialogModules } from "./dialog-host.ts";
 import { createNotificationRouter } from "./notification-router.ts";
 import { reduce } from "./reducer.ts";
 import { type AppEvent, type AppState, isDialogTag, type SessionOutcome } from "./state.ts";
@@ -201,7 +201,7 @@ export async function runSession(
       mountInProgress = true;
       try {
         if (inkReady) await inkReady;
-        router.setDialog(mountDialog({ state, dispatch }));
+        router.setDialog(mountResponseDialog({ state, dispatch }));
       } finally {
         mountInProgress = false;
       }

@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  appendWrapFile,
-  readWrapFile,
-  writeWrapFile,
-} from "../src/core/home-dir.ts";
+import { appendWrapFile, readWrapFile, writeWrapFile } from "../src/core/home-dir.ts";
 import { tmpHome } from "./helpers.ts";
 
 function withHome<T>(fn: (home: string) => T): T {

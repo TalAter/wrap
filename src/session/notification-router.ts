@@ -28,7 +28,7 @@ import type { DialogHost } from "./dialog-host.ts";
  *   const router = createNotificationRouter({ onProcessingChrome, isProcessing });
  *   const unsubscribe = router.subscribe();
  *   ...
- *   router.setDialog(host);    // after mountDialog
+ *   router.setDialog(host);    // after mountResponseDialog
  *   ...
  *   router.teardownDialog();   // before exec / on exit — unmounts + flushes
  *   unsubscribe();

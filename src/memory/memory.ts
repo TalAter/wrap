@@ -38,20 +38,14 @@ export function loadMemory(wrapHome: string): Memory {
 
 function memoryError(filePath: string): Error {
   return new Error(
-    `Memory error: ${
-      prettyPath(filePath)
-    } is broken — delete the file and run Wrap again.`,
+    `Memory error: ${prettyPath(filePath)} is broken — delete the file and run Wrap again.`,
   );
 }
 
 /** Write memory to disk. Creates directory lazily. Sorts keys alphabetically. */
 export function saveMemory(wrapHome: string, memory: Memory): void {
   const sorted: Memory = {};
-  for (
-    const [key, value] of Object.entries(memory).sort(([a], [b]) =>
-      a.localeCompare(b)
-    )
-  ) {
+  for (const [key, value] of Object.entries(memory).sort(([a], [b]) => a.localeCompare(b))) {
     sorted[key] = value;
   }
   writeWrapFile(MEMORY_FILE, JSON.stringify(sorted, null, 2), wrapHome);
@@ -89,19 +83,12 @@ export function parseInitResponse(response: string): Fact[] {
 }
 
 /** Load existing memory or initialize by probing the system and asking the LLM. */
-export async function ensureMemory(
-  provider: Provider,
-  wrapHome: string,
-): Promise<Memory> {
+export async function ensureMemory(provider: Provider, wrapHome: string): Promise<Memory> {
   const existing = loadMemory(wrapHome);
   if (Object.keys(existing).length > 0) {
     const total = countFacts(existing);
     const globalCount = (existing["/"] ?? []).length;
-    verbose(
-      `Memory: ${total} facts (${globalCount} global, ${
-        total - globalCount
-      } scoped)`,
-    );
+    verbose(`Memory: ${total} facts (${globalCount} global, ${total - globalCount} scoped)`);
     return existing;
   }
 
