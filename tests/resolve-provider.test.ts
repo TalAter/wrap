@@ -382,4 +382,38 @@ describe("resolveProvider — per-entry validation", () => {
       baseURL: undefined,
     });
   });
+
+  test("claude-code entry without model → valid (CLI picks its own default)", () => {
+    const config: Config = {
+      providers: { "claude-code": {} },
+      defaultProvider: "claude-code",
+    };
+    const result = resolveProvider(config, undefined, EMPTY_ENV);
+    expect(result).toEqual({
+      name: "claude-code",
+      model: undefined,
+      apiKey: undefined,
+      baseURL: undefined,
+    });
+  });
+
+  test("claude-code override with no stored model → valid", () => {
+    const config: Config = {
+      providers: { "claude-code": {} },
+      defaultProvider: "claude-code",
+    };
+    const result = resolveProvider(config, "claude-code", EMPTY_ENV);
+    expect(result.name).toBe("claude-code");
+    expect(result.model).toBeUndefined();
+  });
+
+  test("anthropic entry without model still errors", () => {
+    const config: Config = {
+      providers: { anthropic: { apiKey: "k" } },
+      defaultProvider: "anthropic",
+    };
+    expect(() => resolveProvider(config, undefined, EMPTY_ENV)).toThrow(
+      "Config error: no LLM configured. Edit ~/.wrap/config.jsonc.",
+    );
+  });
 });

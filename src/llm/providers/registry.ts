@@ -24,6 +24,12 @@ export type ProviderKind = "anthropic" | "openai-compat" | "claude-code";
 export type ProviderRegistration = {
   kind: ProviderKind;
   validate?: (entry: ProviderEntry) => string | null;
+  /**
+   * When true, resolveProvider accepts entries with no `model` field. Set for
+   * CLI providers (e.g. claude-code) whose underlying binary ships its own
+   * default model. AI-SDK providers always require a model.
+   */
+  modelOptional?: boolean;
 };
 
 export type ApiProvider = {
@@ -62,9 +68,7 @@ export type CliProvider = {
  */
 function requiresBaseURL(providerName: string) {
   return (entry: ProviderEntry): string | null =>
-    entry.baseURL
-      ? null
-      : `Config error: provider "${providerName}" requires baseURL.`;
+    entry.baseURL ? null : `Config error: provider "${providerName}" requires baseURL.`;
 }
 
 /**
@@ -146,7 +150,7 @@ export function getRegistration(name: string): ProviderRegistration {
   const api = API_PROVIDERS[name];
   if (api) return { kind: api.kind, validate: api.validate };
   const cli = CLI_PROVIDERS[name];
-  if (cli) return { kind: cli.kind };
+  if (cli) return { kind: cli.kind, modelOptional: true };
   return { kind: "openai-compat" };
 }
 

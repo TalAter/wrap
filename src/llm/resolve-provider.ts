@@ -1,5 +1,5 @@
 import type { Config } from "../config/config.ts";
-import { isKnownProvider, validateProviderEntry } from "./providers/registry.ts";
+import { getRegistration, isKnownProvider, validateProviderEntry } from "./providers/registry.ts";
 import { isTestProviderSelected, TEST_RESOLVED_PROVIDER } from "./providers/test.ts";
 import type { ResolvedProvider } from "./types.ts";
 
@@ -80,7 +80,9 @@ export function resolveProvider(
   if (validationError) throw new Error(validationError);
 
   const model = transientModel ?? entry.model;
-  if (!model) fail(`Config error: provider "${providerName}" has no model set in config.`);
+  if (!model && !getRegistration(providerName).modelOptional) {
+    fail(`Config error: provider "${providerName}" has no model set in config.`);
+  }
 
   return {
     name: providerName,

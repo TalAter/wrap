@@ -16,12 +16,17 @@ export type Provider = {
 /** Final state used by `initProvider` after override resolution. */
 export type ResolvedProvider = {
   name: string;
-  model: string;
+  /**
+   * Final model string. Optional because `claude-code` entries may omit it —
+   * the `claude` CLI picks its own default when `--model` is not passed.
+   * All other providers must have a model by the time they reach runtime.
+   */
+  model?: string;
   apiKey?: string;
   baseURL?: string;
 };
 
 /** Display label for a resolved provider — used in verbose log lines and UI. */
 export function formatProvider(resolved: ResolvedProvider): string {
-  return `${resolved.name} / ${resolved.model}`;
+  return `${resolved.name} / ${resolved.model ?? "(default)"}`;
 }

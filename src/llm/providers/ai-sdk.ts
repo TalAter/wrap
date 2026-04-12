@@ -11,6 +11,10 @@ import { getRegistration } from "./registry.ts";
  * anthropic / openai / openai-compat (ollama + unknown providers).
  */
 function buildModel(resolved: ResolvedProvider, isOpenAICompat: boolean): LanguageModel {
+  const { model } = resolved;
+  // resolveProvider guarantees non-CLI providers have a model; assert loudly
+  // rather than silently passing `undefined` to the SDK factory.
+  if (!model) throw new Error(`LLM error: provider "${resolved.name}" has no model.`);
   if (isOpenAICompat) {
     // @ai-sdk/openai requires an API key even for local endpoints that don't need one.
     // When a custom baseURL is set and no key is provided, use a placeholder so local
@@ -18,12 +22,12 @@ function buildModel(resolved: ResolvedProvider, isOpenAICompat: boolean): Langua
     return createOpenAI({
       apiKey: resolveApiKey(resolved.apiKey) ?? (resolved.baseURL ? "nokey" : undefined),
       baseURL: resolved.baseURL,
-    })(resolved.model);
+    })(model);
   }
   return createAnthropic({
     apiKey: resolveApiKey(resolved.apiKey),
     baseURL: resolved.baseURL,
-  })(resolved.model);
+  })(model);
 }
 
 /**

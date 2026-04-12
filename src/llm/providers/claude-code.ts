@@ -22,8 +22,7 @@ export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
         "",
         "--system-prompt",
         input.system,
-        "--model",
-        model,
+        ...(model ? ["--model", model] : []),
         "--no-session-persistence",
         // "--bare" skips config/MCP discovery (10x faster startup) but also
         // skips credential loading, so `claude` exits with "Not logged in".
