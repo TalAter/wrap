@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fetchCached } from "../src/core/cache.ts";
+import { fetchCached } from "../src/core/cache-dir.ts";
 import { tmpHome } from "./helpers.ts";
 
 let home: string;
