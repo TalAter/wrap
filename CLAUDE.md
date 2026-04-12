@@ -8,7 +8,6 @@ Wrap is a CLI tool that translates natural language into shell commands and runs
 - **Lint/format:** Biome + tsc (`bun run lint` = biome --write + typecheck)
 - **Test:** `bun test` (files in `tests/`). Run specific tests with `bun test tests/foo.test.ts`
 - **Full check:** `bun run check` = lint + test
-- **Build:** `bun build src/index.ts --compile --outfile wrap`
 
 ## Hard Rule: stdout is for useful output only
 
