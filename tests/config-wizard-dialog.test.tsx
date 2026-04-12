@@ -79,7 +79,8 @@ describe("ConfigWizardDialog", () => {
     const { lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("Select providers");
+    expect(text).toContain("Pick one or more");
+    expect(text).toContain("API Providers");
     expect(text).toContain("Anthropic");
     expect(text).toContain("setup wizard");
   });

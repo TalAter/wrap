@@ -1,4 +1,4 @@
-import { MultiSelect, Select } from "@inkjs/ui";
+import { Select } from "@inkjs/ui";
 import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
@@ -8,6 +8,7 @@ import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initWizardState, reduce, type WizardAction } from "../wizard/state.ts";
 import type { Badge } from "./border.ts";
+import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog } from "./dialog.tsx";
 import { TextInput } from "./text-input.tsx";
 
@@ -27,7 +28,7 @@ const WIZARD_BADGE: Badge = {
   label: "setup wizard",
 };
 
-const CONTENT_WIDTH = 48;
+const CONTENT_WIDTH = 70;
 const MAX_VISIBLE_OPTIONS = 8;
 
 export type WizardCallbacks = {
@@ -136,33 +137,29 @@ function ProviderSelectionScreen({
   dispatch: React.Dispatch<WizardAction>;
 }) {
   const hasAnyCli = Object.values(cliAvailable).some(Boolean);
-  // Track live selection count for the footer hint. MultiSelect manages its
-  // own internal state — we sync via onChange so the "⏎ to send" hint
-  // appears/disappears as the user toggles.
-  const [selectionCount, setSelectionCount] = useState(checked.size);
 
-  const apiOptions = useMemo(
-    () =>
-      Object.entries(API_PROVIDERS).map(([name, p]) => ({
-        label: p.displayName,
-        value: name,
-      })),
-    [],
-  );
+  const items = useMemo(() => {
+    const list: ChecklistItem[] = [{ type: "header", label: "API Providers" }];
+    for (const [name, p] of Object.entries(API_PROVIDERS)) {
+      list.push({ type: "option", label: p.displayName, value: name });
+    }
+    if (hasAnyCli) {
+      list.push({ type: "header", label: "Use your coding agent's subscription" });
+      for (const [name, p] of Object.entries(CLI_PROVIDERS)) {
+        if (cliAvailable[name]) {
+          list.push({ type: "option", label: p.displayName, value: name });
+        }
+      }
+    }
+    return list;
+  }, [hasAnyCli, cliAvailable]);
 
-  const cliOptions = useMemo(
-    () =>
-      hasAnyCli
-        ? Object.entries(CLI_PROVIDERS)
-            .filter(([name]) => cliAvailable[name])
-            .map(([name, p]) => ({ label: p.displayName, value: name }))
-        : [],
-    [hasAnyCli, cliAvailable],
-  );
+  const handleToggle = (value: string) => {
+    dispatch({ type: "toggle-provider", name: value });
+  };
 
-  const allOptions = useMemo(() => [...apiOptions, ...cliOptions], [apiOptions, cliOptions]);
-
-  const syncAndSubmit = (values: string[]) => {
+  const handleSubmit = (values: string[]) => {
+    // Sync reducer checked state with the submitted values
     for (const name of [...checked]) {
       if (!values.includes(name)) dispatch({ type: "toggle-provider", name });
     }
@@ -174,19 +171,13 @@ function ProviderSelectionScreen({
 
   return (
     <Box flexDirection="column">
-      <Text bold>Select providers:</Text>
+      <Text>Wrap needs at least one LLM provider configured.</Text>
       <Text> </Text>
-      <MultiSelect
-        options={allOptions}
-        defaultValue={[...checked]}
-        visibleOptionCount={Math.min(MAX_VISIBLE_OPTIONS, allOptions.length)}
-        onChange={(values) => setSelectionCount(values.length)}
-        onSubmit={syncAndSubmit}
-      />
+      <Checklist items={items} checked={checked} onToggle={handleToggle} onSubmit={handleSubmit} />
       <Text> </Text>
       <Text dimColor>
-        {"  Space to select"}
-        {selectionCount > 0 ? " │ ⏎ to send" : ""}
+        {"  Space to toggle"}
+        {checked.size > 0 ? " │ ⏎ to continue" : ""}
       </Text>
     </Box>
   );
@@ -261,7 +252,7 @@ function ModelPickerScreen({
   });
 
   const options = models.map((m) => ({
-    label: m.recommended ? `${m.id}  ✦` : m.id,
+    label: m.recommended ? `${m.id}  ✦ Recommended` : m.id,
     value: m.id,
   }));
 
