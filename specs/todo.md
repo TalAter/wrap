@@ -83,6 +83,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Visual identity — distinctive color scheme, emoji prefix, characterful messages
 - [ ] Answer rendering — colorful terminal markdown (syntax-highlighted code, bold/italic, lists). Blocked on TUI library.
 - [ ] TUI components — radio buttons, checkboxes, free text input, editable fields
+- [ ] High contrast mode — backgrounds on dialogs, high contrast colors
 
 ## Subcommands (see specs/subcommands.md)
 
