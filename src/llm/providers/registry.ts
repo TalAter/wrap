@@ -141,6 +141,19 @@ export function isKnownProvider(name: string): boolean {
   return name in API_PROVIDERS || name in CLI_PROVIDERS;
 }
 
+export function isCliProvider(name: string): boolean {
+  return name in CLI_PROVIDERS;
+}
+
+/**
+ * Drives whether the wizard shows an API-key screen. Only API providers
+ * that publish an `apiKeyUrl` qualify — ollama has no key, claude-code is
+ * CLI-backed.
+ */
+export function providerNeedsApiKey(name: string): boolean {
+  return !!API_PROVIDERS[name]?.apiKeyUrl;
+}
+
 /**
  * Get the registration for a provider name. Unknown names default to
  * `openai-compat` — they're treated as user-defined OpenAI-compatible

@@ -21,7 +21,7 @@ export const DEFAULT_MAX_ROUNDS = 5;
 export const DEFAULT_MAX_CAPTURED_OUTPUT_CHARS = 200_000;
 export const DEFAULT_MAX_PIPED_INPUT_CHARS = 200_000;
 
-const CONFIG_FILENAME = "config.jsonc";
+export const CONFIG_FILENAME = "config.jsonc";
 
 function loadFileConfig(wrapHome: string): Config {
   const raw = readWrapFile(CONFIG_FILENAME, wrapHome);
