@@ -2,7 +2,7 @@
 
 How Wrap renders interactive UI, and how the confirmation dialog is built. Canonical TUI vocabulary (dialog, action bar, risk badge, dialog state) lives in `SPEC.md` §Glossary. `dialog-style.sh` is the ANSI reference mockup.
 
-Code: `src/tui/dialog.tsx`, `src/tui/border.ts`, `src/tui/text-input.tsx`, `src/session/dialog-host.ts`, `src/session/notification-router.ts`.
+Code: `src/tui/dialog.tsx` (generic chrome), `src/tui/response-dialog.tsx` (command response), `src/tui/config-wizard-dialog.tsx` (wizard), `src/tui/border.ts`, `src/tui/text-input.tsx`, `src/session/dialog-host.ts`, `src/session/notification-router.ts`.
 
 ## Framework: Ink 7, lazy-loaded
 
@@ -13,7 +13,7 @@ Ink (React for CLIs) handles every interactive surface: the confirmation dialog,
 - Production-proven in Bun: Anthropic's own Claude Code CLI ships as a Bun-compiled Ink binary.
 - Ink 5+ required. Earlier versions have WASM/compile issues with `bun build --compile`. Yoga 3.2.x (Ink's layout engine) ships as embedded base64 WASM — no native bindings, works with `bun build --compile` (bun#6567, fixed June 2025).
 
-**Why lazy-loaded.** Ink + React + Yoga adds ~1MB to the compiled binary and ~50–100ms of init. The common path — a low-risk command — never needs interactive UI, so Ink must not be paid for on every invocation. Load is kicked off by `preloadDialogModules()` in `src/session/dialog-host.ts`, which runs in parallel with the first LLM call. By the time a dialog is needed the modules are cached and `mountDialog()` is synchronous.
+**Why lazy-loaded.** Ink + React + Yoga adds ~1MB to the compiled binary and ~50–100ms of init. The common path — a low-risk command — never needs interactive UI, so Ink must not be paid for on every invocation. Load is kicked off by `preloadDialogModules()` in `src/session/dialog-host.ts`, which runs in parallel with the first LLM call. By the time a dialog is needed the modules are cached and `mountResponseDialog()` is synchronous.
 
 ## Three output tiers
 
@@ -39,7 +39,7 @@ Wrap supports `cat file | w explain this`, so `process.stdin` is often consumed 
 
 ### Input buffer flush on mount
 
-Before the dialog becomes interactive, drain any buffered stdin. A stray Enter that the user hit while waiting for the LLM must not auto-confirm a dangerous command. The dialog component drains `stdin.read()` on first mount and on every state-tag transition (see `src/tui/dialog.tsx`). The drain is bounded (1024 reads) so a misbehaving stream can't hang the render.
+Before the dialog becomes interactive, drain any buffered stdin. A stray Enter that the user hit while waiting for the LLM must not auto-confirm a dangerous command. The response dialog component drains `stdin.read()` on first mount and on every state-tag transition (see `src/tui/response-dialog.tsx`). The drain is bounded (1024 reads) so a misbehaving stream can't hang the render.
 
 This is a safety invariant, not a nice-to-have.
 
@@ -155,7 +155,7 @@ Keybindings (identical for every risk level — simplified from the earlier tier
 
 ## Host lifecycle (`src/session/dialog-host.ts`)
 
-Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off in parallel with the first LLM call so `mountDialog()` is synchronous by the time the session needs it. `mountDialog` calls `ink.render(..., { stdout: process.stderr, patchConsole: false, alternateScreen: true })` and returns a `{ rerender, unmount }` handle. Ink handles alt-screen enter/exit and cursor restore automatically.
+Ink + React + both dialog components are lazy-loaded via `preloadDialogModules()`, kicked off in parallel with the first LLM call so `mountResponseDialog()` is synchronous by the time the session needs it. Both mount functions call `ink.render(..., { stdout: process.stderr, patchConsole: false, alternateScreen: true })` and return a `{ rerender, unmount }` handle (ResponseDialog) or `Promise<WizardResult | null>` (ConfigWizardDialog). Ink handles alt-screen enter/exit and cursor restore automatically.
 
 **Stderr, not stdout.** Ink is rendered to `process.stderr` because stdout is reserved for useful output (hard rule — see CLAUDE.md / SPEC.md). `patchConsole: false` because Wrap has its own stderr sink (the notification router, above).
 
@@ -196,10 +196,14 @@ Ink + React + `Dialog` are lazy-loaded via `preloadDialogModules()`, kicked off 
 
 ## File map
 
-- `src/tui/dialog.tsx` — `Dialog`, `ActionBar`, `KeyHints`, `BorderLine`, action item table
-- `src/tui/border.ts` — gradient interpolation, risk palettes + badges, top/bottom border segment builders
-- `src/tui/text-input.tsx` — editable text field used by editing / composing
-- `src/session/dialog-host.ts` — lazy module load + mount/rerender/unmount
+- `src/tui/dialog.tsx` — generic `Dialog` chrome (gradient bars, borders, badge, status)
+- `src/tui/response-dialog.tsx` — `ResponseDialog` (ActionBar, KeyHints, risk presets, action items)
+- `src/tui/config-wizard-dialog.tsx` — `ConfigWizardDialog` (multi-screen wizard)
+- `src/tui/checklist.tsx` — `Checklist` (multi-select with ✓/· indicators, group headers)
+- `src/tui/risk-presets.ts` — per-risk-level gradient stops + badge
+- `src/tui/border.ts` — gradient interpolation, badges, top/bottom border segment builders
+- `src/tui/text-input.tsx` — editable text field with masked mode for API keys
+- `src/session/dialog-host.ts` — lazy module load + `mountResponseDialog` + `mountConfigWizardDialog`
 - `src/session/notification-router.ts` — stderr sink, buffer, "is dialog up?" authority
 - `src/session/state.ts` — `AppState`, `AppEvent`, `ActionId`, `isDialogTag`
 - `src/session/reducer.ts` — pure state machine driving the dialog

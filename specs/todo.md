@@ -75,7 +75,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Configuration & First-Run
 
-- [ ] First-run config wizard TUI — provider selection, API key entry, model selection. See `specs/config-wizard.md`.
+- [x] First-run config wizard TUI — provider selection, API key entry, model selection. See `specs/config-wizard.md`.
 - [ ] Alias setup in wizard — scan available single-letter commands, detect shell, write glob-protected aliases to shell rc file
 - [ ] Full first-run flow: config wizard → alias setup → ready
 

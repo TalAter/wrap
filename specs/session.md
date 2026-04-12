@@ -91,7 +91,7 @@ src/
     state.ts             # AppState + AppEvent + SessionOutcome + ActionId + isDialogTag
     reducer.ts           # reduce(state, event) → AppState  (pure)
     session.ts           # runSession + pumpLoop + finaliseOutcome
-    dialog-host.ts       # preloadDialogModules + mountDialog + DialogHost
+    dialog-host.ts       # preloadDialogModules + mountResponseDialog + mountConfigWizardDialog
     notification-router.ts  # createNotificationRouter — dialog handle + buffer + routing
 ```
 
@@ -121,7 +121,7 @@ The session passes `showSpinner: true` for the initial loop (`thinking`) and `fa
 
 ### Dialog mount race + first-mount lazy import
 
-`mountDialog` requires `preloadDialogModules()` to have resolved at least once. The session kicks off the lazy import in parallel with the first LLM call so the await before the first dialog mount is free in practice.
+`mountResponseDialog` requires `preloadDialogModules()` to have resolved at least once. The session kicks off the lazy import in parallel with the first LLM call so the await before the first dialog mount is free in practice.
 
 `syncDialog` is async only for the very first mount. A `mountInProgress` flag gates a second `dispatch → syncDialog` from racing into the mount branch and creating two Ink apps. After the in-flight mount completes, the closure re-syncs to apply any state changes that happened during the await.
 

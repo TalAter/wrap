@@ -16,7 +16,7 @@ Detection is strictly positional: `w find files --verbose` is NL because `--verb
 
 ## Invariants
 
-- **Short-circuit.** Commands run before `loadConfig()`, provider init, `ensureMemory()`, cwd probing. They handle their own prerequisites and must not depend on NL-mode setup.
+- **Short-circuit.** Commands run before `ensureConfig()`, provider init, `ensureMemory()`, cwd probing. They handle their own prerequisites and must not depend on NL-mode setup.
 - **Stdout discipline.** Each command's "useful output" (help text, version string, log entries) goes to stdout. Everything else — errors, warnings, notices — uses `chrome()` (stderr/tty). See project-level stdout rule.
 - **No args → `--help`.** `w` with no argv and no piped stdin dispatches to help.
 - **Unknown flag → exit 1** with the specific flag name on stderr.
@@ -39,7 +39,7 @@ Flow position in `main.ts`:
 parseArgs(argv)           // strips options (--verbose, --model, ...)
   ├─ input.type === "flag" → dispatch(flag, args) → exit
   ├─ no input + no pipe    → dispatch("--help", []) → exit
-  └─ otherwise             → loadConfig → provider → memory → runSession
+  └─ otherwise             → ensureConfig → provider → memory → runSession
 ```
 
 ---

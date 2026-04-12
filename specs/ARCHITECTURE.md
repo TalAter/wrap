@@ -13,7 +13,7 @@ parseArgs / parseInput      { subcommand? prompt? pipedInput? }
     │
 dispatch subcommand?   ──→  yes: run subcommand, exit (see subcommands.md)
     │
-loadConfig                  ~/.wrap/config.jsonc + $WRAP_CONFIG (see llm.md)
+ensureConfig                config.jsonc exists? load it : run wizard (see config-wizard.md)
     │
 resolveProvider             config + overrides → ResolvedProvider (see llm.md)
     │
@@ -44,7 +44,7 @@ The query loop itself (one round at a time) lives in `src/core/`:
 - `runner.ts` — generator over rounds; enforces `maxRounds`, injects the last-round instruction (forbids `final: false`) on the final iteration.
 - `round.ts` — a single round: call LLM, parse, classify, execute.
 - `transcript.ts` — semantic conversation turns (`user`, `step`, `confirmed_step`, `candidate_command`, `answer`) with an attempt directive attached to the latest turn. Also owns `projectResponseForEcho`, the single place that decides which response fields the LLM sees in echoed turns.
-- `parse-response.ts`, `shell.ts`, `notify.ts`, `input.ts`, `output.ts`, `spinner.ts`, `piped-input.ts`, `verbose.ts`, `ansi.ts`, `paths.ts`, `home.ts` — pure-ish supporting modules.
+- `parse-response.ts`, `shell.ts`, `notify.ts`, `input.ts`, `output.ts`, `spinner.ts`, `piped-input.ts`, `verbose.ts`, `ansi.ts`, `paths.ts` — pure-ish supporting modules. Filesystem helpers (`readWrapFile`, `writeWrapFile`, `fetchCached`) live in `src/fs/`.
 
 **Why session is separate from core:** `core` is "run one round, return a result"; `session` is "loop those rounds while a dialog may be mounted and events may be dispatched." Separating them keeps the pure loop testable in isolation from the Ink/React surface. See `session.md` for the full rationale (and the six problems that drove the refactor).
 
@@ -73,7 +73,12 @@ src/
     verbose.ts                   notification → narrative stderr line
     spinner.ts                   animated chrome without Ink
     ansi.ts                      RGB interpolation + styling primitives
-    paths.ts, home.ts            path helpers
+    paths.ts                     path helpers
+
+  fs/                            ~/.wrap/ filesystem helpers
+    home.ts                      getWrapHome, readWrapFile, writeWrapFile, appendWrapFile
+    cache.ts                     fetchCached (TTL + disk cache)
+    temp.ts                      createTempDir + formatTempDirSection
 
   session/                       stateful loop + dialog lifecycle
     session.ts                   pumpLoop, runSession, post-transition hooks
@@ -83,11 +88,14 @@ src/
     notification-router.ts       dialog-aware notification routing
 
   tui/                           Ink presentation layer — see tui.md
-    dialog.tsx                   Dialog, ActionBar, KeyHints, BorderLine
-    border.ts                    gradient interpolation, risk palettes, badges
-    text-input.tsx               custom editable field (word jump, kill, yank)
+    dialog.tsx                   generic bordered chrome (gradient bars, badge, status)
+    response-dialog.tsx          command-response dialog (risk levels, action bar)
+    config-wizard-dialog.tsx     config wizard (multi-screen state machine)
+    checklist.tsx                multi-select with ✓/· indicators and group headers
+    risk-presets.ts              per-risk-level gradient stops + badge
+    border.ts                    gradient interpolation, badges
+    text-input.tsx               custom editable field (word jump, kill, yank, masked mode)
     cursor.ts                    Cursor abstraction for text-input
-    spinner.ts                   React hook variant of the spinner
 
   llm/                           see llm.md
     index.ts                     initProvider dispatch + runCommandPrompt
@@ -101,11 +109,17 @@ src/
       ai-sdk.ts                  Anthropic + OpenAI-compat via Vercel AI SDK
       claude-code.ts             Claude CLI subprocess provider
       test.ts                    Deterministic test mock
-      registry.ts                Provider kinds (anthropic, openai-compat, claude-code)
+      registry.ts                API_PROVIDERS + CLI_PROVIDERS taxonomy + wizard metadata
 
   config/                        see llm.md §Config Shape
     config.ts                    file + env → Config (shallow merge)
+    ensure.ts                    ensureConfig — wizard on missing config
     config.schema.json           JSON Schema for editor support
+
+  wizard/                        config wizard pure logic (see config-wizard.md)
+    state.ts                     WizardState + reducer (screen transitions)
+    models-filter.ts             models.dev filter/sort/recommendation
+    write-config.ts              buildConfig + serialize + write
 
   discovery/                     see discovery.md
     init-probes.ts               first-run probes (OS, shell)

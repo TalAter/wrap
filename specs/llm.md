@@ -21,7 +21,7 @@ All providers implement a single `runPrompt(input, schema?)` method. Without a Z
 
 ### Registry rationale
 
-Provider **taxonomy** lives in `src/llm/providers/registry.ts` — the single source of truth. `KNOWN_PROVIDERS` maps name → `{ kind, validate? }`. `kind` selects the runtime SDK family.
+Provider **taxonomy** lives in `src/llm/providers/registry.ts` — the single source of truth. `API_PROVIDERS` and `CLI_PROVIDERS` carry both runtime metadata (`kind`, optional `validate`) and wizard metadata (`displayName`, `apiKeyUrl`, etc.). `getRegistration(name)` falls through both maps. `kind` selects the runtime SDK family.
 
 Static imports for all provider packages. Wrap is a run-once CLI — startup cost is negligible, and static imports keep `initProvider` synchronous.
 
@@ -136,7 +136,7 @@ A transient model the resolved provider's API rejects is passed through to the S
 
 Two layers with a pure resolver between:
 
-1. **`loadConfig`** (`src/config/config.ts`) — owns `Config` and `ProviderEntry` types; returns file ⊕ `WRAP_CONFIG`.
+1. **`ensureConfig`** (`src/config/ensure.ts`) — if `config.jsonc` exists, loads it via `loadConfig`; otherwise runs the wizard (see `config-wizard.md`). `loadConfig` in `src/config/config.ts` owns `Config` and `ProviderEntry` types; returns file ⊕ `WRAP_CONFIG`.
 2. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure: `(Config, override, env) → ResolvedProvider`. Parses the override, applies smart resolution, runs per-entry validation via the registry, produces the final tuple.
 3. **`initProvider`** (`src/llm/index.ts`) — dispatches `ResolvedProvider` to the right factory via the registry's `kind`.
 
@@ -266,7 +266,7 @@ Messages are **not mutated** — the retry builds a fresh array. This matters be
 
 ## Extending
 
-**Adding a new built-in provider** = one entry in `KNOWN_PROVIDERS`. **Adding a brand-new SDK family** = new `kind` + new branch in `initProvider` + new factory file — all obvious.
+**Adding a new built-in provider** = one entry in `API_PROVIDERS` or `CLI_PROVIDERS`. **Adding a brand-new SDK family** = new `kind` + new branch in `initProvider` + new factory file — all obvious.
 
 ---
 

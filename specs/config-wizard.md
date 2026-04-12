@@ -1,324 +1,91 @@
 # Config Wizard
 
-Interactive TUI that runs on first launch to write a valid `~/.wrap/config.jsonc`. Replaces the current generic `Config error: no LLM configured` dead-end for new users.
+Interactive TUI that runs on first launch to write a valid `~/.wrap/config.jsonc`. Replaces the dead-end `Config error: no LLM configured` message for new users.
 
-## Triggers
+> **Status:** Implemented. All screens, state machine, provider registry, model filter, config writer, and `ensureConfig()` wiring are complete.
 
-- **First-run** — `~/.wrap/config.jsonc` is missing. `ensureConfig()` detects this and launches the wizard before any LLM code path runs. After the wizard saves, execution continues with the user's original query (`w find big files` runs their query once config is written).
+## Architecture
 
-## Scope
+`ensureConfig()` in `src/config/ensure.ts` replaces `loadConfig()` in `main.ts`. If `config.jsonc` exists (or `WRAP_CONFIG` env is set), it returns the loaded config. Otherwise it launches the wizard, writes the file, and returns fresh config. Cancel → `process.exit(0)`.
 
-**In scope:** provider selection, API key entry, model selection, writing a fresh `config.jsonc` with `$schema` + `providers` + `defaultProvider`.
+### Component structure
 
-**Out of scope for v1:**
-- **`w --config` / `w --init` flags** — first-run only. Re-running the wizard over an existing config needs preselect-from-current-state semantics to avoid footgun behavior. See [Future work](#future-work-explicitly-deferred). v1 users who want to change their config hand-edit `config.jsonc`.
-- **Alias setup** — separate spec.
-- **"More providers…" picker** and any freeform "Custom provider" entry — v1 is the curated shortlist + detected `claude-code` only. Users who need non-shortlist providers hand-edit `config.jsonc`.
-- **Editing advanced fields** (`maxRounds`, `verbose`, `maxCapturedOutputChars`, `maxPipedInputChars`) — users edit `config.jsonc` directly.
-- **API key validation** — the wizard never calls the provider API. Invalid keys fail at first real use.
-- **Env-var detection + Tab-to-fill.** Nice-to-have that lets users who have `$ANTHROPIC_API_KEY` already set in their shell skip the paste. Defer — paste flow works for everyone for v1.
+- **`Dialog`** (`src/tui/dialog.tsx`) — generic bordered-chrome. Gradient bars, top/bottom borders, optional badge, `bottomStatus`, terminal centering. Knows nothing about content.
+- **`ConfigWizardDialog`** (`src/tui/config-wizard-dialog.tsx`) — the wizard. Multi-screen state machine rendered inside `<Dialog>` with wizard-specific gradient stops and `🧙 setup wizard` badge.
+- **`Checklist`** (`src/tui/checklist.tsx`) — custom multi-select with `✓`/`·` indicators and group headers. Used for Screen 1 provider selection.
 
-## Integration
+Mounted via `mountConfigWizardDialog()` in `src/session/dialog-host.ts`, which returns `Promise<WizardResult | null>`. Ink + React + both dialog components are lazy-loaded via `preloadDialogModules()`.
 
-Add `ensureConfig()` in `src/config/config.ts` (or a new `src/config/ensure.ts`). It calls `loadConfig()` internally: if the file exists and parses, returns the loaded config; otherwise runs the wizard, writes the file, loads the config, and returns it. `main.ts` calls `ensureConfig()` instead of `loadConfig()`. No other main-flow changes.
+### State machine
 
-On user cancel (Esc / Ctrl+C from the wizard), `ensureConfig()` calls `process.exit(0)` directly — there's no sensible config to return, and the user's original query is abandoned. This keeps the return type unconditionally `Config` for callers.
+Pure reducer in `src/wizard/state.ts`. Top-level fields (`modelsData`, `pickedProviders`, `builtEntries`, `defaultProvider`, `loopIndex`) hold accumulated state; a tagged `screen` union drives rendering:
 
-## Component vocabulary
+`selecting-providers` → `loading-models` → per-provider loop (`entering-key` → `picking-model` | `disclaimer`) → `picking-default` (if >1 provider) → `done`
 
-Three TUI components, introduced here so the rest of the spec can reference them:
+Reducer is unit-tested without Ink.
 
-- **`Dialog`** (new, `src/tui/dialog.tsx`) — the generic bordered-chrome component. Top border with optional badge, gradient side bars, bottom border with optional status text, centers on the terminal, knows nothing about what's inside. Both specific dialogs below render their content inside a `<Dialog>`.
-- **`ResponseDialog`** (`src/tui/response-dialog.tsx`) — the existing command-response confirmation component, currently named `Dialog` in `src/tui/dialog.tsx`. Renamed as part of the extraction. Knows about commands, risk levels, explanations, plans, the output slot, and the action bar. Tightly coupled to `AppState`.
-- **`ConfigWizardDialog`** (`src/tui/config-wizard-dialog.tsx`) — the new wizard component. Multi-screen state machine (provider selection → per-provider loop → default picker). Renders inside `<Dialog>` with wizard-specific gradient stops and badge.
+## Provider data
 
-A "dialog" in Wrap's vocabulary is any bordered panel that presents data or collects a decision. The generic `Dialog` component is the shared chrome; `ResponseDialog` and `ConfigWizardDialog` are two specific flavors that wrap their content inside it. Concrete props and extraction mechanics are in [TUI implementation notes](#tui-implementation-notes).
+### Registry
 
-## Provider data sources
+Source of truth: `src/llm/providers/registry.ts`.
 
-### API Providers
+Two maps: `API_PROVIDERS` (anthropic, openai, openrouter, groq, mistral, ollama) and `CLI_PROVIDERS` (claude-code). Object key order = display order. Each API provider carries `displayName`, `kind`, optional `apiKeyUrl`, `apiKeyPlaceholder`, `baseURL`, `recommendedModelRegex`. CLI providers carry `probeCmd` for `Bun.which()` detection.
 
-Two sources, merged at runtime:
+**Why these providers:** Anthropic/OpenAI are primary. OpenRouter/Groq/Mistral all route via `openai-compat` kind with custom `baseURL`. Ollama is local-first. Google is deferred — its OpenAI-compat endpoint lacks structured-output support, requiring `@ai-sdk/google`. DeepSeek is excluded — only supports `json_object`, not `json_schema`.
 
-1. **Curated shortlist** — hardcoded. Priority order, API-key URLs, placeholders, recommendation regexes. See [Curated shortlist](#curated-shortlist). The hardcoded providers get extra data (eg latest models) from:
-2. **https://models.dev/api.json** — fetched and cached; provides the model list per provider, plus optional metadata (`env[]`, `doc`, `api`, `limit.context`, `cost`, `release_date`, `tool_call`, `modalities`, `status`). See [models.dev integration](#modelsdev-integration).
+### models.dev
 
-### CLI Providers
+URL `https://models.dev/api.json` cached at `~/.wrap/cache/models.dev.json` with 24h TTL via `fetchCached()` in `src/fs/cache.ts`. Fetched synchronously between Screen 1 and Screen 2 (loading spinner on bottom border). Offline first-run with no cache → clean error exit.
 
-CLI tool providers (v1: only `claude-code`) come from `CLI_PROVIDERS` — detected at wizard launch via `Bun.which(probeCmd)`.
+**Filter** (in `src/wizard/models-filter.ts`): text input+output modalities, `status !== "deprecated"`, `tool_call === true` (proxy for "modern chat model" — `structured_output` is under-reported in models.dev). Sorted by `release_date` desc.
 
-## Curated shortlist
-
-> **Status:** Implemented. Source of truth: `src/llm/providers/registry.ts` (`API_PROVIDERS` + `CLI_PROVIDERS`).
-
-Two hardcoded maps keyed by provider id. API providers carry runtime metadata (`kind`, optional `validate`) plus wizard metadata (`displayName`, `apiKeyUrl`, `apiKeyPlaceholder`, fallback `baseURL`, `recommendedModelRegex`). CLI providers carry `displayName`, `kind`, and `probeCmd`. `getRegistration(name)` falls through both maps and defaults to `openai-compat` for unknown ids.
-
-`Record<string, T>` object-literal key order is stable in modern JS/TS, so the declared order of `API_PROVIDERS` doubles as the display order on Screen 1.
-
-### Routing per shortlist provider
-
-Verified against the AI SDK docs:
-
-- **Anthropic, OpenAI, Ollama, OpenRouter, Groq, Mistral** — all work through existing code paths. OpenRouter/Groq/Mistral route via the existing `openai-compat` kind with a custom `baseURL`, full `response_format: json_schema` strict mode support.
-- **Google (Gemini)** — commented out in v1. Its OpenAI-compat endpoint has incomplete structured-output support, so enabling it requires `@ai-sdk/google` and a new `kind: "google"` branch in `src/llm/providers/registry.ts` + factory wiring in `src/llm/providers/ai-sdk.ts`. Tracked in Future work.
-- **DeepSeek** — OpenAI-compatible but only supports `json_object`, not `json_schema`. Wrap's `Output.object({ schema })` path needs strict JSON schema, so DeepSeek is **not usable with Wrap today** and is deliberately absent from `API_PROVIDERS`. Revisit if DeepSeek adds strict mode.
-
-## models.dev integration
-
-### Fetch & cache
-
-- **URL:** `https://models.dev/api.json` (~1.7MB, 110 providers, ~4168 models).
-- **Cache path:** `~/.wrap/cache/models.dev.json` (new `cache/` subdir under `$WRAP_HOME`).
-- **TTL:** 24h. Fresh cache is used as-is; otherwise refetch.
-- **Generic cache helper.** `fetchCached({url, path, ttlMs})` in `src/fs/cache.ts`. Semantics (source of truth: the file):
-  - Fresh: cache file exists and `mtime + ttlMs > now` → `{ stale: false, content }` without hitting the network.
-  - Miss / expired: fetch `url`, write via `writeWrapFile(path, ...)`, return `{ stale: false, content }`.
-  - Fetch fails with cache present: return `{ stale: true, content }` — caller decides whether to use it.
-  - Fetch fails with no cache: throws.
-
-  `stale` is named from the caller's perspective: `true` means "the network call failed and I'm serving you the last known copy." Wizard uses it to log via `verbose()` but otherwise treats the content as usable.
-
-### Fetch timing
-
-Synchronous between Screen 1 (provider selection) and Screen 2 (per-provider loop). After the user submits Screen 1, the wizard transitions to the `loading-models` screen state while `fetchCached` resolves. The `Loading models list…` status is rendered on the **bottom border** via `Dialog`'s existing `bottomStatus` prop (same mechanism `ResponseDialog` uses for its "Reticulating splines..." followup status) — no new prop needed. On cache hit (the common case after first run) the spinner flashes for a few ms; on cache miss it's the network round-trip.
-
-### Offline / fetch failure
-
-If `fetchCached` throws (no network and no cache on first run), abort with `Config error: could not load model list from https://models.dev/api.json. Check your connection and try again.` Exits 1. Next run retries. Acceptable first-run cost — users installing Wrap have just pulled a binary from the network, so network availability is a safe first-run precondition. A bundled snapshot is tracked in [Future work](#future-work-explicitly-deferred) if offline first-run becomes a real pain point.
-
-### Model filter
-
-Applied to the models list returned for a provider before display:
-
-1. `modalities.input` includes `"text"` and `modalities.output` includes `"text"`.
-2. `status !== "deprecated"`.
-3. `tool_call === true`. *(Wrap uses structured JSON output, not tool calling, but `tool_call: true` is a reliable "modern chat model" proxy in models.dev since `structured_output` is under-reported. Revisit if this hides legitimately-working models.)*
-
-Sort the filtered list by `release_date` descending (newest first).
-
-### Recommendation
-
-If the provider's `recommendedModelRegex` matches any model in the filtered list, pick the **newest matching** model (highest `release_date` among matches), move only that one to the top of the list, and mark only it with a `✦` (U+2726, BLACK FOUR POINTED STAR — renders reliably in monospace, visually distinct from asterisk). Other matching models stay in their `release_date`-sorted positions with no marker. If the regex matches nothing (or no regex is defined), don't mark anything — the list is just `release_date`-sorted and the user picks manually. The first row is pre-highlighted either way.
+**Recommendation:** If `recommendedModelRegex` matches, the newest match is promoted to row 0 and marked with `✦`. Others stay in release_date order.
 
 ## Screen flow
 
-Four screens, linear, no back navigation. Rendered to stderr via Ink (same pattern as `src/session/dialog-host.ts` → `preloadDialogModules`). `ConfigWizardDialog` lives in `src/tui/config-wizard-dialog.tsx` as its own component tree but renders inside the shared `<Dialog>` and reuses `TextInput`, border styling, and the preload plumbing.
+Four screens, linear, no back navigation.
 
-### Screen 1 — Provider selection
+**Screen 1 — Provider selection.** Custom `Checklist` with "API Providers" and "CLI Tools" group headers. Intro prose orients first-time users. `⏎ to continue` hint hidden until ≥1 selected. CLI section hidden if no binaries detected.
 
-Multi-select checklist, two groups with headers.
+**Screen 2 — Per-provider loop.** For each selected provider in registry order:
+- **2a (API key):** Masked `TextInput`, placeholder from registry. Skipped for ollama (no key) and CLI providers.
+- **2b (Model selection):** `@inkjs/ui` `Select` with filtered/sorted models.dev list. `Select` has no `onSubmit` — Enter-to-confirm via `useInput` + local `onChange` state.
+- **2c (CLI disclaimer):** Blocking message about routing through the CLI. Enter accepts; Esc drops the provider (bounces to Screen 1 if it was the only pick).
 
-```
-┌─────────────────────────────────┐
-│ Select providers:               │
-│                                 │
-│  API Providers                  │
-│   [x] Anthropic                 │
-│   [ ] OpenAI                    │
-│   [ ] OpenRouter                │
-│   [ ] Groq                      │
-│   [ ] Mistral                   │
-│   [ ] Ollama (local)            │
-│                                 │
-│  CLI Tools                      │
-│   [ ] Claude Code               │
-│                                 │
-│    Space to select │ ⏎ to send  │
-└─────────────────────────────────┘
-```
+**Screen 3 — Default provider.** Skipped if only one provider. `Select` list of configured providers.
 
-- **Keys:** `↑`/`↓` move, `Space` toggles, `Enter` submits. `Esc` / `Ctrl+C` abort.
-- **CLI tools section** only appears if at least one `which` probe succeeds. Individual CLI providers whose binary isn't resolved by `which` render as greyed-out and unselectable, labeled `(not installed)`. For v1, only `claude-code` exists in `CLI_PROVIDERS`, so the section is hidden entirely if `which claude` doesn't resolve.
-- **Footer hint:** `Space to select │ ⏎ to send` — but the `⏎ to send` half is hidden while zero checkboxes are ticked, and `Enter` is a no-op in that state. Prevents the empty-selection error case entirely.
-- **Ordering:** `API_PROVIDERS` in the declared priority order, then `CLI_PROVIDERS`. No "detected-first" reordering — the order is stable across runs.
-
-### Screen 2 — Per-provider loop
-
-For each selected provider in `API_PROVIDERS` order (then any selected CLI providers), run the sub-screens back to back.
-
-#### 2a — API key
-
-Skipped entirely for providers without an `apiKeyUrl` (Ollama) and for `claude-code` (see Screen 2c).
-
-```
-┌─────────────────────────────────┐
-│ Anthropic API key               │
-│ Get one: https://console...     │
-│                                 │
-│ [sk-ant-api03-_______________]  │
-│                                 │
-│   ⏎ to continue                 │
-└─────────────────────────────────┘
-```
-
-- **Input:** `TextInput` in masked mode (new prop — renders `•` for every non-placeholder char). Placeholder comes from `apiKeyPlaceholder`; if missing, no placeholder.
-- **Submit:** Enter submits. Trim leading/trailing whitespace on submit (users paste keys with trailing newlines). Empty submission does nothing. The literal key is written as `apiKey: "<literal>"` into config.jsonc.
-- **Paste:** standard Ink `useInput` character delivery. Ink delivers pasted strings as a single multi-char `input` to `useInput`, and `Cursor.insert()` handles multi-char inserts already.
-
-#### 2b — Model selection
-
-```
-┌─────────────────────────────────┐
-│ Anthropic model                 │
-│                                 │
-│  ▶ claude-sonnet-4-6         ✦  │
-│    claude-opus-4-6              │
-│    claude-haiku-4-5             │
-│    claude-sonnet-4-5            │
-│    ...                          │
-│                                 │
-│   ↑↓ to move │ ⏎ to continue    │
-└─────────────────────────────────┘
-```
-
-- Single-select with viewport scrolling. Arrow keys move, Enter confirms.
-- `✦` marks the regex-recommended model if one exists; it's placed at row 0 regardless of its `release_date` rank. The rest of the list stays sorted by `release_date` desc.
-- First row is pre-highlighted. Pressing Enter immediately on the provider-selection screen and accepting defaults all the way through yields a working config with the newest recommended model.
-- Filtered list being empty for a curated provider shouldn't happen. If it does, it's a bug — let it throw into the top-level error handler rather than specifying a fallback UI.
-
-#### 2c — Claude Code (no key, no model)
-
-For any provider in `CLI_PROVIDERS` (v1: only `claude-code`):
-- **No API key step** (2a skipped) — the CLI owns its own credentials.
-- **No model step** (2b skipped). The wizard writes the provider entry with no `model` field; the CLI picks its own default at runtime. CLI tools don't expose a reliable "list my models" command and their valid IDs change between versions — letting the CLI own the choice keeps Wrap out of that maintenance loop. Users who want a specific model hand-edit `config.jsonc`. (This is why Implementation order step 5 patches `resolveProvider` to allow claude-code entries to have no `model` — without the fix, the wizard's own output would fail to resolve.)
-- Before writing: display the **CLI terms-of-service disclaimer** inline as a blocking full-screen message:
-
-  ```
-  Wrap will route your queries through the `claude` CLI instead
-  of calling the Anthropic API directly. This is slower, and your
-  prompts flow through Claude Code under its own terms — bring
-  your own subscription and credentials.
-
-   ⏎ to accept │ Esc to skip this provider
-  ```
-
-  Pressing Enter accepts. Pressing Esc drops claude-code from the selection and continues the loop with any remaining providers. If claude-code was the *only* selection, dropping it would leave zero providers configured — in that case, Esc bounces the user back to Screen 1 (provider selection) instead of exiting, so they can pick something else.
-
-### Screen 3 — Default provider
-
-Skipped if exactly one provider was configured. Otherwise:
-
-```
-┌─────────────────────────────────┐
-│ Which provider should be the    │
-│ default?                        │
-│                                 │
-│  ▶ anthropic                    │
-│    openai                       │
-│    ollama                       │
-│                                 │
-│   ↑↓ to move │ ⏎ to select      │
-└─────────────────────────────────┘
-```
-
-- List is the providers that were just configured.
-- `defaultProvider` is required — no skip option. The chosen value is written verbatim.
-
-### Screen 4 — Done
-
-No screen. The wizard unmounts cleanly (same teardown as the dialog), writes config, then calls `chrome("Configuration saved", "🧠")` from `src/core/output.ts` (the helper prepends the icon — do not bake it into the text). Control returns to `ensureConfig()`.
+**Screen 4 — Done.** No visible screen. Writes config, calls `chrome("Configuration saved", "🧠")`, returns to `ensureConfig()`.
 
 ## Write semantics
 
-### Filesystem preconditions
+The wizard writes via `writeWizardConfig()` in `src/wizard/write-config.ts`:
 
-> **Status:** Implemented. Source of truth: `src/fs/home.ts`.
+1. `config.jsonc` — `$schema` + `providers` + `defaultProvider`, 2-space indent.
+2. `config.schema.json` — copy of `src/config/config.schema.json` for editor support, bundled via static JSON import (survives `bun build --compile`), overwritten every wizard run.
+3. `cache/models.dev.json` — written indirectly by `fetchCached`.
 
-On a fresh install, `~/.wrap/` does not exist and the wizard is the first thing to write to it. All `~/.wrap/*` I/O flows through `src/fs/home.ts` (`readWrapFile` / `writeWrapFile` / `appendWrapFile`), which lazily creates parent directories on every write. Memory, logging, watchlist, and config read use these helpers — the watchlist missing-parent crash is gone as a side effect.
-
-#### What the wizard needs
-
-The wizard writes three files, all via `writeWrapFile`:
-
-1. **`config.jsonc`** — the serialized config.
-2. **`config.schema.json`** — a copy of `src/config/config.schema.json` so the `"$schema": "./config.schema.json"` reference resolves for users' editors. Overwritten on every successful config write to stay in sync with the installed Wrap version. Bundled via static JSON import (`import schema from "../config/config.schema.json" with { type: "json" }`) — `Bun.file` on a path won't survive `bun build --compile`.
-3. **`cache/models.dev.json`** — written indirectly by `fetchCached` (see [Generic cache helper](#generic-cache-helper)). The wizard never touches the cache directory itself.
-
-### First run
-
-v1 is first-run only — `~/.wrap/config.jsonc` does not exist and the wizard writes it fresh via `JSON.stringify(..., null, 2)` through `writeWrapFile("config.jsonc", ...)`. Three top-level keys: `$schema` (pointing at `./config.schema.json` for editor support), `providers` (exactly what the wizard configured), and `defaultProvider` (the chosen one). Advanced fields are not written.
-
-**Pre-write validation.** Before serializing, run each accumulated entry through `validateProviderEntry(name, entry)` from `src/llm/providers/registry.ts`. Any returned error propagates to the top-level `main.ts` catch (same path as other `Config error:` messages). Cheap insurance against wizard logic bugs producing a config that would immediately fail `resolveProvider`.
-
-### Config file format after a minimal first run
-
-```jsonc
-{
-  "$schema": "./config.schema.json",
-  "providers": {
-    "anthropic": {
-      "apiKey": "sk-ant-api03-gvlJ...",
-      "model": "claude-sonnet-4-6"
-    }
-  },
-  "defaultProvider": "anthropic"
-}
-```
-
-When the provider needs a `baseURL` (Ollama, OpenRouter), it's written as a third field.
+Pre-write validation: every entry passes `validateProviderEntry()` before serialization. CLI providers write an empty entry (`{}`); `resolveProvider` allows this via `modelOptional` flag on CLI registrations.
 
 ## Cancellation
 
-- **Esc / Ctrl+C at any screen:** abort. No file written. No partial save. Any query the user passed on the command line is dropped with a silent exit (no error — the wizard cleanly unmounted). The next `w` invocation re-detects the missing config and re-launches the wizard; no need to instruct the user how to retry.
-- **No back navigation.** Wizard is short (~4 screens). Misclicks require re-running. Keeps the state machine simple.
+Esc at any screen (except disclaimer, where Esc skips the provider) → abort, no file written, silent exit 0. Next `w` invocation re-triggers the wizard.
 
-## Error handling
+## Design decisions
 
-On any unrecoverable wizard error, unmount the Ink surface cleanly and let the error propagate to `main.ts`'s existing top-level `catch`, which already routes through `chrome(e.message)` to stderr and exits 1 (see `src/main.ts:89-92`). No in-dialog error chrome, no inline red text. Matches how every other error in Wrap is reported.
+- **No back navigation.** Wizard is 4 screens max. Keeps state machine simple; misclicks require re-running.
+- **No API key validation.** The wizard never calls the provider API. Invalid keys fail at first real use.
+- **`tool_call` as filter proxy.** models.dev under-reports `structured_output`. `tool_call: true` reliably identifies modern chat models. May need revisiting if it hides usable models.
+- **CLI providers skip model selection.** CLI tools don't expose a reliable model list and their valid IDs change between versions. Letting the CLI own the default keeps Wrap out of that maintenance loop.
+- **Literal API keys in config.** v1 writes raw keys. Env-var `$VAR` reference form is deferred (see Future work).
+- **First-run only.** Re-running over existing config needs preselect semantics to avoid footgun overwrites.
 
+## Future work
 
-## TUI implementation notes
-
-### Framework and mounting
-
-Ink, lazy-loaded through the existing `src/session/dialog-host.ts` plumbing. Today `preloadDialogModules()` preloads Ink + React + the command-response component (named `Dialog` pre-rename) — after the extraction it preloads `ResponseDialog` and `ConfigWizardDialog` side by side. Mount with `render(<ConfigWizardDialog/>, { stdout: process.stderr, patchConsole: false, alternateScreen: true })`. `mountDialog` is renamed to `mountResponseDialog`; add a sibling `mountConfigWizardDialog`. Stdin-drain-on-mount and `/dev/tty` fallback for piped stdin follow the same pattern.
-
-### Generic `<Dialog>` chrome
-
-> **Status:** Implemented. Source of truth: `src/tui/dialog.tsx`, `src/tui/response-dialog.tsx`, `src/tui/risk-presets.ts`, `src/tui/border.ts`.
-
-The command-response component was mostly tied to its own state, but the chrome around the content (terminal-centered outer layout, width clamping, top/bottom borders, gradient bars) is pure layout and applies verbatim to the wizard. It lives in `src/tui/dialog.tsx` as a data-driven component that takes `gradientStops`, an optional `badge`, `bottomStatus`, `naturalContentWidth`, and children. It knows nothing about risk levels, wizards, or any other "kind of dialog" notion — callers own the semantics.
-
-`border.ts` was adjusted in the same refactor: `topBorderSegments(totalWidth, stops, badge?)` is data-driven, no preset lookup. The risk-level preset map moved to `src/tui/risk-presets.ts`; `ResponseDialog` reads the preset based on the current response's `riskLevel` and passes `stops` + `badge` into `<Dialog>`.
-
-**Still unbuilt (stage 7):** `ConfigWizardDialog` will hardcode its own `WIZARD_STOPS` and `WIZARD_BADGE = { fg, bg, icon: "🧙", label: "setup wizard" }`. The icon is plain `🧙` rather than a skin-tone + ZWJ variant — multi-code-point variants render inconsistently across terminals.
-
-### List components: `@inkjs/ui`
-
-Ink 7 has no built-in select/multi-select. Add `@inkjs/ui` (v2.0.0, maintained, Ink ≥5 peer dep) as a new dependency when starting implementation. It exports both components the wizard needs:
-
-- **`MultiSelect`** — Screen 1 provider checklist. Props: `options: {label, value}[]`, `defaultValue?: string[]`, `visibleOptionCount?: number`, `onChange(values)`, `onSubmit(values)`. Space toggles, Enter submits, arrows move, native viewport scrolling. Directly fits the checklist screen's requirements.
-- **`Select`** — Screen 2b model list and Screen 3 default picker. Same `visibleOptionCount` prop. **Gotcha:** `Select` fires `onChange` on arrow navigation — it has no `onSubmit`. To get Enter-to-confirm semantics, hold the currently-highlighted value in local state via `onChange` and commit on Enter through a `useInput` handler.
-
-Set `visibleOptionCount` from `useWindowSize().rows - chromeHeight` so the viewport always fits the terminal. Cap at ~8 when the terminal is tall to avoid a wall of options for providers with 30+ models.
-
-
-### Directly reused without modification
-
-- **`src/tui/border.ts`** — `topBorderSegments`, `bottomBorderSegments`, `interpolateGradient`. Used by `Dialog`.
-- **`src/tui/text-input.tsx`** — `TextInput`. Add a `masked?: boolean` prop; when true, the `cursor.beforeCursor` / `charAtCursor` / `afterCursor` display renders each character as `•` while the underlying `Cursor` state keeps real characters.
-- **`src/core/spinner.ts`** — `SPINNER_FRAMES` + `SPINNER_INTERVAL` for the "Loading models list…" spinner between Screen 1 and Screen 2. The spinner is rendered **inside** Ink (as a React component using `useAnimation` to step through the frames). Do **not** call `startChromeSpinner` from that file — it writes raw `\r` escapes to stderr and fights Ink's alt-screen.
-- **`src/session/dialog-host.ts`** — mounting/preloading pattern. Extend to cache `Wizard` alongside `Dialog`.
-
-### Wizard state model
-
-> **Status:** Implemented. Source of truth: `src/wizard/state.ts`.
-
-Top-level fields for "what's already been fetched or chosen" (`modelsData`, `pickedProviders`, `builtEntries`, `defaultProvider`, `loopIndex`) plus a tagged `screen` union for the current screen. Reducer is pure and unit-tested without mounting Ink. Also has a `done` screen tag for completion.
-
-## Testing
-
-> **Status:** Implemented. 968+ tests across 55 files.
-
-Test files: `tests/wizard-state.test.ts` (reducer transitions), `tests/wizard-models-filter.test.ts` (filter/sort/recommendation), `tests/wizard-write-config.test.ts` (config writer + validation), `tests/config-wizard-dialog.test.tsx` (ink-testing-library integration), `tests/ensure-config.test.ts` (ensureConfig wiring + WRAP_CONFIG bypass), `tests/registry.test.ts` (isCliProvider, providerNeedsApiKey), `tests/text-input.test.tsx` (masked prop). All tests use hand-crafted models.dev fixtures, never the network.
-
-## Future work (explicitly deferred)
-
-- **`w --config` / `w --init` flags.** Ship the re-run path together with preselect-from-current-state semantics — wizard reads the existing config, preselects already-configured providers in Screen 1 (checkboxes pre-ticked), prefills their keys and models on the loop screens, and the user's changes (including *unchecking* a provider) overwrite the file. This gives clean removal semantics without a separate "delete this provider" flow and avoids the footgun of a blank-slate rewrite. `w --init` is initially an alias for `w --config`; eventually `--init` grows into a broader first-run orchestrator (config + alias setup + anything else).
-- **Env-var detection + Tab-to-fill on the API key screen.** Check `process.env[envVar]` for the names in the provider's models.dev `env` field; if set, show a hint and bind Tab to auto-fill the `$VAR` reference form so the existing `resolveApiKey()` in `src/llm/providers/ai-sdk.ts` dereferences it at runtime. Keeps the config portable across machines for users who already have their keys in the environment.
-- **Google (Gemini) support.** Bundle `@ai-sdk/google`, add a `kind: "google"` branch in `src/llm/providers/registry.ts` + factory wiring in `ai-sdk.ts`, uncomment the `google` entry in `API_PROVIDERS`. Tracked in `specs/todo.md`.
-- **Bundled models.dev snapshot.** If offline-first-run becomes a real pain point, add a dev build script that trims models.dev to curated providers and ships it with the binary. v1 fails cleanly offline instead.
-- **"More providers…" picker.** Full searchable list of openai-compatible providers from models.dev, merged into the shortlist UI. Auto-populates baseURL from models.dev's `api` field.
-- **Repair mode.** On `loadConfig` failure against an existing (malformed) file, auto-launch the wizard in a mode that highlights which provider is broken.
-- **Advanced fields.** `maxRounds`, `verbose`, etc. exposed through a second wizard path (`w --config advanced`?).
-- **API key validation.** Hit a cheap provider endpoint to verify the key works before saving.
+- **`w --config` / `w --init` flags.** Re-run wizard with preselect-from-current-config semantics — unchecking a provider removes it.
+- **Env-var detection + Tab-to-fill.** Auto-detect `$ANTHROPIC_API_KEY` etc. and offer `$VAR` reference form.
+- **Google (Gemini) support.** Requires `@ai-sdk/google` + `kind: "google"` branch.
+- **Bundled models.dev snapshot.** Offline first-run fallback.
+- **"More providers…" picker.** Searchable list from models.dev with auto-populated `baseURL`.
+- **Repair mode.** Auto-launch wizard on malformed existing config.
+- **API key validation.** Verify key works before saving.

@@ -191,7 +191,7 @@ These apply everywhere and cross sub-spec boundaries. If they ever conflict with
 ## 6. First-run experience
 
 1. User runs `wrap` (or `wrap <query>`) for the first time.
-2. `ensureConfig()` detects no config → runs config wizard (future — see `tui.md`).
+2. `ensureConfig()` detects no config → runs config wizard (see `config-wizard.md`).
 3. **Provider selection:** CLI tool providers (Claude Code, etc.) if detected; API providers (Anthropic, OpenAI, Ollama, OpenRouter) with key entry. See `llm.md`.
 4. **Alias setup** scans for available single-letter commands, suggests the best one, and installs with glob protection so natural-language prompts never expand:
    - **zsh:** `alias w='noglob wrap'`
