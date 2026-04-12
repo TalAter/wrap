@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { appendWrapFile, readWrapFile, writeWrapFile } from "../src/core/home-dir.ts";
+import {
+  appendWrapFile,
+  getWrapHome,
+  readWrapFile,
+  writeWrapFile,
+} from "../src/fs/home.ts";
 import { tmpHome } from "./helpers.ts";
 
 function withHome<T>(fn: (home: string) => T): T {
@@ -16,7 +22,25 @@ function withHome<T>(fn: (home: string) => T): T {
   }
 }
 
-describe("wrap-dir", () => {
+describe("getWrapHome", () => {
+  test("returns WRAP_HOME when set", () => {
+    expect(getWrapHome({ WRAP_HOME: "/custom/path" })).toBe("/custom/path");
+  });
+
+  test("falls back to ~/.wrap when WRAP_HOME is unset", () => {
+    expect(getWrapHome({})).toBe(join(homedir(), ".wrap"));
+  });
+
+  test("falls back to ~/.wrap when WRAP_HOME is undefined", () => {
+    expect(getWrapHome({ WRAP_HOME: undefined })).toBe(join(homedir(), ".wrap"));
+  });
+
+  test("falls back to ~/.wrap when WRAP_HOME is empty string", () => {
+    expect(getWrapHome({ WRAP_HOME: "" })).toBe(join(homedir(), ".wrap"));
+  });
+});
+
+describe("wrap-home IO", () => {
   test("readWrapFile returns null for missing file", () => {
     withHome(() => {
       expect(readWrapFile("nope.txt")).toBeNull();

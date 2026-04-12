@@ -1,10 +1,10 @@
 import { loadConfig } from "./config/config.ts";
-import { getWrapHome } from "./core/home.ts";
+import { getWrapHome } from "./fs/home.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
-import { createTempDir } from "./core/temp-dir.ts";
+import { createTempDir } from "./fs/temp.ts";
 import { initVerbose, verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";

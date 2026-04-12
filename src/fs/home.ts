@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { getWrapHome } from "./home.ts";
 
 /**
  * Shared filesystem helpers for anything under $WRAP_HOME. All writes create
@@ -9,6 +9,11 @@ import { getWrapHome } from "./home.ts";
  * `home` to scope to a different root (used by modules that thread an
  * already-resolved wrapHome through their own APIs).
  */
+
+/** Returns the Wrap home directory (default: ~/.wrap, override: WRAP_HOME env var). */
+export function getWrapHome(env: Record<string, string | undefined> = process.env): string {
+  return env.WRAP_HOME || join(homedir(), ".wrap");
+}
 
 function resolve(relPath: string, home?: string): string {
   return join(home ?? getWrapHome(), relPath);

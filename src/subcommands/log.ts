@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getWrapHome } from "../core/home.ts";
+import { getWrapHome } from "../fs/home.ts";
 import { chrome, hasJq, isTTY } from "../core/output.ts";
 import type { Command } from "./types.ts";
 

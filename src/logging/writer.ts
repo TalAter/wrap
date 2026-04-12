@@ -1,4 +1,4 @@
-import { appendWrapFile } from "../core/home-dir.ts";
+import { appendWrapFile } from "../fs/home.ts";
 import type { LogEntry } from "./entry.ts";
 import { serializeEntry } from "./entry.ts";
 

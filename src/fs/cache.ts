@@ -1,7 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { getWrapHome } from "./home.ts";
-import { readWrapFile, writeWrapFile } from "./home-dir.ts";
+import { getWrapHome, readWrapFile, writeWrapFile } from "./home.ts";
 
 /**
  * TTL-bounded network fetch with a filesystem cache under $WRAP_HOME.

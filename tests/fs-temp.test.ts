@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { executeShellCommand } from "../src/core/shell.ts";
-import { createTempDir, formatTempDirSection } from "../src/core/temp-dir.ts";
+import { createTempDir, formatTempDirSection } from "../src/fs/temp.ts";
 
 describe("createTempDir", () => {
   let prev: string | undefined;

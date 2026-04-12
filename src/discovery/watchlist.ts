@@ -1,4 +1,4 @@
-import { readWrapFile, writeWrapFile } from "../core/home-dir.ts";
+import { readWrapFile, writeWrapFile } from "../fs/home.ts";
 import { VALID_TOOL_NAME } from "./init-probes.ts";
 
 const WATCHLIST_FILE = "tool-watchlist.json";

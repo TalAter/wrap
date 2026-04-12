@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { readWrapFile, writeWrapFile } from "../core/home-dir.ts";
+import { readWrapFile, writeWrapFile } from "../fs/home.ts";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
 import { verbose } from "../core/verbose.ts";

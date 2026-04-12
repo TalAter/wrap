@@ -1,6 +1,5 @@
 import { type ParseError, parse } from "jsonc-parser";
-import { getWrapHome } from "../core/home.ts";
-import { readWrapFile } from "../core/home-dir.ts";
+import { getWrapHome, readWrapFile } from "../fs/home.ts";
 
 /** One entry in the providers map — see specs/llm.md. */
 export type ProviderEntry = {
