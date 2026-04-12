@@ -35,7 +35,13 @@ export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
       const raw = spawnAndRead(args, flattenMessages(input.messages), { cwd: tmpdir() });
       if (!schema) return raw;
       const cleaned = stripFences(raw);
-      return schema.parse(JSON.parse(cleaned));
+      let json: unknown;
+      try {
+        json = JSON.parse(cleaned);
+      } catch {
+        throw new Error("LLM returned invalid JSON.");
+      }
+      return schema.parse(json);
     },
   };
 }
