@@ -104,6 +104,22 @@ describe("filterAndSortModels", () => {
     expect(filterAndSortModels(empty, "foo")).toEqual([]);
   });
 
+  test("drops models with tool_call undefined (missing from wire)", () => {
+    const data: ModelsDevData = {
+      test: {
+        id: "test",
+        models: {
+          "no-tool-call": {
+            id: "no-tool-call",
+            modalities: { input: ["text"], output: ["text"] },
+            release_date: "2026-01-01",
+          },
+        },
+      },
+    };
+    expect(filterAndSortModels(data, "test")).toEqual([]);
+  });
+
   test("ModelEntry carries id, releaseDate, and recommended flag (default false)", () => {
     const [first] = filterAndSortModels(DATA, "anthropic");
     expect(first).toEqual({

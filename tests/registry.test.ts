@@ -3,7 +3,9 @@ import {
   API_PROVIDERS,
   CLI_PROVIDERS,
   getRegistration,
+  isCliProvider,
   isKnownProvider,
+  providerNeedsApiKey,
   validateProviderEntry,
 } from "../src/llm/providers/registry.ts";
 
@@ -57,6 +59,35 @@ describe("isKnownProvider", () => {
   test("returns false for unknown names", () => {
     expect(isKnownProvider("custom")).toBe(false);
     expect(isKnownProvider("")).toBe(false);
+  });
+});
+
+describe("isCliProvider", () => {
+  test("true for CLI providers", () => {
+    expect(isCliProvider("claude-code")).toBe(true);
+  });
+
+  test("false for API providers and unknowns", () => {
+    expect(isCliProvider("anthropic")).toBe(false);
+    expect(isCliProvider("ollama")).toBe(false);
+    expect(isCliProvider("custom")).toBe(false);
+  });
+});
+
+describe("providerNeedsApiKey", () => {
+  test("true for API providers with apiKeyUrl", () => {
+    expect(providerNeedsApiKey("anthropic")).toBe(true);
+    expect(providerNeedsApiKey("openai")).toBe(true);
+    expect(providerNeedsApiKey("openrouter")).toBe(true);
+  });
+
+  test("false for ollama (no apiKeyUrl) and CLI providers", () => {
+    expect(providerNeedsApiKey("ollama")).toBe(false);
+    expect(providerNeedsApiKey("claude-code")).toBe(false);
+  });
+
+  test("false for unknown providers", () => {
+    expect(providerNeedsApiKey("custom")).toBe(false);
   });
 });
 

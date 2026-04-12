@@ -302,35 +302,15 @@ Set `visibleOptionCount` from `useWindowSize().rows - chromeHeight` so the viewp
 
 ### Wizard state model
 
-Top-level fields for "what's already been fetched or chosen," plus a tagged `screen` for "what's currently on-screen." A single flat tagged union tempts you to push shared state (fetched models data, selected providers, accumulated entries, loop index) into every variant — error-prone and noisy.
+> **Status:** Implemented. Source of truth: `src/wizard/state.ts`.
 
-```ts
-type WizardState = {
-  modelsData: ModelsDevData | null;                   // null until fetched between Screen 1 and Screen 2
-  pickedProviders: string[];                          // provider ids ticked on Screen 1
-  builtEntries: Record<string, ProviderEntry>;        // config entries accumulated across the per-provider loop
-  loopIndex: number;                                  // which `pickedProviders[i]` is being configured
-  screen:
-    | { tag: "selecting-providers"; checked: Set<string> }
-    | { tag: "loading-models" }                       // bottom-border spinner until fetchCached resolves
-    | { tag: "entering-key"; provider: string; draft: string }
-    | { tag: "picking-model"; provider: string; models: ModelEntry[]; cursor: number }
-    | { tag: "disclaimer"; provider: string }
-    | { tag: "picking-default"; cursor: number };
-};
-```
-
-Reducer transitions happen on `screen`; top-level fields are updated when a screen submits. Reducer is pure and unit-testable without mounting Ink.
+Top-level fields for "what's already been fetched or chosen" (`modelsData`, `pickedProviders`, `builtEntries`, `defaultProvider`, `loopIndex`) plus a tagged `screen` union for the current screen. Reducer is pure and unit-tested without mounting Ink. Also has a `done` screen tag for completion.
 
 ## Testing
 
-- Unit tests for the reducer covering every screen transition, including the "single provider" skip of Screen 3.
-- Unit tests for the models.dev filter (`tool_call`, modalities, `status`) and sort.
-- Unit tests for the recommendation logic (regex hit, regex miss).
-- Unit tests for the `fetchCached` helper: fresh cache hit, cache miss + network success, cache miss + network failure (throws), stale cache + network failure (returns `stale: true`).
-- Unit tests for `writeWrapFile`/`readWrapFile`/`appendWrapFile`: creates parent dirs, handles missing files, round-trips.
-- Integration: a fake stdin driver feeds keystrokes into a mounted wizard and asserts the written `config.jsonc`. Uses `ink-testing-library` + `tmpHome()` from `tests/helpers.ts` for `WRAP_HOME` isolation — don't hand-roll `mkdtempSync`.
-- All tests use a hand-crafted models.dev fixture, never the network.
+> **Status:** Implemented. 968+ tests across 55 files.
+
+Test files: `tests/wizard-state.test.ts` (reducer transitions), `tests/wizard-models-filter.test.ts` (filter/sort/recommendation), `tests/wizard-write-config.test.ts` (config writer + validation), `tests/config-wizard-dialog.test.tsx` (ink-testing-library integration), `tests/ensure-config.test.ts` (ensureConfig wiring + WRAP_CONFIG bypass), `tests/registry.test.ts` (isCliProvider, providerNeedsApiKey), `tests/text-input.test.tsx` (masked prop). All tests use hand-crafted models.dev fixtures, never the network.
 
 ## Future work (explicitly deferred)
 
@@ -345,18 +325,15 @@ Reducer transitions happen on `screen`; top-level fields are updated when a scre
 
 ## Implementation plan
 
-1. ✅ **`src/fs/home.ts` helper + migrations.** Centralized `~/.wrap/*` I/O, fixed the `watchlist.ts` missing-parent crash.
-2. ✅ **`Dialog` extraction + rename.** Separated generic chrome from command-response content.
-3. ✅ **`fetchCached` helper.** In `src/fs/cache.ts`.
-4. ✅ **Provider registry consolidation.** Replaced the flat `KNOWN_PROVIDERS` map with `API_PROVIDERS` + `CLI_PROVIDERS`.
-5. **`resolveProvider` claude-code exemption.** Allow a `claude-code` entry to have no `model` field without throwing. Small correctness fix; manually-edited configs with `{"claude-code": {}}` start working.
+> **Status:** All stages implemented.
 
-6. **Wizard reducer + data pipeline.** Pure-logic scaffolding: `WizardState` type and reducer, provider-selection flow, model filter + sort + recommendation logic, pre-write `validateProviderEntry` pass, config-write path. No UI yet — reducer is exercised by unit tests only. Tree doesn't run the wizard at runtime; nothing in `main.ts` changes yet. This is where every screen-transition edge case and every filter/sort invariant gets nailed down in isolation from Ink.
+Source of truth for each stage:
 
-7. **Wizard UI (`ConfigWizardDialog`) mountable via harness.** Connect the reducer from stage 6 to `<Dialog>` and `@inkjs/ui` components. Add the masked `TextInput` prop. Wire up the dialog-host preload/mount plumbing. The component is exercisable via `ink-testing-library` and via a one-off mount script, but `main.ts` still doesn't call it — fresh installs still see the old `Config error: no LLM configured` dead-end. End of this stage: the wizard renders correctly in tests and is visually reviewable.
-
-8. **`ensureConfig` wiring.** Replace `loadConfig()` in `main.ts` with `ensureConfig()`, bundle `config.schema.json` via static JSON import, handle cancel via `process.exit(0)`. This is the stage that actually flips first-run behavior. Small diff because everything underneath already works.
-
-### Stage dependencies
-
-Stages 6–8 run sequentially and depend on stages 1–5.
+1. ✅ `src/fs/home.ts` — centralized `~/.wrap/*` I/O.
+2. ✅ `src/tui/dialog.tsx` + `src/tui/response-dialog.tsx` — generic `Dialog` chrome extraction.
+3. ✅ `src/fs/cache.ts` — `fetchCached` helper.
+4. ✅ `src/llm/providers/registry.ts` — `API_PROVIDERS` + `CLI_PROVIDERS` with wizard metadata.
+5. ✅ `src/llm/resolve-provider.ts` — `claude-code` model-optional exemption via `modelOptional` registration flag.
+6. ✅ `src/wizard/state.ts`, `src/wizard/models-filter.ts`, `src/wizard/write-config.ts` — pure reducer, model filter/sort/recommendation, config writer.
+7. ✅ `src/tui/config-wizard-dialog.tsx` — `ConfigWizardDialog` component, `@inkjs/ui` Select/MultiSelect, masked `TextInput`, `mountConfigWizardDialog` in `src/session/dialog-host.ts`.
+8. ✅ `src/config/ensure.ts` — `ensureConfig()` replaces `loadConfig()` in `main.ts`, bundles `config.schema.json` via static import.
