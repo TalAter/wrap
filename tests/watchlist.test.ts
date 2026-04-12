@@ -75,6 +75,14 @@ describe("loadWatchlist", () => {
 });
 
 describe("addToWatchlist", () => {
+  test("creates wrap home directory lazily (parent does not need to exist)", () => {
+    const dir = join(tmp(), "nested", "wrap");
+    expect(existsSync(dir)).toBe(false);
+    addToWatchlist(dir, ["sips"]);
+    const result = loadWatchlist(dir);
+    expect(result.map((e) => e.tool)).toEqual(["sips"]);
+  });
+
   test("creates file with new entries when it does not exist", () => {
     const dir = tmp();
     addToWatchlist(dir, ["sips", "convert"]);

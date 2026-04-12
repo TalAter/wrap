@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { type ParseError, parse } from "jsonc-parser";
+import { parse, type ParseError } from "jsonc-parser";
 import { getWrapHome } from "../core/home.ts";
+import { readWrapFile } from "../core/home-dir.ts";
 
 /** One entry in the providers map — see specs/llm.md. */
 export type ProviderEntry = {
@@ -26,10 +25,9 @@ export const DEFAULT_MAX_PIPED_INPUT_CHARS = 200_000;
 const CONFIG_FILENAME = "config.jsonc";
 
 function loadFileConfig(wrapHome: string): Config {
-  const path = join(wrapHome, CONFIG_FILENAME);
-  if (!existsSync(path)) return {};
+  const raw = readWrapFile(CONFIG_FILENAME, wrapHome);
+  if (raw === null) return {};
 
-  const raw = readFileSync(path, "utf-8");
   const errors: ParseError[] = [];
   const parsed = parse(raw, errors, { allowTrailingComma: true });
 
@@ -40,7 +38,9 @@ function loadFileConfig(wrapHome: string): Config {
   return parsed ?? {};
 }
 
-function loadEnvConfig(env: Record<string, string | undefined>): Config | undefined {
+function loadEnvConfig(
+  env: Record<string, string | undefined>,
+): Config | undefined {
   const raw = env.WRAP_CONFIG?.trim();
   if (!raw) return undefined;
 
@@ -51,7 +51,9 @@ function loadEnvConfig(env: Record<string, string | undefined>): Config | undefi
   }
 }
 
-export function loadConfig(envOverrides: Record<string, string | undefined> = {}): Config {
+export function loadConfig(
+  envOverrides: Record<string, string | undefined> = {},
+): Config {
   const env = { ...process.env, ...envOverrides };
   const wrapHome = getWrapHome(env);
   const fileConfig = loadFileConfig(wrapHome);

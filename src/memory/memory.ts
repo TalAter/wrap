@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { readWrapFile, writeWrapFile } from "../core/home-dir.ts";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
 import { verbose } from "../core/verbose.ts";
@@ -17,16 +17,10 @@ const MemoryFileSchema = z.record(z.string(), z.array(FactSchema));
 
 /** Load memory from disk. Returns {} if file doesn't exist. Throws on corrupt/invalid file. */
 export function loadMemory(wrapHome: string): Memory {
+  const raw = readWrapFile(MEMORY_FILE, wrapHome);
+  if (raw === null) return {};
+
   const path = join(wrapHome, MEMORY_FILE);
-  if (!existsSync(path)) return {};
-
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf-8");
-  } catch {
-    throw memoryError(path);
-  }
-
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -44,19 +38,23 @@ export function loadMemory(wrapHome: string): Memory {
 
 function memoryError(filePath: string): Error {
   return new Error(
-    `Memory error: ${prettyPath(filePath)} is broken — delete the file and run Wrap again.`,
+    `Memory error: ${
+      prettyPath(filePath)
+    } is broken — delete the file and run Wrap again.`,
   );
 }
 
 /** Write memory to disk. Creates directory lazily. Sorts keys alphabetically. */
 export function saveMemory(wrapHome: string, memory: Memory): void {
-  mkdirSync(wrapHome, { recursive: true });
   const sorted: Memory = {};
-  for (const [key, value] of Object.entries(memory).sort(([a], [b]) => a.localeCompare(b))) {
+  for (
+    const [key, value] of Object.entries(memory).sort(([a], [b]) =>
+      a.localeCompare(b)
+    )
+  ) {
     sorted[key] = value;
   }
-  const path = join(wrapHome, MEMORY_FILE);
-  writeFileSync(path, JSON.stringify(sorted, null, 2));
+  writeWrapFile(MEMORY_FILE, JSON.stringify(sorted, null, 2), wrapHome);
 }
 
 /**
@@ -91,12 +89,19 @@ export function parseInitResponse(response: string): Fact[] {
 }
 
 /** Load existing memory or initialize by probing the system and asking the LLM. */
-export async function ensureMemory(provider: Provider, wrapHome: string): Promise<Memory> {
+export async function ensureMemory(
+  provider: Provider,
+  wrapHome: string,
+): Promise<Memory> {
   const existing = loadMemory(wrapHome);
   if (Object.keys(existing).length > 0) {
     const total = countFacts(existing);
     const globalCount = (existing["/"] ?? []).length;
-    verbose(`Memory: ${total} facts (${globalCount} global, ${total - globalCount} scoped)`);
+    verbose(
+      `Memory: ${total} facts (${globalCount} global, ${
+        total - globalCount
+      } scoped)`,
+    );
     return existing;
   }
 

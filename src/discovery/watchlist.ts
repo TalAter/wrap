@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { readWrapFile, writeWrapFile } from "../core/home-dir.ts";
 import { VALID_TOOL_NAME } from "./init-probes.ts";
 
 const WATCHLIST_FILE = "tool-watchlist.json";
@@ -11,11 +10,9 @@ export type WatchlistEntry = {
 
 /** Load the tool watchlist from WRAP_HOME. Returns [] if missing or invalid. */
 export function loadWatchlist(wrapHome: string): WatchlistEntry[] {
-  const path = join(wrapHome, WATCHLIST_FILE);
-  if (!existsSync(path)) return [];
+  const raw = readWrapFile(WATCHLIST_FILE, wrapHome)?.trim();
+  if (!raw) return [];
   try {
-    const raw = readFileSync(path, "utf-8").trim();
-    if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -43,12 +40,18 @@ export function addToWatchlist(wrapHome: string, tools: string[]): void {
   const nominated = new Set(valid);
 
   // Update date for re-nominated tools, keep others unchanged
-  const updated = existing.map((e) => (nominated.has(e.tool) ? { ...e, added: today } : e));
+  const updated = existing.map((
+    e,
+  ) => (nominated.has(e.tool) ? { ...e, added: today } : e));
   const known = new Set(existing.map((e) => e.tool));
-  const additions = valid.filter((t) => !known.has(t)).map((tool) => ({ tool, added: today }));
+  const additions = valid.filter((t) => !known.has(t)).map((tool) => ({
+    tool,
+    added: today,
+  }));
 
-  writeFileSync(
-    join(wrapHome, WATCHLIST_FILE),
+  writeWrapFile(
+    WATCHLIST_FILE,
     `${JSON.stringify([...updated, ...additions], null, 2)}\n`,
+    wrapHome,
   );
 }

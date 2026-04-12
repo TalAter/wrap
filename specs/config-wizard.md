@@ -328,7 +328,7 @@ On a fresh install, `~/.wrap/` does not exist and the wizard is the first thing 
 
 #### Shared wrap-home IO helper
 
-New module `src/core/wrap-home-io.ts`:
+New module `src/core/wrap-home-dir.ts`:
 
 ```ts
 // All three resolve the base path via getWrapHome(); writes create parent dirs.
@@ -497,7 +497,7 @@ Reducer transitions happen on `screen`; top-level fields are updated when a scre
 
 Stages land in order. The first five are independent of one another except where noted and can also each be split further if they grow — each ends in a committable, non-regressing state. The wizard itself is split across the last three stages; those last three intentionally leave the tree in partially-wired states between commits, which is fine.
 
-1. **`wrap-home-io` helper + migrations.** Centralize `~/.wrap/*` I/O through one module and migrate the existing inline `mkdirSync`/`readFileSync`/`writeFileSync`/`appendFileSync` sites onto it. Fixes the `watchlist.ts` missing-parent crash as a side effect. No behavior change anywhere else.
+1. **`wrap-home-dir` helper + migrations.** Centralize `~/.wrap/*` I/O through one module and migrate the existing inline `mkdirSync`/`readFileSync`/`writeFileSync`/`appendFileSync` sites onto it. Fixes the `watchlist.ts` missing-parent crash as a side effect. No behavior change anywhere else.
 
 2. **`Dialog` extraction + rename.** Separate the generic bordered chrome from the command-response content. Pure refactor — confirmation dialog renders identically after.
 
