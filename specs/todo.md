@@ -51,6 +51,8 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
 - [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the display label lives separately on `ResolvedProvider` and is computed via `formatProvider(resolved)`. Code that holds a `Provider` and wants to display the model has to be passed the resolved provider too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `formatProvider(resolved)`, and update test fixtures to set `label: "test / test"`. After this lands, drop the `model` field from `LoopOptions` / `RunRoundOptions` and read `provider.label` directly inside `runRound` and `runLoop`.
+- [ ] Migrate openai-compat kind from `@ai-sdk/openai` + baseURL to `@ai-sdk/openai-compatible`. The latter is Vercel's recommended wrapper for generic OpenAI-compatible endpoints (LM Studio, NVIDIA NIM, Ollama, OpenRouter, Groq, Mistral, etc.), exposes a `supportsStructuredOutputs` flag, and decouples our code from OpenAI-specific quirks. Today `src/llm/providers/ai-sdk.ts` uses `@ai-sdk/openai` + `baseURL` for Ollama which still works, but the idiomatic path is worth adopting before we add more openai-compat providers through the config wizard.
+- [ ] Add Google (Gemini) support. Bundle `@ai-sdk/google`, add a `kind: "google"` branch in `src/llm/providers/registry.ts` + factory wiring in `src/llm/providers/ai-sdk.ts`, and uncomment the `google` entry in `API_PROVIDERS` in `src/llm/providers/registry.ts`. Google's OpenAI-compat endpoint has gaps in structured-output support, so going through the dedicated SDK is required rather than optional.
 
 ## Memory System
 
@@ -73,10 +75,9 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Configuration & First-Run
 
-- [ ] First-run config wizard TUI — provider selection, API key entry, model selection
-- [ ] CLI tool provider detection (Claude Code, Codex, AMP) in wizard
+- [ ] First-run config wizard TUI — provider selection, API key entry, model selection. See `specs/config-wizard.md`.
 - [ ] Alias setup in wizard — scan available single-letter commands, detect shell, write glob-protected aliases to shell rc file
-- [ ] Full first-run flow: config wizard → alias setup → memory init → ready
+- [ ] Full first-run flow: config wizard → alias setup → ready
 
 ## Output & UI
 
@@ -87,7 +88,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Subcommands (see specs/subcommands.md)
 
-- [ ] `--config` — manual reconfigure (reuses config wizard)
+- [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See `specs/config-wizard.md` Future work. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
 - [ ] `--memory` — view/manage memory
 
 ## Eval System
