@@ -1,4 +1,4 @@
-import { loadConfig } from "./config/config.ts";
+import { ensureConfig } from "./config/ensure.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
@@ -41,7 +41,7 @@ export async function main() {
 
     const prompt = input.type === "prompt" ? input.prompt : "";
 
-    const config = loadConfig();
+    const config = await ensureConfig();
     initVerbose(modifiers.flags.has("verbose") || config.verbose === true);
 
     // CLI flag wins over WRAP_MODEL env var. resolveProvider then parses the
