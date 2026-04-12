@@ -85,12 +85,12 @@ describe("wrap", () => {
   test("unknown provider missing required fields → specific validation error", async () => {
     const { exitCode, stderr } = await wrap("hello", {
       WRAP_CONFIG: JSON.stringify({
-        providers: { groq: { model: "llama" } },
-        defaultProvider: "groq",
+        providers: { custom: { model: "llama" } },
+        defaultProvider: "custom",
       }),
     });
     expect(exitCode).toBe(1);
-    expect(stderr).toBe('Config error: provider "groq" requires baseURL, apiKey, and model.\n');
+    expect(stderr).toBe('Config error: provider "custom" requires baseURL, apiKey, and model.\n');
   });
 
   test("errors on malformed WRAP_CONFIG", async () => {

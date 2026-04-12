@@ -1,12 +1,12 @@
 import { NoObjectGeneratedError } from "ai";
 import type { CommandResponse } from "../command-response.schema.ts";
+import { formatTempDirSection } from "../fs/temp.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import type { PromptInput, Provider } from "../llm/types.ts";
 import type { Round } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
-import { formatTempDirSection } from "../fs/temp.ts";
 import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
 

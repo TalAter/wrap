@@ -1,5 +1,5 @@
 import type { Config } from "../config/config.ts";
-import { KNOWN_PROVIDERS, validateProviderEntry } from "./providers/registry.ts";
+import { isKnownProvider, validateProviderEntry } from "./providers/registry.ts";
 import { isTestProviderSelected, TEST_RESOLVED_PROVIDER } from "./providers/test.ts";
 import type { ResolvedProvider } from "./types.ts";
 
@@ -53,7 +53,7 @@ export function resolveProvider(
         throw new Error(
           `Config error: model "${trimmed}" is configured for multiple providers; use provider:model.`,
         );
-      } else if (trimmed in KNOWN_PROVIDERS) {
+      } else if (isKnownProvider(trimmed)) {
         throw new Error(`Config error: provider "${trimmed}" not found in config.`);
       } else {
         providerName = defaultProvider;

@@ -3,7 +3,6 @@ import {
   DEFAULT_MAX_PIPED_INPUT_CHARS,
   DEFAULT_MAX_ROUNDS,
 } from "../config/config.ts";
-import { getWrapHome } from "../fs/home.ts";
 import { notifications } from "../core/notify.ts";
 import { chrome } from "../core/output.ts";
 import {
@@ -17,6 +16,7 @@ import { executeShellCommand } from "../core/shell.ts";
 import type { Transcript } from "../core/transcript.ts";
 import { verbose } from "../core/verbose.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
+import { getWrapHome } from "../fs/home.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
 import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
 import { addRound, createLogEntry, type LogEntry } from "../logging/entry.ts";

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getWrapHome } from "../fs/home.ts";
 import { chrome, hasJq, isTTY } from "../core/output.ts";
+import { getWrapHome } from "../fs/home.ts";
 import type { Command } from "./types.ts";
 
 type Writer = (parsed: object[]) => Promise<void>;

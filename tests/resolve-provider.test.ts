@@ -145,8 +145,8 @@ describe("resolveProvider — override colon form", () => {
   });
 
   test("provider:model where provider not in config → error", () => {
-    expect(() => resolveProvider(config, "groq:llama", EMPTY_ENV)).toThrow(
-      'Config error: provider "groq" not found in config.',
+    expect(() => resolveProvider(config, "custom:llama", EMPTY_ENV)).toThrow(
+      'Config error: provider "custom" not found in config.',
     );
   });
 
@@ -293,55 +293,55 @@ describe("resolveProvider — per-entry validation", () => {
   test("unknown provider with all required fields → valid", () => {
     const config: Config = {
       providers: {
-        groq: {
-          baseURL: "https://api.groq.com/openai/v1",
+        custom: {
+          baseURL: "https://api.custom.com/openai/v1",
           apiKey: "gsk_x",
           model: "llama-3.1-70b-versatile",
         },
       },
-      defaultProvider: "groq",
+      defaultProvider: "custom",
     };
     const result = resolveProvider(config, undefined, EMPTY_ENV);
     expect(result).toEqual({
-      name: "groq",
+      name: "custom",
       model: "llama-3.1-70b-versatile",
       apiKey: "gsk_x",
-      baseURL: "https://api.groq.com/openai/v1",
+      baseURL: "https://api.custom.com/openai/v1",
     });
   });
 
   test("unknown provider missing apiKey → error", () => {
     const config: Config = {
       providers: {
-        groq: { baseURL: "https://api.groq.com/openai/v1", model: "llama" },
+        custom: { baseURL: "https://api.custom.com/openai/v1", model: "llama" },
       },
-      defaultProvider: "groq",
+      defaultProvider: "custom",
     };
     expect(() => resolveProvider(config, undefined, EMPTY_ENV)).toThrow(
-      'Config error: provider "groq" requires baseURL, apiKey, and model.',
+      'Config error: provider "custom" requires baseURL, apiKey, and model.',
     );
   });
 
   test("unknown provider missing baseURL → error", () => {
     const config: Config = {
-      providers: { groq: { apiKey: "gsk_x", model: "llama" } },
-      defaultProvider: "groq",
+      providers: { custom: { apiKey: "gsk_x", model: "llama" } },
+      defaultProvider: "custom",
     };
     expect(() => resolveProvider(config, undefined, EMPTY_ENV)).toThrow(
-      'Config error: provider "groq" requires baseURL, apiKey, and model.',
+      'Config error: provider "custom" requires baseURL, apiKey, and model.',
     );
   });
 
   test("unknown provider missing both apiKey and model → entry validator wins", () => {
     const config: Config = {
-      providers: { groq: { baseURL: "https://api.groq.com/openai/v1" } },
-      defaultProvider: "groq",
+      providers: { custom: { baseURL: "https://api.custom.com/openai/v1" } },
+      defaultProvider: "custom",
     };
     // Without ordering: would report generic "no LLM configured" via the model
     // check. Per-entry validation must fire first so users see the actionable
     // requires-three-fields message.
     expect(() => resolveProvider(config, undefined, EMPTY_ENV)).toThrow(
-      'Config error: provider "groq" requires baseURL, apiKey, and model.',
+      'Config error: provider "custom" requires baseURL, apiKey, and model.',
     );
   });
 
