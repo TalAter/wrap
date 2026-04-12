@@ -49,100 +49,9 @@ CLI tool providers (v1: only `claude-code`) come from `CLI_PROVIDERS` — detect
 
 ## Curated shortlist
 
-Two hardcoded maps both live in `src/llm/providers/registry.ts`, keyed by provider id. Each map has its own type — API providers carry API-key metadata, CLI providers carry `probeCmd`.
+> **Status:** Implemented. Source of truth: `src/llm/providers/registry.ts` (`API_PROVIDERS` + `CLI_PROVIDERS`).
 
-```ts
-// src/llm/providers/registry.ts
-
-export type ApiProvider = {
-  displayName: string;
-  kind: ProviderKind;
-  validate?: (entry: ProviderEntry) => string | null;
-  apiKeyUrl?: string;
-  apiKeyPlaceholder?: string;
-  // Prefilled when models.dev has no `api` field for this provider (e.g. ollama).
-  baseURL?: string;
-  recommendedModelRegex?: RegExp;
-};
-
-export type CliProvider = {
-  displayName: string;
-  kind: ProviderKind;
-  probeCmd: string;
-};
-
-export const API_PROVIDERS: Record<string, ApiProvider> = {
-  anthropic: {
-    displayName: "Anthropic",
-    kind: "anthropic",
-    apiKeyUrl: "https://console.anthropic.com/settings/keys",
-    apiKeyPlaceholder: "sk-ant-api03-",
-    recommendedModelRegex: /^claude-sonnet-\d+-\d+$/,
-  },
-  openai: {
-    displayName: "OpenAI",
-    kind: "openai-compat",
-    apiKeyUrl: "https://platform.openai.com/api-keys",
-    apiKeyPlaceholder: "sk-proj-",
-    recommendedModelRegex: /^gpt-5(\.\d+)?$/,
-  },
-  // TODO: enable once @ai-sdk/google is bundled and a `kind: "google"` branch
-  // lands in this file + ai-sdk.ts. See Future work.
-  // google: {
-  //   displayName: "Google (Gemini)",
-  //   kind: "google",
-  //   apiKeyUrl: "https://aistudio.google.com/apikey",
-  //   recommendedModelRegex: /^gemini-\d+(\.\d+)?-pro$/,
-  // },
-  openrouter: {
-    displayName: "OpenRouter",
-    kind: "openai-compat",
-    apiKeyUrl: "https://openrouter.ai/keys",
-    apiKeyPlaceholder: "sk-or-v1-",
-    baseURL: "https://openrouter.ai/api/v1",
-  },
-  groq: {
-    displayName: "Groq",
-    kind: "openai-compat",
-    apiKeyUrl: "https://console.groq.com/keys",
-    apiKeyPlaceholder: "gsk_",
-  },
-  mistral: {
-    displayName: "Mistral",
-    kind: "openai-compat",
-    apiKeyUrl: "https://console.mistral.ai/api-keys",
-  },
-  ollama: {
-    displayName: "Ollama (local)",
-    kind: "openai-compat",
-    baseURL: "http://localhost:11434/v1",
-    validate: (entry) =>
-      entry.baseURL ? null : 'Config error: provider "ollama" requires baseURL.',
-  },
-};
-
-export const CLI_PROVIDERS: Record<string, CliProvider> = {
-  "claude-code": {
-    displayName: "Claude Code",
-    kind: "claude-code",
-    probeCmd: "claude",
-  },
-};
-
-// Runtime lookup. Falls through both maps, then defaults to openai-compat
-// for unknown ids. Replaces the old flat KNOWN_PROVIDERS map; call sites
-// in the rest of the codebase stay the same.
-export function getRegistration(name: string): ProviderRegistration {
-  const api = API_PROVIDERS[name];
-  if (api) return { kind: api.kind, validate: api.validate };
-  const cli = CLI_PROVIDERS[name];
-  if (cli) return { kind: cli.kind };
-  return { kind: "openai-compat" };
-}
-
-// Existing — unchanged signature; delegates to getRegistration internally.
-export function validateProviderEntry(name: string, entry: ProviderEntry): string | null;
-```
+Two hardcoded maps keyed by provider id. API providers carry runtime metadata (`kind`, optional `validate`) plus wizard metadata (`displayName`, `apiKeyUrl`, `apiKeyPlaceholder`, fallback `baseURL`, `recommendedModelRegex`). CLI providers carry `displayName`, `kind`, and `probeCmd`. `getRegistration(name)` falls through both maps and defaults to `openai-compat` for unknown ids.
 
 `Record<string, T>` object-literal key order is stable in modern JS/TS, so the declared order of `API_PROVIDERS` doubles as the display order on Screen 1.
 
@@ -161,22 +70,11 @@ Verified against the AI SDK docs:
 - **URL:** `https://models.dev/api.json` (~1.7MB, 110 providers, ~4168 models).
 - **Cache path:** `~/.wrap/cache/models.dev.json` (new `cache/` subdir under `$WRAP_HOME`).
 - **TTL:** 24h. Fresh cache is used as-is; otherwise refetch.
-- **Generic cache helper.** Introduce a new module `src/core/cache.ts` with a small API used here but reusable elsewhere:
-
-  ```ts
-  export async function fetchCached(opts: {
-    url: string;
-    // Relative to $WRAP_HOME/cache/ — e.g. "models.dev.json".
-    path: string;
-    ttlMs: number;
-  }): Promise<{ stale: boolean; content: string }>;
-  ```
-
-  Semantics:
-  - If `cache/<path>` exists and `mtime + ttlMs > now`: return `{ stale: false, content }` without hitting the network.
-  - Otherwise, fetch `url`. On success, write via `writeWrapFile(\`cache/${path}\`, ...)` (the wrap-home IO helper creates the directory on demand) and return `{ stale: false, content }`.
-  - If the fetch fails AND the cache file exists: return `{ stale: true, content }`. Caller decides whether to use it.
-  - If the fetch fails AND there is no cache file: throw.
+- **Generic cache helper.** `fetchCached({url, path, ttlMs})` in `src/fs/cache.ts`. Semantics (source of truth: the file):
+  - Fresh: cache file exists and `mtime + ttlMs > now` → `{ stale: false, content }` without hitting the network.
+  - Miss / expired: fetch `url`, write via `writeWrapFile(path, ...)`, return `{ stale: false, content }`.
+  - Fetch fails with cache present: return `{ stale: true, content }` — caller decides whether to use it.
+  - Fetch fails with no cache: throws.
 
   `stale` is named from the caller's perspective: `true` means "the network call failed and I'm serving you the last known copy." Wizard uses it to log via `verbose()` but otherwise treats the content as usable.
 
@@ -324,20 +222,9 @@ No screen. The wizard unmounts cleanly (same teardown as the dialog), writes con
 
 ### Filesystem preconditions
 
-On a fresh install, `~/.wrap/` does not exist and the wizard is the first thing to write to it. Today the codebase is inconsistent — two write sites create the dir inline, one doesn't and would crash. This spec fixes that by introducing a shared wrap-home IO helper that every module uses.
+> **Status:** Implemented. Source of truth: `src/fs/home.ts`.
 
-#### Shared wrap-home IO helper
-
-New module `src/core/wrap-home-dir.ts`:
-
-```ts
-// All three resolve the base path via getWrapHome(); writes create parent dirs.
-export function readWrapFile(relPath: string): string | null;
-export function writeWrapFile(relPath: string, content: string | Buffer): void;
-export function appendWrapFile(relPath: string, content: string | Buffer): void;
-```
-
-Migrate the existing `~/.wrap/` I/O sites to these helpers in the same PR: `memory.ts`, `logging/writer.ts`, `discovery/watchlist.ts` (fixes the missing-parent crash as a side effect), and the `existsSync`-gated reads in `loadWatchlist`/`loadMemory`/`loadFileConfig`. Listed file paths and line numbers go in the PR description, not here.
+On a fresh install, `~/.wrap/` does not exist and the wizard is the first thing to write to it. All `~/.wrap/*` I/O flows through `src/fs/home.ts` (`readWrapFile` / `writeWrapFile` / `appendWrapFile`), which lazily creates parent directories on every write. Memory, logging, watchlist, and config read use these helpers — the watchlist missing-parent crash is gone as a side effect.
 
 #### What the wizard needs
 
@@ -386,52 +273,15 @@ On any unrecoverable wizard error, unmount the Ink surface cleanly and let the e
 
 Ink, lazy-loaded through the existing `src/session/dialog-host.ts` plumbing. Today `preloadDialogModules()` preloads Ink + React + the command-response component (named `Dialog` pre-rename) — after the extraction it preloads `ResponseDialog` and `ConfigWizardDialog` side by side. Mount with `render(<ConfigWizardDialog/>, { stdout: process.stderr, patchConsole: false, alternateScreen: true })`. `mountDialog` is renamed to `mountResponseDialog`; add a sibling `mountConfigWizardDialog`. Stdin-drain-on-mount and `/dev/tty` fallback for piped stdin follow the same pattern.
 
-### Extracting the generic `<Dialog>`
+### Generic `<Dialog>` chrome
 
-The existing component in `src/tui/dialog.tsx` (~420 lines) is mostly tied to command-response state — the command slot, explanation, plan, output slot, and action bar all belong to `ResponseDialog`. But the **chrome around the content** is pure layout and applies verbatim to the wizard:
+> **Status:** Implemented. Source of truth: `src/tui/dialog.tsx`, `src/tui/response-dialog.tsx`, `src/tui/risk-presets.ts`, `src/tui/border.ts`.
 
-- Width calculation from `useWindowSize().columns` + margin
-- Top border (`topBorderSegments`)
-- Left + right vertical gradient bars sized to inner content height
-- Inner `<Box>` with `paddingTop`/`paddingBottom`/`ref` for `useBoxMetrics` height measurement
-- Bottom border with optional status text (`bottomBorderSegments`)
+The command-response component was mostly tied to its own state, but the chrome around the content (terminal-centered outer layout, width clamping, top/bottom borders, gradient bars) is pure layout and applies verbatim to the wizard. It lives in `src/tui/dialog.tsx` as a data-driven component that takes `gradientStops`, an optional `badge`, `bottomStatus`, `naturalContentWidth`, and children. It knows nothing about risk levels, wizards, or any other "kind of dialog" notion — callers own the semantics.
 
-Move this into the new `src/tui/dialog.tsx`:
+`border.ts` was adjusted in the same refactor: `topBorderSegments(totalWidth, stops, badge?)` is data-driven, no preset lookup. The risk-level preset map moved to `src/tui/risk-presets.ts`; `ResponseDialog` reads the preset based on the current response's `riskLevel` and passes `stops` + `badge` into `<Dialog>`.
 
-```tsx
-type Badge = {
-  fg: Color;        // RGB tuple
-  bg: Color;
-  icon: string;     // 1-2 cell glyph
-  label: string;
-};
-
-type DialogProps = {
-  gradientStops: Color[];          // gradient ramp for top border + left bar
-  badge?: Badge;                   // optional badge embedded in top border
-  bottomStatus?: string;           // threaded into bottomBorderSegments
-  naturalContentWidth: number;     // caller-computed max text width
-  children: ReactNode;             // rendered inside the inner Box
-};
-
-export function Dialog({ gradientStops, badge, bottomStatus, naturalContentWidth, children }: DialogProps);
-```
-
-`Dialog` knows nothing about risk levels, wizards, or any other notion of "what kind of dialog this is". It takes primitive styling inputs and renders a bordered frame around arbitrary children. Callers own the semantics and pick their own stops + badge.
-
-`Dialog` owns: `termCols`, width/height calculation, `useBoxMetrics`, the left/right border arrays, the outer centering `<Box>`, and rendering top/bottom borders via `topBorderSegments`/`bottomBorderSegments`.
-
-**Adjust `border.ts` accordingly.** Today `topBorderSegments(totalWidth, riskLevel)` looks up stops and badge from a `RISK` map keyed by risk level. Change the signature to `topBorderSegments(totalWidth, stops, badge?)` — purely data-driven, no preset lookup. `interpolateGradient` similarly takes `stops` instead of a risk-level key. The `RISK` map itself moves out of `border.ts`:
-
-- **Risk presets for `ResponseDialog`** → a new `src/tui/risk-presets.ts` (or kept co-located with `response-dialog.tsx`). Exports `RISK_PRESETS: Record<RiskLevel, { stops, badge }>`. `ResponseDialog` reads its preset based on the current `riskLevel` from the LLM response and passes `stops` + `badge` into `<Dialog>`.
-- **Wizard badge + stops** → hardcoded as constants at the top of `src/tui/config-wizard-dialog.tsx`: `const WIZARD_STOPS = [...]; const WIZARD_BADGE = { fg, bg, icon: "🧙", label: "setup wizard" };`. `ConfigWizardDialog` passes both into `<Dialog>`.
-
-Icon is plain `🧙` rather than a skin-tone + ZWJ variant — the multi-code-point variants render inconsistently across terminals.
-
-Then:
-
-- **`ResponseDialog`** drops ~150 lines of chrome bookkeeping. It imports `RISK_PRESETS`, looks up `const preset = RISK_PRESETS[riskLevel]`, and returns `<Dialog gradientStops={preset.stops} badge={preset.badge} bottomStatus={...} naturalContentWidth={...}>{ response-specific content }</Dialog>`.
-- **`ConfigWizardDialog`** returns `<Dialog gradientStops={WIZARD_STOPS} badge={WIZARD_BADGE} bottomStatus={screen.tag === "loading-models" ? "Loading models list…" : undefined}>{ current screen }</Dialog>`.
+**Still unbuilt (stage 7):** `ConfigWizardDialog` will hardcode its own `WIZARD_STOPS` and `WIZARD_BADGE = { fg, bg, icon: "🧙", label: "setup wizard" }`. The icon is plain `🧙` rather than a skin-tone + ZWJ variant — multi-code-point variants render inconsistently across terminals.
 
 ### List components: `@inkjs/ui`
 
@@ -495,16 +345,10 @@ Reducer transitions happen on `screen`; top-level fields are updated when a scre
 
 ## Implementation plan
 
-Stages land in order. The first five are independent of one another except where noted and can also each be split further if they grow — each ends in a committable, non-regressing state. The wizard itself is split across the last three stages; those last three intentionally leave the tree in partially-wired states between commits, which is fine.
-
-1. **`wrap-home-dir` helper + migrations.** Centralize `~/.wrap/*` I/O through one module and migrate the existing inline `mkdirSync`/`readFileSync`/`writeFileSync`/`appendFileSync` sites onto it. Fixes the `watchlist.ts` missing-parent crash as a side effect. No behavior change anywhere else.
-
-2. **`Dialog` extraction + rename.** Separate the generic bordered chrome from the command-response content. Pure refactor — confirmation dialog renders identically after.
-
-3. **`fetchCached` helper.** Standalone cache+fetch primitive with the semantics described in [Generic cache helper](#generic-cache-helper). No consumers yet. Depends on stage 1.
-
-4. **Provider registry consolidation.** Replace the flat `KNOWN_PROVIDERS` map with `API_PROVIDERS` + `CLI_PROVIDERS` maps that also carry the wizard's display metadata. Runtime behavior unchanged; adding providers now has a single touch point.
-
+1. ✅ **`src/fs/home.ts` helper + migrations.** Centralized `~/.wrap/*` I/O, fixed the `watchlist.ts` missing-parent crash.
+2. ✅ **`Dialog` extraction + rename.** Separated generic chrome from command-response content.
+3. ✅ **`fetchCached` helper.** In `src/fs/cache.ts`.
+4. ✅ **Provider registry consolidation.** Replaced the flat `KNOWN_PROVIDERS` map with `API_PROVIDERS` + `CLI_PROVIDERS`.
 5. **`resolveProvider` claude-code exemption.** Allow a `claude-code` entry to have no `model` field without throwing. Small correctness fix; manually-edited configs with `{"claude-code": {}}` start working.
 
 6. **Wizard reducer + data pipeline.** Pure-logic scaffolding: `WizardState` type and reducer, provider-selection flow, model filter + sort + recommendation logic, pre-write `validateProviderEntry` pass, config-write path. No UI yet — reducer is exercised by unit tests only. Tree doesn't run the wizard at runtime; nothing in `main.ts` changes yet. This is where every screen-transition edge case and every filter/sort invariant gets nailed down in isolation from Ink.
@@ -515,4 +359,4 @@ Stages land in order. The first five are independent of one another except where
 
 ### Stage dependencies
 
-Stages 1–5 are mutually independent except for stage 3 depending on stage 1. Stages 6–8 run sequentially and depend on all five prerequisites.
+Stages 6–8 run sequentially and depend on stages 1–5.
