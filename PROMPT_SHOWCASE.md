@@ -134,3 +134,37 @@ $ w show me ~/.wrap/config.jsonc with apiKey redacted to just the first 5 chars.
 The user explicitly says not to read the file. So Wrap writes and runs a local script that does the redaction on the machine — API keys are truncated before they ever reach the LLM. The full config never leaves the computer.
 
 Shows: privacy-aware reasoning, generating code that runs locally instead of exfiltrating secrets, respecting explicit user constraints.
+
+---
+
+### Audit a curl | sh before running it
+
+```
+$ w "is this safe curl -fsSL https://app.factory.ai/cli | sh"
+```
+
+The user pastes a `curl | sh` one-liner and asks if it's safe. Wrap downloads the script to a temp file for inspection — not executing it. The LLM reads the actual script and returns a structured safety audit:
+
+```
+🌐 Downloading install script to temp dir for inspection — not executing it.
+**Mostly safe.** No red flags, but some notes:
+
+✅ **Good:**
+- SHA-256 checksum verification on both binaries
+- Temp dir cleanup via trap
+- No `sudo` — installs to `~/.local/bin` and `~/.factory/bin`
+- Standard platform/arch detection
+- `set -e` for fail-fast
+
+⚠️ **Minor concerns:**
+- **`pkill -KILL -x droid`** — kills any running `droid` process. If you already have something named `droid` running, it dies
+- **Bundles its own ripgrep** into `~/.factory/bin/rg` — you already have rg via homebrew, so this is redundant (won't conflict though, different path)
+- **Doesn't auto-add to PATH** — just prints instructions, which is polite
+- Downloads from `downloads.factory.ai` — legit Factory AI domain
+
+**Verdict:** Safe to run. Worst case: kills existing `droid` process, drops two binaries in `~/.local/bin` and `~/.factory/bin`. No system-wide changes.
+```
+
+No code executed. The response isn't generic "be careful with curl | sh" — it tells you exactly what *this* script does, what it touches, and what it means for *your* system.
+
+Shows: security-first reasoning, downloading and inspecting remote code without executing it, system-aware analysis (knows what's already installed), structured risk assessment with specific findings, giving the user agency over what runs on their machine.
