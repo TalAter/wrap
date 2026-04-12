@@ -1,3 +1,6 @@
+import type { ProviderEntry } from "../config/config.ts";
+import type { WizardCallbacks } from "../tui/config-wizard-dialog.tsx";
+import type { ModelsDevData } from "../wizard/models-filter.ts";
 import type { AppEvent, AppState } from "./state.ts";
 
 export type DialogHost = {
@@ -5,34 +8,39 @@ export type DialogHost = {
   unmount(): void;
 };
 
+export type WizardResult = {
+  entries: Record<string, ProviderEntry>;
+  defaultProvider: string;
+};
+
 type DialogModules = {
   ink: typeof import("ink");
   react: typeof import("react");
   ResponseDialog: typeof import("../tui/response-dialog.tsx").ResponseDialog;
+  ConfigWizardDialog: typeof import("../tui/config-wizard-dialog.tsx").ConfigWizardDialog;
 };
 
 let cached: DialogModules | null = null;
 
 /**
- * Lazy-load Ink + React + ResponseDialog. Idempotent. The session kicks
- * this off in parallel with the first LLM call so by the time the first
- * dialog mount is needed, the modules are already loaded and
- * `mountResponseDialog` is synchronous.
+ * Lazy-load Ink + React + both dialog components. Idempotent.
  */
 export async function preloadDialogModules(): Promise<void> {
   if (cached) return;
-  const [ink, react, responseDialogModule] = await Promise.all([
+  const [ink, react, responseDialogModule, wizardModule] = await Promise.all([
     import("ink"),
     import("react"),
     import("../tui/response-dialog.tsx"),
+    import("../tui/config-wizard-dialog.tsx"),
   ]);
-  cached = { ink, react, ResponseDialog: responseDialogModule.ResponseDialog };
+  cached = {
+    ink,
+    react,
+    ResponseDialog: responseDialogModule.ResponseDialog,
+    ConfigWizardDialog: wizardModule.ConfigWizardDialog,
+  };
 }
 
-/**
- * Mount the Ink command-response dialog synchronously. Throws if
- * `preloadDialogModules()` hasn't resolved at least once.
- */
 export function mountResponseDialog(props: {
   state: AppState;
   dispatch: (e: AppEvent) => void;
@@ -54,6 +62,40 @@ export function mountResponseDialog(props: {
       app.unmount();
     },
   };
+}
+
+/**
+ * Mount the config wizard in Ink's alt-screen. Returns a promise that
+ * resolves with the wizard result on success or `null` on user cancel.
+ */
+export async function mountConfigWizardDialog(callbacks: {
+  fetchModels: () => Promise<ModelsDevData>;
+  probeCliBinaries: () => Record<string, boolean>;
+}): Promise<WizardResult | null> {
+  if (!cached) await preloadDialogModules();
+  // preloadDialogModules guarantees cached is populated
+  const modules = cached;
+  if (!modules) throw new Error("mountConfigWizardDialog: preloadDialogModules() failed");
+  const { ink, react, ConfigWizardDialog } = modules;
+
+  return new Promise<WizardResult | null>((resolve) => {
+    const props: WizardCallbacks = {
+      ...callbacks,
+      onDone: (entries, defaultProvider) => {
+        app.unmount();
+        resolve({ entries, defaultProvider });
+      },
+      onCancel: () => {
+        app.unmount();
+        resolve(null);
+      },
+    };
+    const app = ink.render(react.createElement(ConfigWizardDialog, props), {
+      stdout: process.stderr,
+      patchConsole: false,
+      alternateScreen: true,
+    });
+  });
 }
 
 /** Test-only — clear the lazy module cache. */

@@ -20,6 +20,8 @@ export type TextInputProps =
       onChange: (value: string) => void;
       onSubmit: (value: string) => void;
       placeholder?: string;
+      /** Render each character as `•`. Cursor state keeps the real text. */
+      masked?: boolean;
     }
   | {
       readOnly: true;
@@ -42,7 +44,11 @@ const metaKeys = new Map<string, KeyHandler>([
   ["f", (c) => c.wordRight()],
 ]);
 
-function EditableTextInput({ value, onChange, onSubmit, placeholder }: EditableProps) {
+function mask(text: string): string {
+  return "•".repeat(text.length);
+}
+
+function EditableTextInput({ value, onChange, onSubmit, placeholder, masked }: EditableProps) {
   const [cursor, setCursor] = useState(() => new Cursor(value, value.length));
   const killRef = useRef<string | undefined>(undefined);
 
@@ -103,9 +109,11 @@ function EditableTextInput({ value, onChange, onSubmit, placeholder }: EditableP
   return (
     <InputFrame>
       <Text>
-        {cursor.beforeCursor}
-        <Text inverse>{cursor.charAtCursor}</Text>
-        {cursor.afterCursor}
+        {masked ? mask(cursor.beforeCursor) : cursor.beforeCursor}
+        <Text inverse>
+          {masked ? (cursor.charAtCursor === " " ? " " : "•") : cursor.charAtCursor}
+        </Text>
+        {masked ? mask(cursor.afterCursor) : cursor.afterCursor}
         {showPlaceholder ? <Text color={PLACEHOLDER_COLOR}>{placeholder}</Text> : null}
       </Text>
     </InputFrame>

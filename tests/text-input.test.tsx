@@ -58,6 +58,32 @@ describe("TextInput — editable", () => {
     expect(stripAnsi(lastFrame() ?? "")).not.toContain("actually...");
   });
 
+  test("masked mode renders dots instead of characters", () => {
+    const { lastFrame } = render(
+      <TextInput value="secret" masked onChange={() => {}} onSubmit={() => {}} />,
+    );
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).not.toContain("secret");
+    expect(text).toContain("•");
+  });
+
+  test("masked mode still calls onSubmit with real value", async () => {
+    let submitted: string | undefined;
+    const { stdin } = render(
+      <TextInput
+        value="key123"
+        masked
+        onChange={() => {}}
+        onSubmit={(v) => {
+          submitted = v;
+        }}
+      />,
+    );
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(submitted).toBe("key123");
+  });
+
   test("does not handle Esc (parent owns it)", async () => {
     let changed = false;
     const { stdin } = render(
