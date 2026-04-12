@@ -1,11 +1,21 @@
-export function spawnAndRead(cmd: string[], prompt: string, opts?: { cwd?: string }): string {
-  const result = Bun.spawnSync(cmd, {
+export async function spawnAndRead(
+  cmd: string[],
+  prompt: string,
+  opts?: { cwd?: string },
+): Promise<string> {
+  const proc = Bun.spawn(cmd, {
     stdin: Buffer.from(prompt),
     cwd: opts?.cwd,
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  if (result.exitCode !== 0) {
-    const stderr = result.stderr.toString().trim();
-    throw new Error(stderr || `${cmd[0]} failed`);
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(stderr.trim() || `${cmd[0]} failed`);
   }
-  return result.stdout.toString().trim();
+  return stdout.trim();
 }

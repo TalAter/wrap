@@ -32,7 +32,7 @@ export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
         args.push("--json-schema", JSON.stringify(z.toJSONSchema(schema)));
       }
       args.push("-p");
-      const raw = spawnAndRead(args, flattenMessages(input.messages), { cwd: tmpdir() });
+      const raw = await spawnAndRead(args, flattenMessages(input.messages), { cwd: tmpdir() });
       if (!schema) return raw;
       const cleaned = stripFences(raw);
       let json: unknown;
