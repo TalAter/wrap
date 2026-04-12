@@ -80,7 +80,7 @@ describe("ConfigWizardDialog", () => {
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("LLM provider");
-    expect(text).toContain("API Providers");
+    expect(text).toContain("SELECT API PROVIDER");
     expect(text).toContain("Anthropic");
     expect(text).toContain("setup wizard");
   });

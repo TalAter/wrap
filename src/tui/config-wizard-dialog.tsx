@@ -12,6 +12,25 @@ import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog } from "./dialog.tsx";
 import { TextInput } from "./text-input.tsx";
 
+type HintItem = { combo: string; label: string; primary?: boolean };
+
+function KeyHints({ items }: { items: readonly HintItem[] }) {
+  return (
+    <Text>
+      <Text>{"  "}</Text>
+      {items.map((item, i) => (
+        <Text key={item.combo}>
+          {i > 0 ? <Text color="#414150">{"  │  "}</Text> : null}
+          <Text bold color={item.primary ? "#f5c864" : "#aaaac3"}>
+            {item.combo}
+          </Text>
+          <Text color="#73738c">{` ${item.label}`}</Text>
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
 const WIZARD_STOPS: Color[] = [
   [120, 180, 255],
   [100, 150, 240],
@@ -139,7 +158,7 @@ function ProviderSelectionScreen({
   const hasAnyCli = Object.values(cliAvailable).some(Boolean);
 
   const items = useMemo(() => {
-    const list: ChecklistItem[] = [{ type: "header", label: "API Providers" }];
+    const list: ChecklistItem[] = [{ type: "header", label: "Select API Provider(s)" }];
     for (const [name, p] of Object.entries(API_PROVIDERS)) {
       list.push({ type: "option", label: p.displayName, value: name });
     }
@@ -173,12 +192,24 @@ function ProviderSelectionScreen({
     <Box flexDirection="column">
       <Text>Wrap needs at least one LLM provider configured.</Text>
       <Text> </Text>
-      <Checklist items={items} checked={checked} onToggle={handleToggle} onSubmit={handleSubmit} />
+      <Checklist
+        items={items}
+        checked={checked}
+        width={CONTENT_WIDTH}
+        onToggle={handleToggle}
+        onSubmit={handleSubmit}
+      />
       <Text> </Text>
-      <Text dimColor>
-        {"  Space to toggle"}
-        {checked.size > 0 ? " │ ⏎ to continue" : ""}
-      </Text>
+      <KeyHints
+        items={
+          checked.size > 0
+            ? [
+                { combo: "Space", label: "to toggle" },
+                { combo: "⏎", label: "to continue", primary: true },
+              ]
+            : [{ combo: "Space", label: "to toggle" }]
+        }
+      />
     </Box>
   );
 }
@@ -222,7 +253,7 @@ function ApiKeyScreen({
         onSubmit={() => dispatch({ type: "submit-key" })}
       />
       <Text> </Text>
-      <Text dimColor> ⏎ to continue</Text>
+      <KeyHints items={[{ combo: "⏎", label: "to continue", primary: true }]} />
     </Box>
   );
 }
@@ -266,7 +297,12 @@ function ModelPickerScreen({
         visibleOptionCount={Math.min(MAX_VISIBLE_OPTIONS, models.length)}
       />
       <Text> </Text>
-      <Text dimColor> ↑↓ to move │ ⏎ to continue</Text>
+      <KeyHints
+        items={[
+          { combo: "↑↓", label: "to move" },
+          { combo: "⏎", label: "to continue", primary: true },
+        ]}
+      />
     </Box>
   );
 }
@@ -284,7 +320,12 @@ function DisclaimerScreen({ dispatch }: { dispatch: React.Dispatch<WizardAction>
         own terms — bring your own subscription and credentials.
       </Text>
       <Text> </Text>
-      <Text dimColor> ⏎ to accept │ Esc to skip this provider</Text>
+      <KeyHints
+        items={[
+          { combo: "⏎", label: "to accept", primary: true },
+          { combo: "Esc", label: "to skip this provider" },
+        ]}
+      />
     </Box>
   );
 }
@@ -321,7 +362,12 @@ function DefaultPickerScreen({
       <Text> </Text>
       <Select options={options} onChange={setSelected} />
       <Text> </Text>
-      <Text dimColor> ↑↓ to move │ ⏎ to select</Text>
+      <KeyHints
+        items={[
+          { combo: "↑↓", label: "to move" },
+          { combo: "⏎", label: "to select", primary: true },
+        ]}
+      />
     </Box>
   );
 }
