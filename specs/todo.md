@@ -47,7 +47,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## LLM Integration
 
-- [ ] Test removing system message from Claude Code provider
 - [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
 - [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the display label lives separately on `ResolvedProvider` and is computed via `formatProvider(resolved)`. Code that holds a `Provider` and wants to display the model has to be passed the resolved provider too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `formatProvider(resolved)`, and update test fixtures to set `label: "test / test"`. After this lands, drop the `model` field from `LoopOptions` / `RunRoundOptions` and read `provider.label` directly inside `runRound` and `runLoop`.
@@ -106,7 +105,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Future Ideas
 
-- [ ] Consider running Claude Code in user's cwd as CLI tool provider for filesystem context
 - [ ] Model-switching shorthand — e.g., `W` (uppercase) uses premium model, `w` uses default
 - [ ] Shell keybinding integration — keybinding reads raw line buffer (`$BUFFER` in zsh, `$READLINE_LINE` in bash) and sends to Wrap. Fully bypasses shell expansion (globs, `$()`, backticks). Aliases only protect against globs; this is the complete solution.
 - [ ] Speculative LLM call for large piped input — check if command can consume stdin directly
