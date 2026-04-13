@@ -14,6 +14,7 @@ import {
 } from "../core/runner.ts";
 import { executeShellCommand } from "../core/shell.ts";
 import type { Transcript } from "../core/transcript.ts";
+import { truncateMiddle } from "../core/truncate.ts";
 import { verbose } from "../core/verbose.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { getWrapHome } from "../fs/home.ts";
@@ -169,12 +170,7 @@ export async function runSession(
       if (exec.stderr.trim()) {
         stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
       }
-      if (stepOutput.length > maxCapturedOutput) {
-        const total = stepOutput.length;
-        stepOutput =
-          stepOutput.slice(0, maxCapturedOutput) +
-          `\n[…truncated, showing first ${maxCapturedOutput} of ${total} chars]`;
-      }
+      stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
       notifications.emit({ kind: "step-output", text: stepOutput });
       transcript.push({
         kind: "confirmed_step",

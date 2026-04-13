@@ -8,6 +8,7 @@ import { prettyPath, resolvePath } from "./paths.ts";
 import { runRound } from "./round.ts";
 import { executeShellCommand } from "./shell.ts";
 import type { Transcript } from "./transcript.ts";
+import { truncateMiddle } from "./truncate.ts";
 import { verbose } from "./verbose.ts";
 
 export type LoopState = {
@@ -239,12 +240,7 @@ export async function* runLoop(
     if (exec.stderr.trim()) {
       stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
     }
-    if (stepOutput.length > options.maxCapturedOutput) {
-      const total = stepOutput.length;
-      stepOutput =
-        stepOutput.slice(0, options.maxCapturedOutput) +
-        `\n[…truncated, showing first ${options.maxCapturedOutput} of ${total} chars]`;
-    }
+    stepOutput = truncateMiddle(stepOutput, options.maxCapturedOutput);
 
     yield { type: "step-output", text: stepOutput };
     transcript.push({

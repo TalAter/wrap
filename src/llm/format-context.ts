@@ -1,3 +1,4 @@
+import { truncateMiddle } from "../core/truncate.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import type { Memory } from "../memory/types.ts";
 
@@ -27,12 +28,9 @@ export function formatContext(params: FormatContextParams): string {
   const sections: string[] = [];
 
   if (pipedInput) {
-    const truncate = maxPipedInputChars != null && pipedInput.length > maxPipedInputChars;
-    const header = truncate
-      ? `${constants.sectionPipedInput} (truncated — showing first ${maxPipedInputChars} of ${pipedInput.length} chars)`
-      : constants.sectionPipedInput;
-    const content = truncate ? pipedInput.slice(0, maxPipedInputChars) : pipedInput;
-    sections.push(`${header}\n${content}`);
+    const content =
+      maxPipedInputChars != null ? truncateMiddle(pipedInput, maxPipedInputChars) : pipedInput;
+    sections.push(`${constants.sectionPipedInput}\n${content}`);
   }
 
   const cwdSlash = cwd.endsWith("/") ? cwd : `${cwd}/`;

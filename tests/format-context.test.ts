@@ -288,8 +288,10 @@ describe("formatContext", () => {
       const result = formatContext(
         makeParams({ pipedInput: longContent, maxPipedInputChars: 200 }),
       );
-      expect(result).toContain("x".repeat(200));
-      expect(result).not.toContain("x".repeat(201));
+      expect(result).toContain("…truncated");
+      expect(result).toContain("of 500 chars");
+      // Should not contain the full untruncated content
+      expect(result).not.toContain("x".repeat(500));
     });
 
     test("truncation note shows correct character counts", () => {
@@ -297,7 +299,8 @@ describe("formatContext", () => {
       const result = formatContext(
         makeParams({ pipedInput: longContent, maxPipedInputChars: 200 }),
       );
-      expect(result).toContain("## Piped input (truncated — showing first 200 of 500 chars)");
+      expect(result).toContain("of 500 chars");
+      expect(result).toMatch(/showing first \d+ and last \d+/);
     });
 
     test("no truncation note when under limit", () => {
