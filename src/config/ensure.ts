@@ -86,7 +86,7 @@ export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Conf
     throw new Error("unreachable"); // satisfy TS return type
   }
 
-  writeWizardConfig(result.entries, result.defaultProvider, home);
+  writeWizardConfig(result, home);
   writeSchema(home);
   chrome("Configuration saved", "🧠");
   return loadConfig(envOverrides);

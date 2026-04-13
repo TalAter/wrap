@@ -39,14 +39,25 @@ describe("buildConfig", () => {
     );
     expect(config.nerdFonts).toBe(false);
   });
+
+  test("includes nerdFonts: true when passed", () => {
+    const config = buildConfig(
+      { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+      "anthropic",
+      true,
+    );
+    expect(config.nerdFonts).toBe(true);
+  });
 });
 
 describe("writeWizardConfig", () => {
   test("writes config.jsonc with $schema + providers + defaultProvider", () => {
     const home = tmpHome();
     writeWizardConfig(
-      { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
-      "anthropic",
+      {
+        entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+        defaultProvider: "anthropic",
+      },
       home,
     );
     const raw = readFileSync(join(home, "config.jsonc"), "utf8");
@@ -61,8 +72,10 @@ describe("writeWizardConfig", () => {
   test("serializes with 2-space indent (human-readable)", () => {
     const home = tmpHome();
     writeWizardConfig(
-      { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
-      "anthropic",
+      {
+        entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+        defaultProvider: "anthropic",
+      },
       home,
     );
     const raw = readFileSync(join(home, "config.jsonc"), "utf8");
@@ -74,10 +87,12 @@ describe("writeWizardConfig", () => {
     const home = tmpHome();
     writeWizardConfig(
       {
-        anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" },
-        openai: { apiKey: "sk-o", model: "gpt-5" },
+        entries: {
+          anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" },
+          openai: { apiKey: "sk-o", model: "gpt-5" },
+        },
+        defaultProvider: "openai",
       },
-      "openai",
       home,
     );
     const parsed = JSON.parse(readFileSync(join(home, "config.jsonc"), "utf8"));
@@ -85,11 +100,28 @@ describe("writeWizardConfig", () => {
     expect(parsed.defaultProvider).toBe("openai");
   });
 
+  test("writes nerdFonts: true to disk when set", () => {
+    const home = tmpHome();
+    writeWizardConfig(
+      {
+        entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+        defaultProvider: "anthropic",
+        nerdFonts: true,
+      },
+      home,
+    );
+    const parsed = JSON.parse(readFileSync(join(home, "config.jsonc"), "utf8"));
+    expect(parsed.nerdFonts).toBe(true);
+  });
+
   test("validation error prevents the file from being written", () => {
     const home = tmpHome();
-    expect(() => writeWizardConfig({ ollama: { model: "llama3.2" } }, "ollama", home)).toThrow(
-      /ollama.*requires baseURL/,
-    );
+    expect(() =>
+      writeWizardConfig(
+        { entries: { ollama: { model: "llama3.2" } }, defaultProvider: "ollama" },
+        home,
+      ),
+    ).toThrow(/ollama.*requires baseURL/);
     expect(() => readFileSync(join(home, "config.jsonc"), "utf8")).toThrow();
   });
 });

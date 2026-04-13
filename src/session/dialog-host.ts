@@ -11,6 +11,7 @@ export type DialogHost = {
 export type WizardResult = {
   entries: Record<string, ProviderEntry>;
   defaultProvider: string;
+  nerdFonts?: boolean;
 };
 
 type DialogModules = {
