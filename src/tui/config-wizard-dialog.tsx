@@ -2,12 +2,15 @@ import { Select } from "@inkjs/ui";
 import { Box, Text, useInput, useWindowSize } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
+import { updateConfig } from "../config/store.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
+import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initWizardState, reduce, type WizardAction } from "../wizard/state.ts";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
+import { NerdIconsSection } from "./nerd-icons-section.tsx";
 import { TextInput } from "./text-input.tsx";
 import { KeyHints, WIZARD_BADGE, WIZARD_CONTENT_WIDTH, WIZARD_STOPS } from "./wizard-chrome.tsx";
 
@@ -124,9 +127,11 @@ export function ProvidersSection({
 export type WizardCallbacks = {
   fetchModels: () => Promise<ModelsDevData>;
   probeCliBinaries: () => Record<string, boolean>;
-  onDone: (entries: Record<string, ProviderEntry>, defaultProvider: string) => void;
+  onDone: (result: WizardResult) => void;
   onCancel: () => void;
 };
+
+type WizardSection = "nerd-icons" | "providers";
 
 export function ConfigWizardDialog({
   fetchModels,
@@ -134,11 +139,27 @@ export function ConfigWizardDialog({
   onDone,
   onCancel,
 }: WizardCallbacks) {
+  const [section, setSection] = useState<WizardSection>("nerd-icons");
+  const nerdFontsRef = useRef<boolean | undefined>(undefined);
+
+  if (section === "nerd-icons") {
+    return (
+      <NerdIconsSection
+        onDone={(result) => {
+          nerdFontsRef.current = result.nerdFonts;
+          updateConfig({ nerdFonts: result.nerdFonts });
+          setSection("providers");
+        }}
+        onCancel={onCancel}
+      />
+    );
+  }
+
   return (
     <ProvidersSection
       fetchModels={fetchModels}
       probeCliBinaries={probeCliBinaries}
-      onDone={(result) => onDone(result.entries, result.defaultProvider)}
+      onDone={(result) => onDone({ ...result, nerdFonts: nerdFontsRef.current })}
       onCancel={onCancel}
     />
   );

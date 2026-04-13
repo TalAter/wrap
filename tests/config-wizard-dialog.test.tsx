@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import type { ProviderEntry } from "../src/config/config.ts";
-import { setConfig } from "../src/config/store.ts";
+import { getConfig, setConfig } from "../src/config/store.ts";
 import { stripAnsi } from "../src/core/ansi.ts";
+import type { WizardResult } from "../src/session/dialog-host.ts";
 import { ConfigWizardDialog, type WizardCallbacks } from "../src/tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../src/wizard/models-filter.ts";
 
@@ -51,15 +51,15 @@ const FIXTURE: ModelsDevData = {
 const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
 function makeCallbacks(overrides?: Partial<WizardCallbacks>): WizardCallbacks & {
-  result: { entries: Record<string, ProviderEntry>; defaultProvider: string } | null;
+  result: WizardResult | null;
   cancelled: boolean;
 } {
-  const state = { result: null as ReturnType<typeof makeCallbacks>["result"], cancelled: false };
+  const state = { result: null as WizardResult | null, cancelled: false };
   return {
     fetchModels: () => Promise.resolve(FIXTURE),
     probeCliBinaries: () => ({}),
-    onDone: (entries, defaultProvider) => {
-      state.result = { entries, defaultProvider };
+    onDone: (result) => {
+      state.result = result;
     },
     onCancel: () => {
       state.cancelled = true;
@@ -74,23 +74,28 @@ function makeCallbacks(overrides?: Partial<WizardCallbacks>): WizardCallbacks & 
   };
 }
 
+/** Pass through the nerd icons screen by pressing Enter (Yes). */
+async function passNerdIcons(stdin: { write: (s: string) => void }) {
+  await wait();
+  stdin.write("\r"); // Yes (default)
+  await wait();
+}
+
 beforeEach(() => {
   setConfig({});
 });
 
 describe("ConfigWizardDialog", () => {
-  test("renders provider selection on initial mount", async () => {
+  test("starts with nerd icons screen", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("LLM provider");
-    expect(text).toContain("SELECT API PROVIDER");
-    expect(text).toContain("Anthropic");
+    expect(text).toContain("four icons");
     expect(text).toContain("setup wizard");
   });
 
-  test("Esc on provider selection triggers cancel", async () => {
+  test("Esc on nerd icons screen cancels wizard", async () => {
     const cb = makeCallbacks();
     const { stdin } = render(<ConfigWizardDialog {...cb} />);
     await wait();
@@ -99,12 +104,45 @@ describe("ConfigWizardDialog", () => {
     expect(cb.cancelled).toBe(true);
   });
 
-  test("single API provider happy path: select → key → model → done", async () => {
+  test("Yes on nerd icons → updates config store → shows providers", async () => {
+    const cb = makeCallbacks();
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+    await passNerdIcons(stdin);
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("LLM provider");
+    expect(getConfig().nerdFonts).toBe(true);
+  });
+
+  test("No on nerd icons → config store nerdFonts false → shows providers", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await wait();
+    stdin.write("\x1b[B"); // arrow down to No
+    await wait();
+    stdin.write("\r");
+    await wait();
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("LLM provider");
+    expect(getConfig().nerdFonts).toBe(false);
+  });
 
-    // Select Anthropic (first item, already highlighted) → Space to toggle
+  test("Esc on provider selection triggers cancel", async () => {
+    const cb = makeCallbacks();
+    const { stdin } = render(<ConfigWizardDialog {...cb} />);
+    await passNerdIcons(stdin);
+    stdin.write("\x1b");
+    await wait();
+    expect(cb.cancelled).toBe(true);
+  });
+
+  test("full happy path: nerd icons → select provider → key → model → done", async () => {
+    const cb = makeCallbacks();
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+
+    // Nerd icons: Yes
+    await passNerdIcons(stdin);
+
+    // Select Anthropic → Space to toggle
     stdin.write(" ");
     await wait();
     // Submit selection
@@ -135,12 +173,13 @@ describe("ConfigWizardDialog", () => {
     expect(cb.result?.defaultProvider).toBe("anthropic");
     expect(cb.result?.entries.anthropic?.apiKey).toBe("sk-ant-test-key");
     expect(cb.result?.entries.anthropic?.model).toBe("claude-sonnet-4-6");
+    expect(cb.result?.nerdFonts).toBe(true);
   });
 
   test("CLI tools section hidden when no binaries found", async () => {
     const cb = makeCallbacks({ probeCliBinaries: () => ({}) });
-    const { lastFrame } = render(<ConfigWizardDialog {...cb} />);
-    await wait();
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+    await passNerdIcons(stdin);
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).not.toContain("Claude Code");
   });
@@ -149,8 +188,8 @@ describe("ConfigWizardDialog", () => {
     const cb = makeCallbacks({
       probeCliBinaries: () => ({ "claude-code": true }),
     });
-    const { lastFrame } = render(<ConfigWizardDialog {...cb} />);
-    await wait();
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+    await passNerdIcons(stdin);
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Claude Code");
   });
@@ -163,7 +202,9 @@ describe("ConfigWizardDialog", () => {
       });
     const cb = makeCallbacks({ fetchModels });
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
-    await wait();
+
+    // Pass nerd icons
+    await passNerdIcons(stdin);
 
     // Select Anthropic + submit
     stdin.write(" ");

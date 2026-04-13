@@ -82,9 +82,9 @@ export async function mountConfigWizardDialog(callbacks: {
   return new Promise<WizardResult | null>((resolve) => {
     const props: WizardCallbacks = {
       ...callbacks,
-      onDone: (entries, defaultProvider) => {
+      onDone: (result) => {
         app.unmount();
-        resolve({ entries, defaultProvider });
+        resolve(result);
       },
       onCancel: () => {
         app.unmount();
