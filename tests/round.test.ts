@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
+import { setConfig } from "../src/config/store.ts";
 import { RoundError, runRound } from "../src/core/round.ts";
 import type { Transcript } from "../src/core/transcript.ts";
-import { initVerbose, resetVerbose } from "../src/core/verbose.ts";
+import { resetVerboseTimer } from "../src/core/verbose.ts";
 import type { PromptScaffold } from "../src/llm/build-prompt.ts";
 import type { Provider } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
@@ -18,12 +19,12 @@ let stderr: MockStderr;
 
 beforeEach(() => {
   stderr = mockStderr();
-  resetVerbose();
+  setConfig({ verbose: false });
+  resetVerboseTimer();
 });
 
 afterEach(() => {
   stderr.restore();
-  resetVerbose();
 });
 
 function makeTranscript(): Transcript {
@@ -165,7 +166,7 @@ describe("runRound", () => {
   });
 
   test("verbose prints _scratchpad line before the response line when present", async () => {
-    initVerbose(true);
+    setConfig({ verbose: true });
     const { provider } = makeProvider([
       {
         _scratchpad: "Need to plan first.\nSecond thought.",
@@ -190,7 +191,7 @@ describe("runRound", () => {
   });
 
   test("verbose prints nothing when scratchpad is absent", async () => {
-    initVerbose(true);
+    setConfig({ verbose: true });
     const { provider } = makeProvider([
       { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
     ]);

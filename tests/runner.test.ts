@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandResponse } from "../src/command-response.schema.ts";
+import { setConfig } from "../src/config/store.ts";
 import {
   fetchesUrl,
   type LoopEvent,
@@ -26,6 +27,7 @@ let stderr: MockStderr;
 let tmpHome: string;
 
 beforeEach(() => {
+  setConfig({ verbose: false });
   stderr = mockStderr();
   tmpHome = mkdtempSync(join(tmpdir(), "wrap-runner-test-"));
 });

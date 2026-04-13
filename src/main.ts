@@ -1,9 +1,10 @@
 import { ensureConfig } from "./config/ensure.ts";
+import { setConfig } from "./config/store.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
-import { chrome, initNerdFonts } from "./core/output.ts";
+import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
-import { initVerbose, verbose } from "./core/verbose.ts";
+import { verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { loadWatchlist } from "./discovery/watchlist.ts";
@@ -42,8 +43,10 @@ export async function main() {
     const prompt = input.type === "prompt" ? input.prompt : "";
 
     const config = await ensureConfig();
-    initVerbose(modifiers.flags.has("verbose") || config.verbose === true);
-    initNerdFonts(config.nerdFonts === true);
+    setConfig({
+      ...config,
+      verbose: modifiers.flags.has("verbose") || config.verbose === true,
+    });
 
     // CLI flag wins over WRAP_MODEL env var. resolveProvider then parses the
     // raw string and short-circuits to the test sentinel if WRAP_TEST_RESPONSE

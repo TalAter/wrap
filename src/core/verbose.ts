@@ -1,26 +1,18 @@
+import { getConfig } from "../config/store.ts";
 import { dim } from "./ansi.ts";
 import { emit } from "./notify.ts";
 
-let enabled = false;
-let initialized = false;
 let startTime = 0;
 
-/** Called once from main.ts after config loads. */
-export function initVerbose(enable: boolean): void {
-  if (initialized) throw new Error("initVerbose() called more than once");
-  initialized = true;
-  enabled = enable;
-  if (enable) startTime = performance.now();
-}
-
 function prefix(): string {
+  if (!startTime) startTime = performance.now();
   const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
   return dim(`» [+${elapsed}s] `);
 }
 
 /** Emit a verbose line through the notification bus if enabled; no-op if disabled. */
 export function verbose(msg: string): void {
-  if (!enabled) return;
+  if (!getConfig().verbose) return;
   emit({ kind: "verbose", line: `${prefix()}${dim(msg)}\n` });
 }
 
@@ -29,13 +21,11 @@ export function verbose(msg: string): void {
  * Used for the LLM response line where command content stands out.
  */
 export function verboseHighlight(msg: string, highlight: string): void {
-  if (!enabled) return;
+  if (!getConfig().verbose) return;
   emit({ kind: "verbose", line: `${prefix()}${dim(msg)}${highlight}\n` });
 }
 
 /** Reset state — for tests only. */
-export function resetVerbose(): void {
-  enabled = false;
-  initialized = false;
+export function resetVerboseTimer(): void {
   startTime = 0;
 }

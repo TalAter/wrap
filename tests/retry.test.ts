@@ -113,7 +113,9 @@ describe("round retry in runSession", () => {
   let stdoutOutput: string[];
   let stderr: MockStderr;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { setConfig } = await import("../src/config/store.ts");
+    setConfig({ verbose: false });
     stdoutOutput = [];
     console.log = (...args: unknown[]) => {
       stdoutOutput.push(args.map(String).join(" "));
@@ -239,9 +241,9 @@ describe("chrome spinner around LLM call", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const { runSession } = await import("../src/session/session.ts");
-    const { resetVerbose } = await import("../src/core/verbose.ts");
+    const { setConfig } = await import("../src/config/store.ts");
 
-    resetVerbose();
+    setConfig({ verbose: false });
     stderr = mockStderr({ isTTY: true });
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
@@ -267,9 +269,9 @@ describe("chrome spinner around LLM call", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const { runSession } = await import("../src/session/session.ts");
-    const { resetVerbose } = await import("../src/core/verbose.ts");
+    const { setConfig } = await import("../src/config/store.ts");
 
-    resetVerbose();
+    setConfig({ verbose: false });
     stderr = mockStderr({ isTTY: false });
 
     const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));

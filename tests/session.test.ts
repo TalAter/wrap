@@ -11,6 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandResponse } from "../src/command-response.schema.ts";
+import { setConfig } from "../src/config/store.ts";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import type { Provider } from "../src/llm/types.ts";
 import { resetDialogHostCache } from "../src/session/dialog-host.ts";
@@ -23,6 +24,7 @@ let originalConsoleLog: typeof console.log;
 let stdoutLines: string[];
 
 beforeEach(() => {
+  setConfig({ verbose: false });
   stderr = mockStderr();
   tmpHome = mkdtempSync(join(tmpdir(), "wrap-session-test-"));
   process.env.WRAP_HOME = tmpHome;
