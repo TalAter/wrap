@@ -8,11 +8,6 @@ Code: `src/tui/dialog.tsx` (generic chrome), `src/tui/response-dialog.tsx` (comm
 
 Ink (React for CLIs) handles every interactive surface: the confirmation dialog, the config wizard, interactive mode. Non-interactive output stays on the `chrome()` / `chromeRaw()` utilities in `src/core/output.ts`.
 
-**Why Ink**
-- Flexbox/Yoga layout, built-in wrapping, `useInput`/`useStdin`, `measureElement`. Everything we'd otherwise hand-roll.
-- Production-proven in Bun: Anthropic's own Claude Code CLI ships as a Bun-compiled Ink binary.
-- Ink 5+ required. Earlier versions have WASM/compile issues with `bun build --compile`. Yoga 3.2.x (Ink's layout engine) ships as embedded base64 WASM — no native bindings, works with `bun build --compile` (bun#6567, fixed June 2025).
-
 **Why lazy-loaded.** Ink + React + Yoga adds ~1MB to the compiled binary and ~50–100ms of init. The common path — a low-risk command — never needs interactive UI, so Ink must not be paid for on every invocation. Load is kicked off by `preloadDialogModules()` in `src/session/dialog-host.ts`, which runs in parallel with the first LLM call. By the time a dialog is needed the modules are cached and `mountResponseDialog()` is synchronous.
 
 ## Three output tiers
