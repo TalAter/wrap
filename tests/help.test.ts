@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { stripAnsi } from "../src/core/ansi.ts";
 import {
+  animationFits,
   buildDiffEscape,
   renderFlagHelp,
   renderPlain,
@@ -233,6 +234,25 @@ describe("buildDiffEscape", () => {
     expect(out).toContain("\x1b[1B");
     expect(out).toContain("\x1b[1A");
     expect(out).not.toContain("\x1b[2B");
+  });
+});
+
+describe("animationFits", () => {
+  test("true when content fits in terminal", () => {
+    expect(animationFits(20, 40)).toBe(true);
+  });
+
+  test("true when content equals terminal height", () => {
+    expect(animationFits(40, 40)).toBe(true);
+  });
+
+  test("false when content taller than terminal", () => {
+    expect(animationFits(41, 40)).toBe(false);
+  });
+
+  test("true when terminal rows unknown", () => {
+    expect(animationFits(100, undefined)).toBe(true);
+    expect(animationFits(100, 0)).toBe(true);
   });
 });
 

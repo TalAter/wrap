@@ -90,6 +90,18 @@ const FRAMES = 16;
 const FRAME_DELAY = 60;
 const SHINE_RADIUS = 4;
 
+/**
+ * Animation uses cursor-up to return to the logo after scrolling. When
+ * help output is taller than the viewport, the earlier `styled` write
+ * scrolls the logo off-screen; cursor-up then clamps at the viewport
+ * top and subsequent frames paint over the help text. Skip animation
+ * when there isn't enough room.
+ */
+export function animationFits(contentRows: number, terminalRows: number | undefined): boolean {
+  if (!terminalRows || terminalRows <= 0) return true;
+  return contentRows <= terminalRows;
+}
+
 function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
 }
@@ -150,6 +162,11 @@ async function renderAnimated(commands: CLIFlag[], options: CLIFlag[]): Promise<
 
   const totalRows = styled.split("\n").length - 1;
   const artStart = 1;
+
+  if (!animationFits(totalRows, process.stdout.rows)) {
+    process.stdout.write(styled);
+    return;
+  }
 
   process.stdout.write(styled);
 
