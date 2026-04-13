@@ -2,52 +2,15 @@ import { Select } from "@inkjs/ui";
 import { Box, Text, useInput, useWindowSize } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
-import type { Color } from "../core/ansi.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initWizardState, reduce, type WizardAction } from "../wizard/state.ts";
-import type { Badge } from "./border.ts";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { TextInput } from "./text-input.tsx";
+import { KeyHints, WIZARD_BADGE, WIZARD_CONTENT_WIDTH, WIZARD_STOPS } from "./wizard-chrome.tsx";
 
-type HintItem = { combo: string; label: string; primary?: boolean };
-
-function KeyHints({ items }: { items: readonly HintItem[] }) {
-  return (
-    <Text>
-      <Text>{"  "}</Text>
-      {items.map((item, i) => (
-        <Text key={item.combo}>
-          {i > 0 ? <Text color="#414150">{"  │  "}</Text> : null}
-          <Text bold color={item.primary ? "#f5c864" : "#aaaac3"}>
-            {item.combo}
-          </Text>
-          <Text color="#73738c">{` ${item.label}`}</Text>
-        </Text>
-      ))}
-    </Text>
-  );
-}
-
-const WIZARD_STOPS: Color[] = [
-  [120, 180, 255],
-  [100, 150, 240],
-  [90, 120, 210],
-  [80, 100, 180],
-  [70, 80, 150],
-  [60, 60, 100],
-];
-
-const WIZARD_BADGE: Badge = {
-  fg: [180, 210, 255],
-  bg: [30, 50, 90],
-  icon: "🧙",
-  label: "setup wizard",
-};
-
-const CONTENT_WIDTH = 70;
 const MAX_VISIBLE_OPTIONS = 8;
 
 // ── Providers Section ──────────────────────────────────────────────
@@ -111,7 +74,7 @@ export function ProvidersSection({
 
   const { screen } = state;
   const { columns: termCols } = useWindowSize();
-  const innerWidth = dialogInnerWidth(termCols, CONTENT_WIDTH);
+  const innerWidth = dialogInnerWidth(termCols, WIZARD_CONTENT_WIDTH);
   let bottomStatus: string | undefined;
   if (screen.tag === "loading-models") {
     bottomStatus = "Loading models list…";
@@ -122,7 +85,7 @@ export function ProvidersSection({
       gradientStops={WIZARD_STOPS}
       badge={WIZARD_BADGE}
       bottomStatus={bottomStatus}
-      naturalContentWidth={CONTENT_WIDTH}
+      naturalContentWidth={WIZARD_CONTENT_WIDTH}
     >
       {screen.tag === "selecting-providers" && (
         <ProviderSelectionScreen
