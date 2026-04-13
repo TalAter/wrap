@@ -1,6 +1,11 @@
 import { tmpdir } from "node:os";
 import { z } from "zod";
-import { stripFences } from "../../core/parse-response.ts";
+import {
+  INVALID_JSON_MSG,
+  INVALID_RESPONSE_MSG,
+  StructuredOutputError,
+  stripFences,
+} from "../../core/parse-response.ts";
 import type { ConversationMessage, Provider, ResolvedProvider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
@@ -39,9 +44,13 @@ export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
       try {
         json = JSON.parse(cleaned);
       } catch {
-        throw new Error("LLM returned invalid JSON.");
+        throw new StructuredOutputError(INVALID_JSON_MSG, cleaned);
       }
-      return schema.parse(json);
+      const result = schema.safeParse(json);
+      if (!result.success) {
+        throw new StructuredOutputError(INVALID_RESPONSE_MSG, cleaned);
+      }
+      return result.data;
     },
   };
 }

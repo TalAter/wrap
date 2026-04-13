@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
+import { StructuredOutputError } from "../src/core/parse-response.ts";
 import { extractFailedText, isStructuredOutputError } from "../src/core/round.ts";
 import { fetchesUrl } from "../src/core/runner.ts";
 import { SPINNER_TEXT } from "../src/core/spinner.ts";
@@ -101,6 +102,11 @@ describe("extractFailedText", () => {
 
   test("returns empty string for NoObjectGeneratedError without text", () => {
     expect(extractFailedText(mockNoObjectError())).toBe("");
+  });
+
+  test("extracts text from StructuredOutputError", () => {
+    const raw = '{"type":"command","content":"ls","risk_level":"none"}';
+    expect(extractFailedText(new StructuredOutputError("invalid response", raw))).toBe(raw);
   });
 
   test("returns empty string for other errors", () => {

@@ -6,6 +6,7 @@ import { runCommandPrompt } from "../llm/index.ts";
 import type { PromptInput, Provider } from "../llm/types.ts";
 import type { Round } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
+import { StructuredOutputError } from "./parse-response.ts";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
 import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
@@ -20,6 +21,7 @@ export function isStructuredOutputError(e: unknown): boolean {
 
 export function extractFailedText(e: unknown): string {
   if (NoObjectGeneratedError.isInstance(e)) return e.text ?? "";
+  if (e instanceof StructuredOutputError) return e.text;
   return "";
 }
 
