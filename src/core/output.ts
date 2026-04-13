@@ -64,3 +64,32 @@ export function chrome(text: string, icon?: string): void {
 export function chromeRaw(msg: string): void {
   process.stderr.write(msg);
 }
+
+// ── Nerd Fonts singleton ────────────────────────────────────────────
+
+let nerdFontsEnabled = false;
+let nerdFontsInitialized = false;
+
+export function initNerdFonts(enable: boolean): void {
+  if (nerdFontsInitialized) throw new Error("initNerdFonts() called more than once");
+  nerdFontsInitialized = true;
+  nerdFontsEnabled = enable;
+}
+
+/**
+ * Return `icon` when Nerd Fonts are enabled, otherwise `fallback`.
+ * Callers own coloring — this is pure string resolution.
+ */
+export function resolveIcon(icon: string, fallback = ""): string {
+  return nerdFontsEnabled ? icon : fallback;
+}
+
+export function isNerdFonts(): boolean {
+  return nerdFontsEnabled;
+}
+
+/** Test helper — reset to uninitialized state. */
+export function resetNerdFonts(): void {
+  nerdFontsEnabled = false;
+  nerdFontsInitialized = false;
+}

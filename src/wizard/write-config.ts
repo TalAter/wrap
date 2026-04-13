@@ -14,7 +14,7 @@ export function buildConfig(
     const err = validateProviderEntry(name, entry);
     if (err) throw new Error(err);
   }
-  return { providers: entries, defaultProvider };
+  return { providers: entries, defaultProvider, nerdFonts: false };
 }
 
 export function serializeConfig(config: Config): string {

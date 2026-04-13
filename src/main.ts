@@ -1,6 +1,6 @@
 import { ensureConfig } from "./config/ensure.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
-import { chrome } from "./core/output.ts";
+import { chrome, initNerdFonts } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
 import { initVerbose, verbose } from "./core/verbose.ts";
@@ -43,6 +43,7 @@ export async function main() {
 
     const config = await ensureConfig();
     initVerbose(modifiers.flags.has("verbose") || config.verbose === true);
+    initNerdFonts(config.nerdFonts === true);
 
     // CLI flag wins over WRAP_MODEL env var. resolveProvider then parses the
     // raw string and short-circuits to the test sentinel if WRAP_TEST_RESPONSE

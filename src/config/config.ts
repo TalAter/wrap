@@ -15,6 +15,7 @@ export type Config = {
   maxCapturedOutputChars?: number;
   maxPipedInputChars?: number;
   verbose?: boolean;
+  nerdFonts?: boolean;
 };
 
 export const DEFAULT_MAX_ROUNDS = 5;

@@ -31,6 +31,14 @@ describe("buildConfig", () => {
       /requires baseURL, apiKey, and model/,
     );
   });
+
+  test("includes nerdFonts: false by default", () => {
+    const config = buildConfig(
+      { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+      "anthropic",
+    );
+    expect(config.nerdFonts).toBe(false);
+  });
 });
 
 describe("writeWizardConfig", () => {

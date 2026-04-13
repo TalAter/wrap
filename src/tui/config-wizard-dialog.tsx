@@ -160,13 +160,13 @@ function ProviderSelectionScreen({
   const items = useMemo(() => {
     const list: ChecklistItem[] = [{ type: "header", label: "Select API Provider(s)" }];
     for (const [name, p] of Object.entries(API_PROVIDERS)) {
-      list.push({ type: "option", label: p.displayName, value: name });
+      list.push({ type: "option", label: p.displayName, value: name, icon: p.nerdIcon });
     }
     if (hasAnyCli) {
       list.push({ type: "header", label: "Use your coding agent's subscription" });
       for (const [name, p] of Object.entries(CLI_PROVIDERS)) {
         if (cliAvailable[name]) {
-          list.push({ type: "option", label: p.displayName, value: name });
+          list.push({ type: "option", label: p.displayName, value: name, icon: p.nerdIcon });
         }
       }
     }

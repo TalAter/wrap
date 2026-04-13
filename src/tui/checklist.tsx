@@ -1,8 +1,10 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
+import stringWidth from "string-width";
+import { resolveIcon } from "../core/output.ts";
 
 export type ChecklistItem =
-  | { type: "option"; label: string; value: string }
+  | { type: "option"; label: string; value: string; icon?: string }
   | { type: "header"; label: string };
 
 type Props = {
@@ -15,6 +17,7 @@ type Props = {
 };
 
 const CHECKED_COLOR = "#66cc88";
+const DIM_COLOR = "#73738c";
 const CURSOR_COLOR = "#6699ff";
 const CURSOR_BG = "#1a2a4d";
 const LEADER_COLOR = "#484866";
@@ -47,7 +50,7 @@ export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) 
       {items.map((item, i) => {
         if (item.type === "header") {
           const label = ` ${item.label.toUpperCase()} `;
-          const trailWidth = width ? width - label.length - 3 : 0;
+          const trailWidth = width ? width - label.length - 2 : 0;
           return (
             <Box key={item.label} flexDirection="column">
               {i > 0 && <Text> </Text>}
@@ -63,15 +66,18 @@ export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) 
         }
         const isFocused = i === cursorIndex;
         const isChecked = checked.has(item.value);
-        const checkbox = isChecked ? "[✓]" : "[ ]";
+        const tick = isChecked ? "[✓]" : "[ ]";
+        const icon = item.icon ? resolveIcon(`${item.icon} `) : "";
+        const checkbox = icon ? `${tick} ${icon}` : tick;
+        const checkboxColor = isChecked ? CHECKED_COLOR : DIM_COLOR;
         const pointer = isFocused ? " ❯" : "  ";
         const rowText = `${pointer} ${checkbox} ${item.label}`;
-        const pad = width ? Math.max(0, width - rowText.length) : 0;
+        const pad = width ? Math.max(0, width - stringWidth(rowText)) : 0;
 
         return (
           <Text key={item.value} backgroundColor={isFocused ? CURSOR_BG : undefined}>
             <Text color={isFocused ? CURSOR_COLOR : undefined}>{pointer} </Text>
-            <Text color={isChecked ? CHECKED_COLOR : "#73738c"}>{checkbox} </Text>
+            <Text color={isFocused ? CURSOR_COLOR : checkboxColor}>{checkbox} </Text>
             <Text color={isFocused ? CURSOR_COLOR : isChecked ? CHECKED_COLOR : undefined}>
               {item.label}
             </Text>

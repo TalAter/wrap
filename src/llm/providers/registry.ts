@@ -52,6 +52,8 @@ export type ApiProvider = {
    * recommendation star.
    */
   recommendedModelRegex?: RegExp;
+  /** Nerd Font icon glyph. Shown in the wizard when nerdFonts is enabled. */
+  nerdIcon?: string;
 };
 
 export type CliProvider = {
@@ -59,6 +61,8 @@ export type CliProvider = {
   kind: ProviderKind;
   /** Name of the CLI binary. Wizard probes via `Bun.which(probeCmd)`. */
   probeCmd: string;
+  /** Nerd Font icon glyph. Shown in the wizard when nerdFonts is enabled. */
+  nerdIcon?: string;
 };
 
 /**
@@ -83,6 +87,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
     apiKeyUrl: "https://console.anthropic.com/settings/keys",
     apiKeyPlaceholder: "sk-ant-api03-",
     recommendedModelRegex: /^claude-sonnet-\d+-\d+$/,
+    nerdIcon: "\ue754", // nf-dev-azure
   },
   openai: {
     displayName: "OpenAI",
@@ -90,6 +95,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
     apiKeyUrl: "https://platform.openai.com/api-keys",
     apiKeyPlaceholder: "sk-proj-",
     recommendedModelRegex: /^gpt-5(\.\d+)?$/,
+    nerdIcon: "\udb80\udd04", // nf-fa-empire
   },
   // TODO: enable once @ai-sdk/google is bundled and a `kind: "google"` branch
   // lands in this file + ai-sdk.ts. See specs/config-wizard.md Future work.
@@ -106,6 +112,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
     apiKeyPlaceholder: "sk-or-v1-",
     baseURL: "https://openrouter.ai/api/v1",
     validate: requiresBaseURL("openrouter"),
+    nerdIcon: "\uea63", // nf-cod-repo_forked
   },
   groq: {
     displayName: "Groq",
@@ -113,18 +120,21 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
     apiKeyUrl: "https://console.groq.com/keys",
     apiKeyPlaceholder: "gsk_",
     validate: requiresBaseURL("groq"),
+    nerdIcon: "\udb85\udc0b", // nf-md-lightning_bolt
   },
   mistral: {
     displayName: "Mistral",
     kind: "openai-compat",
     apiKeyUrl: "https://console.mistral.ai/api-keys",
     validate: requiresBaseURL("mistral"),
+    nerdIcon: "\uef16", // nf-fa-wind
   },
   ollama: {
     displayName: "Ollama (local)",
     kind: "openai-compat",
     baseURL: "http://localhost:11434/v1",
     validate: requiresBaseURL("ollama"),
+    nerdIcon: "\udb80\udd9a", // nf-fa-horse_head
   },
 };
 
@@ -133,6 +143,7 @@ export const CLI_PROVIDERS: Record<string, CliProvider> = {
     displayName: "Claude Code",
     kind: "claude-code",
     probeCmd: "claude",
+    nerdIcon: "\udb82\udfc9", // nf-md-space_invaders
   },
 };
 
