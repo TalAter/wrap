@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import type { ProviderEntry } from "../src/config/config.ts";
+import { setConfig } from "../src/config/store.ts";
 import { stripAnsi } from "../src/core/ansi.ts";
 import { ConfigWizardDialog, type WizardCallbacks } from "../src/tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../src/wizard/models-filter.ts";
@@ -72,6 +73,10 @@ function makeCallbacks(overrides?: Partial<WizardCallbacks>): WizardCallbacks & 
     },
   };
 }
+
+beforeEach(() => {
+  setConfig({});
+});
 
 describe("ConfigWizardDialog", () => {
   test("renders provider selection on initial mount", async () => {
