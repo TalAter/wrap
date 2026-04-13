@@ -2,7 +2,7 @@
 
 Interactive TUI that runs on first launch to write a valid `~/.wrap/config.jsonc`. Replaces the dead-end `Config error: no LLM configured` message for new users.
 
-> **Status:** Nerd Icons section pending. Provider section implemented. Orchestrator pending.
+> **Status:** Implemented. Nerd icons section, providers section, and orchestrator complete.
 
 ## Architecture
 
@@ -115,7 +115,7 @@ Pre-write validation: every entry passes `validateProviderEntry()` before serial
 
 ## Cancellation
 
-Esc at any screen (except disclaimer, where Esc skips the provider) → abort, no file written, silent exit 0. Next `w` invocation re-triggers the wizard.
+Esc on nerd icons screen or provider selection → abort, no file written, silent exit 0. Esc on disclaimer → skips that provider. Next `w` invocation re-triggers the wizard.
 
 ## Design decisions
 
