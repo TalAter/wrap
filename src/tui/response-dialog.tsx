@@ -1,9 +1,9 @@
-import { Box, Text, useAnimation, useInput, useStdin } from "ink";
+import { Box, Text, useAnimation, useInput, useStdin, useWindowSize } from "ink";
 import { useEffect, useState } from "react";
 import stringWidth from "string-width";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
-import { Dialog } from "./dialog.tsx";
+import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { RISK_PRESETS } from "./risk-presets.ts";
 import { TextInput } from "./text-input.tsx";
 
@@ -50,6 +50,59 @@ export const EXECUTING_STEP_STATUS = "Running step...";
 export const OUTPUT_SLOT_EMPTY = "(no output)";
 /** Number of trailing rows shown in the output slot. Spec pins this. */
 const OUTPUT_SLOT_TAIL_ROWS = 3;
+
+/** How many visual rows a single line occupies at the given text width. */
+function visualRows(line: string, textWidth: number): number {
+  const w = stringWidth(line);
+  return w === 0 ? 1 : Math.ceil(w / textWidth);
+}
+
+/**
+ * Truncate a command string so it fits within `maxRows` visual rows at
+ * the given `textWidth`. When the command fits, returns it unchanged.
+ * When it overflows, returns head lines + a "… N lines hidden" indicator
+ * + tail lines, sized to stay within the budget.
+ */
+export function truncateCommand(command: string, maxRows: number, textWidth: number): string {
+  if (maxRows < 1 || textWidth < 1) return command;
+  const lines = command.split("\n");
+  const total = lines.reduce((sum, line) => sum + visualRows(line, textWidth), 0);
+  if (total <= maxRows) return command;
+
+  // Reserve 1 row for the "… N lines hidden" indicator.
+  const budget = maxRows - 1;
+  if (budget < 1) return `… ${lines.length} lines hidden`;
+
+  // Allocate roughly half budget to head, half to tail (tail gets the extra).
+  const headBudget = Math.floor(budget / 2);
+  const tailBudget = budget - headBudget;
+
+  // Collect head lines.
+  const headLines: string[] = [];
+  let headUsed = 0;
+  for (const line of lines) {
+    const rows = visualRows(line, textWidth);
+    if (headUsed + rows > headBudget) break;
+    headLines.push(line);
+    headUsed += rows;
+  }
+
+  // Collect tail lines (backwards).
+  const tailLines: string[] = [];
+  let tailUsed = 0;
+  for (let i = lines.length - 1; i >= headLines.length; i--) {
+    const line = lines[i] as string;
+    const rows = visualRows(line, textWidth);
+    if (tailUsed + rows > tailBudget) break;
+    tailLines.unshift(line);
+    tailUsed += rows;
+  }
+
+  const hiddenCount = lines.length - headLines.length - tailLines.length;
+  const indicator = `… ${hiddenCount} lines hidden`;
+
+  return [...headLines, indicator, ...tailLines].join("\n");
+}
 
 /**
  * Format a captured step body for the dialog's output slot: tail to the
@@ -109,7 +162,8 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   const status = state.tag === "processing" ? state.status : undefined;
   const outputSlot = "outputSlot" in state ? state.outputSlot : undefined;
 
-  // Width calculation — caller owns this since it knows what will render.
+  // Width + height calculation — caller owns this since it knows what will render.
+  const { columns: termCols, rows: termRows } = useWindowSize();
   const showFollowupInput = state.tag === "composing" || state.tag === "processing";
   const naturalContentWidth = Math.max(
     stringWidth(command),
@@ -118,6 +172,27 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     showFollowupInput ? stringWidth(draft) : 0,
     MIN_INNER_WIDTH,
   );
+
+  const textWidth = dialogInnerWidth(termCols, naturalContentWidth) - 2; // -2 for InputFrame paddingX={1}
+
+  // Compute rows consumed by non-command content so we know max command rows.
+  // Borders (2) + padding (2) + blank lines before action bar (2) + action bar (1) = 7
+  let chromeRows = 7;
+  if (explanation) chromeRows += 1 + Math.max(1, Math.ceil(stringWidth(explanation) / textWidth));
+  if (plan) chromeRows += 1 + Math.max(1, Math.ceil(stringWidth(`Plan: ${plan}`) / textWidth));
+  if (outputSlot !== undefined) {
+    const formatted = formatOutputSlot(outputSlot);
+    const outputTextRows = formatted
+      .split("\n")
+      .reduce((sum, line) => sum + Math.max(1, Math.ceil(stringWidth(line) / textWidth) || 1), 0);
+    chromeRows += 1 + outputTextRows + 1; // label + wrapped text + spacer
+  }
+  if (showFollowupInput) chromeRows += 1 + Math.max(1, Math.ceil(stringWidth(draft) / textWidth));
+  const maxCommandRows = Math.max(3, termRows - chromeRows);
+
+  // Truncate command for display when it would overflow the terminal.
+  const displayCommand =
+    state.tag === "editing" ? command : truncateCommand(command, maxCommandRows, textWidth);
 
   // Esc dispatches key-esc in every mode except confirming (which has its
   // own handler below with arrow nav, hotkeys, etc.).
@@ -214,7 +289,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
           }}
         />
       ) : (
-        <TextInput value={command} readOnly />
+        <TextInput value={displayCommand} readOnly />
       )}
       {explanation && (
         <>

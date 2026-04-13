@@ -97,6 +97,10 @@ natural     = max(stringWidth(command), stringWidth(explanation), stringWidth(dr
 
 `MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4`, so on ordinary terminals the action bar never wraps. On narrow terminals Ink wraps it naturally and the height-sync loop (below) grows the borders to match.
 
+### Command truncation for tall terminals
+
+When a command (e.g. a multi-line script) would overflow the terminal height, `truncateCommand()` in `response-dialog.tsx` truncates the displayed text to fit. It computes available rows by subtracting chrome overhead (borders, padding, explanation, plan, action bar) from `termRows`, then splits the command into head + `… N lines hidden` + tail. The full command is preserved in state — editing (`e`) and copy (`c`) always operate on the untruncated original. Minimum 3 rows are always reserved for the command even on tiny terminals.
+
 ### Height sync
 
 The border columns need exactly as many `│` rows as the middle column's rendered height. We compute a first-pass estimate from content (line counts for command / explanation / follow-up draft / action bar / padding) so the initial render is usually correct in one pass. Ink's `useBoxMetrics(middleRef)` then provides the measured height; if it differs from the estimate, the derived `borderCount` updates — one extra render, Ink swaps the frame.

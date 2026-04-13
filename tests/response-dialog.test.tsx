@@ -6,6 +6,7 @@ import {
   formatOutputSlot,
   OUTPUT_SLOT_EMPTY,
   ResponseDialog,
+  truncateCommand,
 } from "../src/tui/response-dialog.tsx";
 import {
   makeComposing,
@@ -282,6 +283,67 @@ describe("formatOutputSlot", () => {
   test("tails to the last 3 rows when output is longer", () => {
     const out = formatOutputSlot("1\n2\n3\n4\n5\n");
     expect(out).toBe("3\n4\n5");
+  });
+});
+
+describe("truncateCommand", () => {
+  test("returns short command unchanged", () => {
+    expect(truncateCommand("ls -la", 10, 80)).toBe("ls -la");
+  });
+
+  test("returns multi-line command unchanged when it fits", () => {
+    const cmd = "echo a\necho b\necho c";
+    expect(truncateCommand(cmd, 10, 80)).toBe(cmd);
+  });
+
+  test("truncates when lines exceed maxRows", () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `echo line${i}`);
+    const cmd = lines.join("\n");
+    const result = truncateCommand(cmd, 10, 80);
+    expect(result).toContain("echo line0");
+    expect(result).toContain("echo line29");
+    expect(result).toContain("lines hidden");
+    expect(result).not.toContain("hidden hidden");
+    const resultLines = result.split("\n");
+    expect(resultLines.length).toBeLessThanOrEqual(10);
+  });
+
+  test("accounts for soft-wrapping of long single lines", () => {
+    // A single line of 200 chars at width 40 wraps to 5 visual rows.
+    const cmd = "x".repeat(200);
+    const result = truncateCommand(cmd, 3, 40);
+    // Single line exceeds budget — can't split it, so indicator is all we get.
+    expect(result).not.toBe(cmd);
+    expect(result).toContain("lines hidden");
+  });
+
+  test("handles mixed long and short lines", () => {
+    const lines = [
+      "a".repeat(100), // wraps to 2 rows at width 50
+      "short",
+      "b".repeat(100),
+      "also short",
+      "c".repeat(100),
+      "end",
+    ];
+    const cmd = lines.join("\n");
+    const result = truncateCommand(cmd, 4, 50);
+    expect(result).toContain("end");
+    const visualRows = result.split("\n").reduce((sum: number, line: string) => {
+      return sum + Math.max(1, Math.ceil(line.length / 50));
+    }, 0);
+    expect(visualRows).toBeLessThanOrEqual(4);
+  });
+
+  test("returns command as-is when maxRows is very large", () => {
+    const cmd = "echo a\necho b\necho c";
+    expect(truncateCommand(cmd, 1000, 80)).toBe(cmd);
+  });
+
+  test("returns command as-is when textWidth is zero or negative", () => {
+    const cmd = "echo a\necho b";
+    expect(truncateCommand(cmd, 5, 0)).toBe(cmd);
+    expect(truncateCommand(cmd, 5, -1)).toBe(cmd);
   });
 });
 

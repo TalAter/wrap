@@ -12,6 +12,13 @@ import {
 const DIALOG_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
 
+/** Derive the inner content width for a dialog given terminal columns and natural content width. */
+export function dialogInnerWidth(termCols: number, naturalContentWidth: number): number {
+  const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - DIALOG_MARGIN);
+  const totalWidth = Math.min(naturalContentWidth + 4, maxWidth);
+  return totalWidth - 4;
+}
+
 /**
  * Generic bordered-chrome dialog. Owns the terminal-centered outer layout,
  * width clamping, top/bottom borders (with optional badge + status), and
@@ -44,9 +51,8 @@ export function Dialog({
 }: DialogProps) {
   const { columns: termCols, rows: termRows } = useWindowSize();
 
-  const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - DIALOG_MARGIN);
-  const totalWidth = Math.min(naturalContentWidth + 4, maxWidth);
-  const innerWidth = totalWidth - 4;
+  const innerWidth = dialogInnerWidth(termCols, naturalContentWidth);
+  const totalWidth = innerWidth + 4;
 
   const middleRef = useRef<DOMElement>(null);
   const { height: measuredHeight } = useBoxMetrics(middleRef as RefObject<DOMElement>);
