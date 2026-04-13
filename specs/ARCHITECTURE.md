@@ -15,7 +15,9 @@ dispatch subcommand?   ──→  yes: run subcommand, exit (see subcommands.md)
     │
 ensureConfig                config.jsonc exists? load it : run wizard (see config-wizard.md)
     │
-resolveProvider             config + overrides → ResolvedProvider (see llm.md)
+setConfig                   fold CLI flag overrides, store globally (see §Global config store)
+    │
+resolveProvider             getConfig() + overrides → ResolvedProvider (see llm.md)
     │
 probeTools + loadWatchlist  `which` every entry (see discovery.md)
     │
@@ -113,6 +115,7 @@ src/
 
   config/                        see llm.md §Config Shape
     config.ts                    file + env → Config (shallow merge)
+    store.ts                     global config store (setConfig / getConfig / updateConfig)
     ensure.ts                    ensureConfig — wizard on missing config
     config.schema.json           JSON Schema for editor support
 
@@ -159,6 +162,22 @@ Considered and rejected. Wrap has a small fixed set of flows — the composabili
 ### Ensure-pattern over resolve/execute split
 
 A pure `resolve()` → `execute()` split breaks when flows continue after prerequisites. First-run setup creates config, then the query should proceed — not re-resolve. `ensureConfig()` / `ensureMemory()` return and the next line runs.
+
+### Global config store, not prop drilling
+
+`src/config/store.ts` — `setConfig()` / `getConfig()` / `updateConfig()`. Any module reads config via `getConfig()` without receiving it as a parameter.
+
+**Store holds raw `Config` only.** Provider resolution, memory, and other derived state stay outside the store. `resolveProvider(getConfig(), override)` reads from the store; it doesn't write back into it.
+
+**`setConfig()` is idempotent.** No init guard — calling it again replaces the config. Tests call `setConfig({...})` in `beforeEach` to isolate; no separate `resetConfig()` needed.
+
+**`getConfig()` throws before `setConfig()`.** Pre-config code paths (parseArgs, `--help` dispatch) never touch config. If they accidentally do, the throw surfaces it immediately.
+
+**`updateConfig(patch)` for mid-flight mutation.** Shallow-merges `patch` into the current config. Primary consumer: the config wizard, which updates settings (e.g. `nerdFonts`) between screens so later screens can read them via `getConfig()`.
+
+**CLI flag overrides merge at `setConfig` time.** `main.ts` folds `--verbose` into the config before calling `setConfig()`, so `getConfig().verbose` returns the resolved value everywhere.
+
+**Replaces per-setting singletons.** `initNerdFonts()` and `initVerbose()` are eliminated. `resolveIcon()` reads `getConfig().nerdFonts` directly. `verbose()` reads `getConfig().verbose` directly. Session options like `maxRounds` read from `getConfig()` instead of being passed through `SessionOptions`.
 
 ### Core is pure; session owns the world
 

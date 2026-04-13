@@ -22,13 +22,14 @@ No `-v` shorthand. No env var. `w --verbose` with no prompt shows help, same as 
 
 ## The verbose module
 
-`src/core/verbose.ts` — set-once, import-anywhere:
+`src/core/verbose.ts` — reads from the global config store, import-anywhere:
 
-- `initVerbose(enabled)` — called once from `main.ts` after config loads. Captures `performance.now()` as the baseline for elapsed timestamps. Throws if called twice (guards against re-entry).
-- `verbose(msg)` — no-op if disabled; otherwise emits a `verbose` notification through the bus (see `specs/logging.md`).
+- `verbose(msg)` — reads `getConfig().verbose`; no-op if false, otherwise emits a `verbose` notification through the bus (see `specs/logging.md`).
 - `verboseHighlight(msg, highlight)` — same, but renders `highlight` at normal brightness against a dimmed prefix. Used for LLM response lines where the command/probe content needs to stand out.
 
-Why set-once + module-level: mirrors `chrome()` — any module calls `verbose()` without threading an `enabled` flag through every function signature.
+Elapsed timestamps: `startTime` is lazily captured on the first `verbose()` call when config says verbose is enabled. Module-level var for timing only — the enabled flag comes from the config store.
+
+No `initVerbose()` — the `--verbose` CLI flag is folded into config at `setConfig()` time in `main.ts`, so `getConfig().verbose` returns the resolved value everywhere.
 
 Why emit through the notification bus instead of writing stderr directly: keeps all user-facing output funneling through one sink, so tests and alternate frontends (TUI) can intercept.
 
@@ -83,8 +84,8 @@ Every pipeline step is reported. Fast steps (<1ms) are still shown — verbose m
 
 ## Edge cases
 
-- **`w --verbose` alone:** modifier extracted, input type is `none`, help is shown. `initVerbose` is never called (config never loads in that branch) — fine, help needs no verbose.
-- **`w --verbose --help`:** modifier extracted, `--help` dispatched as subcommand. Verbose doesn't activate — subcommands exit before the query pipeline and don't call `initVerbose`.
+- **`w --verbose` alone:** modifier extracted, input type is `none`, help is shown. Config never loads in that branch — `getConfig()` would throw, but `verbose()` is never called.
+- **`w --verbose --help`:** modifier extracted, `--help` dispatched as subcommand. Verbose doesn't activate — subcommands exit before the query pipeline and config is never loaded.
 - **Provider errors:** `LLM error: {message}` is emitted before the chrome error message.
 - **Empty response:** `LLM responded (command, low): ` (empty content) appears, then chrome error "LLM returned an empty response."
 
