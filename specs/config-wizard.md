@@ -2,29 +2,73 @@
 
 Interactive TUI that runs on first launch to write a valid `~/.wrap/config.jsonc`. Replaces the dead-end `Config error: no LLM configured` message for new users.
 
-> **Status:** Implemented. All screens, state machine, provider registry, model filter, config writer, and `ensureConfig()` wiring are complete.
+> **Status:** Nerd Icons section pending. Provider section implemented. Orchestrator pending.
 
 ## Architecture
 
 `ensureConfig()` in `src/config/ensure.ts` replaces `loadConfig()` in `main.ts`. If `config.jsonc` exists (or `WRAP_CONFIG` env is set), it returns the loaded config. Otherwise it launches the wizard, writes the file, and returns fresh config. Cancel → `process.exit(0)`.
 
-Once the nerd-font selection screen is added, the wizard will call `updateConfig()` between sections — e.g. after the nerd-font screen completes, subsequent screens can read `getConfig().nerdFonts` to render icons. The wizard's own state machine handles wizard-specific state (provider loop, model selection); shared display settings will flow through the config store. On completion, `main.ts` calls `setConfig()` with the final loaded config.
+### Sections
 
-### Component structure
+The wizard is composed of independent **sections** that run sequentially. Each section is a self-contained React component with its own state, rendered inside its own `<Dialog>` shell. Sections are unaware of each other.
 
-- **`Dialog`** (`src/tui/dialog.tsx`) — generic bordered-chrome. Gradient bars, top/bottom borders, optional badge, `bottomStatus`, terminal centering. Knows nothing about content.
-- **`ConfigWizardDialog`** (`src/tui/config-wizard-dialog.tsx`) — the wizard. Multi-screen state machine rendered inside `<Dialog>` with wizard-specific gradient stops and `🧙 setup wizard` badge.
-- **`Checklist`** (`src/tui/checklist.tsx`) — custom multi-select with `✓`/`·` indicators and group headers. Used for Screen 1 provider selection.
+Each section exports:
+- A React component: `(props: { onDone: (result: T) => void; onCancel: () => void; ...deps }) => JSX.Element`
+- A result type `T` representing what the section produces
 
-Mounted via `mountConfigWizardDialog()` in `src/session/dialog-host.ts`, which returns `Promise<WizardResult | null>`. Ink + React + both dialog components are lazy-loaded via `preloadDialogModules()`.
+`ensureConfig()` seeds the config store with `setConfig({})` before launching the wizard (the store throws on read if uninitialized). The orchestrator never calls `setConfig()` itself — it only calls `updateConfig()` between sections so downstream code (e.g. `resolveIcon()` reading `getConfig().nerdFonts`) picks up settings immediately. This keeps the wizard safe to run later via `w --wizard` when a real config is already loaded. On wizard completion, `ensureConfig()` writes config to disk; `main.ts` then calls `setConfig()` with the final loaded config.
 
-### State machine
+Future: individual sections can run standalone (e.g. `w --config-models`). Out of scope for now, but the section architecture supports it.
+
+### Orchestrator
+
+Lives in `config-wizard-dialog.tsx`. Tracks which section is active, accumulates results, and passes context forward. On final section completion, returns unified `WizardResult`. All sections share the same `🧙 setup wizard` badge and gradient.
+
+Flow: `nerd-icons` → `providers` → done
+
+### WizardResult
+
+```ts
+type WizardResult = {
+  entries: Record<string, ProviderEntry>;
+  defaultProvider: string;
+  nerdFonts?: boolean; // absent when nerd icons section wasn't shown (standalone providers mode)
+};
+```
+
+Mounted via `mountConfigWizardDialog()` in `src/session/dialog-host.ts`, which returns `Promise<WizardResult | null>`. Ink + React + dialog components are lazy-loaded via `preloadDialogModules()`.
+
+### Providers state machine
 
 Pure reducer in `src/wizard/state.ts`. Top-level fields (`modelsData`, `pickedProviders`, `builtEntries`, `defaultProvider`, `loopIndex`) hold accumulated state; a tagged `screen` union drives rendering:
 
 `selecting-providers` → `loading-models` → per-provider loop (`entering-key` → `picking-model` | `disclaimer`) → `picking-default` (if >1 provider) → `done`
 
 Reducer is unit-tested without Ink.
+
+## Nerd Icons section
+
+Binary detection screen. Shown always on interactive first run (TTY). CI/pipe already skip the wizard entirely.
+
+**Screen:**
+```
+  Do you see four icons below?
+
+  󰳼      
+
+  > Yes — enable icons throughout Wrap
+    No — they look like boxes or question marks
+
+  ↑↓ to move  ⏎ to select
+```
+
+Icons: `\udb82\udcd9` (Death Star), `\uf1d0` (Rebel), `\uedd6` (Republic), `\uf1d1` (Empire). All Nerd Font PUA codepoints.
+
+- **Yes** → result `{ nerdFonts: true }`. Orchestrator calls `updateConfig({ nerdFonts: true })` so `resolveIcon()` renders icons in subsequent sections.
+- **No** → result `{ nerdFonts: false }`
+- **Esc** → cancel entire wizard
+
+**Result type:** `{ nerdFonts: boolean }`
 
 ## Provider data
 
@@ -44,11 +88,11 @@ URL `https://models.dev/api.json` cached at `~/.wrap/cache/models.dev.json` with
 
 **Recommendation:** If `recommendedModelRegex` matches, the newest match is promoted to row 0 and marked with `✦`. Others stay in release_date order.
 
-## Screen flow
+## Providers section — screen flow
 
-Four screens, linear, no back navigation.
+Linear, no back navigation.
 
-**Screen 1 — Provider selection.** Custom `Checklist` with "API Providers" and "CLI Tools" group headers. Intro prose orients first-time users. `⏎ to continue` hint hidden until ≥1 selected. CLI section hidden if no binaries detected.
+**Screen 1 — Provider selection.** Custom `Checklist` with "API Providers" and "CLI Tools" group headers. Nerd icons shown per provider when enabled. `⏎ to continue` hint hidden until ≥1 selected. CLI section hidden if no binaries detected.
 
 **Screen 2 — Per-provider loop.** For each selected provider in registry order:
 - **2a (API key):** Masked `TextInput`, placeholder from registry. Skipped for ollama (no key) and CLI providers.
@@ -57,13 +101,13 @@ Four screens, linear, no back navigation.
 
 **Screen 3 — Default provider.** Skipped if only one provider. `Select` list of configured providers.
 
-**Screen 4 — Done.** No visible screen. Writes config, calls `chrome("Configuration saved", "🧠")`, returns to `ensureConfig()`.
+**Done.** Orchestrator collects result, writes config, calls `chrome("Configuration saved", "🧠")`, returns to `ensureConfig()`.
 
 ## Write semantics
 
 The wizard writes via `writeWizardConfig()` in `src/wizard/write-config.ts`:
 
-1. `config.jsonc` — `$schema` + `providers` + `defaultProvider`, 2-space indent.
+1. `config.jsonc` — `$schema` + `providers` + `defaultProvider` + `nerdFonts`, 2-space indent.
 2. `config.schema.json` — copy of `src/config/config.schema.json` for editor support, bundled via static JSON import (survives `bun build --compile`), overwritten every wizard run.
 3. `cache/models.dev.json` — written indirectly by `fetchCached`.
 
@@ -75,7 +119,7 @@ Esc at any screen (except disclaimer, where Esc skips the provider) → abort, n
 
 ## Design decisions
 
-- **No back navigation.** Wizard is 4 screens max. Keeps state machine simple; misclicks require re-running.
+- **No back navigation.** Keeps state machine simple; misclicks require re-running.
 - **No API key validation.** The wizard never calls the provider API. Invalid keys fail at first real use.
 - **`tool_call` as filter proxy.** models.dev under-reports `structured_output`. `tool_call: true` reliably identifies modern chat models. May need revisiting if it hides usable models.
 - **CLI providers skip model selection.** CLI tools don't expose a reliable model list and their valid IDs change between versions. Letting the CLI own the default keeps Wrap out of that maintenance loop.
@@ -84,7 +128,7 @@ Esc at any screen (except disclaimer, where Esc skips the provider) → abort, n
 
 ## Future work
 
-- **`w --config` / `w --init` flags.** Re-run wizard with preselect-from-current-config semantics — unchecking a provider removes it.
+- **`w --config` / `w --init` flags.** Re-run wizard with preselect-from-current-config semantics — unchecking a provider removes it. Section architecture enables running individual sections standalone (e.g. `w --config-models`, `w --config-nerdfonts`).
 - **Env-var detection + Tab-to-fill.** Auto-detect `$ANTHROPIC_API_KEY` etc. and offer `$VAR` reference form.
 - **Google (Gemini) support.** Requires `@ai-sdk/google` + `kind: "google"` branch.
 - **Bundled models.dev snapshot.** Offline first-run fallback.
