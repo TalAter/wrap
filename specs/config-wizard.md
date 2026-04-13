@@ -8,7 +8,7 @@ Interactive TUI that runs on first launch to write a valid `~/.wrap/config.jsonc
 
 `ensureConfig()` in `src/config/ensure.ts` replaces `loadConfig()` in `main.ts`. If `config.jsonc` exists (or `WRAP_CONFIG` env is set), it returns the loaded config. Otherwise it launches the wizard, writes the file, and returns fresh config. Cancel → `process.exit(0)`.
 
-The wizard updates the global config store (`updateConfig()`) between sections — e.g. after the nerd-font screen completes, subsequent screens can read `getConfig().nerdFonts` to render icons. The wizard's own state machine handles wizard-specific state (provider loop, model selection); shared display settings flow through the config store. On completion, `main.ts` calls `setConfig()` with the final loaded config.
+Once the nerd-font selection screen is added, the wizard will call `updateConfig()` between sections — e.g. after the nerd-font screen completes, subsequent screens can read `getConfig().nerdFonts` to render icons. The wizard's own state machine handles wizard-specific state (provider loop, model selection); shared display settings will flow through the config store. On completion, `main.ts` calls `setConfig()` with the final loaded config.
 
 ### Component structure
 

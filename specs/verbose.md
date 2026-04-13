@@ -57,6 +57,7 @@ Every pipeline step is reported. Fast steps (<1ms) are still shown — verbose m
 ### Startup (main.ts)
 - `Config loaded ({provider label})`
 - `Provider initialized ({provider label})`
+- `Temp dir: {path}` 
 - `Tools: {available}/{total} available` (only when probing ran)
 - `CWD: {N} files listed` (only when listing ran)
 
@@ -71,7 +72,7 @@ Every pipeline step is reported. Fast steps (<1ms) are still shown — verbose m
 - `LLM parse error, retrying...` — on structured-output retry
 - `LLM scratchpad: {text}` — printed before the LLM response line whenever `_scratchpad` is non-null (see `specs/scratchpad.md`). Newlines collapsed to ` \n ` so each scratchpad is one line.
 - `LLM responded (command, {risk_level}): {content}` — content highlighted
-- `LLM responded (answer, {N} chars)` — content not echoed (it goes to stdout)
+- `LLM responded (reply, {N} chars)` — content not echoed (it goes to stdout)
 - `LLM responded (step, {risk_level}): {content}` — content highlighted
 - `LLM error: {message}` — on provider failure (network, auth, empty)
 - `Step: {command}` / `Step exited ({code})`
