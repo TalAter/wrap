@@ -1,5 +1,5 @@
 import { Select } from "@inkjs/ui";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useWindowSize } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
 import type { Color } from "../core/ansi.ts";
@@ -9,7 +9,7 @@ import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initWizardState, reduce, type WizardAction } from "../wizard/state.ts";
 import type { Badge } from "./border.ts";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
-import { Dialog } from "./dialog.tsx";
+import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { TextInput } from "./text-input.tsx";
 
 type HintItem = { combo: string; label: string; primary?: boolean };
@@ -103,6 +103,8 @@ export function ConfigWizardDialog({
   );
 
   const { screen } = state;
+  const { columns: termCols } = useWindowSize();
+  const innerWidth = dialogInnerWidth(termCols, CONTENT_WIDTH);
   let bottomStatus: string | undefined;
   if (screen.tag === "loading-models") {
     bottomStatus = "Loading models list…";
@@ -119,6 +121,7 @@ export function ConfigWizardDialog({
         <ProviderSelectionScreen
           checked={screen.checked}
           cliAvailable={cliAvailable}
+          contentWidth={innerWidth}
           dispatch={dispatch}
         />
       )}
@@ -149,10 +152,12 @@ export function ConfigWizardDialog({
 function ProviderSelectionScreen({
   checked,
   cliAvailable,
+  contentWidth,
   dispatch,
 }: {
   checked: Set<string>;
   cliAvailable: Record<string, boolean>;
+  contentWidth: number;
   dispatch: React.Dispatch<WizardAction>;
 }) {
   const hasAnyCli = Object.values(cliAvailable).some(Boolean);
@@ -195,7 +200,7 @@ function ProviderSelectionScreen({
       <Checklist
         items={items}
         checked={checked}
-        width={CONTENT_WIDTH}
+        width={contentWidth}
         onToggle={handleToggle}
         onSubmit={handleSubmit}
       />

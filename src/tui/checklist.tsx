@@ -49,19 +49,8 @@ export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) 
     <Box flexDirection="column">
       {items.map((item, i) => {
         if (item.type === "header") {
-          const label = ` ${item.label.toUpperCase()} `;
-          const trailWidth = width ? width - label.length - 2 : 0;
           return (
-            <Box key={item.label} flexDirection="column">
-              {i > 0 && <Text> </Text>}
-              <Text>
-                <Text color={LEADER_COLOR}>{BRAILLE.repeat(2)}</Text>
-                <Text bold dimColor>
-                  {label}
-                </Text>
-                {trailWidth > 0 && <Text color={LEADER_COLOR}>{BRAILLE.repeat(trailWidth)}</Text>}
-              </Text>
-            </Box>
+            <SectionHeader key={item.label} label={item.label} width={width} spaceAbove={i > 0} />
           );
         }
         const isFocused = i === cursorIndex;
@@ -85,6 +74,33 @@ export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) 
           </Text>
         );
       })}
+    </Box>
+  );
+}
+
+function SectionHeader({
+  label,
+  width,
+  spaceAbove,
+}: {
+  label: string;
+  width?: number;
+  spaceAbove: boolean;
+}) {
+  const showBraille = !width || width >= label.length + 8;
+  const text = showBraille ? ` ${label.toUpperCase()} ` : label.toUpperCase();
+  const trailWidth = showBraille && width ? width - text.length - 2 : 0;
+
+  return (
+    <Box flexDirection="column">
+      {spaceAbove && <Text> </Text>}
+      <Text>
+        {showBraille && <Text color={LEADER_COLOR}>{BRAILLE.repeat(2)}</Text>}
+        <Text bold dimColor>
+          {text}
+        </Text>
+        {trailWidth > 0 && <Text color={LEADER_COLOR}>{BRAILLE.repeat(trailWidth)}</Text>}
+      </Text>
     </Box>
   );
 }
