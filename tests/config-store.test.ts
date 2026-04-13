@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { getConfig, setConfig, updateConfig } from "../src/config/store.ts";
 
-// Every test calls setConfig() first — module state carries across tests.
-// The "throws before init" cases are tested via the pre-init test file.
-
 describe("setConfig + getConfig", () => {
   test("returns config after setConfig", () => {
     setConfig({ verbose: true, nerdFonts: false });

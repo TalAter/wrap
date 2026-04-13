@@ -1,5 +1,5 @@
 import { ensureConfig } from "./config/ensure.ts";
-import { setConfig } from "./config/store.ts";
+import { getConfig, setConfig } from "./config/store.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
@@ -52,7 +52,7 @@ export async function main() {
     // raw string and short-circuits to the test sentinel if WRAP_TEST_RESPONSE
     // is set, regardless of config.
     const override = modifiers.values.get("modelOverride") ?? process.env.WRAP_MODEL;
-    const resolved = resolveProvider(config, override);
+    const resolved = resolveProvider(getConfig(), override);
     const label = formatProvider(resolved);
     verbose(`Config loaded (${label})`);
 
