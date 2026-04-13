@@ -3,6 +3,7 @@ import {
   DEFAULT_MAX_PIPED_INPUT_CHARS,
   DEFAULT_MAX_ROUNDS,
 } from "../config/config.ts";
+import { getConfig } from "../config/store.ts";
 import { notifications } from "../core/notify.ts";
 import { chrome } from "../core/output.ts";
 import {
@@ -36,9 +37,6 @@ export type SessionOptions = {
   tools?: ToolProbeResult | null;
   cwdFiles?: string;
   pipedInput?: string;
-  maxRounds?: number;
-  maxCapturedOutputChars?: number;
-  maxPipedInputChars?: number;
 };
 
 /**
@@ -53,9 +51,10 @@ export async function runSession(
   options: SessionOptions,
 ): Promise<number> {
   const wrapHome = getWrapHome();
-  const maxRounds = options.maxRounds ?? DEFAULT_MAX_ROUNDS;
-  const maxCapturedOutput = options.maxCapturedOutputChars ?? DEFAULT_MAX_CAPTURED_OUTPUT_CHARS;
-  const maxPipedInput = options.maxPipedInputChars ?? DEFAULT_MAX_PIPED_INPUT_CHARS;
+  const config = getConfig();
+  const maxRounds = config.maxRounds ?? DEFAULT_MAX_ROUNDS;
+  const maxCapturedOutput = config.maxCapturedOutputChars ?? DEFAULT_MAX_CAPTURED_OUTPUT_CHARS;
+  const maxPipedInput = config.maxPipedInputChars ?? DEFAULT_MAX_PIPED_INPUT_CHARS;
   const memory = options.memory ?? {};
 
   const entry = createLogEntry({
@@ -88,8 +87,6 @@ export async function runSession(
     cwd: options.cwd,
     wrapHome,
     model,
-    maxRounds,
-    maxCapturedOutput,
     pipedInput: options.pipedInput,
   };
 

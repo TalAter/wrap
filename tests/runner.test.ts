@@ -55,8 +55,6 @@ function makeOptions(overrides?: Partial<LoopOptions>): LoopOptions {
     cwd: "/tmp",
     wrapHome: tmpHome,
     model: "test / model",
-    maxRounds: 5,
-    maxCapturedOutput: 10000,
     pipedInput: undefined,
     showSpinner: false,
     ...overrides,
@@ -160,9 +158,8 @@ describe("runLoop", () => {
     const { provider } = makeProvider([step, step, step]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 2, roundNum: 0 };
-    const { final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions({ maxRounds: 2 })),
-    );
+    setConfig({ verbose: false, maxRounds: 2 });
+    const { final } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
     expect(final.type).toBe("exhausted");
     expect(state.roundNum).toBe(2);
   });

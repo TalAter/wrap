@@ -92,10 +92,10 @@ describe("runSession — exhausted", () => {
       risk_level: "low",
     };
     const { provider } = makeProvider([step, step, step]);
+    setConfig({ verbose: false, maxRounds: 2 });
     const exit = await runSession("hmm", provider, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
-      maxRounds: 2,
     });
     expect(exit).toBe(1);
     expect(stderr.text).toContain("Could not resolve");

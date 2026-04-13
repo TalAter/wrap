@@ -1,3 +1,5 @@
+import { DEFAULT_MAX_CAPTURED_OUTPUT_CHARS, DEFAULT_MAX_ROUNDS } from "../config/config.ts";
+import { getConfig } from "../config/store.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import type { Provider } from "../llm/types.ts";
@@ -23,8 +25,6 @@ export type LoopOptions = {
   wrapHome: string;
   /** Display label for the active provider, e.g. "anthropic / claude-sonnet-4-6". */
   model: string;
-  maxRounds: number;
-  maxCapturedOutput: number;
   pipedInput?: string;
   signal?: AbortSignal;
   /**
@@ -139,8 +139,9 @@ export async function* runLoop(
     // against maxRounds (which would be wrong across follow-ups).
     const isLastRound = state.budgetRemaining === 0;
 
+    const maxRounds = getConfig().maxRounds ?? DEFAULT_MAX_ROUNDS;
     if (state.roundNum > 1) {
-      verbose(`Round ${state.roundNum}/${options.maxRounds}`);
+      verbose(`Round ${state.roundNum}/${maxRounds}`);
     }
     if (isLastRound) {
       verbose("Final round: must return command or answer");
@@ -240,7 +241,9 @@ export async function* runLoop(
     if (exec.stderr.trim()) {
       stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
     }
-    stepOutput = truncateMiddle(stepOutput, options.maxCapturedOutput);
+    const maxCapturedOutput =
+      getConfig().maxCapturedOutputChars ?? DEFAULT_MAX_CAPTURED_OUTPUT_CHARS;
+    stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
 
     yield { type: "step-output", text: stepOutput };
     transcript.push({

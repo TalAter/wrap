@@ -87,9 +87,6 @@ export async function main() {
         tools,
         cwdFiles,
         pipedInput,
-        maxRounds: config.maxRounds,
-        maxCapturedOutputChars: config.maxCapturedOutputChars,
-        maxPipedInputChars: config.maxPipedInputChars,
       }),
     );
   } catch (e) {
