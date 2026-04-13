@@ -40,11 +40,11 @@ Mounted via `mountConfigWizardDialog()` in `src/session/dialog-host.ts`, which r
 
 ### Providers state machine
 
-Pure reducer in `src/wizard/state.ts`. Top-level fields (`modelsData`, `pickedProviders`, `builtEntries`, `defaultProvider`, `loopIndex`) hold accumulated state; a tagged `screen` union drives rendering:
+Pure reducer in `src/wizard/state.ts`. `ProviderWizardState` holds accumulated state (`modelsData`, `pickedProviders`, `builtEntries`, `defaultProvider`, `loopIndex`); a tagged `ProviderScreen` union drives rendering:
 
 `selecting-providers` → `loading-models` → per-provider loop (`entering-key` → `picking-model` | `disclaimer`) → `picking-default` (if >1 provider) → `done`
 
-Reducer is unit-tested without Ink.
+Actions are typed as `ProviderWizardAction`. Reducer is unit-tested without Ink.
 
 ## Nerd Icons section
 

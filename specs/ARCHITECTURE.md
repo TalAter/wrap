@@ -120,7 +120,7 @@ src/
     config.schema.json           JSON Schema for editor support
 
   wizard/                        config wizard pure logic (see config-wizard.md)
-    state.ts                     WizardState + reducer (screen transitions)
+    state.ts                     ProviderWizardState + reducer (screen transitions)
     models-filter.ts             models.dev filter/sort/recommendation
     write-config.ts              buildConfig + serialize + write
 

@@ -130,6 +130,13 @@ Canonical terms used throughout specs, code, and discussion. Use these consisten
 | **Border status** | Animated indicator embedded in the bottom of the dialog's border (spinner + chrome during `processing`) |
 | **Notification router** | Single source of truth for "is a dialog up?"; routes notifications to stderr, buffer, or dialog. See `session.md` / `tui.md`. |
 
+### Config wizard
+
+| Term | Definition |
+|------|-----------|
+| **Wizard section** | Top-level unit of the setup wizard. Self-contained React component with its own state, rendered inside its own `<Dialog>` shell. Each section produces a typed result. Sections are unaware of each other. Examples: welcome, nerd-icons, providers. See `config-wizard.md`. |
+| **Wizard screen** | A sub-view within a wizard section. A section with one view has one implicit screen. The providers section has many, driven by the `ProviderScreen` tagged union in `src/wizard/state.ts`. |
+
 ### Safety
 
 | Term | Definition |

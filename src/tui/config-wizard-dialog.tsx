@@ -8,7 +8,7 @@ import { getTheme, themeHex } from "../core/theme.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
-import { initWizardState, reduce, type WizardAction } from "../wizard/state.ts";
+import { initProviderWizardState, type ProviderWizardAction, reduce } from "../wizard/state.ts";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { NerdIconsSection } from "./nerd-icons-section.tsx";
@@ -42,7 +42,7 @@ export function ProvidersSection({
   onDone,
   onCancel,
 }: ProvidersSectionProps) {
-  const [state, dispatch] = useReducer(reduce, undefined, initWizardState);
+  const [state, dispatch] = useReducer(reduce, undefined, initProviderWizardState);
   const [cliAvailable, setCliAvailable] = useState<Record<string, boolean>>({});
   const doneRef = useRef(false);
 
@@ -182,7 +182,7 @@ function ProviderSelectionScreen({
   checked: Set<string>;
   cliAvailable: Record<string, boolean>;
   contentWidth: number;
-  dispatch: React.Dispatch<WizardAction>;
+  dispatch: React.Dispatch<ProviderWizardAction>;
 }) {
   const hasAnyCli = Object.values(cliAvailable).some(Boolean);
 
@@ -262,7 +262,7 @@ function ApiKeyScreen({
 }: {
   provider: string;
   draft: string;
-  dispatch: React.Dispatch<WizardAction>;
+  dispatch: React.Dispatch<ProviderWizardAction>;
 }) {
   const api = API_PROVIDERS[provider];
   return (
@@ -296,7 +296,7 @@ function ModelPickerScreen({
   provider: string;
   models: import("../wizard/models-filter.ts").ModelEntry[];
   cursor: number;
-  dispatch: React.Dispatch<WizardAction>;
+  dispatch: React.Dispatch<ProviderWizardAction>;
 }) {
   const api = API_PROVIDERS[provider];
   const [selected, setSelected] = useState(models[0]?.id ?? "");
@@ -336,7 +336,7 @@ function ModelPickerScreen({
   );
 }
 
-function DisclaimerScreen({ dispatch }: { dispatch: React.Dispatch<WizardAction> }) {
+function DisclaimerScreen({ dispatch }: { dispatch: React.Dispatch<ProviderWizardAction> }) {
   useInput((_input, key) => {
     if (key.return) dispatch({ type: "accept-disclaimer" });
   });
@@ -366,7 +366,7 @@ function DefaultPickerScreen({
 }: {
   providers: string[];
   cursor: number;
-  dispatch: React.Dispatch<WizardAction>;
+  dispatch: React.Dispatch<ProviderWizardAction>;
 }) {
   const [selected, setSelected] = useState(providers[0] ?? "");
 

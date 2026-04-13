@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ModelsDevData } from "../src/wizard/models-filter.ts";
-import { initWizardState, reduce, type WizardState } from "../src/wizard/state.ts";
+import { initProviderWizardState, type ProviderWizardState, reduce } from "../src/wizard/state.ts";
 
 const FIXTURE: ModelsDevData = {
   anthropic: {
@@ -44,13 +44,13 @@ const FIXTURE: ModelsDevData = {
   },
 };
 
-function screenTag(state: WizardState) {
+function screenTag(state: ProviderWizardState) {
   return state.screen.tag;
 }
 
-describe("initWizardState", () => {
+describe("initProviderWizardState", () => {
   test("returns empty-selection screen", () => {
-    const state = initWizardState();
+    const state = initProviderWizardState();
     expect(state.modelsData).toBeNull();
     expect(state.pickedProviders).toEqual([]);
     expect(state.builtEntries).toEqual({});
@@ -62,7 +62,7 @@ describe("initWizardState", () => {
 
 describe("reduce — selecting-providers", () => {
   test("toggle adds and removes names from the checked set", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     expect(s.screen).toEqual({
       tag: "selecting-providers",
@@ -77,13 +77,13 @@ describe("reduce — selecting-providers", () => {
   });
 
   test("submit with empty selection is a no-op", () => {
-    const s = initWizardState();
+    const s = initProviderWizardState();
     const next = reduce(s, { type: "submit-providers" });
     expect(next).toBe(s);
   });
 
   test("submit orders picks by API_PROVIDERS order then CLI_PROVIDERS", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "claude-code" });
     s = reduce(s, { type: "toggle-provider", name: "openai" });
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
@@ -96,7 +96,7 @@ describe("reduce — selecting-providers", () => {
 
 describe("reduce — models-fetched", () => {
   test("advances into the first provider's first screen (entering-key for anthropic)", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -105,7 +105,7 @@ describe("reduce — models-fetched", () => {
   });
 
   test("ollama skips the key screen and jumps straight to picking-model", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "ollama" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -117,7 +117,7 @@ describe("reduce — models-fetched", () => {
   });
 
   test("claude-code jumps to disclaimer", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "claude-code" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -127,7 +127,7 @@ describe("reduce — models-fetched", () => {
 
 describe("reduce — entering-key", () => {
   function stateAtKey() {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -175,7 +175,7 @@ describe("reduce — entering-key", () => {
 
 describe("reduce — picking-model", () => {
   function stateAtModel() {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -207,7 +207,7 @@ describe("reduce — picking-model", () => {
   });
 
   test("ollama submit-model writes baseURL into the entry", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "ollama" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -221,7 +221,7 @@ describe("reduce — picking-model", () => {
 
 describe("reduce — multi-provider loop and default picker", () => {
   test("two providers → loop advances, then picking-default, then done", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     s = reduce(s, { type: "toggle-provider", name: "openai" });
     s = reduce(s, { type: "submit-providers" });
@@ -254,7 +254,7 @@ describe("reduce — multi-provider loop and default picker", () => {
 
 describe("reduce — disclaimer", () => {
   test("accept-disclaimer writes an empty entry and advances", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "claude-code" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -265,7 +265,7 @@ describe("reduce — disclaimer", () => {
   });
 
   test("skip-disclaimer with claude-code as only pick bounces back to selecting-providers", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "claude-code" });
     s = reduce(s, { type: "submit-providers" });
     s = reduce(s, { type: "models-fetched", data: FIXTURE });
@@ -276,7 +276,7 @@ describe("reduce — disclaimer", () => {
   });
 
   test("skip-disclaimer mid-loop advances to the next survivor", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     s = reduce(s, { type: "toggle-provider", name: "claude-code" });
     s = reduce(s, { type: "toggle-provider", name: "openai" });
@@ -301,7 +301,7 @@ describe("reduce — disclaimer", () => {
   });
 
   test("skip-disclaimer drops current provider and advances to next", () => {
-    let s = initWizardState();
+    let s = initProviderWizardState();
     s = reduce(s, { type: "toggle-provider", name: "anthropic" });
     s = reduce(s, { type: "toggle-provider", name: "claude-code" });
     s = reduce(s, { type: "submit-providers" });

@@ -12,7 +12,7 @@ import {
   type ModelsDevData,
 } from "./models-filter.ts";
 
-export type WizardScreen =
+export type ProviderScreen =
   | { tag: "selecting-providers"; checked: Set<string> }
   | { tag: "loading-models" }
   | { tag: "entering-key"; provider: string; draft: string }
@@ -21,16 +21,16 @@ export type WizardScreen =
   | { tag: "picking-default"; cursor: number }
   | { tag: "done" };
 
-export type WizardState = {
+export type ProviderWizardState = {
   modelsData: ModelsDevData | null;
   pickedProviders: string[];
   builtEntries: Record<string, ProviderEntry>;
   defaultProvider: string | null;
   loopIndex: number;
-  screen: WizardScreen;
+  screen: ProviderScreen;
 };
 
-export type WizardAction =
+export type ProviderWizardAction =
   | { type: "toggle-provider"; name: string }
   | { type: "submit-providers" }
   | { type: "models-fetched"; data: ModelsDevData }
@@ -42,7 +42,7 @@ export type WizardAction =
   | { type: "skip-disclaimer" }
   | { type: "submit-default" };
 
-export function initWizardState(): WizardState {
+export function initProviderWizardState(): ProviderWizardState {
   return {
     modelsData: null,
     pickedProviders: [],
@@ -75,13 +75,13 @@ function buildEntry(provider: string, fields: { apiKey?: string; model?: string 
   return entry;
 }
 
-function firstScreenFor(provider: string, data: ModelsDevData): WizardScreen {
+function firstScreenFor(provider: string, data: ModelsDevData): ProviderScreen {
   if (isCliProvider(provider)) return { tag: "disclaimer", provider };
   if (providerNeedsApiKey(provider)) return { tag: "entering-key", provider, draft: "" };
   return { tag: "picking-model", provider, models: computeModels(data, provider), cursor: 0 };
 }
 
-function advanceLoop(state: WizardState): WizardState {
+function advanceLoop(state: ProviderWizardState): ProviderWizardState {
   const nextIdx = state.loopIndex + 1;
   if (nextIdx >= state.pickedProviders.length) return finishLoop(state, nextIdx);
   const nextName = state.pickedProviders[nextIdx];
@@ -89,7 +89,7 @@ function advanceLoop(state: WizardState): WizardState {
   return { ...state, loopIndex: nextIdx, screen: firstScreenFor(nextName, state.modelsData) };
 }
 
-function finishLoop(state: WizardState, nextIdx: number): WizardState {
+function finishLoop(state: ProviderWizardState, nextIdx: number): ProviderWizardState {
   if (state.pickedProviders.length === 1) {
     return {
       ...state,
@@ -105,7 +105,10 @@ function clampCursor(cursor: number, length: number): number {
   return Math.max(0, Math.min(length - 1, cursor));
 }
 
-export function reduce(state: WizardState, action: WizardAction): WizardState {
+export function reduce(
+  state: ProviderWizardState,
+  action: ProviderWizardAction,
+): ProviderWizardState {
   const { screen } = state;
 
   switch (action.type) {
