@@ -50,19 +50,26 @@ const WIZARD_BADGE: Badge = {
 const CONTENT_WIDTH = 70;
 const MAX_VISIBLE_OPTIONS = 8;
 
-export type WizardCallbacks = {
+// ── Providers Section ──────────────────────────────────────────────
+
+export type ProvidersResult = {
+  entries: Record<string, ProviderEntry>;
+  defaultProvider: string;
+};
+
+export type ProvidersSectionProps = {
   fetchModels: () => Promise<ModelsDevData>;
   probeCliBinaries: () => Record<string, boolean>;
-  onDone: (entries: Record<string, ProviderEntry>, defaultProvider: string) => void;
+  onDone: (result: ProvidersResult) => void;
   onCancel: () => void;
 };
 
-export function ConfigWizardDialog({
+export function ProvidersSection({
   fetchModels,
   probeCliBinaries,
   onDone,
   onCancel,
-}: WizardCallbacks) {
+}: ProvidersSectionProps) {
   const [state, dispatch] = useReducer(reduce, undefined, initWizardState);
   const [cliAvailable, setCliAvailable] = useState<Record<string, boolean>>({});
   const doneRef = useRef(false);
@@ -85,7 +92,7 @@ export function ConfigWizardDialog({
   useEffect(() => {
     if (state.screen.tag === "done" && !doneRef.current) {
       doneRef.current = true;
-      onDone(state.builtEntries, state.defaultProvider as string);
+      onDone({ entries: state.builtEntries, defaultProvider: state.defaultProvider as string });
     }
   }, [state.screen.tag, state.builtEntries, state.defaultProvider, onDone]);
 
@@ -148,6 +155,33 @@ export function ConfigWizardDialog({
     </Dialog>
   );
 }
+
+// ── Orchestrator ───────────────────────────────────────────────────
+
+export type WizardCallbacks = {
+  fetchModels: () => Promise<ModelsDevData>;
+  probeCliBinaries: () => Record<string, boolean>;
+  onDone: (entries: Record<string, ProviderEntry>, defaultProvider: string) => void;
+  onCancel: () => void;
+};
+
+export function ConfigWizardDialog({
+  fetchModels,
+  probeCliBinaries,
+  onDone,
+  onCancel,
+}: WizardCallbacks) {
+  return (
+    <ProvidersSection
+      fetchModels={fetchModels}
+      probeCliBinaries={probeCliBinaries}
+      onDone={(result) => onDone(result.entries, result.defaultProvider)}
+      onCancel={onCancel}
+    />
+  );
+}
+
+// ── Provider Screens ───────────────────────────────────────────────
 
 function ProviderSelectionScreen({
   checked,
