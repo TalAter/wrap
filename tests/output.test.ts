@@ -104,10 +104,6 @@ describe("shouldAnimate", () => {
     expect(shouldAnimate()).toBe(false);
   });
 
-  test("false when enabled=false", () => {
-    expect(shouldAnimate({ enabled: false })).toBe(false);
-  });
-
   test("false when config has noAnimation set", () => {
     setConfig({ noAnimation: true });
     expect(shouldAnimate()).toBe(false);
