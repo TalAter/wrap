@@ -47,9 +47,9 @@ export async function runSession(
 ): Promise<number> {
   const wrapHome = getWrapHome();
   const config = getConfig();
-  const maxRounds = config.maxRounds as number;
-  const maxCapturedOutput = config.maxCapturedOutputChars as number;
-  const maxPipedInput = config.maxPipedInputChars as number;
+  const maxRounds = config.maxRounds;
+  const maxCapturedOutput = config.maxCapturedOutputChars;
+  const maxPipedInput = config.maxPipedInputChars;
   const memory = options.memory ?? {};
 
   const entry = createLogEntry({

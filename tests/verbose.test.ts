@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { setConfig } from "../src/config/store.ts";
 import { resetVerboseTimer, verbose } from "../src/core/verbose.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 let stderr: MockStderr;
 
 beforeEach(() => {
   resetVerboseTimer();
-  setConfig({ verbose: false });
+  seedTestConfig();
   stderr = mockStderr();
 });
 
@@ -22,13 +22,13 @@ describe("verbose module", () => {
   });
 
   test("verbose emits to stderr when enabled", () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("Config loaded (anthropic)");
     expect(stderr.text).toContain("Config loaded (anthropic)");
   });
 
   test("verbose line starts with guillemet prefix", () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("test message");
     // Dim ANSI wraps the line, but guillemet is the first visible char
     expect(stderr.text).toContain("»");
@@ -37,33 +37,33 @@ describe("verbose module", () => {
   });
 
   test("verbose line includes elapsed time in brackets", () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("test message");
     // Format: » [+0.00s] message
     expect(stderr.text).toMatch(/» \[\+\d+\.\d{2}s\]/);
   });
 
   test("verbose line includes the message text", () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("Tools: 28/34 available");
     expect(stderr.text).toContain("Tools: 28/34 available");
   });
 
   test("verbose line ends with newline", () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("test");
     expect(stderr.text).toMatch(/\n$/);
   });
 
   test("verbose line is wrapped in dim ANSI", () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("dim text");
     // Dim = ESC[2m ... ESC[0m
     expect(stderr.text).toContain("\x1b[2m");
   });
 
   test("elapsed time increases between calls", async () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     verbose("first");
     await new Promise((r) => setTimeout(r, 50));
     verbose("second");

@@ -1,5 +1,5 @@
 import type { Modifiers } from "../core/input.ts";
-import type { Config } from "./config.ts";
+import type { Config, ResolvedConfig } from "./config.ts";
 import { SETTINGS, type Setting } from "./settings.ts";
 
 /**
@@ -19,15 +19,15 @@ export function resolveSettings(
   modifiers: Modifiers,
   env: Record<string, string | undefined>,
   fileConfig: Config,
-): Config {
-  const result: Config = { ...fileConfig };
+): ResolvedConfig {
+  const result: Record<string, unknown> = { ...fileConfig };
 
   for (const [key, setting] of Object.entries(SETTINGS) as [string, Setting][]) {
     if (key === "model") continue;
 
     const value = resolveOne(key, setting, modifiers, env, fileConfig);
     if (value !== undefined) {
-      (result as Record<string, unknown>)[key] = value;
+      result[key] = value;
     }
   }
 
@@ -38,7 +38,10 @@ export function resolveSettings(
     result.noAnimation = true;
   }
 
-  return result;
+  // Every SETTINGS entry with a default has contributed a value above (CLI,
+  // env, file, or the default fallback), so the result satisfies
+  // ResolvedConfig's required-field contract.
+  return result as ResolvedConfig;
 }
 
 function isAnimationDisabledByEnv(env: Record<string, string | undefined>): boolean {

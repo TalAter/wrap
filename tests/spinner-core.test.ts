@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
-import { setConfig } from "../src/config/store.ts";
 import { HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
 import {
   resetExitGuard,
@@ -10,6 +9,7 @@ import {
   startChromeSpinner,
 } from "../src/core/spinner.ts";
 import { mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 describe("SPINNER_FRAMES", () => {
   test("has frames", () => {
@@ -32,7 +32,7 @@ describe("SPINNER_INTERVAL", () => {
 });
 
 describe("startChromeSpinner", () => {
-  beforeEach(() => setConfig({}));
+  beforeEach(() => seedTestConfig());
 
   test("writes the text and a frame to stderr", () => {
     const stderr = mockStderr({ isTTY: true });
@@ -93,7 +93,7 @@ describe("startChromeSpinner", () => {
   });
 
   test("does not animate or hide cursor when config.noAnimation is true", async () => {
-    setConfig({ noAnimation: true });
+    seedTestConfig({ noAnimation: true });
     const stderr = mockStderr({ isTTY: true });
     try {
       const stop = startChromeSpinner(SPINNER_TEXT);

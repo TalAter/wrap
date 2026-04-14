@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import { getConfig, setConfig } from "../src/config/store.ts";
+import { getConfig } from "../src/config/store.ts";
 import { stripAnsi } from "../src/core/ansi.ts";
 import type { WizardResult } from "../src/session/dialog-host.ts";
 import { ConfigWizardDialog, type WizardCallbacks } from "../src/tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../src/wizard/models-filter.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 const FIXTURE: ModelsDevData = {
   anthropic: {
@@ -82,7 +83,7 @@ async function passNerdIcons(stdin: { write: (s: string) => void }) {
 }
 
 beforeEach(() => {
-  setConfig({});
+  seedTestConfig();
 });
 
 describe("ConfigWizardDialog", () => {

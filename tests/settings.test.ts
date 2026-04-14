@@ -82,4 +82,25 @@ describe("SETTINGS registry", () => {
     expect(s.flag).toContain("--provider");
     expect(s.env).toContain("WRAP_MODEL");
   });
+
+  // Drift guard: every SETTINGS entry with a `default` must be a required
+  // field in ResolvedConfig (src/config/config.ts). Add/remove here in lock
+  // step — otherwise `getConfig()` would silently lie about which fields are
+  // defined post-resolve.
+  test("SETTINGS entries with defaults match ResolvedConfig required fields", () => {
+    const withDefaults = (Object.entries(SETTINGS) as [string, Setting][])
+      .filter(([, s]) => s.default !== undefined)
+      .map(([k]) => k)
+      .sort();
+    expect(withDefaults).toEqual(
+      [
+        "maxCapturedOutputChars",
+        "maxPipedInputChars",
+        "maxRounds",
+        "nerdFonts",
+        "noAnimation",
+        "verbose",
+      ].sort(),
+    );
+  });
 });

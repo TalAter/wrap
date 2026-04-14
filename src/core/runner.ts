@@ -138,7 +138,7 @@ export async function* runLoop(
     // against maxRounds (which would be wrong across follow-ups).
     const isLastRound = state.budgetRemaining === 0;
 
-    const maxRounds = getConfig().maxRounds as number;
+    const maxRounds = getConfig().maxRounds;
     if (state.roundNum > 1) {
       verbose(`Round ${state.roundNum}/${maxRounds}`);
     }
@@ -240,7 +240,7 @@ export async function* runLoop(
     if (exec.stderr.trim()) {
       stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
     }
-    const maxCapturedOutput = getConfig().maxCapturedOutputChars as number;
+    const maxCapturedOutput = getConfig().maxCapturedOutputChars;
     stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
 
     yield { type: "step-output", text: stepOutput };

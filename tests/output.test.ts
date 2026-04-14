@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { setConfig } from "../src/config/store.ts";
 import { chrome, chromeRaw, colorLevel, shouldAnimate } from "../src/core/output.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 let stderr: MockStderr;
 
@@ -54,7 +54,7 @@ describe("shouldAnimate", () => {
   beforeEach(() => {
     origIsTTY = process.stdout.isTTY;
     Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
-    setConfig({});
+    seedTestConfig();
   });
 
   afterEach(() => {
@@ -71,7 +71,7 @@ describe("shouldAnimate", () => {
   });
 
   test("false when config.noAnimation is true", () => {
-    setConfig({ noAnimation: true });
+    seedTestConfig({ noAnimation: true });
     expect(shouldAnimate()).toBe(false);
   });
 });
