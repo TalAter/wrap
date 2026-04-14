@@ -86,46 +86,46 @@ export const DARK_THEME: ThemeTokens = {
 
 export const LIGHT_THEME: ThemeTokens = {
   text: {
-    primary: [30, 30, 50], // near-black for readability
-    secondary: [60, 60, 90],
-    muted: [100, 100, 130],
-    disabled: [170, 170, 190],
+    primary: [25, 25, 40], // near-black for readability
+    secondary: [70, 70, 95],
+    muted: [105, 105, 130],
+    disabled: [175, 175, 195],
   },
   status: {
-    success: [20, 140, 60],
-    warning: [180, 120, 0],
-    error: [200, 30, 50],
-    info: [30, 100, 200],
+    success: [15, 125, 55],
+    warning: [160, 95, 0],
+    error: [190, 25, 45],
+    info: [25, 90, 190],
   },
   chrome: {
-    border: [180, 180, 200],
-    surface: [240, 240, 245],
-    accent: [220, 215, 235],
-    dim: [180, 180, 200],
+    border: [170, 170, 195],
+    surface: [238, 238, 245],
+    accent: [220, 215, 238],
+    dim: [170, 170, 195],
   },
   interactive: {
-    cursor: [40, 80, 200],
+    cursor: [30, 75, 195],
     selection: [210, 220, 245],
-    highlight: [160, 120, 0],
+    highlight: [150, 100, 0],
   },
   gradient: {
     wizard: [
-      [30, 100, 200],
-      [180, 180, 200],
+      [25, 90, 190],
+      [170, 170, 195],
     ],
     riskLow: [
-      [20, 160, 140],
-      [180, 180, 200],
+      [15, 150, 130],
+      [170, 170, 195],
     ],
     riskMed: [
-      [180, 40, 120],
-      [180, 180, 200],
+      [175, 35, 115],
+      [170, 170, 195],
     ],
     riskHigh: [
-      [200, 30, 50],
-      [180, 180, 200],
+      [190, 25, 45],
+      [170, 170, 195],
     ],
-    dim: [180, 180, 200],
+    dim: [170, 170, 195],
   },
 };
 
@@ -155,14 +155,21 @@ export function themeHex(c: Color): string {
 }
 
 /**
- * Blend a bright foreground toward the theme's dim endpoint at 30/70.
- * Produces the recessed background colors used under badges so they
- * read as "same hue, muted" rather than contrast-heavy rectangles.
+ * Blend a foreground toward the theme's dim endpoint to produce a badge
+ * background that reads as "same hue, muted" rather than a heavy rectangle.
+ *
+ * Dark mode (fg brighter than dim): 30/70 pulls dark-tinted bg up to elevate.
+ * Light mode (fg darker than dim): 18/82 keeps bg pale-tinted so dark text
+ * on a near-white surface doesn't collapse into muddy gray.
  */
 export function blendBadgeBg(fg: Color, dim: Color): Color {
+  const fgSum = fg[0] + fg[1] + fg[2];
+  const dimSum = dim[0] + dim[1] + dim[2];
+  const r = fgSum < dimSum ? 0.18 : 0.3;
+  const inv = 1 - r;
   return [
-    Math.round(fg[0] * 0.3 + dim[0] * 0.7),
-    Math.round(fg[1] * 0.3 + dim[1] * 0.7),
-    Math.round(fg[2] * 0.3 + dim[2] * 0.7),
+    Math.round(fg[0] * r + dim[0] * inv),
+    Math.round(fg[1] * r + dim[1] * inv),
+    Math.round(fg[2] * r + dim[2] * inv),
   ];
 }
