@@ -124,7 +124,7 @@ w --log --raw            # force raw JSONL
 
 ## Relationship to Other Systems
 
-- **Verbose mode (`specs/verbose.md`):** Verbose is a curated, human-friendly **subset** of what the logger captures, rendered to stderr in real time. The log file is the source of truth for full diagnostic detail.
+- **Verbose mode (`--verbose` / `config.verbose`):** A curated, human-friendly **subset** of what the logger captures, rendered to stderr in real time via the notification bus. `verbose()` in `src/core/verbose.ts` reads `getConfig().verbose`; no-op if false, otherwise emits a `verbose` notification. Format: `» [+elapsed_s] message` in dim ANSI. The log file is the source of truth for full diagnostic detail. See `config.md` for how the verbose setting resolves.
 - **Threads (future):** Independent. Threads may reference entries by `id` or use their own storage — decided when built.
 - **Eval / DSPy (future):** Logs are raw material. Manual cherry-pick into `eval/examples/seed.jsonl`. No automated pipeline.
 - **Memory:** Snapshotted per entry. Updates from the LLM appear in `parsed.memory_updates`. Persistence lives separately at `~/.wrap/memory.json`.

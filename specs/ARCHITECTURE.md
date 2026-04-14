@@ -7,17 +7,17 @@ High-level map of how an invocation flows through the code. Details live in the 
 ## Top-level flow
 
 ```
-extractModifiers(argv)      strip --verbose / --model / --provider
+parseArgs(argv)             strip modifier options (--verbose, --model, --no-animation)
     │
-parseArgs / parseInput      { subcommand? prompt? pipedInput? }
+resolveSettings + setConfig seed store from CLI + env + defaults (see config.md)
     │
 dispatch subcommand?   ──→  yes: run subcommand, exit (see subcommands.md)
     │
-ensureConfig                config.jsonc exists? load it : run wizard (see config-wizard.md)
+ensureConfig                config.jsonc exists? load it : run wizard (see config.md)
     │
-setConfig                   fold CLI flag overrides, store globally (see §Global config store)
+resolveSettings + setConfig re-resolve with file config layered in
     │
-resolveProvider             getConfig() + overrides → ResolvedProvider (see llm.md)
+resolveProvider             getConfig() + model override → ResolvedProvider (see llm.md)
     │
 probeTools + loadWatchlist  `which` every entry (see discovery.md)
     │
@@ -28,7 +28,7 @@ runSession                  state machine: rounds × LLM × dialog × execute
 appendLogEntry              JSONL at ~/.wrap/logs/wrap.jsonl (see logging.md)
 ```
 
-Subcommands short-circuit before `loadConfig` — `--log` only needs `$WRAP_HOME`, not config or memory. See `subcommands.md` for the registry and dispatch rules, including modifier-flag stripping.
+Subcommands short-circuit before `ensureConfig` — `--log` only needs `$WRAP_HOME`, not file config or memory. Seeded config (CLI + env + defaults) is still available to them. See `subcommands.md` for the registry and dispatch rules.
 
 ---
 
@@ -113,13 +113,15 @@ src/
       test.ts                    Deterministic test mock
       registry.ts                API_PROVIDERS + CLI_PROVIDERS taxonomy + wizard metadata
 
-  config/                        see llm.md §Config Shape
-    config.ts                    file + env → Config (shallow merge)
+  config/                        see config.md
+    config.ts                    Config + ResolvedConfig types, file/env loader
+    settings.ts                  SETTINGS registry — flag/env/config/default metadata
+    resolve.ts                   resolveSettings — precedence CLI > env > file > default
     store.ts                     global config store (setConfig / getConfig / updateConfig)
     ensure.ts                    ensureConfig — wizard on missing config
     config.schema.json           JSON Schema for editor support
 
-  wizard/                        config wizard pure logic (see config-wizard.md)
+  wizard/                        config wizard pure logic (see config.md)
     state.ts                     ProviderWizardState + reducer (screen transitions)
     models-filter.ts             models.dev filter/sort/recommendation
     write-config.ts              buildConfig + serialize + write
@@ -165,19 +167,11 @@ A pure `resolve()` → `execute()` split breaks when flows continue after prereq
 
 ### Global config store, not prop drilling
 
-`src/config/store.ts` — `setConfig()` / `getConfig()` / `updateConfig()`. Any module reads config via `getConfig()` without receiving it as a parameter.
+`src/config/store.ts` — any module reads config via `getConfig()` without receiving it as a parameter. The store holds a `ResolvedConfig` (Config with SETTINGS defaults materialized); `setConfig` refuses anything less. See `config.md` for the full sources/precedence/resolver story.
 
-**Store holds raw `Config` only.** Provider resolution, memory, and other derived state stay outside the store. `resolveProvider(getConfig(), override)` reads from the store; it doesn't write back into it.
+**Replaces per-setting singletons.** `initNerdFonts()` and `initVerbose()` are eliminated. `resolveIcon()` reads `getConfig().nerdFonts`. `verbose()` reads `getConfig().verbose`. Session options like `maxRounds` read from `getConfig()` instead of being passed through `SessionOptions`.
 
-**`setConfig()` is idempotent.** No init guard — calling it again replaces the config. Tests call `setConfig({...})` in `beforeEach` to isolate; no separate `resetConfig()` needed.
-
-**`getConfig()` throws before `setConfig()`.** Pre-config code paths (parseArgs, `--help` dispatch) never touch config. If they accidentally do, the throw surfaces it immediately.
-
-**`updateConfig(patch)` for mid-flight mutation.** Shallow-merges `patch` into the current config. Primary consumer: the config wizard, which updates settings (e.g. `nerdFonts`) between screens so later screens can read them via `getConfig()`.
-
-**CLI flag overrides merge at `setConfig` time.** `main.ts` folds `--verbose` into the config before calling `setConfig()`, so `getConfig().verbose` returns the resolved value everywhere.
-
-**Replaces per-setting singletons.** `initNerdFonts()` and `initVerbose()` are eliminated. `resolveIcon()` reads `getConfig().nerdFonts` directly. `verbose()` reads `getConfig().verbose` directly. Session options like `maxRounds` read from `getConfig()` instead of being passed through `SessionOptions`.
+**`updateConfig(patch)` for mid-flight mutation.** Shallow-merges into the current config, skipping `undefined` values. Primary consumer: the config wizard, updating settings (e.g. `nerdFonts`) between screens so later screens read them via `getConfig()`.
 
 ### Core is pure; session owns the world
 
@@ -200,6 +194,6 @@ Prompts are assembled as a `PromptScaffold` (`system` + `prefixMessages` + `init
 - **Changing what the LLM sees?** → `llm.md` § Prompt scaffold + `discovery.md`
 - **Changing when a command is blocked?** → `safety.md`
 - **Changing what gets logged?** → `logging.md`
-- **Changing stderr narrative?** → `verbose.md`
+- **Adding a setting / changing precedence?** → `config.md`
 - **Adding a subcommand?** → `subcommands.md`
 - **Multi-step flows?** → `multi-step.md` (planned; blocked on session architecture it builds on)

@@ -98,7 +98,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
     nerdIcon: "\udb80\udd04", // nf-fa-empire
   },
   // TODO: enable once @ai-sdk/google is bundled and a `kind: "google"` branch
-  // lands in this file + ai-sdk.ts. See specs/config-wizard.md Future work.
+  // lands in this file + ai-sdk.ts. See specs/config.md Future work.
   // google: {
   //   displayName: "Google (Gemini)",
   //   kind: "google",

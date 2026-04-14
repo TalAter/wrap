@@ -61,8 +61,8 @@ Read the sub-spec for the area you care about. Each owns its architecture, reaso
 | Environment discovery, probes, tool watchlist, CWD files | [`discovery.md`](./discovery.md) |
 | Scoped memory facts | [`memory.md`](./memory.md) |
 | Piped stdin | [`piped-input.md`](./piped-input.md) |
-| CLI flags: subcommands (`--log`, `--help`, `--version`) and modifier options (`--verbose`, `--model`/`--provider`) | [`subcommands.md`](./subcommands.md) |
-| Verbose mode (stderr narrative) | [`verbose.md`](./verbose.md) |
+| CLI flags: subcommands (`--log`, `--help`, `--version`) and modifier options (`--verbose`, `--model`/`--provider`, `--no-animation`) | [`subcommands.md`](./subcommands.md) |
+| Config: sources, precedence, SETTINGS registry, file schema, first-run wizard | [`config.md`](./config.md) |
 | Structured JSONL logging | [`logging.md`](./logging.md) |
 | Answer-mode voice | [`answer-voice.md`](./answer-voice.md) |
 | Scratchpad field | [`scratchpad.md`](./scratchpad.md) |
@@ -199,7 +199,7 @@ These apply everywhere and cross sub-spec boundaries. If they ever conflict with
 ## 6. First-run experience
 
 1. User runs `wrap` (or `wrap <query>`) for the first time.
-2. `ensureConfig()` detects no config → runs config wizard (see `config-wizard.md`).
+2. `ensureConfig()` detects no config → runs config wizard (see `config.md`).
 3. **Provider selection:** CLI tool providers (Claude Code, etc.) if detected; API providers (Anthropic, OpenAI, Ollama, OpenRouter) with key entry. See `llm.md`.
 4. **Alias setup** scans for available single-letter commands, suggests the best one, and installs with glob protection so natural-language prompts never expand:
    - **zsh:** `alias w='noglob wrap'`

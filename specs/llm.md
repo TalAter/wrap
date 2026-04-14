@@ -136,7 +136,7 @@ A transient model the resolved provider's API rejects is passed through to the S
 
 Two layers with a pure resolver between:
 
-1. **`ensureConfig`** (`src/config/ensure.ts`) — if `config.jsonc` exists, loads it via `loadConfig`; otherwise runs the wizard (see `config-wizard.md`). `loadConfig` in `src/config/config.ts` owns `Config` and `ProviderEntry` types; returns file ⊕ `WRAP_CONFIG`.
+1. **`ensureConfig`** (`src/config/ensure.ts`) — if `config.jsonc` exists, loads it via `loadConfig`; otherwise runs the wizard (see `config.md`). `loadConfig` in `src/config/config.ts` owns `Config` and `ProviderEntry` types; returns file ⊕ `WRAP_CONFIG`.
 2. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure: `(Config, override, env) → ResolvedProvider`. Parses the override, applies smart resolution, runs per-entry validation via the registry, produces the final tuple.
 3. **`initProvider`** (`src/llm/index.ts`) — dispatches `ResolvedProvider` to the right factory via the registry's `kind`.
 

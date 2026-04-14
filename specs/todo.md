@@ -8,6 +8,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
 - [ ] `truncateToLine()` utility — line-aware truncation for LLM context (see `specs/piped-input.md` § Truncation). Replace naive `slice()` in captured-output truncation (`runner.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
+- [ ] Verbose `Context: {N} memory facts, {T} tools, {F} CWD files` line before the first LLM call.
 
 ## Input & Invocation
 
@@ -18,6 +19,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 ## Execution & Safety (see specs/safety.md)
 
 - [ ] Local safety rule engine — pattern list, `classifyLocal()`, integration in `query.ts` (see `specs/safety.md`)
+- [ ] Verbose `Risk escalated: {llm} → {effective} (matched: {pattern})` line when the local rule engine overrides the LLM's level.
 - [ ] Adversarial eval samples — indirect phrasing, obfuscated commands, social engineering
 - [ ] Piped injection eval samples (`pipedInput` bridge support now available)
 - [ ] Nonce delimiters for untrusted prompt sections
@@ -44,6 +46,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Command not found → LLM decides: memory update (system tool) vs path suggestion (local script)
 - [ ] Feed infrastructure errors back to LLM for corrected command
 - [ ] LLM classifies errors as fixable vs informational
+- [ ] Verbose `Command failed ({code}), feeding error to LLM...` line when a failed command is fed back.
 
 ## LLM Integration
 
@@ -74,9 +77,10 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Configuration & First-Run
 
-- [x] First-run config wizard TUI — provider selection, API key entry, model selection. See `specs/config-wizard.md`.
+- [x] First-run config wizard TUI — provider selection, API key entry, model selection. See `specs/config.md`.
 - [ ] Alias setup in wizard — scan available single-letter commands, detect shell, write glob-protected aliases to shell rc file
 - [ ] Full first-run flow: config wizard → alias setup → ready
+- [ ] Auto-generate `src/config/config.schema.json` from SETTINGS so the two can't drift — until then, adding a persistent setting means editing both.
 
 ## Output & UI
 
@@ -88,7 +92,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Subcommands (see specs/subcommands.md)
 
-- [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See `specs/config-wizard.md` Future work. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
+- [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See `specs/config.md` Future work. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
 - [ ] `--memory` — view/manage memory
 
 ## Eval System
@@ -112,4 +116,5 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Piped input: `--full` flag to send complete content to LLM without truncation
 - [ ] Piped input: temp-file buffering for very large inputs (avoid holding multi-GB strings in memory)
 - [ ] Piped input: `Bun.stdin.bytes()` for binary-safe re-piping (current `text()` corrupts non-UTF-8)
+- [ ] Piped input verbose lines — `Piped input: {size}`, `Piped input truncated: ...`, `Re-piping {size} to command stdin` when piping to the child. Empty pipes emit nothing.
 - [ ] Interactive mode — `w` with no args opens a free-text prompt area (see `specs/interactive-mode.md`). Blocked on TUI lib.

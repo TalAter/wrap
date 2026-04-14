@@ -33,6 +33,8 @@ Detection is strictly positional: `w find files --verbose` is NL because `--verb
 
 `main.ts` derives the modifier parser input from the registry's `options` array, so adding an option to the registry automatically makes it parseable and visible in help. `dispatch()` reads `commands` and passes remaining args through untouched — per-command arg parsing is each command's job.
 
+The `options` array is itself derived from the SETTINGS registry in `src/config/settings.ts` — every SETTINGS entry with a `flag` becomes an Option. See `config.md` for the full settings story (CLI flag / env var / config file precedence, resolver, defaults).
+
 Flow position in `main.ts`:
 
 ```
@@ -54,12 +56,13 @@ parseArgs(argv)           // strips options (--verbose, --model, ...)
 | `--version` | `-v` | Reads `package.json`. Rejects extra args. |
 | `--log` | — | Unified log viewer. |
 
-**Options:**
+**Options:** (all also settable per `config.md` precedence rules)
 
-| Flag | Aliases | Value | Notes |
-|---|---|---|---|
-| `--model` | `--provider` | required | Override LLM provider/model for this invocation. Formats: `provider:model`, `provider`, `:model`, or bare `model` (smart match). See `llm.md`. |
-| `--verbose` | — | none | Enable real-time narrative debugging on stderr. See `verbose.md`. |
+| Flag | Aliases | Env | Value | Notes |
+|---|---|---|---|---|
+| `--model` | `--provider` | `WRAP_MODEL` | required | Override LLM provider/model. Formats: `provider:model`, `provider`, `:model`, or bare `model` (smart match). See `llm.md`. |
+| `--verbose` | — | — | none | Narrative pipeline output on stderr — config load, tool probes, LLM calls, executions. Curated, human-friendly subset of what the full log captures. |
+| `--no-animation` | — | `WRAP_NO_ANIMATION` | none | Disable animations (help shine, spinners, dialog status). Also triggered automatically by `CI`, `TERM=dumb`, `NO_COLOR`. |
 
 ### `--log` behaviour
 
@@ -82,6 +85,6 @@ Edge cases: missing log file → `No log entries yet.` on stderr, exit 0. Corrup
 
 ## Out of scope
 
-- `--config` — reuses the config wizard once that exists.
+- `--config` — reuses the config wizard, preselect semantics. See `config.md` Future work.
 - `--memory` — view/manage memory store.
 - Fuzzy "did you mean?" for unknown-flag typos.
