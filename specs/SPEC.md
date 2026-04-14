@@ -55,6 +55,7 @@ Read the sub-spec for the area you care about. Each owns its architecture, reaso
 | LLM providers, config, SDK integration, prompt scaffold | [`llm.md`](./llm.md) |
 | Multi-step command flows (planned) | [`multi-step.md`](./multi-step.md) |
 | TUI / dialog / Ink layout / text-input | [`tui.md`](./tui.md) |
+| Colors, dark/light mode, color depth, `WRAP_THEME` / `FORCE_COLOR` | [`theme.md`](./theme.md) |
 | Follow-up refinement flow | [`follow-up.md`](./follow-up.md) |
 | Risk classification, rule engine, modes, injection defenses | [`safety.md`](./safety.md) |
 | Environment discovery, probes, tool watchlist, CWD files | [`discovery.md`](./discovery.md) |
