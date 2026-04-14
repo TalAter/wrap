@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { setConfig } from "../src/config/store.ts";
 import { chrome, chromeRaw, colorLevel, shouldAnimate } from "../src/core/output.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 
@@ -58,6 +59,7 @@ describe("shouldAnimate", () => {
     origIsTTY = process.stdout.isTTY;
     Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
     process.env.TERM = "xterm-256color";
+    setConfig({});
   });
 
   afterEach(() => {
@@ -104,6 +106,11 @@ describe("shouldAnimate", () => {
 
   test("false when enabled=false", () => {
     expect(shouldAnimate({ enabled: false })).toBe(false);
+  });
+
+  test("false when config has noAnimation set", () => {
+    setConfig({ noAnimation: true });
+    expect(shouldAnimate()).toBe(false);
   });
 });
 

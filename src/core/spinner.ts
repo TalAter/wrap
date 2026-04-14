@@ -1,3 +1,4 @@
+import { getConfig } from "../config/store.ts";
 import { ERASE_LINE, HIDE_CURSOR, SHOW_CURSOR } from "./ansi.ts";
 import { chromeRaw } from "./output.ts";
 
@@ -60,6 +61,18 @@ export function resetExitGuard(): void {
  */
 export function startChromeSpinner(text: string): () => void {
   if (!process.stderr.isTTY) return () => {};
+
+  // When animations are disabled, show the status text once (no frame, no
+  // cursor hide, no interval) and erase it on stop.
+  if (getConfig().noAnimation) {
+    chromeRaw(`\r${text}`);
+    let stopped = false;
+    return () => {
+      if (stopped) return;
+      stopped = true;
+      chromeRaw(`\r${ERASE_LINE}`);
+    };
+  }
 
   ensureExitGuard();
 

@@ -337,7 +337,7 @@ describe("--help", () => {
   });
 
   test("--no-animation suppresses animation but still prints help", async () => {
-    const { exitCode, stdout } = await wrap("--help --no-animation");
+    const { exitCode, stdout } = await wrap("--no-animation --help");
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Usage:");
     expect(stdout).toContain("--help");

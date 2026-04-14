@@ -34,6 +34,13 @@ export async function main() {
 
     const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
+    // Seed config from CLI modifier flags so subcommands can read them.
+    // ensureConfig() merges file/env config on top in the session path.
+    setConfig({
+      verbose: modifiers.flags.has("verbose") || undefined,
+      noAnimation: modifiers.flags.has("noAnimation") || undefined,
+    });
+
     if (input.type === "flag") {
       await dispatch(input.flag, input.args);
       return;
@@ -52,6 +59,7 @@ export async function main() {
     setConfig({
       ...config,
       verbose: modifiers.flags.has("verbose") || config.verbose === true,
+      noAnimation: modifiers.flags.has("noAnimation") || config.noAnimation === true,
     });
 
     // Re-resolve with config.appearance now available.

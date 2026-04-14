@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
+import { setConfig } from "../src/config/store.ts";
 import { stripAnsi } from "../src/core/ansi.ts";
+
+beforeEach(() => setConfig({}));
+
 import type { AppEvent } from "../src/session/state.ts";
 import {
   formatOutputSlot,

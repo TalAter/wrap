@@ -11,7 +11,6 @@ import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { writeWizardConfig } from "../wizard/write-config.ts";
 import configSchema from "./config.schema.json" with { type: "json" };
 import { CONFIG_FILENAME, type Config, loadConfig } from "./config.ts";
-import { setConfig } from "./store.ts";
 
 const MODELS_URL = "https://models.dev/api.json";
 const MODELS_CACHE_PATH = "cache/models.dev.json";
@@ -70,10 +69,6 @@ export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Conf
   if (existing !== null || env.WRAP_CONFIG) {
     return loadConfig(envOverrides);
   }
-
-  // Seed the config store so wizard sections can call getConfig()/updateConfig().
-  // Safe even if store is already populated (e.g. future w --wizard re-run).
-  setConfig({});
 
   let result: WizardResult | null;
   if ("_testWizardResult" in opts) {

@@ -222,16 +222,13 @@ export const helpCmd: Command = {
     "",
     "Run it with a command name for help on that command, e.g. w --help log",
     "",
-    "Pass --no-animation (or set WRAP_NO_MOTION=1) to skip the shine animation.",
+    "The global --no-animation flag (or WRAP_NO_MOTION=1) disables animations.",
   ].join("\n"),
   run: async (args) => {
     const { commands, options } = await import("./registry.ts");
 
-    const animationEnabled = !args.includes("--no-animation");
-    const rest = args.filter((a) => a !== "--no-animation");
-
-    if (rest.length === 0) {
-      if (shouldAnimate({ enabled: animationEnabled })) {
+    if (args.length === 0) {
+      if (shouldAnimate()) {
         await renderAnimated(commands, options);
       } else if (supportsColor()) {
         process.stdout.write(renderStyled(commands, options));
@@ -241,17 +238,17 @@ export const helpCmd: Command = {
       return;
     }
 
-    if (rest.length > 1) {
+    if (args.length > 1) {
       chrome("--help takes at most one argument.");
       process.exit(1);
       return;
     }
 
-    const name = (rest[0] as string).replace(/^--/, "");
+    const name = (args[0] as string).replace(/^--/, "");
     const allFlags: CLIFlag[] = [...commands, ...options];
     const flag = allFlags.find((f) => f.flag === `--${name}`);
     if (!flag) {
-      chrome(`Unknown flag: ${rest[0]}`);
+      chrome(`Unknown flag: ${args[0]}`);
       process.exit(1);
       return;
     }

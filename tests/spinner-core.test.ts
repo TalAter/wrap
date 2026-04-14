@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
+import { setConfig } from "../src/config/store.ts";
 import { HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
 import {
   resetExitGuard,
@@ -31,6 +32,8 @@ describe("SPINNER_INTERVAL", () => {
 });
 
 describe("startChromeSpinner", () => {
+  beforeEach(() => setConfig({}));
+
   test("writes the text and a frame to stderr", () => {
     const stderr = mockStderr({ isTTY: true });
     try {
@@ -84,6 +87,26 @@ describe("startChromeSpinner", () => {
         }
       }
       expect(seen.size).toBeGreaterThanOrEqual(2);
+    } finally {
+      stderr.restore();
+    }
+  });
+
+  test("does not animate or hide cursor when config.noAnimation is true", async () => {
+    setConfig({ noAnimation: true });
+    const stderr = mockStderr({ isTTY: true });
+    try {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      await new Promise((r) => setTimeout(r, SPINNER_INTERVAL * 3 + 30));
+      stop();
+      expect(stderr.text).not.toContain(HIDE_CURSOR);
+      // No spinner frames rendered — only the text itself.
+      const seenFrames = SPINNER_FRAMES.filter((f) =>
+        stderr.lines.some((w) => w.includes(f.trim())),
+      );
+      expect(seenFrames).toEqual([]);
+      // Status text still shown.
+      expect(stderr.lines.some((w) => w.includes(SPINNER_TEXT))).toBe(true);
     } finally {
       stderr.restore();
     }

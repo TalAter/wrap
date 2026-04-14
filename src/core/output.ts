@@ -57,6 +57,7 @@ export function colorLevel(): ColorLevel {
  */
 export function shouldAnimate(opts?: { enabled?: boolean }): boolean {
   if (opts?.enabled === false) return false;
+  if (getConfig().noAnimation) return false;
   if (!supportsColor()) return false;
   if ("CI" in process.env) return false;
   if (process.env.TERM === "dumb") return false;

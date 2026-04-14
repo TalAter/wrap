@@ -15,6 +15,7 @@ export type Config = {
   maxCapturedOutputChars?: number;
   maxPipedInputChars?: number;
   verbose?: boolean;
+  noAnimation?: boolean;
   nerdFonts?: boolean;
   appearance?: "auto" | "dark" | "light";
 };

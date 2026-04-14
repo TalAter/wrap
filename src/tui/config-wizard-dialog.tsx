@@ -2,7 +2,7 @@ import { Select } from "@inkjs/ui";
 import { Box, Text, useInput, useWindowSize } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
-import { updateConfig } from "../config/store.ts";
+import { getConfig, updateConfig } from "../config/store.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import { getTheme, themeHex } from "../core/theme.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
@@ -244,15 +244,19 @@ function ProviderSelectionScreen({
 }
 
 function LoadingScreen() {
+  const noAnimation = getConfig().noAnimation;
   const [frame, setFrame] = useState(0);
   useEffect(() => {
+    if (noAnimation) return;
     const id = setInterval(
       () => setFrame((f) => (f + 1) % SPINNER_FRAMES.length),
       SPINNER_INTERVAL,
     );
     return () => clearInterval(id);
-  }, []);
-  return <Text>{SPINNER_FRAMES[frame]} Loading models…</Text>;
+  }, [noAnimation]);
+  return (
+    <Text>{noAnimation ? "Loading models…" : `${SPINNER_FRAMES[frame]} Loading models…`}</Text>
+  );
 }
 
 function ApiKeyScreen({

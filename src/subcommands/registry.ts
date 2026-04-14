@@ -33,5 +33,14 @@ export const verboseOption: Option = {
   usage: "w --verbose",
 };
 
+export const noAnimationOption: Option = {
+  kind: "option",
+  flag: "--no-animation",
+  id: "noAnimation",
+  takesValue: false,
+  description: "Disable animations",
+  usage: "w --no-animation",
+};
+
 export const commands: Command[] = [logCmd, helpCmd, versionCmd];
-export const options: Option[] = [modelOption, verboseOption];
+export const options: Option[] = [modelOption, verboseOption, noAnimationOption];

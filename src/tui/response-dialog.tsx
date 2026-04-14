@@ -1,6 +1,7 @@
 import { Box, Text, useAnimation, useInput, useStdin, useWindowSize } from "ink";
 import { useEffect, useState } from "react";
 import stringWidth from "string-width";
+import { getConfig } from "../config/store.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import type { ThemeTokens } from "../core/theme.ts";
 import { themeHex } from "../core/theme.ts";
@@ -248,7 +249,9 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     { isActive: state.tag === "confirming" },
   );
 
-  const spinnerActive = state.tag === "processing" || state.tag === "executing-step";
+  const noAnimation = getConfig().noAnimation;
+  const spinnerActive =
+    !noAnimation && (state.tag === "processing" || state.tag === "executing-step");
   const { frame: spinnerIndex } = useAnimation({
     interval: SPINNER_INTERVAL,
     isActive: spinnerActive,
@@ -256,11 +259,12 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   const spinnerFrame = spinnerActive
     ? (SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length] ?? null)
     : null;
+  const prefix = spinnerFrame ? `${spinnerFrame} ` : "";
   const bottomStatus =
     state.tag === "processing"
-      ? `${spinnerFrame ?? ""} ${status ?? FOLLOWUP_FALLBACK_STATUS}`
+      ? `${prefix}${status ?? FOLLOWUP_FALLBACK_STATUS}`
       : state.tag === "executing-step"
-        ? `${spinnerFrame ?? ""} ${EXECUTING_STEP_STATUS}`
+        ? `${prefix}${EXECUTING_STEP_STATUS}`
         : undefined;
 
   const preset = getRiskPresets()[riskLevel];
