@@ -155,6 +155,45 @@ function to256(r: number, g: number, b: number): number {
   return 16 + 36 * ri + 6 * gi + bi;
 }
 
+/** Convert an RGB tuple to a #rrggbb hex string for Ink color props. */
+export function colorHex([r, g, b]: Color): string {
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+function idx256ToRgb(idx: number): Color {
+  if (idx >= 232) {
+    const v = 8 + (idx - 232) * 10;
+    return [v, v, v];
+  }
+  const n = idx - 16;
+  const ri = Math.floor(n / 36);
+  const gi = Math.floor((n % 36) / 6);
+  const bi = n % 6;
+  return [CUBE_LEVELS[ri] as number, CUBE_LEVELS[gi] as number, CUBE_LEVELS[bi] as number];
+}
+
+function code16ToRgb(code: number): Color {
+  for (const [rgb, c] of ANSI16) {
+    if (c === code) return rgb;
+  }
+  return [0, 0, 0];
+}
+
+/**
+ * Snap a color to the nearest representable RGB for the given level.
+ * Level 3 and 0 pass through (no palette constraint). Level 2 uses the
+ * xterm 256-color cube + grayscale. Level 1 uses the ANSI16 palette.
+ *
+ * Use this before handing a hex string to Ink: Ink's Text color prop
+ * always emits truecolor escapes, which defeats FORCE_COLOR=1/2.
+ */
+export function quantizeColor(c: Color, level: number): Color {
+  if (level >= 3 || level <= 0) return c;
+  const [r, g, b] = c;
+  if (level === 2) return idx256ToRgb(to256(r, g, b));
+  return code16ToRgb(nearest16(r, g, b));
+}
+
 /** SGR foreground escape for the given color at the given level (default truecolor). */
 export function fgCode(r: number, g: number, b: number, level = 3): string {
   if (level <= 0) return "";
@@ -167,6 +206,11 @@ export function fgCode(r: number, g: number, b: number, level = 3): string {
  * Per-cell rendering — each element is either a single space or an ANSI
  * SGR escape glued to its character. Diff-based repainters compare cells
  * directly to find the minimal dirty range per row.
+ *
+ * Below truecolor, the gradient is collapsed to the signature color (first
+ * stop) because quantising an interpolation across 16 or 256 colors
+ * produces chunky banding instead of a smooth ramp. Shine is also dropped
+ * since it depends on blended whites that don't land in limited palettes.
  */
 export function gradientCells(
   text: string,
@@ -178,6 +222,9 @@ export function gradientCells(
   const len = text.length;
   if (len === 0) return [];
   const cells: string[] = new Array(len);
+  const solid = level > 0 && level < 3 ? (stops[0] as Color) : null;
+  const solidEsc = solid ? fgCode(solid[0], solid[1], solid[2], level) : "";
+
   for (let i = 0; i < len; i++) {
     const ch = text[i] as string;
     if (ch === " ") {
@@ -186,6 +233,10 @@ export function gradientCells(
     }
     if (level <= 0) {
       cells[i] = ch;
+      continue;
+    }
+    if (solid) {
+      cells[i] = `${solidEsc}${ch}`;
       continue;
     }
     const t = len > 1 ? i / (len - 1) : 0;

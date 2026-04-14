@@ -1,7 +1,13 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
+import { getTheme, themeHex } from "../core/theme.ts";
 import { Dialog } from "./dialog.tsx";
-import { KeyHints, WIZARD_BADGE, WIZARD_CONTENT_WIDTH, WIZARD_STOPS } from "./wizard-chrome.tsx";
+import {
+  getWizardBadge,
+  getWizardStops,
+  KeyHints,
+  WIZARD_CONTENT_WIDTH,
+} from "./wizard-chrome.tsx";
 
 // Star Wars Nerd Font glyphs for detection
 const TEST_ICONS = [
@@ -38,8 +44,8 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
 
   return (
     <Dialog
-      gradientStops={WIZARD_STOPS}
-      badge={WIZARD_BADGE}
+      gradientStops={getWizardStops()}
+      badge={getWizardBadge()}
       naturalContentWidth={WIZARD_CONTENT_WIDTH}
     >
       <Box flexDirection="column">
@@ -50,14 +56,18 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
           {TEST_ICONS.join("  ")}
         </Text>
         <Text> </Text>
-        {options.map((label, i) => (
-          <Text key={label}>
-            <Text color={i === cursor ? "#f5c864" : "#73738c"}>
-              {i === cursor ? "  ❯ " : "    "}
+        {options.map((label, i) => {
+          const t = getTheme();
+          const active = themeHex(t.interactive.highlight);
+          const muted = themeHex(t.text.muted);
+          const bright = themeHex(t.text.primary);
+          return (
+            <Text key={label}>
+              <Text color={i === cursor ? active : muted}>{i === cursor ? "  ❯ " : "    "}</Text>
+              <Text color={i === cursor ? bright : muted}>{label}</Text>
             </Text>
-            <Text color={i === cursor ? "#ffffff" : "#73738c"}>{label}</Text>
-          </Text>
-        ))}
+          );
+        })}
         <Text> </Text>
         <KeyHints
           items={[

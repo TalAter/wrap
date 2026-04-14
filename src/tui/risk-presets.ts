@@ -1,47 +1,55 @@
 import type { RiskLevel } from "../command-response.schema.ts";
 import type { Color } from "../core/ansi.ts";
+import { getTheme, type ThemeTokens } from "../core/theme.ts";
 import type { Badge } from "./border.ts";
 
+type RiskPreset = { stops: Color[]; badge: Badge };
+
+// Badge backgrounds are derived by mixing the badge fg toward the theme dim.
+function badgeBg(fg: Color, dim: Color): Color {
+  return [
+    Math.round(fg[0] * 0.3 + dim[0] * 0.7),
+    Math.round(fg[1] * 0.3 + dim[1] * 0.7),
+    Math.round(fg[2] * 0.3 + dim[2] * 0.7),
+  ];
+}
+
+function buildPresets(t: ThemeTokens): Record<RiskLevel, RiskPreset> {
+  return {
+    low: {
+      stops: t.gradient.riskLow,
+      badge: {
+        fg: t.status.success,
+        bg: badgeBg(t.status.success, t.gradient.dim),
+        icon: "✔",
+        label: "low risk",
+      },
+    },
+    medium: {
+      stops: t.gradient.riskMed,
+      badge: {
+        fg: t.status.warning,
+        bg: badgeBg(t.status.warning, t.gradient.dim),
+        icon: "⚠",
+        label: "medium risk",
+      },
+    },
+    high: {
+      stops: t.gradient.riskHigh,
+      badge: {
+        fg: t.status.error,
+        bg: badgeBg(t.status.error, t.gradient.dim),
+        icon: "⚠",
+        label: "high risk",
+      },
+    },
+  };
+}
+
 /**
- * Per-risk-level gradient stops + badge. Co-located so tuning a level's look
- * only touches one place. ResponseDialog picks the preset for the current
- * risk level and hands stops + badge into the generic <Dialog> chrome.
+ * Per-risk-level gradient stops + badge, derived from the active theme.
+ * Call at render time (after setTheme has run).
  */
-export const RISK_PRESETS: Record<RiskLevel, { stops: Color[]; badge: Badge }> = {
-  // Low risk: teal → blue → dim
-  low: {
-    stops: [
-      [80, 220, 200],
-      [70, 190, 195],
-      [65, 160, 180],
-      [60, 130, 160],
-      [60, 95, 130],
-      [60, 60, 100],
-    ],
-    badge: { fg: [120, 230, 160], bg: [25, 70, 40], icon: "✔", label: "low risk" },
-  },
-  // Medium risk: pink → purple → dim
-  medium: {
-    stops: [
-      [255, 100, 200],
-      [220, 100, 225],
-      [160, 100, 250],
-      [100, 100, 220],
-      [70, 80, 150],
-      [60, 60, 100],
-    ],
-    badge: { fg: [255, 200, 80], bg: [80, 60, 30], icon: "⚠", label: "medium risk" },
-  },
-  // High risk: red → purple → dim
-  high: {
-    stops: [
-      [255, 60, 80],
-      [230, 65, 130],
-      [185, 75, 190],
-      [125, 85, 210],
-      [80, 80, 155],
-      [60, 60, 100],
-    ],
-    badge: { fg: [255, 100, 100], bg: [80, 25, 25], icon: "⚠", label: "high risk" },
-  },
-};
+export function getRiskPresets(): Record<RiskLevel, RiskPreset> {
+  return buildPresets(getTheme());
+}

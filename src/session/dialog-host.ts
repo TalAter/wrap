@@ -19,6 +19,7 @@ type DialogModules = {
   react: typeof import("react");
   ResponseDialog: typeof import("../tui/response-dialog.tsx").ResponseDialog;
   ConfigWizardDialog: typeof import("../tui/config-wizard-dialog.tsx").ConfigWizardDialog;
+  ThemeProvider: typeof import("../tui/theme-context.tsx").ThemeProvider;
 };
 
 let cached: DialogModules | null = null;
@@ -28,17 +29,19 @@ let cached: DialogModules | null = null;
  */
 export async function preloadDialogModules(): Promise<void> {
   if (cached) return;
-  const [ink, react, responseDialogModule, wizardModule] = await Promise.all([
+  const [ink, react, responseDialogModule, wizardModule, themeModule] = await Promise.all([
     import("ink"),
     import("react"),
     import("../tui/response-dialog.tsx"),
     import("../tui/config-wizard-dialog.tsx"),
+    import("../tui/theme-context.tsx"),
   ]);
   cached = {
     ink,
     react,
     ResponseDialog: responseDialogModule.ResponseDialog,
     ConfigWizardDialog: wizardModule.ConfigWizardDialog,
+    ThemeProvider: themeModule.ThemeProvider,
   };
 }
 
@@ -49,15 +52,18 @@ export function mountResponseDialog(props: {
   if (!cached) {
     throw new Error("mountResponseDialog: preloadDialogModules() must resolve first");
   }
-  const { ink, react, ResponseDialog } = cached;
-  const app = ink.render(react.createElement(ResponseDialog, props), {
-    stdout: process.stderr,
-    patchConsole: false,
-    alternateScreen: true,
-  });
+  const { ink, react, ResponseDialog, ThemeProvider: TP } = cached;
+  const app = ink.render(
+    react.createElement(TP, null, react.createElement(ResponseDialog, props)),
+    {
+      stdout: process.stderr,
+      patchConsole: false,
+      alternateScreen: true,
+    },
+  );
   return {
     rerender(nextProps) {
-      app.rerender(react.createElement(ResponseDialog, nextProps));
+      app.rerender(react.createElement(TP, null, react.createElement(ResponseDialog, nextProps)));
     },
     unmount() {
       app.unmount();
@@ -77,7 +83,7 @@ export async function mountConfigWizardDialog(callbacks: {
   // preloadDialogModules guarantees cached is populated
   const modules = cached;
   if (!modules) throw new Error("mountConfigWizardDialog: preloadDialogModules() failed");
-  const { ink, react, ConfigWizardDialog } = modules;
+  const { ink, react, ConfigWizardDialog, ThemeProvider: TP } = modules;
 
   return new Promise<WizardResult | null>((resolve) => {
     const props: WizardCallbacks = {
@@ -91,11 +97,14 @@ export async function mountConfigWizardDialog(callbacks: {
         resolve(null);
       },
     };
-    const app = ink.render(react.createElement(ConfigWizardDialog, props), {
-      stdout: process.stderr,
-      patchConsole: false,
-      alternateScreen: true,
-    });
+    const app = ink.render(
+      react.createElement(TP, null, react.createElement(ConfigWizardDialog, props)),
+      {
+        stdout: process.stderr,
+        patchConsole: false,
+        alternateScreen: true,
+      },
+    );
   });
 }
 

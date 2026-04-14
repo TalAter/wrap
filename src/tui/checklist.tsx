@@ -2,6 +2,7 @@ import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import stringWidth from "string-width";
 import { resolveIcon } from "../core/output.ts";
+import { getTheme, themeHex } from "../core/theme.ts";
 
 export type ChecklistItem =
   | { type: "option"; label: string; value: string; icon?: string }
@@ -16,15 +17,15 @@ type Props = {
   onSubmit: (values: string[]) => void;
 };
 
-const CHECKED_COLOR = "#66cc88";
-const DIM_COLOR = "#73738c";
-const CURSOR_COLOR = "#6699ff";
-const CURSOR_BG = "#1a2a4d";
-const LEADER_COLOR = "#484866";
-
 const BRAILLE = "⠶";
 
 export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) {
+  const t = getTheme();
+  const CHECKED_COLOR = themeHex(t.status.success);
+  const DIM_COLOR = themeHex(t.text.muted);
+  const CURSOR_COLOR = themeHex(t.interactive.cursor);
+  const CURSOR_BG = themeHex(t.interactive.selection);
+
   const selectableIndices = items
     .map((item, i) => (item.type === "option" ? i : -1))
     .filter((i) => i >= 0);
@@ -87,6 +88,7 @@ function SectionHeader({
   width?: number;
   spaceAbove: boolean;
 }) {
+  const leaderColor = themeHex(getTheme().chrome.dim);
   const showBraille = !width || width >= label.length + 8;
   const text = showBraille ? ` ${label.toUpperCase()} ` : label.toUpperCase();
   const trailWidth = showBraille && width ? width - text.length - 2 : 0;
@@ -95,11 +97,11 @@ function SectionHeader({
     <Box flexDirection="column">
       {spaceAbove && <Text> </Text>}
       <Text>
-        {showBraille && <Text color={LEADER_COLOR}>{BRAILLE.repeat(2)}</Text>}
+        {showBraille && <Text color={leaderColor}>{BRAILLE.repeat(2)}</Text>}
         <Text bold dimColor>
           {text}
         </Text>
-        {trailWidth > 0 && <Text color={LEADER_COLOR}>{BRAILLE.repeat(trailWidth)}</Text>}
+        {trailWidth > 0 && <Text color={leaderColor}>{BRAILLE.repeat(trailWidth)}</Text>}
       </Text>
     </Box>
   );

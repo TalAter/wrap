@@ -108,7 +108,7 @@ describe("shouldAnimate", () => {
 });
 
 describe("colorLevel", () => {
-  const envKeys = ["NO_COLOR", "COLORTERM", "TERM"];
+  const envKeys = ["NO_COLOR", "COLORTERM", "TERM", "FORCE_COLOR"];
   let saved: Record<string, string | undefined>;
   let origIsTTY: boolean | undefined;
 
@@ -161,5 +161,62 @@ describe("colorLevel", () => {
   test("0 when TERM=dumb", () => {
     process.env.TERM = "dumb";
     expect(colorLevel()).toBe(0);
+  });
+
+  test("FORCE_COLOR=0 returns 0", () => {
+    process.env.FORCE_COLOR = "0";
+    expect(colorLevel()).toBe(0);
+  });
+
+  test("FORCE_COLOR=1 returns 1", () => {
+    process.env.FORCE_COLOR = "1";
+    expect(colorLevel()).toBe(1);
+  });
+
+  test("FORCE_COLOR=2 returns 2", () => {
+    process.env.FORCE_COLOR = "2";
+    expect(colorLevel()).toBe(2);
+  });
+
+  test("FORCE_COLOR=3 returns 3", () => {
+    process.env.FORCE_COLOR = "3";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("FORCE_COLOR (empty) returns 1", () => {
+    process.env.FORCE_COLOR = "";
+    expect(colorLevel()).toBe(1);
+  });
+
+  test("FORCE_COLOR bypasses TTY check", () => {
+    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+    process.env.FORCE_COLOR = "3";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("NO_COLOR wins over FORCE_COLOR", () => {
+    process.env.NO_COLOR = "1";
+    process.env.FORCE_COLOR = "3";
+    expect(colorLevel()).toBe(0);
+  });
+
+  test("FORCE_COLOR=4 clamps to 3", () => {
+    process.env.FORCE_COLOR = "4";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("FORCE_COLOR=99 clamps to 3", () => {
+    process.env.FORCE_COLOR = "99";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("FORCE_COLOR=-1 clamps to 0", () => {
+    process.env.FORCE_COLOR = "-1";
+    expect(colorLevel()).toBe(0);
+  });
+
+  test("FORCE_COLOR=foo falls back to 1", () => {
+    process.env.FORCE_COLOR = "foo";
+    expect(colorLevel()).toBe(1);
   });
 });

@@ -1,9 +1,9 @@
 import stringWidth from "string-width";
 import { type Color, interpolate } from "../core/ansi.ts";
+import { colorLevel } from "../core/output.ts";
+import { getTheme, themeHex } from "../core/theme.ts";
 
 export type Badge = { fg: Color; bg: Color; icon: string; label: string };
-
-const DIM_COLOR: Color = [60, 60, 100];
 
 export type BorderSegment = {
   key: string;
@@ -13,18 +13,13 @@ export type BorderSegment = {
   bold?: boolean;
 };
 
-function hex(n: number): string {
-  return n.toString(16).padStart(2, "0");
-}
-
-function colorHex([r, g, b]: Color): string {
-  return `#${hex(r)}${hex(g)}${hex(b)}`;
-}
-
 export function interpolateGradient(index: number, total: number, stops: Color[]): string {
+  // Below truecolor, interpolating across many quantized cells produces
+  // chunky banding. Collapse to the terminal's default text color (near
+  // white on dark, near black on light) for a neutral uniform border.
+  if (colorLevel() < 3) return themeHex(getTheme().text.primary);
   const t = total > 1 ? index / (total - 1) : 0;
-  const [r, g, b] = interpolate(stops, t);
-  return colorHex([r, g, b]);
+  return themeHex(interpolate(stops, t));
 }
 
 export function topBorderSegments(
@@ -56,8 +51,8 @@ export function topBorderSegments(
       segments.push({
         key: `top-${i}`,
         text: badgeText,
-        color: colorHex(badge.fg),
-        backgroundColor: colorHex(badge.bg),
+        color: themeHex(badge.fg),
+        backgroundColor: themeHex(badge.bg),
         bold: true,
       });
       i += badgeVisualWidth;
@@ -82,12 +77,14 @@ function truncateToWidth(text: string, maxWidth: number): string | null {
   return cut.length > 0 ? `${cut}…` : null;
 }
 
-// Near-white text color for the status label so it pops against the dim
-// border. Matches the action-bar's primary text color in response-dialog.
-const STATUS_COLOR = "#d2d2e1";
-
-export function bottomBorderSegments(totalWidth: number, status?: string): BorderSegment[] {
-  const color = colorHex(DIM_COLOR);
+export function bottomBorderSegments(
+  totalWidth: number,
+  stops: Color[],
+  status?: string,
+): BorderSegment[] {
+  // Bottom matches the gradient's end so the four sides read as one frame.
+  const color = interpolateGradient(stops.length - 1, stops.length, stops);
+  const statusColor = themeHex(getTheme().text.primary);
 
   if (totalWidth <= 1) {
     return [{ key: "bottom-left", text: "╰", color }];
@@ -106,7 +103,7 @@ export function bottomBorderSegments(totalWidth: number, status?: string): Borde
       return [
         { key: "bottom-left", text: "╰", color },
         { key: "bottom-mid-lead", text: "─ ", color },
-        { key: "bottom-status", text: fitted, color: STATUS_COLOR },
+        { key: "bottom-status", text: fitted, color: statusColor },
         { key: "bottom-mid-tail", text: ` ${"─".repeat(trailingDashes)}`, color },
         { key: "bottom-right", text: "╯", color },
       ];

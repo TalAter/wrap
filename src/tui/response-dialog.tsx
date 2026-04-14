@@ -2,10 +2,13 @@ import { Box, Text, useAnimation, useInput, useStdin, useWindowSize } from "ink"
 import { useEffect, useState } from "react";
 import stringWidth from "string-width";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
+import type { ThemeTokens } from "../core/theme.ts";
+import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
-import { RISK_PRESETS } from "./risk-presets.ts";
+import { getRiskPresets } from "./risk-presets.ts";
 import { TextInput } from "./text-input.tsx";
+import { useTheme } from "./theme-context.tsx";
 
 type ResponseDialogProps = {
   state: AppState;
@@ -119,6 +122,7 @@ export function formatOutputSlot(text: string): string {
 }
 
 export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
+  const theme = useTheme();
   // Local presentation state. Pure UI — no application state depends on it.
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -259,7 +263,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         ? `${spinnerFrame ?? ""} ${EXECUTING_STEP_STATUS}`
         : undefined;
 
-  const preset = RISK_PRESETS[riskLevel];
+  const preset = getRiskPresets()[riskLevel];
 
   return (
     <Dialog
@@ -271,10 +275,10 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       {outputSlot !== undefined && (
         <>
           <Box paddingLeft={1}>
-            <Text color="#73738c">Output:</Text>
+            <Text color={themeHex(theme.text.muted)}>Output:</Text>
           </Box>
           <Box paddingLeft={1}>
-            <Text color="#9a9ab4">{formatOutputSlot(outputSlot)}</Text>
+            <Text color={themeHex(theme.text.secondary)}>{formatOutputSlot(outputSlot)}</Text>
           </Box>
           <Text> </Text>
         </>
@@ -295,7 +299,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color="#87879b">{explanation}</Text>
+            <Text color={themeHex(theme.text.muted)}>{explanation}</Text>
           </Box>
         </>
       )}
@@ -303,7 +307,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color="#6f8fb4">Plan: {plan}</Text>
+            <Text color={themeHex(theme.status.info)}>Plan: {plan}</Text>
           </Box>
         </>
       )}
@@ -328,15 +332,15 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       <Text> </Text>
       <Text> </Text>
       {state.tag === "editing" ? (
-        <KeyHints items={EDIT_HINTS} />
+        <KeyHints items={EDIT_HINTS} theme={theme} />
       ) : state.tag === "composing" ? (
-        <KeyHints items={COMPOSE_HINTS} />
+        <KeyHints items={COMPOSE_HINTS} theme={theme} />
       ) : state.tag === "processing" ? (
-        <KeyHints items={PROCESS_HINTS} />
+        <KeyHints items={PROCESS_HINTS} theme={theme} />
       ) : state.tag === "executing-step" ? (
-        <KeyHints items={EXECUTING_STEP_HINTS} />
+        <KeyHints items={EXECUTING_STEP_HINTS} theme={theme} />
       ) : (
-        <ActionBar selectedIndex={selectedIndex} />
+        <ActionBar selectedIndex={selectedIndex} theme={theme} />
       )}
     </Dialog>
   );
@@ -344,42 +348,61 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
 
 type HintItem = { combo: string; label: string; primary?: boolean };
 
-function KeyHints({ items }: { items: readonly HintItem[] }) {
+function KeyHints({ items, theme }: { items: readonly HintItem[]; theme: ThemeTokens }) {
+  const divider = themeHex(theme.text.disabled);
+  const highlight = themeHex(theme.interactive.highlight);
+  const secondary = themeHex(theme.text.secondary);
+  const muted = themeHex(theme.text.muted);
+
   return (
     <Text>
-      <Text color="#d2d2e1">{"   "}</Text>
+      <Text>{"   "}</Text>
       {items.map((item, i) => (
         <Text key={item.combo}>
-          {i > 0 ? <Text color="#414150">{"  │  "}</Text> : null}
-          <Text bold color={item.primary ? "#f5c864" : "#aaaac3"}>
+          {i > 0 ? <Text color={divider}>{"  │  "}</Text> : null}
+          <Text bold color={item.primary ? highlight : secondary}>
             {item.combo}
           </Text>
-          <Text color="#73738c">{` ${item.label}`}</Text>
+          <Text color={muted}>{` ${item.label}`}</Text>
         </Text>
       ))}
     </Text>
   );
 }
 
-function ActionBar({ selectedIndex }: { selectedIndex: number }) {
+function ActionBar({ selectedIndex, theme }: { selectedIndex: number; theme: ThemeTokens }) {
+  const primary = themeHex(theme.text.primary);
+  const divider = themeHex(theme.text.disabled);
+  const highlight = themeHex(theme.interactive.highlight);
+  const secondary = themeHex(theme.text.secondary);
+  const muted = themeHex(theme.text.muted);
+  const accentBg = themeHex(theme.chrome.accent);
+
+  // Brighter variant for selected primary actions
+  const highlightBright = themeHex([
+    Math.min(255, theme.interactive.highlight[0] + 10),
+    Math.min(255, theme.interactive.highlight[1] + 20),
+    Math.min(255, theme.interactive.highlight[2] + 20),
+  ]);
+
   return (
     <Text>
-      <Text color="#d2d2e1">{"   Run command? "}</Text>
+      <Text color={primary}>{"   Run command? "}</Text>
       {ACTION_ITEMS.map((item, i) => {
         const isSelected = i === selectedIndex;
         const accent = item.primary
           ? isSelected
-            ? "#ffdc78"
-            : "#f5c864"
+            ? highlightBright
+            : highlight
           : isSelected
-            ? "#c8c8e0"
-            : "#aaaac3";
-        const dimColor = isSelected ? "#ebe6fa" : "#73738c";
-        const bg = isSelected ? "#372d50" : undefined;
+            ? primary
+            : secondary;
+        const dimColor = isSelected ? themeHex(theme.text.primary) : muted;
+        const bg = isSelected ? accentBg : undefined;
 
         return (
           <Text key={item.label}>
-            {i === 2 ? <Text color="#414150">{" │ "}</Text> : null}
+            {i === 2 ? <Text color={divider}>{" │ "}</Text> : null}
             <Text backgroundColor={bg}>
               {" "}
               <Text bold underline color={accent}>

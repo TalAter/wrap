@@ -4,6 +4,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
 import { updateConfig } from "../config/store.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
+import { getTheme, themeHex } from "../core/theme.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
@@ -12,7 +13,12 @@ import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { NerdIconsSection } from "./nerd-icons-section.tsx";
 import { TextInput } from "./text-input.tsx";
-import { KeyHints, WIZARD_BADGE, WIZARD_CONTENT_WIDTH, WIZARD_STOPS } from "./wizard-chrome.tsx";
+import {
+  getWizardBadge,
+  getWizardStops,
+  KeyHints,
+  WIZARD_CONTENT_WIDTH,
+} from "./wizard-chrome.tsx";
 
 const MAX_VISIBLE_OPTIONS = 8;
 
@@ -85,8 +91,8 @@ export function ProvidersSection({
 
   return (
     <Dialog
-      gradientStops={WIZARD_STOPS}
-      badge={WIZARD_BADGE}
+      gradientStops={getWizardStops()}
+      badge={getWizardBadge()}
       bottomStatus={bottomStatus}
       naturalContentWidth={WIZARD_CONTENT_WIDTH}
     >
@@ -264,7 +270,7 @@ function ApiKeyScreen({
       <Text bold>{api?.displayName ?? provider} API key</Text>
       {api?.apiKeyUrl && (
         <Text>
-          Get one: <Text color="#73738c">{api.apiKeyUrl}</Text>
+          Get one: <Text color={themeHex(getTheme().text.muted)}>{api.apiKeyUrl}</Text>
         </Text>
       )}
       <Text> </Text>

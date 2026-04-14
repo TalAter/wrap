@@ -59,6 +59,12 @@
       "type": "boolean",
       "description": "Enable Nerd Font icons in the TUI. Requires a Nerd Font active in your terminal.",
       "default": false
+    },
+    "appearance": {
+      "type": "string",
+      "enum": ["auto", "dark", "light"],
+      "description": "Terminal color scheme. 'auto' detects from terminal background. Override with WRAP_THEME env var.",
+      "default": "auto"
     }
   },
   "additionalProperties": false

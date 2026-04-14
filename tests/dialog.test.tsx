@@ -3,10 +3,10 @@ import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import { Dialog } from "../src/tui/dialog.tsx";
-import { RISK_PRESETS } from "../src/tui/risk-presets.ts";
+import { getRiskPresets } from "../src/tui/risk-presets.ts";
 
-const { stops: lowStops, badge: lowBadge } = RISK_PRESETS.low;
-const { stops: medStops, badge: medBadge } = RISK_PRESETS.medium;
+const { stops: lowStops, badge: lowBadge } = getRiskPresets().low;
+const { stops: medStops, badge: medBadge } = getRiskPresets().medium;
 
 describe("Dialog (generic chrome)", () => {
   test("renders arbitrary children inside the bordered frame", () => {

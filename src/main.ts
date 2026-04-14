@@ -1,9 +1,11 @@
 import { ensureConfig } from "./config/ensure.ts";
 import { getConfig, setConfig } from "./config/store.ts";
+import { resolveAppearance } from "./core/detect-appearance.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { readPipedInput } from "./core/piped-input.ts";
+import { resolveTheme, setTheme } from "./core/theme.ts";
 import { verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
@@ -26,6 +28,10 @@ const MODIFIER_SPECS: readonly ModifierSpec[] = options.map((o) => ({
 
 export async function main() {
   try {
+    // Early theme: WRAP_THEME env + cache work before config is loaded.
+    // Covers --help, the wizard, and any other pre-config code path.
+    setTheme(resolveTheme(resolveAppearance(undefined)));
+
     const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
     if (input.type === "flag") {
@@ -47,6 +53,10 @@ export async function main() {
       ...config,
       verbose: modifiers.flags.has("verbose") || config.verbose === true,
     });
+
+    // Re-resolve with config.appearance now available.
+    const appearance = resolveAppearance(getConfig().appearance);
+    setTheme(resolveTheme(appearance));
 
     // CLI flag wins over WRAP_MODEL env var. resolveProvider then parses the
     // raw string and short-circuits to the test sentinel if WRAP_TEST_RESPONSE

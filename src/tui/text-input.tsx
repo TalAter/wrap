@@ -1,13 +1,12 @@
 import { Box, Text, useInput } from "ink";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { getTheme, themeHex } from "../core/theme.ts";
 import { Cursor } from "./cursor.ts";
 
-const INPUT_BG = "#232332";
-const PLACEHOLDER_COLOR = "#73738c";
-
 function InputFrame({ children }: { children: ReactNode }) {
+  const bg = themeHex(getTheme().chrome.surface);
   return (
-    <Box width="100%" paddingX={1} backgroundColor={INPUT_BG}>
+    <Box width="100%" paddingX={1} backgroundColor={bg}>
       {children}
     </Box>
   );
@@ -114,7 +113,9 @@ function EditableTextInput({ value, onChange, onSubmit, placeholder, masked }: E
           {masked ? (cursor.charAtCursor === " " ? " " : "•") : cursor.charAtCursor}
         </Text>
         {masked ? mask(cursor.afterCursor) : cursor.afterCursor}
-        {showPlaceholder ? <Text color={PLACEHOLDER_COLOR}>{placeholder}</Text> : null}
+        {showPlaceholder ? (
+          <Text color={themeHex(getTheme().text.muted)}>{placeholder}</Text>
+        ) : null}
       </Text>
     </InputFrame>
   );

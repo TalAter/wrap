@@ -7,11 +7,11 @@ export function isTTY(): boolean {
 
 /**
  * Color is safe when the user hasn't opted out via NO_COLOR (no-color.org)
- * and stdout is an interactive TTY. Logs, pipes, and `NO_COLOR=` alike
- * must fall back to plain text.
+ * and stdout is an interactive TTY (or FORCE_COLOR overrides the TTY check).
  */
 export function supportsColor(): boolean {
   if ("NO_COLOR" in process.env) return false;
+  if ("FORCE_COLOR" in process.env) return process.env.FORCE_COLOR !== "0";
   return isTTY();
 }
 
@@ -24,7 +24,23 @@ export function supportsColor(): boolean {
 export type ColorLevel = 0 | 1 | 2 | 3;
 
 export function colorLevel(): ColorLevel {
-  if (!supportsColor()) return 0;
+  // NO_COLOR always wins (no-color.org)
+  if ("NO_COLOR" in process.env) return 0;
+
+  // FORCE_COLOR overrides TTY detection. Values: 0=off, 1=16, 2=256, 3=truecolor.
+  // Numeric values are clamped to [0,3]. Empty / non-numeric → 1.
+  if ("FORCE_COLOR" in process.env) {
+    const raw = process.env.FORCE_COLOR ?? "";
+    const n = Number.parseInt(raw, 10);
+    if (Number.isFinite(n)) {
+      if (n <= 0) return 0;
+      if (n >= 3) return 3;
+      return n as ColorLevel;
+    }
+    return 1;
+  }
+
+  if (!isTTY()) return 0;
   const term = process.env.TERM ?? "";
   if (term === "dumb") return 0;
   const ct = process.env.COLORTERM;

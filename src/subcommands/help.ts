@@ -7,9 +7,10 @@ import {
   shouldAnimate,
   supportsColor,
 } from "../core/output.ts";
+import { getTheme } from "../core/theme.ts";
 import type { CLIFlag, Command } from "./types.ts";
 
-// ZX Spectrum rainbow
+// ZX Spectrum rainbow — decorative, stays the same in both themes
 const SPECTRUM: [number, number, number][] = [
   [255, 51, 51],
   [255, 136, 0],
@@ -19,8 +20,6 @@ const SPECTRUM: [number, number, number][] = [
   [51, 102, 255],
   [204, 51, 255],
 ];
-
-const FLAG_COLOR = SPECTRUM[5] as [number, number, number];
 
 const LOGO = [
   "  █   █  █▀▀▄  ▄▀▀▄  █▀▀▄",
@@ -62,7 +61,8 @@ export function renderStyled(
   options: CLIFlag[],
   level: ColorLevel = colorLevel(),
 ): string {
-  const flagPrefix = fgCode(...FLAG_COLOR, level);
+  const flagColor = getTheme().status.info;
+  const flagPrefix = fgCode(...flagColor, level);
   const flagReset = flagPrefix ? "\x1b[0m" : "";
   const colorizeFlag = (f: string) => `${flagPrefix}${f}${flagReset}`;
   const lines: string[] = [
@@ -153,9 +153,9 @@ async function renderAnimated(commands: CLIFlag[], options: CLIFlag[]): Promise<
   const level = colorLevel();
   const styled = renderStyled(commands, options, level);
 
-  // With no color, shine is invisible — skip the animation machinery
-  // entirely so we don't hide the cursor or waste ~1s of stdout.
-  if (level <= 0) {
+  // Shine needs truecolor to blend white into the gradient; below that we
+  // render the signature color solidly and there's nothing to animate.
+  if (level < 3) {
     process.stdout.write(styled);
     return;
   }

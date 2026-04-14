@@ -92,14 +92,21 @@ export function Dialog({
 
           <Box flexDirection="column" width={2}>
             {rightBorderLines.map((line) => (
-              <Text key={line.key} color="#3c3c64">
+              <Text
+                key={line.key}
+                color={interpolateGradient(
+                  gradientStops.length - 1,
+                  gradientStops.length,
+                  gradientStops,
+                )}
+              >
                 {" │"}
               </Text>
             ))}
           </Box>
         </Box>
 
-        <BorderLine segments={bottomBorderSegments(totalWidth, bottomStatus)} />
+        <BorderLine segments={bottomBorderSegments(totalWidth, gradientStops, bottomStatus)} />
       </Box>
     </Box>
   );

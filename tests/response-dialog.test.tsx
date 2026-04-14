@@ -8,6 +8,7 @@ import {
   ResponseDialog,
   truncateCommand,
 } from "../src/tui/response-dialog.tsx";
+import { ThemeProvider } from "../src/tui/theme-context.tsx";
 import {
   makeComposing,
   makeConfirming,
@@ -32,7 +33,11 @@ describe("Dialog — confirming", () => {
       response: makeResponse({ content: "ls -la", risk_level: "medium" }),
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("ls -la");
   });
 
@@ -44,14 +49,22 @@ describe("Dialog — confirming", () => {
       }),
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("removes the file");
   });
 
   test("renders the action bar with hotkey hints", () => {
     const state = makeConfirming();
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Run command?");
     expect(text).toContain("Yes");
@@ -61,7 +74,11 @@ describe("Dialog — confirming", () => {
   test("Enter dispatches key-action with currently-selected action", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\r");
     await tick();
     // Default selection is first item ("cancel").
@@ -71,7 +88,11 @@ describe("Dialog — confirming", () => {
   test("hotkey y dispatches key-action run", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("y");
     await tick();
     expect(events).toContainEqual({ type: "key-action", action: "run" });
@@ -80,7 +101,11 @@ describe("Dialog — confirming", () => {
   test("hotkey n dispatches key-action cancel", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("n");
     await tick();
     expect(events).toContainEqual({ type: "key-action", action: "cancel" });
@@ -89,7 +114,11 @@ describe("Dialog — confirming", () => {
   test("hotkey e dispatches key-action edit", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("e");
     await tick();
     expect(events).toContainEqual({ type: "key-action", action: "edit" });
@@ -98,7 +127,11 @@ describe("Dialog — confirming", () => {
   test("hotkey f dispatches key-action followup", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("f");
     await tick();
     expect(events).toContainEqual({ type: "key-action", action: "followup" });
@@ -107,7 +140,11 @@ describe("Dialog — confirming", () => {
   test("Esc dispatches key-esc", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\u001b");
     await tick();
     expect(events.some((e) => e.type === "key-esc")).toBe(true);
@@ -116,7 +153,11 @@ describe("Dialog — confirming", () => {
   test("q is an alias for cancel", async () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("q");
     await tick();
     expect(events).toContainEqual({ type: "key-action", action: "cancel" });
@@ -130,7 +171,11 @@ describe("Dialog — editing", () => {
       draft: "rm -i a",
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("rm -i a");
   });
 
@@ -140,7 +185,11 @@ describe("Dialog — editing", () => {
       draft: "rm",
     });
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("x");
     await tick();
     expect(events.some((e) => e.type === "draft-change")).toBe(true);
@@ -152,7 +201,11 @@ describe("Dialog — editing", () => {
       draft: "rm -i",
     });
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\r");
     await tick();
     expect(events).toContainEqual({ type: "submit-edit", text: "rm -i" });
@@ -164,7 +217,11 @@ describe("Dialog — editing", () => {
       draft: "   ",
     });
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\r");
     await tick();
     expect(events.find((e) => e.type === "submit-edit")).toBeUndefined();
@@ -173,7 +230,11 @@ describe("Dialog — editing", () => {
   test("Esc dispatches key-esc", async () => {
     const state = makeEditing();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\u001b");
     await tick();
     expect(events).toContainEqual({ type: "key-esc" });
@@ -184,7 +245,11 @@ describe("Dialog — composing", () => {
   test("typing dispatches draft-change", async () => {
     const state = makeComposing({ draft: "" });
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("x");
     await tick();
     expect(events.some((e) => e.type === "draft-change")).toBe(true);
@@ -193,7 +258,11 @@ describe("Dialog — composing", () => {
   test("Enter dispatches submit-followup with the draft", async () => {
     const state = makeComposing({ draft: "be safer" });
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\r");
     await tick();
     expect(events).toContainEqual({ type: "submit-followup", text: "be safer" });
@@ -202,7 +271,11 @@ describe("Dialog — composing", () => {
   test("Enter on composing with blank draft does NOT dispatch submit-followup", async () => {
     const state = makeComposing({ draft: "  " });
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\r");
     await tick();
     expect(events.find((e) => e.type === "submit-followup")).toBeUndefined();
@@ -211,7 +284,11 @@ describe("Dialog — composing", () => {
   test("Esc dispatches key-esc", async () => {
     const state = makeComposing();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\u001b");
     await tick();
     expect(events).toContainEqual({ type: "key-esc" });
@@ -220,7 +297,11 @@ describe("Dialog — composing", () => {
   test("renders the placeholder when draft is empty", () => {
     const state = makeComposing({ draft: "" });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("actually...");
   });
 });
@@ -229,21 +310,33 @@ describe("Dialog — processing", () => {
   test("renders the draft as read-only", () => {
     const state = makeProcessing({ draft: "the draft" });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("the draft");
   });
 
   test("renders state.status in the bottom border when set", () => {
     const state = makeProcessing({ status: "Probing the database" });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("Probing the database");
   });
 
   test("Esc dispatches key-esc", async () => {
     const state = makeProcessing();
     const { dispatch, events } = captureDispatch();
-    const { stdin } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     stdin.write("\u001b");
     await tick();
     expect(events).toContainEqual({ type: "key-esc" });
@@ -261,9 +354,17 @@ describe("Dialog — rerender behaviour", () => {
       response: makeResponse({ content: "second cmd" }),
     });
     const { dispatch } = captureDispatch();
-    const { rerender, lastFrame } = render(<ResponseDialog state={state1} dispatch={dispatch} />);
+    const { rerender, lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state1} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("first cmd");
-    rerender(<ResponseDialog state={state2} dispatch={dispatch} />);
+    rerender(
+      <ThemeProvider>
+        <ResponseDialog state={state2} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     await tick();
     expect(stripAnsi(lastFrame() ?? "")).toContain("second cmd");
   });
@@ -354,7 +455,11 @@ describe("Dialog — multi-step slots", () => {
       outputSlot: "discovered sips at /usr/bin/sips",
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Output:");
     expect(text).toContain("discovered sips");
@@ -366,7 +471,11 @@ describe("Dialog — multi-step slots", () => {
       outputSlot: "",
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain(OUTPUT_SLOT_EMPTY);
   });
@@ -376,7 +485,11 @@ describe("Dialog — multi-step slots", () => {
       response: makeResponse({ content: "echo done" }),
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).not.toContain("Output:");
   });
 
@@ -390,7 +503,11 @@ describe("Dialog — multi-step slots", () => {
       }),
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Plan:");
     expect(text).toContain("Download, inspect");
@@ -406,7 +523,11 @@ describe("Dialog — multi-step slots", () => {
       outputSlot: "Saved working directory.",
     });
     const { dispatch } = captureDispatch();
-    const { lastFrame } = render(<ResponseDialog state={state} dispatch={dispatch} />);
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("git stash");
     expect(text).toContain("Saved working directory.");

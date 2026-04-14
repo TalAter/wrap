@@ -1,14 +1,26 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
 import { bottomBorderSegments, interpolateGradient, topBorderSegments } from "../src/tui/border.ts";
-import { RISK_PRESETS } from "../src/tui/risk-presets.ts";
+import { getRiskPresets } from "../src/tui/risk-presets.ts";
+
+// Border gradients collapse to the signature color below truecolor. These
+// tests exercise the interpolation math, so force the truecolor path.
+let savedForceColor: string | undefined;
+beforeAll(() => {
+  savedForceColor = process.env.FORCE_COLOR;
+  process.env.FORCE_COLOR = "3";
+});
+afterAll(() => {
+  if (savedForceColor === undefined) delete process.env.FORCE_COLOR;
+  else process.env.FORCE_COLOR = savedForceColor;
+});
 
 function plainText(segments: { text: string }[]): string {
   return segments.map((segment) => segment.text).join("");
 }
 
 function preset(level: "low" | "medium" | "high") {
-  return RISK_PRESETS[level];
+  return getRiskPresets()[level];
 }
 
 describe("interpolateGradient", () => {
@@ -93,7 +105,7 @@ describe("topBorderSegments", () => {
     const segs = topBorderSegments(60, stops, badge);
     const badgeSeg = segs.find((segment) => segment.text.includes("medium"));
     expect(badgeSeg).toBeDefined();
-    expect(badgeSeg?.backgroundColor).toBe("#503c1e");
+    expect(badgeSeg?.backgroundColor).toMatch(/^#[0-9a-f]{6}$/);
     expect(badgeSeg?.bold).toBe(true);
   });
 
@@ -106,12 +118,12 @@ describe("topBorderSegments", () => {
     expect(text).not.toContain("⚠");
   });
 
-  test("low risk badge is styled with the green/dim background", () => {
+  test("low risk badge is styled with a background color", () => {
     const { stops, badge } = preset("low");
     const segs = topBorderSegments(60, stops, badge);
     const badgeSeg = segs.find((segment) => segment.text.includes("low"));
     expect(badgeSeg).toBeDefined();
-    expect(badgeSeg?.backgroundColor).toBe("#194628");
+    expect(badgeSeg?.backgroundColor).toMatch(/^#[0-9a-f]{6}$/);
     expect(badgeSeg?.bold).toBe(true);
   });
 
@@ -139,51 +151,51 @@ describe("topBorderSegments", () => {
 });
 
 describe("bottomBorderSegments", () => {
+  const stops = preset("medium").stops;
+
   test("starts with ╰ and ends with ╯", () => {
-    const border = bottomBorderSegments(60);
+    const border = bottomBorderSegments(60, stops);
     const visual = plainText(border);
     expect(visual).toMatch(/^╰/);
     expect(visual).toMatch(/╯$/);
   });
 
   test("visual width matches requested width", () => {
-    const border = bottomBorderSegments(60);
+    const border = bottomBorderSegments(60, stops);
     expect(stringWidth(plainText(border))).toBe(60);
   });
 
-  test("uses dim color throughout", () => {
-    const border = bottomBorderSegments(60);
+  test("uses the gradient's end color throughout", () => {
+    const border = bottomBorderSegments(60, stops);
     expect(border.every((segment) => segment.color === "#3c3c64")).toBe(true);
   });
 });
 
 describe("bottomBorderSegments with status", () => {
+  const stops = preset("medium").stops;
+
   test("renders status text embedded in left side", () => {
-    const border = bottomBorderSegments(60, "⢎ Reticulating splines...");
+    const border = bottomBorderSegments(60, stops, "⢎ Reticulating splines...");
     expect(plainText(border)).toContain("⢎ Reticulating splines...");
   });
 
   test("starts with ╰─ and ends with ╯", () => {
-    const border = bottomBorderSegments(60, "⢎ Loading");
+    const border = bottomBorderSegments(60, stops, "⢎ Loading");
     const visual = plainText(border);
     expect(visual).toMatch(/^╰─/);
     expect(visual).toMatch(/╯$/);
   });
 
   test("visual width matches requested width", () => {
-    const border = bottomBorderSegments(60, "⢎ Loading");
+    const border = bottomBorderSegments(60, stops, "⢎ Loading");
     expect(stringWidth(plainText(border))).toBe(60);
   });
 
   test("status text is rendered in white, dashes/corners stay dim", () => {
-    // The dim border color makes the status text hard to read against the
-    // dialog background. The status segment must use a near-white color so
-    // the spinner + label stand out, while the surrounding dashes stay dim.
-    const border = bottomBorderSegments(60, "⢎ Loading");
+    const border = bottomBorderSegments(60, stops, "⢎ Loading");
     const statusSegment = border.find((s) => s.text.includes("Loading"));
     expect(statusSegment).toBeDefined();
     expect(statusSegment?.color).toBe("#d2d2e1");
-    // Corner segments still dim.
     const left = border.find((s) => s.text === "╰");
     const right = border.find((s) => s.text === "╯");
     expect(left?.color).toBe("#3c3c64");
@@ -191,27 +203,24 @@ describe("bottomBorderSegments with status", () => {
   });
 
   test("width stays constant across different status lengths", () => {
-    const short = bottomBorderSegments(60, "⢎ Hi");
-    const long = bottomBorderSegments(60, "⢎ Reticulating splines...");
+    const short = bottomBorderSegments(60, stops, "⢎ Hi");
+    const long = bottomBorderSegments(60, stops, "⢎ Reticulating splines...");
     expect(stringWidth(plainText(short))).toBe(60);
     expect(stringWidth(plainText(long))).toBe(60);
   });
 
   test("truncates status with ellipsis when it does not fit at full length", () => {
-    // 24 cells leaves room for "⢎ Reticulati…" (13 cells) plus padding (5+1=6)
-    const border = bottomBorderSegments(20, "⢎ Reticulating splines...");
+    const border = bottomBorderSegments(20, stops, "⢎ Reticulating splines...");
     const visual = plainText(border);
     expect(stringWidth(visual)).toBe(20);
     expect(visual).toContain("…");
     expect(visual).toMatch(/^╰─/);
     expect(visual).toMatch(/╯$/);
-    // The first piece of the status survives
     expect(visual).toContain("⢎ ");
   });
 
   test("falls back to plain border when even one ellipsis cannot fit", () => {
-    // totalWidth too small for any status content — render unadorned border.
-    const border = bottomBorderSegments(7, "⢎ Reticulating splines...");
+    const border = bottomBorderSegments(7, stops, "⢎ Reticulating splines...");
     expect(stringWidth(plainText(border))).toBe(7);
     expect(plainText(border)).not.toContain("…");
     expect(plainText(border)).not.toContain("Reticulating");
