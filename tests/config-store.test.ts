@@ -20,9 +20,8 @@ describe("setConfig + getConfig", () => {
   });
 
   test("replaces entire config (no merge)", () => {
-    // Use a non-default value for maxRounds so we can distinguish replace
-    // from merge — the default is 5, so if the second seed merged instead
-    // of replaced, maxRounds would still be 42.
+    // 42 must not leak into the second seed — if it did, the second seed
+    // merged instead of replaced. Default is 5.
     seedTestConfig({ maxRounds: 42 });
     seedTestConfig({ verbose: true });
     expect(getConfig().verbose).toBe(true);

@@ -21,17 +21,8 @@ export type Config = {
 };
 
 /**
- * Config after the resolver has materialized every SETTINGS default. The
- * store only holds ResolvedConfigs; the store API enforces this at the type
- * level so `getConfig()` can honestly claim these fields are defined.
- *
- * Callers building a ResolvedConfig go through `resolveSettings()` — there's
- * no other legal path. Tests use the `seedTestConfig()` helper for the same
- * reason.
- *
- * Drift check: every SETTINGS entry with a `default` must appear as a
- * required field here. A runtime test in tests/settings.test.ts asserts the
- * two stay in sync.
+ * Config after the resolver has materialized every SETTINGS default. Every
+ * SETTINGS entry with a `default` must appear as a required field below.
  */
 export type ResolvedConfig = Config & {
   verbose: boolean;
@@ -43,8 +34,7 @@ export type ResolvedConfig = Config & {
 };
 
 // Compile-time drift check: every SETTINGS entry with a `default` must be a
-// required (non-optional) field in ResolvedConfig. Adding a defaulted setting
-// without updating ResolvedConfig — or vice versa — fails to typecheck.
+// required field in ResolvedConfig, or typecheck fails.
 type _Settings = typeof import("./settings.ts").SETTINGS;
 type _KeysWithDefault = {
   [K in keyof _Settings]: _Settings[K] extends { default: unknown } ? K : never;

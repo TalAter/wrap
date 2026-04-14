@@ -38,9 +38,8 @@ export function resolveSettings(
     result.noAnimation = true;
   }
 
-  // Every SETTINGS entry with a default has contributed a value above (CLI,
-  // env, file, or the default fallback), so the result satisfies
-  // ResolvedConfig's required-field contract.
+  // Every SETTINGS-with-default has contributed a value above, so the
+  // ResolvedConfig required-field contract is satisfied.
   return result as ResolvedConfig;
 }
 

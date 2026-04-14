@@ -83,11 +83,9 @@ describe("SETTINGS registry", () => {
     expect(s.env).toContain("WRAP_MODEL");
   });
 
-  // Drift guard: every SETTINGS entry with a `default` must be a required
-  // field in ResolvedConfig (src/config/config.ts). Add/remove here in lock
-  // step — otherwise `getConfig()` would silently lie about which fields are
-  // defined post-resolve.
-  test("SETTINGS entries with defaults match ResolvedConfig required fields", () => {
+  // Runtime complement to the compile-time drift check in config.ts — catches
+  // edge cases the type check can't (e.g. `default: undefined` slipping in).
+  test("SETTINGS entries with defaults match the expected list", () => {
     const withDefaults = (Object.entries(SETTINGS) as [string, Setting][])
       .filter(([, s]) => s.default !== undefined)
       .map(([k]) => k)
