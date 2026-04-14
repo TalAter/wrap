@@ -131,7 +131,11 @@ export function resolveAppearance(
 
 /** Fire-and-forget OSC 11 detection; caches result for next run. */
 function scheduleBackgroundDetection(): void {
-  queryTerminalBackground().then((result) => {
-    if (result) cacheAppearance(result);
-  });
+  queryTerminalBackground()
+    .then((result) => {
+      if (result) cacheAppearance(result);
+    })
+    .catch(() => {
+      // Detection is best-effort; never crash the process on unexpected stdin errors.
+    });
 }

@@ -36,31 +36,30 @@ export type ThemeTokens = {
 };
 
 // ── Dark theme ─────────────────────────────────────────────────────
-// Extracted from existing hardcoded values across the codebase.
 
 export const DARK_THEME: ThemeTokens = {
   text: {
-    primary: [210, 210, 225], // #d2d2e1 — action bar, status text
-    secondary: [170, 170, 195], // #aaaac3 — key hints
-    muted: [115, 115, 140], // #73738c — descriptions, placeholders
-    disabled: [65, 65, 80], // #414150 — separators, dividers
+    primary: [210, 210, 225],
+    secondary: [170, 170, 195],
+    muted: [115, 115, 140],
+    disabled: [65, 65, 80],
   },
   status: {
-    success: [120, 230, 160], // low-risk badge fg
-    warning: [255, 200, 80], // medium-risk badge fg, primary key hint
-    error: [255, 100, 100], // high-risk badge fg
-    info: [120, 180, 255], // wizard accent
+    success: [120, 230, 160],
+    warning: [255, 200, 80],
+    error: [255, 100, 100],
+    info: [120, 180, 255],
   },
   chrome: {
-    border: [60, 60, 100], // shared dim border color
-    surface: [35, 35, 50], // #232332 — input background
-    accent: [55, 45, 80], // #372d50 — selected action bg
-    dim: [60, 60, 100], // gradient tail / bottom border
+    border: [60, 60, 100],
+    surface: [35, 35, 50],
+    accent: [55, 45, 80],
+    dim: [60, 60, 100],
   },
   interactive: {
-    cursor: [102, 153, 255], // #6699ff — checklist cursor
-    selection: [26, 42, 77], // #1a2a4d — cursor row bg
-    highlight: [245, 200, 100], // #f5c864 — primary key combo
+    cursor: [102, 153, 255],
+    selection: [26, 42, 77],
+    highlight: [245, 200, 100],
   },
   gradient: {
     wizard: [
@@ -84,7 +83,6 @@ export const DARK_THEME: ThemeTokens = {
 };
 
 // ── Light theme ────────────────────────────────────────────────────
-// Higher contrast on bright backgrounds. Darker text, lighter chrome.
 
 export const LIGHT_THEME: ThemeTokens = {
   text: {
@@ -154,4 +152,17 @@ export function resolveTheme(appearance: Appearance): ThemeTokens {
  */
 export function themeHex(c: Color): string {
   return colorHex(quantizeColor(c, colorLevel()));
+}
+
+/**
+ * Blend a bright foreground toward the theme's dim endpoint at 30/70.
+ * Produces the recessed background colors used under badges so they
+ * read as "same hue, muted" rather than contrast-heavy rectangles.
+ */
+export function blendBadgeBg(fg: Color, dim: Color): Color {
+  return [
+    Math.round(fg[0] * 0.3 + dim[0] * 0.7),
+    Math.round(fg[1] * 0.3 + dim[1] * 0.7),
+    Math.round(fg[2] * 0.3 + dim[2] * 0.7),
+  ];
 }

@@ -1,21 +1,16 @@
 import { Text } from "ink";
-import { getTheme, themeHex } from "../core/theme.ts";
+import { blendBadgeBg, getTheme, themeHex } from "../core/theme.ts";
 import type { Badge } from "./border.ts";
 
 export function getWizardStops() {
-  const t = getTheme();
-  return t.gradient.wizard;
+  return getTheme().gradient.wizard;
 }
 
 export function getWizardBadge(): Badge {
   const t = getTheme();
   return {
     fg: t.status.info,
-    bg: [
-      Math.round(t.status.info[0] * 0.3 + t.gradient.dim[0] * 0.7),
-      Math.round(t.status.info[1] * 0.3 + t.gradient.dim[1] * 0.7),
-      Math.round(t.status.info[2] * 0.3 + t.gradient.dim[2] * 0.7),
-    ],
+    bg: blendBadgeBg(t.status.info, t.gradient.dim),
     icon: "🧙",
     label: "setup wizard",
   };
