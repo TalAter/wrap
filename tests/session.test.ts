@@ -11,12 +11,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandResponse } from "../src/command-response.schema.ts";
-import { setConfig } from "../src/config/store.ts";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import type { Provider } from "../src/llm/types.ts";
 import { resetDialogHostCache } from "../src/session/dialog-host.ts";
 import { runSession } from "../src/session/session.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 let stderr: MockStderr;
 let tmpHome: string;
@@ -24,7 +24,7 @@ let originalConsoleLog: typeof console.log;
 let stdoutLines: string[];
 
 beforeEach(() => {
-  setConfig({ verbose: false });
+  seedTestConfig();
   stderr = mockStderr();
   tmpHome = mkdtempSync(join(tmpdir(), "wrap-session-test-"));
   process.env.WRAP_HOME = tmpHome;
@@ -92,7 +92,7 @@ describe("runSession — exhausted", () => {
       risk_level: "low",
     };
     const { provider } = makeProvider([step, step, step]);
-    setConfig({ verbose: false, maxRounds: 2 });
+    seedTestConfig({ maxRounds: 2 });
     const exit = await runSession("hmm", provider, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,

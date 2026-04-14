@@ -1,4 +1,3 @@
-import { DEFAULT_MAX_CAPTURED_OUTPUT_CHARS, DEFAULT_MAX_ROUNDS } from "../config/config.ts";
 import { getConfig } from "../config/store.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
@@ -139,7 +138,7 @@ export async function* runLoop(
     // against maxRounds (which would be wrong across follow-ups).
     const isLastRound = state.budgetRemaining === 0;
 
-    const maxRounds = getConfig().maxRounds ?? DEFAULT_MAX_ROUNDS;
+    const maxRounds = getConfig().maxRounds as number;
     if (state.roundNum > 1) {
       verbose(`Round ${state.roundNum}/${maxRounds}`);
     }
@@ -241,8 +240,7 @@ export async function* runLoop(
     if (exec.stderr.trim()) {
       stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
     }
-    const maxCapturedOutput =
-      getConfig().maxCapturedOutputChars ?? DEFAULT_MAX_CAPTURED_OUTPUT_CHARS;
+    const maxCapturedOutput = getConfig().maxCapturedOutputChars as number;
     stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
 
     yield { type: "step-output", text: stepOutput };

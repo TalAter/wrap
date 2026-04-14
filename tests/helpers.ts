@@ -1,6 +1,21 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Config } from "../src/config/config.ts";
+import { resolveSettings } from "../src/config/resolve.ts";
+import { setConfig } from "../src/config/store.ts";
+
+/**
+ * Seed the global config store through the resolver so SETTINGS-declared
+ * defaults (maxRounds, maxCapturedOutputChars, etc.) are materialized.
+ *
+ * Use this in tests that drive runSession/runLoop — raw `setConfig({...})`
+ * leaves those fields undefined and the runner has no fallback anymore.
+ */
+export function seedTestConfig(overrides: Config = {}): void {
+  const empty = { flags: new Set<string>(), values: new Map<string, string>() };
+  setConfig(resolveSettings(empty, {}, overrides));
+}
 
 /** Create an isolated temp dir for WRAP_HOME without spawning a subprocess. */
 export function tmpHome(): string {

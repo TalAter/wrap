@@ -20,10 +20,6 @@ export type Config = {
   appearance?: "auto" | "dark" | "light";
 };
 
-export const DEFAULT_MAX_ROUNDS = 5;
-export const DEFAULT_MAX_CAPTURED_OUTPUT_CHARS = 200_000;
-export const DEFAULT_MAX_PIPED_INPUT_CHARS = 200_000;
-
 export const CONFIG_FILENAME = "config.jsonc";
 
 function loadFileConfig(wrapHome: string): Config {

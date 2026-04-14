@@ -1,8 +1,3 @@
-import {
-  DEFAULT_MAX_CAPTURED_OUTPUT_CHARS,
-  DEFAULT_MAX_PIPED_INPUT_CHARS,
-  DEFAULT_MAX_ROUNDS,
-} from "../config/config.ts";
 import { getConfig } from "../config/store.ts";
 import { notifications } from "../core/notify.ts";
 import { chrome } from "../core/output.ts";
@@ -52,9 +47,9 @@ export async function runSession(
 ): Promise<number> {
   const wrapHome = getWrapHome();
   const config = getConfig();
-  const maxRounds = config.maxRounds ?? DEFAULT_MAX_ROUNDS;
-  const maxCapturedOutput = config.maxCapturedOutputChars ?? DEFAULT_MAX_CAPTURED_OUTPUT_CHARS;
-  const maxPipedInput = config.maxPipedInputChars ?? DEFAULT_MAX_PIPED_INPUT_CHARS;
+  const maxRounds = config.maxRounds as number;
+  const maxCapturedOutput = config.maxCapturedOutputChars as number;
+  const maxPipedInput = config.maxPipedInputChars as number;
   const memory = options.memory ?? {};
 
   const entry = createLogEntry({

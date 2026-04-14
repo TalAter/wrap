@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandResponse } from "../src/command-response.schema.ts";
-import { setConfig } from "../src/config/store.ts";
 import {
   fetchesUrl,
   type LoopEvent,
@@ -16,6 +15,7 @@ import type { Transcript } from "../src/core/transcript.ts";
 import type { PromptScaffold } from "../src/llm/build-prompt.ts";
 import type { Provider } from "../src/llm/types.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 const scaffold: PromptScaffold = {
   system: "system",
@@ -27,7 +27,7 @@ let stderr: MockStderr;
 let tmpHome: string;
 
 beforeEach(() => {
-  setConfig({ verbose: false });
+  seedTestConfig();
   stderr = mockStderr();
   tmpHome = mkdtempSync(join(tmpdir(), "wrap-runner-test-"));
 });
@@ -158,7 +158,7 @@ describe("runLoop", () => {
     const { provider } = makeProvider([step, step, step]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 2, roundNum: 0 };
-    setConfig({ verbose: false, maxRounds: 2 });
+    seedTestConfig({ maxRounds: 2 });
     const { final } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
     expect(final.type).toBe("exhausted");
     expect(state.roundNum).toBe(2);

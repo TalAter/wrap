@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
-import { setConfig } from "../src/config/store.ts";
 import { RoundError, runRound } from "../src/core/round.ts";
 import type { Transcript } from "../src/core/transcript.ts";
 import { resetVerboseTimer } from "../src/core/verbose.ts";
@@ -8,6 +7,7 @@ import type { PromptScaffold } from "../src/llm/build-prompt.ts";
 import type { Provider } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 const scaffold: PromptScaffold = {
   system: "system",
@@ -19,7 +19,7 @@ let stderr: MockStderr;
 
 beforeEach(() => {
   stderr = mockStderr();
-  setConfig({ verbose: false });
+  seedTestConfig();
   resetVerboseTimer();
 });
 
@@ -166,7 +166,7 @@ describe("runRound", () => {
   });
 
   test("verbose prints _scratchpad line before the response line when present", async () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     const { provider } = makeProvider([
       {
         _scratchpad: "Need to plan first.\nSecond thought.",
@@ -191,7 +191,7 @@ describe("runRound", () => {
   });
 
   test("verbose prints nothing when scratchpad is absent", async () => {
-    setConfig({ verbose: true });
+    seedTestConfig({ verbose: true });
     const { provider } = makeProvider([
       { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
     ]);

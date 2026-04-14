@@ -3,12 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import configSchema from "../src/config/config.schema.json";
-import {
-  DEFAULT_MAX_CAPTURED_OUTPUT_CHARS,
-  DEFAULT_MAX_PIPED_INPUT_CHARS,
-  DEFAULT_MAX_ROUNDS,
-  loadConfig,
-} from "../src/config/config.ts";
+import { loadConfig } from "../src/config/config.ts";
+import { SETTINGS } from "../src/config/settings.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-test-"));
@@ -271,24 +267,24 @@ describe("loadConfig", () => {
       expect(configSchema.properties.defaultProvider.type).toBe("string");
     });
 
-    test("configSchema includes maxRounds with default 5", () => {
+    test("configSchema.maxRounds default matches SETTINGS.maxRounds.default", () => {
       const mr = configSchema.properties.maxRounds;
       expect(mr.type).toBe("integer");
-      expect(mr.default).toBe(DEFAULT_MAX_ROUNDS);
+      expect(mr.default).toBe(SETTINGS.maxRounds.default);
       expect(mr.minimum).toBe(1);
     });
 
-    test("configSchema includes maxCapturedOutputChars with default 200000", () => {
+    test("configSchema.maxCapturedOutputChars default matches SETTINGS", () => {
       const mp = configSchema.properties.maxCapturedOutputChars;
       expect(mp.type).toBe("integer");
-      expect(mp.default).toBe(DEFAULT_MAX_CAPTURED_OUTPUT_CHARS);
+      expect(mp.default).toBe(SETTINGS.maxCapturedOutputChars.default);
       expect(mp.minimum).toBe(1000);
     });
 
-    test("configSchema includes maxPipedInputChars with default 200000", () => {
+    test("configSchema.maxPipedInputChars default matches SETTINGS", () => {
       const mp = configSchema.properties.maxPipedInputChars;
       expect(mp.type).toBe("integer");
-      expect(mp.default).toBe(DEFAULT_MAX_PIPED_INPUT_CHARS);
+      expect(mp.default).toBe(SETTINGS.maxPipedInputChars.default);
       expect(mp.minimum).toBe(1000);
     });
   });
