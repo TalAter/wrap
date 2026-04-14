@@ -130,6 +130,14 @@ describe("resolveSettings — noAnimation aggregates env-wide signals", () => {
   });
 });
 
+describe("resolveSettings — env layer skipped when value is undefined", () => {
+  test("env names not present in env are skipped silently", () => {
+    // No env var set at all — resolver falls through to file/default for noAnimation.
+    const result = resolveSettings(mods(), {}, { noAnimation: true });
+    expect(result.noAnimation).toBe(true);
+  });
+});
+
 describe("resolveSettings — model is virtual", () => {
   test("model key does not appear in resolved Config", () => {
     const result = resolveSettings(

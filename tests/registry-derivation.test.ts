@@ -31,6 +31,15 @@ describe("options derived from SETTINGS", () => {
     expect(model?.aliases).toContain("--provider");
   });
 
+  test("description, usage, and help flow through to the Option", () => {
+    const byId = new Map(options.map((o) => [o.id, o]));
+    const verbose = byId.get("verbose");
+    expect(verbose?.description).toBe(SETTINGS.verbose.description);
+    expect(verbose?.usage).toBe(SETTINGS.verbose.usage);
+    const model = byId.get("model");
+    expect(model?.help).toBe(SETTINGS.model.help);
+  });
+
   test("env names from SETTINGS flow through to the Option", () => {
     const byId = new Map(options.map((o) => [o.id, o]));
     const noAnim = byId.get("noAnimation");

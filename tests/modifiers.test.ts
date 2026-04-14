@@ -3,7 +3,7 @@ import { extractModifiers, type ModifierSpec, parseArgs } from "../src/core/inpu
 
 const SPECS: readonly ModifierSpec[] = [
   { name: "verbose", flags: ["--verbose"], takesValue: false },
-  { name: "modelOverride", flags: ["--model", "--provider"], takesValue: true },
+  { name: "model", flags: ["--model", "--provider"], takesValue: true },
 ];
 
 /** Test helper: build a Modifiers from plain literals. */
@@ -73,61 +73,55 @@ describe("extractModifiers — boolean", () => {
 describe("extractModifiers — value-taking", () => {
   test("--model anthropic captures next arg as value", () => {
     const result = extractModifiers(["--model", "anthropic", "find", "files"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "anthropic" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "anthropic" } }));
     expect(result.remaining).toEqual(["find", "files"]);
   });
 
   test("--model=anthropic uses equals form", () => {
     const result = extractModifiers(["--model=anthropic", "find", "files"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "anthropic" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "anthropic" } }));
     expect(result.remaining).toEqual(["find", "files"]);
   });
 
   test("--provider is an alias mapping to the same key", () => {
     const result = extractModifiers(["--provider", "openai"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "openai" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "openai" } }));
     expect(result.remaining).toEqual([]);
   });
 
   test("--provider=openai equals form", () => {
     const result = extractModifiers(["--provider=openai", "do", "thing"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "openai" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "openai" } }));
     expect(result.remaining).toEqual(["do", "thing"]);
   });
 
   test("--verbose then --model combined", () => {
     const result = extractModifiers(["--verbose", "--model", "gpt-4o", "find", "files"], SPECS);
-    expect(result.modifiers).toEqual(
-      mods({ flags: ["verbose"], values: { modelOverride: "gpt-4o" } }),
-    );
+    expect(result.modifiers).toEqual(mods({ flags: ["verbose"], values: { model: "gpt-4o" } }));
     expect(result.remaining).toEqual(["find", "files"]);
   });
 
   test("--model then --verbose combined", () => {
     const result = extractModifiers(["--model", "gpt-4o", "--verbose", "find", "files"], SPECS);
-    expect(result.modifiers).toEqual(
-      mods({ flags: ["verbose"], values: { modelOverride: "gpt-4o" } }),
-    );
+    expect(result.modifiers).toEqual(mods({ flags: ["verbose"], values: { model: "gpt-4o" } }));
     expect(result.remaining).toEqual(["find", "files"]);
   });
 
   test("--model with provider:model value", () => {
     const result = extractModifiers(["--model", "anthropic:claude-opus-4-5", "hi"], SPECS);
-    expect(result.modifiers).toEqual(
-      mods({ values: { modelOverride: "anthropic:claude-opus-4-5" } }),
-    );
+    expect(result.modifiers).toEqual(mods({ values: { model: "anthropic:claude-opus-4-5" } }));
     expect(result.remaining).toEqual(["hi"]);
   });
 
   test("--model with empty quoted value", () => {
     const result = extractModifiers(["--model", "", "hi"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "" } }));
     expect(result.remaining).toEqual(["hi"]);
   });
 
   test("--model= (equals form, empty value)", () => {
     const result = extractModifiers(["--model=", "hi"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "" } }));
     expect(result.remaining).toEqual(["hi"]);
   });
 
@@ -157,15 +151,13 @@ describe("extractModifiers — value-taking", () => {
 
   test("--model=anthropic:claude-opus-4-5 (equals form, colon in value)", () => {
     const result = extractModifiers(["--model=anthropic:claude-opus-4-5", "hi"], SPECS);
-    expect(result.modifiers).toEqual(
-      mods({ values: { modelOverride: "anthropic:claude-opus-4-5" } }),
-    );
+    expect(result.modifiers).toEqual(mods({ values: { model: "anthropic:claude-opus-4-5" } }));
     expect(result.remaining).toEqual(["hi"]);
   });
 
   test("two value modifiers in a row → last wins", () => {
     const result = extractModifiers(["--model", "anthropic", "--provider", "openai", "go"], SPECS);
-    expect(result.modifiers).toEqual(mods({ values: { modelOverride: "openai" } }));
+    expect(result.modifiers).toEqual(mods({ values: { model: "openai" } }));
     expect(result.remaining).toEqual(["go"]);
   });
 });
@@ -223,7 +215,7 @@ describe("parseArgs", () => {
 
   test("--model + prompt", () => {
     const { modifiers, input } = parseArgs(argv("--model", "anthropic", "find", "files"), SPECS);
-    expect(modifiers).toEqual(mods({ values: { modelOverride: "anthropic" } }));
+    expect(modifiers).toEqual(mods({ values: { model: "anthropic" } }));
     expect(input).toEqual({ type: "prompt", prompt: "find files" });
   });
 });
