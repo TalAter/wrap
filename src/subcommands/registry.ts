@@ -18,6 +18,7 @@ function settingToOption(id: string, s: Setting): Option {
     description: s.description,
     usage: s.usage ?? `w ${primary}`,
     help: s.help,
+    env: s.env ? [...s.env] : undefined,
   };
 }
 

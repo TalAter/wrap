@@ -207,6 +207,9 @@ export function renderFlagHelp(flag: CLIFlag): string {
   if (flag.help) {
     lines.push("", flag.help);
   }
+  if (flag.kind === "option" && flag.env && flag.env.length > 0) {
+    lines.push("", `  Env: ${flag.env.join(", ")}`);
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -221,8 +224,6 @@ export const helpCmd: Command = {
     "You already know this. You're here.",
     "",
     "Run it with a command name for help on that command, e.g. w --help log",
-    "",
-    "The global --no-animation flag (or WRAP_NO_ANIMATION=1) disables animations.",
   ].join("\n"),
   run: async (args) => {
     const { commands, options } = await import("./registry.ts");

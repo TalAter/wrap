@@ -7,7 +7,7 @@ export type CLIFlag = {
   help?: string;
 } & (
   | { kind: "command"; run: (args: string[]) => Promise<void> }
-  | { kind: "option"; takesValue: boolean }
+  | { kind: "option"; takesValue: boolean; env?: string[] }
 );
 
 export type Command = CLIFlag & { kind: "command" };

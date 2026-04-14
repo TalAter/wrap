@@ -190,6 +190,47 @@ describe("renderFlagHelp", () => {
     expect(result).toContain("w --baz <val>");
     expect(result).toContain("Baz details.");
   });
+
+  test("includes env var line when option.env is set", () => {
+    const opt: CLIFlag = {
+      kind: "option",
+      flag: "--baz",
+      id: "baz",
+      description: "Do baz",
+      usage: "w --baz",
+      takesValue: false,
+      env: ["WRAP_BAZ"],
+    };
+    const result = renderFlagHelp(opt);
+    expect(result).toContain("WRAP_BAZ");
+  });
+
+  test("lists multiple env var names comma-separated", () => {
+    const opt: CLIFlag = {
+      kind: "option",
+      flag: "--baz",
+      id: "baz",
+      description: "Do baz",
+      usage: "w --baz",
+      takesValue: false,
+      env: ["WRAP_BAZ", "WRAP_BAZ_LEGACY"],
+    };
+    const result = renderFlagHelp(opt);
+    expect(result).toContain("WRAP_BAZ, WRAP_BAZ_LEGACY");
+  });
+
+  test("omits env line when option has no env", () => {
+    const opt: CLIFlag = {
+      kind: "option",
+      flag: "--baz",
+      id: "baz",
+      description: "Do baz",
+      usage: "w --baz",
+      takesValue: false,
+    };
+    const result = renderFlagHelp(opt);
+    expect(result).not.toMatch(/env/i);
+  });
 });
 
 describe("buildDiffEscape", () => {

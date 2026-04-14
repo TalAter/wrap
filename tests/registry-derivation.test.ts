@@ -31,6 +31,20 @@ describe("options derived from SETTINGS", () => {
     expect(model?.aliases).toContain("--provider");
   });
 
+  test("env names from SETTINGS flow through to the Option", () => {
+    const byId = new Map(options.map((o) => [o.id, o]));
+    const noAnim = byId.get("noAnimation");
+    expect(noAnim?.kind).toBe("option");
+    if (noAnim?.kind === "option") {
+      expect(noAnim.env).toContain("WRAP_NO_ANIMATION");
+    }
+    // verbose has no env — env should be undefined or empty
+    const verbose = byId.get("verbose");
+    if (verbose?.kind === "option") {
+      expect(verbose.env === undefined || verbose.env.length === 0).toBe(true);
+    }
+  });
+
   test("flagless settings are excluded from options", () => {
     const ids = new Set(options.map((o) => o.id));
     expect(ids.has("maxRounds")).toBe(false);
