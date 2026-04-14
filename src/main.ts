@@ -35,9 +35,9 @@ export async function main() {
 
     const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
-    // Seed config from CLI + env + defaults so subcommands (like --help) can
-    // read resolved values. The session path re-resolves with file config
-    // layered in below.
+    // Seed config from CLI + env + defaults so we have an initial state
+    // even before reading config file. The session path re-resolves with
+    // file config layered in below.
     setConfig(resolveSettings(modifiers, process.env, {}));
 
     if (input.type === "flag") {
