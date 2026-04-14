@@ -222,7 +222,7 @@ export const helpCmd: Command = {
     "",
     "Run it with a command name for help on that command, e.g. w --help log",
     "",
-    "The global --no-animation flag (or WRAP_NO_MOTION=1) disables animations.",
+    "The global --no-animation flag (or WRAP_NO_ANIMATION=1) disables animations.",
   ].join("\n"),
   run: async (args) => {
     const { commands, options } = await import("./registry.ts");

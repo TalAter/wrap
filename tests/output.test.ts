@@ -49,7 +49,7 @@ describe("chromeRaw", () => {
 });
 
 describe("shouldAnimate", () => {
-  const envKeys = ["NO_COLOR", "CI", "TERM", "WRAP_NO_MOTION"];
+  const envKeys = ["NO_COLOR", "CI", "TERM", "WRAP_NO_ANIMATION"];
   let saved: Record<string, string | undefined>;
   let origIsTTY: boolean | undefined;
 
@@ -94,8 +94,8 @@ describe("shouldAnimate", () => {
     expect(shouldAnimate()).toBe(false);
   });
 
-  test("false when WRAP_NO_MOTION is set", () => {
-    process.env.WRAP_NO_MOTION = "1";
+  test("false when WRAP_NO_ANIMATION is set", () => {
+    process.env.WRAP_NO_ANIMATION = "1";
     expect(shouldAnimate()).toBe(false);
   });
 

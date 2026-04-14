@@ -53,7 +53,7 @@ export function colorLevel(): ColorLevel {
  * Motion on top of color requires an interactive session where the
  * redraw is actually watched. CI logs replay frames as garbage, dumb
  * terminals can't move the cursor, and screen-reader / low-motion
- * users signal via WRAP_NO_MOTION.
+ * users signal via WRAP_NO_ANIMATION.
  */
 export function shouldAnimate(opts?: { enabled?: boolean }): boolean {
   if (opts?.enabled === false) return false;
@@ -61,7 +61,7 @@ export function shouldAnimate(opts?: { enabled?: boolean }): boolean {
   if (!supportsColor()) return false;
   if ("CI" in process.env) return false;
   if (process.env.TERM === "dumb") return false;
-  if ("WRAP_NO_MOTION" in process.env) return false;
+  if ("WRAP_NO_ANIMATION" in process.env) return false;
   return true;
 }
 
