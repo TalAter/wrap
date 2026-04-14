@@ -29,7 +29,7 @@ Detection is strictly positional: `w find files --verbose` is NL because `--verb
 `CLIFlag` (`src/subcommands/types.ts`) is a discriminated union with two variants, sharing `flag`, optional `aliases`, `id`, `description`, `usage`, and optional long `help`:
 
 - **`Command`** (`kind: "command"`) adds `run(args)`. Invoked by `dispatch()` when the first non-option argv is a known flag.
-- **`Option`** (`kind: "option"`) adds `takesValue`. Stripped from leading argv positions by `extractModifiers()` in `src/core/input.ts` before command dispatch or NL parsing. `id` becomes the key in the resulting `Modifiers` map (e.g. `--model` → `modelOverride`).
+- **`Option`** (`kind: "option"`) adds `takesValue`. Stripped from leading argv positions by `extractModifiers()` in `src/core/input.ts` before command dispatch or NL parsing. `id` becomes the key in the resulting `Modifiers` map (e.g. `--model` → `model`).
 
 `main.ts` derives the modifier parser input from the registry's `options` array, so adding an option to the registry automatically makes it parseable and visible in help. `dispatch()` reads `commands` and passes remaining args through untouched — per-command arg parsing is each command's job.
 

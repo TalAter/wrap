@@ -1,4 +1,5 @@
 import { ensureConfig } from "./config/ensure.ts";
+import { resolveSettings } from "./config/resolve.ts";
 import { getConfig, setConfig } from "./config/store.ts";
 import { resolveAppearance } from "./core/detect-appearance.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
@@ -34,12 +35,10 @@ export async function main() {
 
     const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
-    // Seed config from CLI modifier flags so subcommands can read them.
-    // ensureConfig() merges file/env config on top in the session path.
-    setConfig({
-      verbose: modifiers.flags.has("verbose") || undefined,
-      noAnimation: modifiers.flags.has("noAnimation") || undefined,
-    });
+    // Seed config from CLI + env + defaults so subcommands (like --help) can
+    // read resolved values. The session path re-resolves with file config
+    // layered in below.
+    setConfig(resolveSettings(modifiers, process.env, {}));
 
     if (input.type === "flag") {
       await dispatch(input.flag, input.args);
@@ -55,21 +54,17 @@ export async function main() {
 
     const prompt = input.type === "prompt" ? input.prompt : "";
 
-    const config = await ensureConfig();
-    setConfig({
-      ...config,
-      verbose: modifiers.flags.has("verbose") || config.verbose === true,
-      noAnimation: modifiers.flags.has("noAnimation") || config.noAnimation === true,
-    });
+    const fileConfig = await ensureConfig();
+    setConfig(resolveSettings(modifiers, process.env, fileConfig));
 
-    // Re-resolve with config.appearance now available.
+    // Re-resolve theme now that config.appearance is available.
     const appearance = resolveAppearance(getConfig().appearance);
     setTheme(resolveTheme(appearance));
 
-    // CLI flag wins over WRAP_MODEL env var. resolveProvider then parses the
-    // raw string and short-circuits to the test sentinel if WRAP_TEST_RESPONSE
-    // is set, regardless of config.
-    const override = modifiers.values.get("modelOverride") ?? process.env.WRAP_MODEL;
+    // Model is virtual — resolveSettings skips it. resolveProvider parses the
+    // override string (provider:model etc.) and short-circuits to the test
+    // sentinel if WRAP_TEST_RESPONSE is set.
+    const override = modifiers.values.get("model") ?? process.env.WRAP_MODEL;
     const resolved = resolveProvider(getConfig(), override);
     const label = formatProvider(resolved);
     verbose(`Config loaded (${label})`);

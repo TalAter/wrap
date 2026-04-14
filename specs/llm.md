@@ -149,7 +149,7 @@ type ResolvedProvider = {
 };
 ```
 
-`parseArgs` in `src/core/input.ts` treats `--model`/`--provider` as value-taking modifiers. `main.ts` picks `modifiers.values.get("modelOverride") ?? process.env.WRAP_MODEL` and hands it to `resolveProvider`.
+`parseArgs` in `src/core/input.ts` treats `--model`/`--provider` as value-taking modifiers. `main.ts` picks `modifiers.values.get("model") ?? process.env.WRAP_MODEL` and hands it to `resolveProvider`.
 
 ---
 

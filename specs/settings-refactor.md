@@ -184,6 +184,8 @@ After this refactor lands and is committed, this spec file is a **working doc** 
 
    Do not pre-commit to a destination. Read the landscape at compact time.
 
+   **Also add to the final spec:** a note that `src/config/config.schema.json` must stay in sync with SETTINGS — any new setting that persists in config needs a schema entry for jsonc validation/IDE support.
+
 2. **Delete `specs/verbose.md`** — fold its essentials:
    - Verbose pipeline steps list → keep in `verbose.md` OR move to `session.md`/`logging.md` (decide during compact)
    - `--verbose` as a setting → covered by settings system
