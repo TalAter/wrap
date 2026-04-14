@@ -98,6 +98,38 @@ describe("resolveSettings — structural fields pass through", () => {
   });
 });
 
+describe("resolveSettings — noAnimation aggregates env-wide signals", () => {
+  test("CI env var forces noAnimation true", () => {
+    const result = resolveSettings(mods(), { CI: "true" }, {});
+    expect(result.noAnimation).toBe(true);
+  });
+
+  test("TERM=dumb forces noAnimation true", () => {
+    const result = resolveSettings(mods(), { TERM: "dumb" }, {});
+    expect(result.noAnimation).toBe(true);
+  });
+
+  test("NO_COLOR forces noAnimation true", () => {
+    const result = resolveSettings(mods(), { NO_COLOR: "1" }, {});
+    expect(result.noAnimation).toBe(true);
+  });
+
+  test("NO_COLOR as empty string still forces noAnimation true (presence, not value)", () => {
+    const result = resolveSettings(mods(), { NO_COLOR: "" }, {});
+    expect(result.noAnimation).toBe(true);
+  });
+
+  test("TERM set to a non-dumb value does not affect noAnimation", () => {
+    const result = resolveSettings(mods(), { TERM: "xterm-256color" }, {});
+    expect(result.noAnimation).toBe(false);
+  });
+
+  test("env-wide signals override file config noAnimation=false", () => {
+    const result = resolveSettings(mods(), { CI: "true" }, { noAnimation: false });
+    expect(result.noAnimation).toBe(true);
+  });
+});
+
 describe("resolveSettings — model is virtual", () => {
   test("model key does not appear in resolved Config", () => {
     const result = resolveSettings(

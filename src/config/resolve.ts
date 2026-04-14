@@ -31,7 +31,18 @@ export function resolveSettings(
     }
   }
 
+  // Env-wide capability signals force noAnimation regardless of the per-setting
+  // layers: CI redraw logs are garbage, dumb terminals can't move the cursor,
+  // and NO_COLOR users generally want a quiet terminal.
+  if (isAnimationDisabledByEnv(env)) {
+    result.noAnimation = true;
+  }
+
   return result;
+}
+
+function isAnimationDisabledByEnv(env: Record<string, string | undefined>): boolean {
+  return "CI" in env || env.TERM === "dumb" || "NO_COLOR" in env;
 }
 
 function resolveOne(

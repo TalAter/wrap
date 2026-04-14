@@ -50,18 +50,16 @@ export function colorLevel(): ColorLevel {
 }
 
 /**
- * Motion on top of color requires an interactive session where the
- * redraw is actually watched. CI logs replay frames as garbage, dumb
- * terminals can't move the cursor, and screen-reader / low-motion
- * users signal via WRAP_NO_ANIMATION.
+ * Stdout-targeted predicate: animate only when the user hasn't opted out
+ * (config.noAnimation folds CLI flag, WRAP_NO_ANIMATION, CI, TERM=dumb,
+ * and NO_COLOR at resolve time) and stdout is an interactive TTY.
+ *
+ * Per-stream spinners (e.g. chrome spinner on stderr) check `stream.isTTY`
+ * directly since TTY status varies per channel.
  */
 export function shouldAnimate(): boolean {
   if (getConfig().noAnimation) return false;
-  if (!supportsColor()) return false;
-  if ("CI" in process.env) return false;
-  if (process.env.TERM === "dumb") return false;
-  if ("WRAP_NO_ANIMATION" in process.env) return false;
-  return true;
+  return isTTY();
 }
 
 export function hasJq(): boolean {

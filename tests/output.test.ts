@@ -49,28 +49,19 @@ describe("chromeRaw", () => {
 });
 
 describe("shouldAnimate", () => {
-  const envKeys = ["NO_COLOR", "CI", "TERM", "WRAP_NO_ANIMATION"];
-  let saved: Record<string, string | undefined>;
   let origIsTTY: boolean | undefined;
 
   beforeEach(() => {
-    saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
-    for (const k of envKeys) delete process.env[k];
     origIsTTY = process.stdout.isTTY;
     Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
-    process.env.TERM = "xterm-256color";
     setConfig({});
   });
 
   afterEach(() => {
-    for (const k of envKeys) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
     Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
   });
 
-  test("true when interactive TTY with defaults", () => {
+  test("true when stdout is a TTY and config.noAnimation is unset", () => {
     expect(shouldAnimate()).toBe(true);
   });
 
@@ -79,32 +70,7 @@ describe("shouldAnimate", () => {
     expect(shouldAnimate()).toBe(false);
   });
 
-  test("false when NO_COLOR is set", () => {
-    process.env.NO_COLOR = "1";
-    expect(shouldAnimate()).toBe(false);
-  });
-
-  test("false when CI is set", () => {
-    process.env.CI = "true";
-    expect(shouldAnimate()).toBe(false);
-  });
-
-  test("false when TERM=dumb", () => {
-    process.env.TERM = "dumb";
-    expect(shouldAnimate()).toBe(false);
-  });
-
-  test("false when WRAP_NO_ANIMATION is set", () => {
-    process.env.WRAP_NO_ANIMATION = "1";
-    expect(shouldAnimate()).toBe(false);
-  });
-
-  test("false when NO_COLOR is the empty string", () => {
-    process.env.NO_COLOR = "";
-    expect(shouldAnimate()).toBe(false);
-  });
-
-  test("false when config has noAnimation set", () => {
+  test("false when config.noAnimation is true", () => {
     setConfig({ noAnimation: true });
     expect(shouldAnimate()).toBe(false);
   });
