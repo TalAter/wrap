@@ -1,6 +1,6 @@
 import stringWidth from "string-width";
 import { type Color, interpolate } from "../core/ansi.ts";
-import { colorLevel } from "../core/output.ts";
+import { colorLevel, isNerdFonts } from "../core/output.ts";
 import { type BadgeColors, getTheme, themeHex } from "../core/theme.ts";
 
 export type Badge = BadgeColors & { icon: string; label: string };
@@ -29,9 +29,17 @@ export function topBorderSegments(
 ): BorderSegment[] {
   // Custom instead of Ink's built-in border so we can style each glyph and
   // embed a styled badge inside the top rule.
-  const badgeText = badge ? ` ${badge.icon} ${badge.label} ` : "";
+  // Powerline curves carry their own visual padding; half-blocks don't.
+  const nerd = isNerdFonts();
+  const edgeLeft = nerd ? "\uE0B6" : "▐";
+  const edgeRight = nerd ? "\uE0B4" : "▌";
+  const badgeText = badge
+    ? nerd
+      ? `${badge.icon} ${badge.label}`
+      : ` ${badge.icon} ${badge.label} `
+    : "";
   const badgeVisualWidth = badge ? stringWidth(badgeText) : 0;
-  // Badge position: totalWidth - badgeVisualWidth - 3 (space + ─ + ╮)
+  // Badge position: totalWidth - badgeVisualWidth - 3 (edge + ─ + ╮)
   const badgeStart = badge ? totalWidth - badgeVisualWidth - 3 : -1;
 
   const segments: BorderSegment[] = [];
@@ -44,8 +52,11 @@ export function topBorderSegments(
     } else if (i === totalWidth - 1) {
       segments.push({ key: `top-${i}`, text: "╮", color });
       i += 1;
-    } else if (badge && (i === badgeStart - 1 || i === badgeStart + badgeVisualWidth)) {
-      segments.push({ key: `top-${i}`, text: " ", color });
+    } else if (badge && i === badgeStart - 1) {
+      segments.push({ key: `top-${i}`, text: edgeLeft, color: themeHex(badge.bg) });
+      i += 1;
+    } else if (badge && i === badgeStart + badgeVisualWidth) {
+      segments.push({ key: `top-${i}`, text: edgeRight, color: themeHex(badge.bg) });
       i += 1;
     } else if (badge && i === badgeStart) {
       segments.push({

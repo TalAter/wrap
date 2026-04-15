@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
 import { bottomBorderSegments, interpolateGradient, topBorderSegments } from "../src/tui/border.ts";
 import { getRiskPresets } from "../src/tui/risk-presets.ts";
+import { seedTestConfig } from "./helpers.ts";
 
 // Border gradients collapse to the signature color below truecolor. These
 // tests exercise the interpolation math, so force the truecolor path.
@@ -9,6 +10,7 @@ let savedForceColor: string | undefined;
 beforeAll(() => {
   savedForceColor = process.env.FORCE_COLOR;
   process.env.FORCE_COLOR = "3";
+  seedTestConfig();
 });
 afterAll(() => {
   if (savedForceColor === undefined) delete process.env.FORCE_COLOR;
@@ -147,6 +149,44 @@ describe("topBorderSegments", () => {
     expect(text).toMatch(/╮$/);
     expect(text).not.toContain("medium");
     expect(text).not.toContain("⚠");
+  });
+
+  test("plain mode wraps badge in half-block pill edges with padding", () => {
+    const { stops, badge } = preset("medium");
+    const text = plainText(topBorderSegments(60, stops, badge));
+    expect(text).toContain("▐");
+    expect(text).toContain("▌");
+    expect(text).not.toContain("\uE0B6");
+    expect(text).toContain(" ⚠ medium risk ");
+  });
+
+  describe("with nerd fonts enabled", () => {
+    beforeAll(() => {
+      seedTestConfig({ nerdFonts: true });
+    });
+    afterAll(() => {
+      seedTestConfig();
+    });
+
+    test("wraps badge in Powerline curve edges", () => {
+      const { stops, badge } = preset("medium");
+      const text = plainText(topBorderSegments(60, stops, badge));
+      expect(text).toContain("\uE0B6");
+      expect(text).toContain("\uE0B4");
+      expect(text).not.toContain("▐");
+    });
+
+    test("drops inner padding spaces since curve glyph supplies them", () => {
+      const { stops, badge } = preset("medium");
+      const text = plainText(topBorderSegments(60, stops, badge));
+      expect(text).toContain("\uE0B6⚠ medium risk\uE0B4");
+    });
+
+    test("visual width matches requested width", () => {
+      const { stops, badge } = preset("medium");
+      const border = topBorderSegments(60, stops, badge);
+      expect(stringWidth(plainText(border))).toBe(60);
+    });
   });
 });
 
