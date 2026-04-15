@@ -136,9 +136,9 @@ Sections are individually mountable (future: `w --config-nerdfonts`, etc.). The 
 
 ### Orchestrator
 
-`config-wizard-dialog.tsx` tracks which section is active, accumulates results, and passes context forward. On final section completion, returns a unified `WizardResult`. All sections share the same `🧙 setup wizard` badge and gradient.
+`config-wizard-dialog.tsx` tracks which section is active, accumulates results, and passes context forward. On final section completion, returns a unified `WizardResult`. Sections share the same wizard gradient; the `🧙 setup wizard` badge is shown on all sections except the welcome screen.
 
-Current flow: `nerd-icons` → `providers` → done.
+Current flow: `welcome` → `nerd-icons` → `providers` → done.
 
 ### WizardResult
 
