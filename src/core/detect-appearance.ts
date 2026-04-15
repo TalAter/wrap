@@ -1,3 +1,5 @@
+import { openSync } from "node:fs";
+import { ReadStream } from "node:tty";
 import { readWrapFile, writeWrapFile } from "../fs/home.ts";
 
 export type Appearance = "dark" | "light";
@@ -49,29 +51,38 @@ export function cacheAppearance(appearance: Appearance, home?: string): void {
 
 /**
  * Query the terminal background color via OSC 11. Writes the query to
- * stderr (which is typically the TTY even when stdout is piped) and reads
- * the response from stdin in raw mode.
+ * stderr and reads the response from /dev/tty on a dedicated fd — never
+ * touches process.stdin, so Ink dialogs mounted concurrently keep full
+ * ownership of stdin raw mode.
  *
  * Returns null on timeout or if the terminal doesn't respond.
  */
 export async function queryTerminalBackground(timeoutMs = 100): Promise<Appearance | null> {
-  if (!process.stdin.isTTY || !process.stderr.isTTY) return null;
+  if (!process.stderr.isTTY) return null;
+
+  let fd: number;
+  try {
+    fd = openSync("/dev/tty", "r");
+  } catch {
+    // No controlling terminal (detached process, CI, Windows cmd/PowerShell).
+    return null;
+  }
 
   return new Promise<Appearance | null>((resolve) => {
     let settled = false;
     let buf = "";
+    const stream = new ReadStream(fd);
 
     const cleanup = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      process.stdin.removeListener("data", onData);
       try {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
+        stream.setRawMode(false);
       } catch {
-        // stdin may not support raw mode in all environments
+        // ignore
       }
+      stream.destroy();
     };
 
     const timer = setTimeout(() => {
@@ -79,20 +90,21 @@ export async function queryTerminalBackground(timeoutMs = 100): Promise<Appearan
       resolve(null);
     }, timeoutMs);
 
-    const onData = (chunk: Buffer) => {
+    stream.on("data", (chunk: Buffer) => {
       buf += chunk.toString();
-      // Look for BEL or ST terminator
       if (buf.includes("\x07") || buf.includes("\x1b\\")) {
         cleanup();
         resolve(parseOsc11Response(buf));
       }
-    };
+    });
+
+    stream.on("error", () => {
+      cleanup();
+      resolve(null);
+    });
 
     try {
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.on("data", onData);
-      // Send OSC 11 query
+      stream.setRawMode(true);
       process.stderr.write("\x1b]11;?\x07");
     } catch {
       cleanup();

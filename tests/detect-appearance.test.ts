@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { parseOsc11Response } from "../src/core/detect-appearance.ts";
+import { parseOsc11Response, queryTerminalBackground } from "../src/core/detect-appearance.ts";
+import { mockStderr } from "./helpers/mock-stderr.ts";
+import { mockStdin } from "./helpers/mock-stdin.ts";
 
 describe("parseOsc11Response", () => {
   test("parses dark background (Ghostty)", () => {
@@ -38,5 +40,24 @@ describe("parseOsc11Response", () => {
 
   test("returns null for incomplete response", () => {
     expect(parseOsc11Response("\x1b]11;rgb:2828/2c2c")).toBeNull();
+  });
+});
+
+describe("queryTerminalBackground", () => {
+  // Regression: OSC 11 detection used to grab process.stdin raw mode, then
+  // release it with setRawMode(false) + pause() on cleanup. If the wizard's
+  // Ink render happened between grab and release, Ink inherited a paused,
+  // cooked stdin — keys echoed raw and ⏎/Esc/arrows did nothing. Detection
+  // must read from /dev/tty instead and never touch process.stdin.
+  test("does not touch process.stdin raw mode", async () => {
+    const stderr = mockStderr({ isTTY: true });
+    const stdin = mockStdin({ isTTY: true, spySetRawMode: true });
+    try {
+      await queryTerminalBackground(10);
+    } finally {
+      stdin.restore();
+      stderr.restore();
+    }
+    expect(stdin.setRawModeCalled).toBe(false);
   });
 });
