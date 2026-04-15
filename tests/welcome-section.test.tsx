@@ -56,6 +56,15 @@ describe("WelcomeSection", () => {
     expect(cb.cancelled).toBe(false);
   });
 
+  test("hides the animation when the terminal is narrower than 150 cols", async () => {
+    // ink-testing-library hardcodes stdout.columns to 100 — narrow case.
+    const cb = makeCallbacks();
+    const { lastFrame } = render(<WelcomeSection {...cb} />);
+    await wait();
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).not.toContain("⣿");
+  });
+
   test("Esc cancels the wizard", async () => {
     const cb = makeCallbacks();
     const { stdin } = render(<WelcomeSection {...cb} />);

@@ -12,6 +12,11 @@ import {
 const DIALOG_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
 
+/** Horizontal cells the dialog chrome adds on top of its inner content (borders + outer margin). */
+export const DIALOG_CHROME_WIDTH = 4 + DIALOG_MARGIN;
+/** Vertical cells the dialog chrome adds on top of its inner content (top/bottom border + top/bottom padding). */
+export const DIALOG_CHROME_HEIGHT = 4;
+
 /** Derive the inner content width for a dialog given terminal columns and natural content width. */
 export function dialogInnerWidth(termCols: number, naturalContentWidth: number): number {
   const maxWidth = Math.max(MIN_TOTAL_WIDTH, termCols - DIALOG_MARGIN);
