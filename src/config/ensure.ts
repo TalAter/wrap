@@ -2,11 +2,7 @@ import { chrome } from "../core/output.ts";
 import { fetchCached } from "../fs/cache.ts";
 import { getWrapHome, readWrapFile, writeWrapFile } from "../fs/home.ts";
 import { CLI_PROVIDERS } from "../llm/providers/registry.ts";
-import {
-  mountConfigWizardDialog,
-  preloadDialogModules,
-  type WizardResult,
-} from "../session/dialog-host.ts";
+import { mountConfigWizardDialog, type WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { writeWizardConfig } from "../wizard/write-config.ts";
 import configSchema from "./config.schema.json" with { type: "json" };
@@ -74,7 +70,6 @@ export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Conf
   if ("_testWizardResult" in opts) {
     result = opts._testWizardResult ?? null;
   } else {
-    await preloadDialogModules();
     result = await mountConfigWizardDialog({
       fetchModels,
       probeCliBinaries,

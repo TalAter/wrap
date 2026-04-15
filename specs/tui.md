@@ -8,7 +8,7 @@ Code: `src/tui/dialog.tsx` (generic chrome), `src/tui/response-dialog.tsx` (comm
 
 Ink (React for CLIs) handles every interactive surface: the confirmation dialog, the config wizard, interactive mode. Non-interactive output stays on the `chrome()` / `chromeRaw()` utilities in `src/core/output.ts`.
 
-**Why lazy-loaded.** Ink + React + Yoga adds ~1MB to the compiled binary and ~50–100ms of init. The common path — a low-risk command — never needs interactive UI, so Ink must not be paid for on every invocation. Load is kicked off by `preloadDialogModules()` in `src/session/dialog-host.ts`, which runs in parallel with the first LLM call. By the time a dialog is needed the modules are cached and `mountResponseDialog()` is synchronous.
+**Why lazy-loaded.** Ink + React + Yoga adds ~1MB to the compiled binary and ~50–100ms of init. The common path — a low-risk command — never needs interactive UI, so Ink must not be paid for on every invocation. Load is kicked off by `preloadResponseDialogModules()` in `src/session/dialog-host.ts`, which runs in parallel with the first LLM call. By the time a response dialog is needed the modules are cached and `mountResponseDialog()` is synchronous. The config wizard has its own separate lazy import inside `mountConfigWizardDialog()` — it's only pulled in on the first-run path, never on normal invocations.
 
 ## Three output tiers
 
@@ -154,7 +154,7 @@ Keybindings (identical for every risk level — simplified from the earlier tier
 
 ## Host lifecycle (`src/session/dialog-host.ts`)
 
-Ink + React + both dialog components are lazy-loaded via `preloadDialogModules()`, kicked off in parallel with the first LLM call so `mountResponseDialog()` is synchronous by the time the session needs it. Both mount functions call `ink.render(..., { stdout: process.stderr, patchConsole: false, alternateScreen: true })` and return a `{ rerender, unmount }` handle (ResponseDialog) or `Promise<WizardResult | null>` (ConfigWizardDialog). Ink handles alt-screen enter/exit and cursor restore automatically.
+Ink + React + the response dialog are lazy-loaded via `preloadResponseDialogModules()`, kicked off in parallel with the first LLM call so `mountResponseDialog()` is synchronous by the time the session needs it. The config wizard module (and its 68KB+ of frame/animation data) is NOT part of that preload — it's lazy-imported inside `mountConfigWizardDialog()` on the first-run path only, keeping wizard code out of every normal invocation. Both mount functions call `ink.render(..., { stdout: process.stderr, patchConsole: false, alternateScreen: true })` and return a `{ rerender, unmount }` handle (ResponseDialog) or `Promise<WizardResult | null>` (ConfigWizardDialog). Ink handles alt-screen enter/exit and cursor restore automatically.
 
 **Stderr, not stdout.** Ink is rendered to `process.stderr` because stdout is reserved for useful output (hard rule — see CLAUDE.md / SPEC.md). `patchConsole: false` because Wrap has its own stderr sink (the notification router, above).
 

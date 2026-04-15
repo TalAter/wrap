@@ -150,7 +150,7 @@ type WizardResult = {
 };
 ```
 
-Mounted via `mountConfigWizardDialog()` in `src/session/dialog-host.ts`, which returns `Promise<WizardResult | null>`. Ink + React + dialog components are lazy-loaded via `preloadDialogModules()`.
+Mounted via `mountConfigWizardDialog()` in `src/session/dialog-host.ts`, which returns `Promise<WizardResult | null>`. Ink + React + the wizard component are lazy-loaded the first time the wizard actually mounts — the wizard module is NOT part of the session-time `preloadResponseDialogModules()` call, so its 68KB+ of code stays out of the common path where config already exists.
 
 ### Providers state machine
 

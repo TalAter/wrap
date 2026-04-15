@@ -14,33 +14,38 @@ export type WizardResult = {
   nerdFonts?: boolean;
 };
 
-type DialogModules = {
+type ResponseModules = {
   ink: typeof import("ink");
   react: typeof import("react");
   ResponseDialog: typeof import("../tui/response-dialog.tsx").ResponseDialog;
-  ConfigWizardDialog: typeof import("../tui/config-wizard-dialog.tsx").ConfigWizardDialog;
   ThemeProvider: typeof import("../tui/theme-context.tsx").ThemeProvider;
 };
 
-let cached: DialogModules | null = null;
+type WizardModule = {
+  ConfigWizardDialog: typeof import("../tui/config-wizard-dialog.tsx").ConfigWizardDialog;
+};
+
+let responseCached: ResponseModules | null = null;
+let wizardCached: WizardModule | null = null;
 
 /**
- * Lazy-load Ink + React + both dialog components. Idempotent.
+ * Lazy-load Ink + React + ResponseDialog. Fired in parallel with the first
+ * LLM call so the await before a response dialog mount is free in practice.
+ * Does NOT load the config wizard — that lives behind a separate first-run
+ * path and is pulled lazily by `mountConfigWizardDialog`.
  */
-export async function preloadDialogModules(): Promise<void> {
-  if (cached) return;
-  const [ink, react, responseDialogModule, wizardModule, themeModule] = await Promise.all([
+export async function preloadResponseDialogModules(): Promise<void> {
+  if (responseCached) return;
+  const [ink, react, responseDialogModule, themeModule] = await Promise.all([
     import("ink"),
     import("react"),
     import("../tui/response-dialog.tsx"),
-    import("../tui/config-wizard-dialog.tsx"),
     import("../tui/theme-context.tsx"),
   ]);
-  cached = {
+  responseCached = {
     ink,
     react,
     ResponseDialog: responseDialogModule.ResponseDialog,
-    ConfigWizardDialog: wizardModule.ConfigWizardDialog,
     ThemeProvider: themeModule.ThemeProvider,
   };
 }
@@ -49,10 +54,10 @@ export function mountResponseDialog(props: {
   state: AppState;
   dispatch: (e: AppEvent) => void;
 }): DialogHost {
-  if (!cached) {
-    throw new Error("mountResponseDialog: preloadDialogModules() must resolve first");
+  if (!responseCached) {
+    throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
   }
-  const { ink, react, ResponseDialog, ThemeProvider: TP } = cached;
+  const { ink, react, ResponseDialog, ThemeProvider: TP } = responseCached;
   const app = ink.render(
     react.createElement(TP, null, react.createElement(ResponseDialog, props)),
     {
@@ -72,18 +77,23 @@ export function mountResponseDialog(props: {
 }
 
 /**
- * Mount the config wizard in Ink's alt-screen. Returns a promise that
- * resolves with the wizard result on success or `null` on user cancel.
+ * Mount the config wizard in Ink's alt-screen. Ensures the shared response
+ * runtime (ink/react/theme) is loaded, then lazy-imports the wizard module
+ * on first call — keeps 68KB+ of wizard/animation code out of the hot path
+ * where config already exists. Returns `null` on user cancel.
  */
 export async function mountConfigWizardDialog(callbacks: {
   fetchModels: () => Promise<ModelsDevData>;
   probeCliBinaries: () => Record<string, boolean>;
 }): Promise<WizardResult | null> {
-  if (!cached) await preloadDialogModules();
-  // preloadDialogModules guarantees cached is populated
-  const modules = cached;
-  if (!modules) throw new Error("mountConfigWizardDialog: preloadDialogModules() failed");
-  const { ink, react, ConfigWizardDialog, ThemeProvider: TP } = modules;
+  await preloadResponseDialogModules();
+  if (!wizardCached) {
+    const m = await import("../tui/config-wizard-dialog.tsx");
+    wizardCached = { ConfigWizardDialog: m.ConfigWizardDialog };
+  }
+  // biome-ignore lint/style/noNonNullAssertion: populated by the awaits above
+  const { ink, react, ThemeProvider: TP } = responseCached!;
+  const { ConfigWizardDialog } = wizardCached;
 
   return new Promise<WizardResult | null>((resolve) => {
     const props: WizardCallbacks = {
@@ -108,7 +118,8 @@ export async function mountConfigWizardDialog(callbacks: {
   });
 }
 
-/** Test-only — clear the lazy module cache. */
+/** Test-only — clear both lazy module caches. */
 export function resetDialogHostCache(): void {
-  cached = null;
+  responseCached = null;
+  wizardCached = null;
 }

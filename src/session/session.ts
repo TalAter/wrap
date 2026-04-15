@@ -20,7 +20,7 @@ import { addRound, createLogEntry, type LogEntry } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
-import { mountResponseDialog, preloadDialogModules } from "./dialog-host.ts";
+import { mountResponseDialog, preloadResponseDialogModules } from "./dialog-host.ts";
 import { createNotificationRouter } from "./notification-router.ts";
 import { reduce } from "./reducer.ts";
 import { type AppEvent, type AppState, isDialogTag, type SessionOutcome } from "./state.ts";
@@ -89,7 +89,7 @@ export async function runSession(
   // await is free in practice. The .catch surfaces a failed dynamic import
   // as a session error instead of an unbounded hang on `exitDeferred`.
   const inkReady = process.stderr.isTTY
-    ? preloadDialogModules().catch((e) => {
+    ? preloadResponseDialogModules().catch((e) => {
         const err = e instanceof Error ? e : new Error(String(e));
         dispatch({ type: "loop-error", error: err });
         throw err;
