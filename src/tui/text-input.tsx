@@ -107,7 +107,7 @@ function EditableTextInput({ value, onChange, onSubmit, placeholder, masked }: E
 
   return (
     <InputFrame>
-      <Text>
+      <Text color={themeHex(getTheme().text.primary)}>
         {masked ? mask(cursor.beforeCursor) : cursor.beforeCursor}
         <Text inverse>
           {masked ? (cursor.charAtCursor === " " ? " " : "•") : cursor.charAtCursor}
@@ -126,7 +126,7 @@ export function TextInput(props: TextInputProps) {
     return (
       <InputFrame>
         {/* Empty value would otherwise collapse the row to height 0. */}
-        <Text>{props.value || " "}</Text>
+        <Text color={themeHex(getTheme().text.primary)}>{props.value || " "}</Text>
       </InputFrame>
     );
   }

@@ -104,7 +104,7 @@ export const LIGHT_THEME: ThemeTokens = {
   },
   chrome: {
     border: [170, 170, 195],
-    surface: [238, 238, 245],
+    surface: [218, 232, 250],
     accent: [220, 215, 238],
     dim: [170, 170, 195],
   },
