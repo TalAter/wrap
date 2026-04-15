@@ -75,10 +75,12 @@ function makeCallbacks(overrides?: Partial<WizardCallbacks>): WizardCallbacks & 
   };
 }
 
-/** Pass through the nerd icons screen by pressing Enter (Yes). */
-async function passNerdIcons(stdin: { write: (s: string) => void }) {
+/** Pass welcome + nerd icons by pressing Enter (Yes on icons). */
+async function passIntro(stdin: { write: (s: string) => void }) {
   await wait();
-  stdin.write("\r"); // Yes (default)
+  stdin.write("\r"); // Welcome: continue
+  await wait();
+  stdin.write("\r"); // Nerd icons: Yes (default)
   await wait();
 }
 
@@ -87,16 +89,25 @@ beforeEach(() => {
 });
 
 describe("ConfigWizardDialog", () => {
-  test("starts with nerd icons screen", async () => {
+  test("starts with welcome screen", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("four icons");
-    expect(text).toContain("setup wizard");
+    expect(text).toContain("Welcome to Wrap");
   });
 
-  test("Esc on nerd icons screen cancels wizard", async () => {
+  test("Enter on welcome advances to nerd icons", async () => {
+    const cb = makeCallbacks();
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+    await wait();
+    stdin.write("\r");
+    await wait();
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("four icons");
+  });
+
+  test("Esc on welcome cancels wizard", async () => {
     const cb = makeCallbacks();
     const { stdin } = render(<ConfigWizardDialog {...cb} />);
     await wait();
@@ -108,7 +119,7 @@ describe("ConfigWizardDialog", () => {
   test("Yes on nerd icons → updates config store → shows providers", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
-    await passNerdIcons(stdin);
+    await passIntro(stdin);
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("LLM provider");
     expect(getConfig().nerdFonts).toBe(true);
@@ -117,6 +128,8 @@ describe("ConfigWizardDialog", () => {
   test("No on nerd icons → config store nerdFonts false → shows providers", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+    await wait();
+    stdin.write("\r"); // Welcome: continue
     await wait();
     stdin.write("\x1b[B"); // arrow down to No
     await wait();
@@ -130,7 +143,7 @@ describe("ConfigWizardDialog", () => {
   test("Esc on provider selection triggers cancel", async () => {
     const cb = makeCallbacks();
     const { stdin } = render(<ConfigWizardDialog {...cb} />);
-    await passNerdIcons(stdin);
+    await passIntro(stdin);
     stdin.write("\x1b");
     await wait();
     expect(cb.cancelled).toBe(true);
@@ -141,7 +154,7 @@ describe("ConfigWizardDialog", () => {
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
 
     // Nerd icons: Yes
-    await passNerdIcons(stdin);
+    await passIntro(stdin);
 
     // Select Anthropic → Space to toggle
     stdin.write(" ");
@@ -180,7 +193,7 @@ describe("ConfigWizardDialog", () => {
   test("CLI tools section hidden when no binaries found", async () => {
     const cb = makeCallbacks({ probeCliBinaries: () => ({}) });
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
-    await passNerdIcons(stdin);
+    await passIntro(stdin);
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).not.toContain("Claude Code");
   });
@@ -190,7 +203,7 @@ describe("ConfigWizardDialog", () => {
       probeCliBinaries: () => ({ "claude-code": true }),
     });
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
-    await passNerdIcons(stdin);
+    await passIntro(stdin);
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Claude Code");
   });
@@ -205,7 +218,7 @@ describe("ConfigWizardDialog", () => {
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
 
     // Pass nerd icons
-    await passNerdIcons(stdin);
+    await passIntro(stdin);
 
     // Select Anthropic + submit
     stdin.write(" ");

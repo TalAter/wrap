@@ -13,6 +13,7 @@ import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { NerdIconsSection } from "./nerd-icons-section.tsx";
 import { TextInput } from "./text-input.tsx";
+import { WelcomeSection } from "./welcome-section.tsx";
 import {
   getWizardBadge,
   getWizardStops,
@@ -137,7 +138,7 @@ export type WizardCallbacks = {
   onCancel: () => void;
 };
 
-type WizardSection = "nerd-icons" | "providers";
+type WizardSection = "welcome" | "nerd-icons" | "providers";
 
 export function ConfigWizardDialog({
   fetchModels,
@@ -145,8 +146,12 @@ export function ConfigWizardDialog({
   onDone,
   onCancel,
 }: WizardCallbacks) {
-  const [section, setSection] = useState<WizardSection>("nerd-icons");
+  const [section, setSection] = useState<WizardSection>("welcome");
   const nerdFontsRef = useRef<boolean | undefined>(undefined);
+
+  if (section === "welcome") {
+    return <WelcomeSection onDone={() => setSection("nerd-icons")} onCancel={onCancel} />;
+  }
 
   if (section === "nerd-icons") {
     return (
