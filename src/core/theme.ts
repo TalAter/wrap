@@ -31,6 +31,7 @@ export type ThemeTokens = {
     riskLow: BadgeColors;
     riskMedium: BadgeColors;
     riskHigh: BadgeColors;
+    fold: BadgeColors;
   };
   gradient: {
     wizard: [Color, Color];
@@ -70,6 +71,7 @@ export const DARK_THEME: ThemeTokens = {
     riskLow: { fg: [120, 230, 160], bg: [78, 111, 118] },
     riskMedium: { fg: [255, 200, 80], bg: [118, 102, 94] },
     riskHigh: { fg: [255, 100, 100], bg: [118, 72, 100] },
+    fold: { fg: [210, 210, 225], bg: [60, 60, 100] },
   },
   gradient: {
     wizard: [
@@ -121,6 +123,7 @@ export const LIGHT_THEME: ThemeTokens = {
     riskLow: { fg: [15, 125, 55], bg: [215, 238, 220] },
     riskMedium: { fg: [160, 95, 0], bg: [248, 232, 200] },
     riskHigh: { fg: [190, 25, 45], bg: [248, 218, 218] },
+    fold: { fg: [45, 45, 70], bg: [210, 215, 230] },
   },
   gradient: {
     wizard: [

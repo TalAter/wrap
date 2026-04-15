@@ -151,12 +151,11 @@ describe("topBorderSegments", () => {
     expect(text).not.toContain("⚠");
   });
 
-  test("plain mode wraps badge in half-block pill edges with padding", () => {
+  test("plain mode pads badge with spaces and no edge glyphs", () => {
     const { stops, badge } = preset("medium");
     const text = plainText(topBorderSegments(60, stops, badge));
-    expect(text).toContain("▐");
-    expect(text).toContain("▌");
     expect(text).not.toContain("\uE0B6");
+    expect(text).not.toContain("\uE0B4");
     expect(text).toContain(" ⚠ medium risk ");
   });
 
@@ -173,7 +172,6 @@ describe("topBorderSegments", () => {
       const text = plainText(topBorderSegments(60, stops, badge));
       expect(text).toContain("\uE0B6");
       expect(text).toContain("\uE0B4");
-      expect(text).not.toContain("▐");
     });
 
     test("drops inner padding spaces since curve glyph supplies them", () => {

@@ -7,8 +7,9 @@ import type { ThemeTokens } from "../core/theme.ts";
 import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
+import { Pill } from "./pill.tsx";
 import { getRiskPresets } from "./risk-presets.ts";
-import { TextInput } from "./text-input.tsx";
+import { InputFrame, TextInput } from "./text-input.tsx";
 import { useTheme } from "./theme-context.tsx";
 
 type ResponseDialogProps = {
@@ -61,27 +62,24 @@ function visualRows(line: string, textWidth: number): number {
   return w === 0 ? 1 : Math.ceil(w / textWidth);
 }
 
-/**
- * Truncate a command string so it fits within `maxRows` visual rows at
- * the given `textWidth`. When the command fits, returns it unchanged.
- * When it overflows, returns head lines + a "… N lines hidden" indicator
- * + tail lines, sized to stay within the budget.
- */
-export function truncateCommand(command: string, maxRows: number, textWidth: number): string {
-  if (maxRows < 1 || textWidth < 1) return command;
+export type CommandDisplay =
+  | { kind: "full"; text: string }
+  | { kind: "folded"; head: string; hiddenCount: number; tail: string };
+
+/** Caller owns how to render the indicator — plain text, pill, etc. */
+export function foldCommand(command: string, maxRows: number, textWidth: number): CommandDisplay {
+  if (maxRows < 1 || textWidth < 1) return { kind: "full", text: command };
   const lines = command.split("\n");
   const total = lines.reduce((sum, line) => sum + visualRows(line, textWidth), 0);
-  if (total <= maxRows) return command;
+  if (total <= maxRows) return { kind: "full", text: command };
 
-  // Reserve 1 row for the "… N lines hidden" indicator.
+  // Reserve 1 row for the fold indicator.
   const budget = maxRows - 1;
-  if (budget < 1) return `… ${lines.length} lines hidden`;
+  if (budget < 1) return { kind: "folded", head: "", hiddenCount: lines.length, tail: "" };
 
-  // Allocate roughly half budget to head, half to tail (tail gets the extra).
   const headBudget = Math.floor(budget / 2);
   const tailBudget = budget - headBudget;
 
-  // Collect head lines.
   const headLines: string[] = [];
   let headUsed = 0;
   for (const line of lines) {
@@ -91,7 +89,6 @@ export function truncateCommand(command: string, maxRows: number, textWidth: num
     headUsed += rows;
   }
 
-  // Collect tail lines (backwards).
   const tailLines: string[] = [];
   let tailUsed = 0;
   for (let i = lines.length - 1; i >= headLines.length; i--) {
@@ -103,9 +100,20 @@ export function truncateCommand(command: string, maxRows: number, textWidth: num
   }
 
   const hiddenCount = lines.length - headLines.length - tailLines.length;
-  const indicator = `… ${hiddenCount} lines hidden`;
+  return {
+    kind: "folded",
+    head: headLines.join("\n"),
+    hiddenCount,
+    tail: tailLines.join("\n"),
+  };
+}
 
-  return [...headLines, indicator, ...tailLines].join("\n");
+/** String form of foldCommand — kept for callers that want a flat string. */
+export function truncateCommand(command: string, maxRows: number, textWidth: number): string {
+  const r = foldCommand(command, maxRows, textWidth);
+  if (r.kind === "full") return r.text;
+  const indicator = `… ${r.hiddenCount} lines hidden`;
+  return [r.head, indicator, r.tail].filter((s) => s.length > 0).join("\n");
 }
 
 /**
@@ -120,6 +128,33 @@ export function formatOutputSlot(text: string): string {
   const lines = trimmed.split("\n");
   if (lines.length <= OUTPUT_SLOT_TAIL_ROWS) return lines.join("\n");
   return lines.slice(-OUTPUT_SLOT_TAIL_ROWS).join("\n");
+}
+
+function FoldedCommand({
+  head,
+  hiddenCount,
+  tail,
+  theme,
+}: {
+  head: string;
+  hiddenCount: number;
+  tail: string;
+  theme: ThemeTokens;
+}) {
+  const textColor = themeHex(theme.text.primary);
+  return (
+    <InputFrame>
+      <Box flexDirection="column">
+        {head ? <Text color={textColor}>{head}</Text> : null}
+        <Pill
+          label={`${hiddenCount} lines hidden`}
+          fg={theme.badge.fold.fg}
+          bg={theme.badge.fold.bg}
+        />
+        {tail ? <Text color={textColor}>{tail}</Text> : null}
+      </Box>
+    </InputFrame>
+  );
 }
 
 export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
@@ -195,9 +230,12 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   if (showFollowupInput) chromeRows += 1 + Math.max(1, Math.ceil(stringWidth(draft) / textWidth));
   const maxCommandRows = Math.max(3, termRows - chromeRows);
 
-  // Truncate command for display when it would overflow the terminal.
-  const displayCommand =
-    state.tag === "editing" ? command : truncateCommand(command, maxCommandRows, textWidth);
+  // Fold command for display when it would overflow the terminal. Editing
+  // mode always renders the raw command so the user can edit it in full.
+  const folded =
+    state.tag === "editing"
+      ? ({ kind: "full", text: command } as const)
+      : foldCommand(command, maxCommandRows, textWidth);
 
   // Esc dispatches key-esc in every mode except confirming (which has its
   // own handler below with arrow nav, hotkeys, etc.).
@@ -296,8 +334,15 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
             dispatch({ type: "submit-edit", text: t });
           }}
         />
+      ) : folded.kind === "full" ? (
+        <TextInput value={folded.text} readOnly />
       ) : (
-        <TextInput value={displayCommand} readOnly />
+        <FoldedCommand
+          head={folded.head}
+          hiddenCount={folded.hiddenCount}
+          tail={folded.tail}
+          theme={theme}
+        />
       )}
       {explanation && (
         <>

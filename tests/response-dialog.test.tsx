@@ -7,6 +7,7 @@ beforeEach(() => seedTestConfig());
 
 import type { AppEvent } from "../src/session/state.ts";
 import {
+  foldCommand,
   formatOutputSlot,
   OUTPUT_SLOT_EMPTY,
   ResponseDialog,
@@ -449,6 +450,35 @@ describe("truncateCommand", () => {
     const cmd = "echo a\necho b";
     expect(truncateCommand(cmd, 5, 0)).toBe(cmd);
     expect(truncateCommand(cmd, 5, -1)).toBe(cmd);
+  });
+});
+
+describe("foldCommand", () => {
+  test("returns full kind when command fits", () => {
+    const result = foldCommand("ls -la", 10, 80);
+    expect(result).toEqual({ kind: "full", text: "ls -la" });
+  });
+
+  test("returns folded kind with head, tail, and hiddenCount when oversized", () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `echo line${i}`);
+    const result = foldCommand(lines.join("\n"), 10, 80);
+    expect(result.kind).toBe("folded");
+    if (result.kind !== "folded") return;
+    expect(result.head).toContain("echo line0");
+    expect(result.tail).toContain("echo line29");
+    expect(result.hiddenCount).toBeGreaterThan(0);
+    expect(result.head).not.toContain("hidden");
+    expect(result.tail).not.toContain("hidden");
+  });
+
+  test("empty head and tail when budget is too small", () => {
+    const cmd = "x".repeat(200);
+    const result = foldCommand(cmd, 3, 40);
+    expect(result.kind).toBe("folded");
+    if (result.kind !== "folded") return;
+    expect(result.head).toBe("");
+    expect(result.tail).toBe("");
+    expect(result.hiddenCount).toBe(1);
   });
 });
 

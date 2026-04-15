@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { getTheme, themeHex } from "../core/theme.ts";
 import { Cursor } from "./cursor.ts";
 
-function InputFrame({ children }: { children: ReactNode }) {
+export function InputFrame({ children }: { children: ReactNode }) {
   const bg = themeHex(getTheme().chrome.surface);
   return (
     <Box width="100%" paddingX={1} backgroundColor={bg}>

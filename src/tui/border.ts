@@ -2,6 +2,7 @@ import stringWidth from "string-width";
 import { type Color, interpolate } from "../core/ansi.ts";
 import { colorLevel, isNerdFonts } from "../core/output.ts";
 import { type BadgeColors, getTheme, themeHex } from "../core/theme.ts";
+import { pillEdges } from "./pill.tsx";
 
 export type Badge = BadgeColors & { icon: string; label: string };
 
@@ -31,8 +32,7 @@ export function topBorderSegments(
   // embed a styled badge inside the top rule.
   // Powerline curves carry their own visual padding; half-blocks don't.
   const nerd = isNerdFonts();
-  const edgeLeft = nerd ? "\uE0B6" : "▐";
-  const edgeRight = nerd ? "\uE0B4" : "▌";
+  const { left: edgeLeft, right: edgeRight } = pillEdges();
   const badgeText = badge
     ? nerd
       ? `${badge.icon} ${badge.label}`
@@ -41,6 +41,7 @@ export function topBorderSegments(
   const badgeVisualWidth = badge ? stringWidth(badgeText) : 0;
   // Badge position: totalWidth - badgeVisualWidth - 3 (edge + ─ + ╮)
   const badgeStart = badge ? totalWidth - badgeVisualWidth - 3 : -1;
+  const badgeBg = badge ? themeHex(badge.bg) : "";
 
   const segments: BorderSegment[] = [];
   for (let i = 0; i < totalWidth; ) {
@@ -53,17 +54,25 @@ export function topBorderSegments(
       segments.push({ key: `top-${i}`, text: "╮", color });
       i += 1;
     } else if (badge && i === badgeStart - 1) {
-      segments.push({ key: `top-${i}`, text: edgeLeft, color: themeHex(badge.bg) });
+      segments.push(
+        nerd
+          ? { key: `top-${i}`, text: edgeLeft, color: badgeBg }
+          : { key: `top-${i}`, text: " ", color },
+      );
       i += 1;
     } else if (badge && i === badgeStart + badgeVisualWidth) {
-      segments.push({ key: `top-${i}`, text: edgeRight, color: themeHex(badge.bg) });
+      segments.push(
+        nerd
+          ? { key: `top-${i}`, text: edgeRight, color: badgeBg }
+          : { key: `top-${i}`, text: " ", color },
+      );
       i += 1;
     } else if (badge && i === badgeStart) {
       segments.push({
         key: `top-${i}`,
         text: badgeText,
         color: themeHex(badge.fg),
-        backgroundColor: themeHex(badge.bg),
+        backgroundColor: badgeBg,
         bold: true,
       });
       i += badgeVisualWidth;

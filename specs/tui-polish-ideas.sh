@@ -400,41 +400,42 @@ print "    ${FG_DIM}[ ] ${ICON_ROUTER} OpenRouter${RESET}"
 print "    ${FG_DIM}[ ] ${ICON_OLLAMA} Ollama${RESET}"
 
 # ────────────────────────────────────────────────────────────────
-header "H. CHECKBOX — Nerd Icon Toggle"
-print "  Replace [✓]/[ ] checkbox text with nerd font icons."
-print "  Several options shown — toggle switches, checkbox icons, circles,"
-print "  pill toggles, or combined pill cursor + checkbox icon."
-print "  FILE: checklist.tsx — swap tick/checkbox rendering"
-print ""
-
-print "  ${DIM}Option 1 — Toggle icons:${RESET}"
-print "  ${FG_GREEN}${ICON_TOGGLE_ON}${RESET}  Anthropic"
-print "  ${FG_GREEN}${ICON_TOGGLE_ON}${RESET}  OpenAI"
-print "  ${FG_DIM}${ICON_TOGGLE_OFF}${RESET}  OpenRouter"
-print ""
-
-print "  ${DIM}Option 2 — Checkbox icons:${RESET}"
-print "  ${FG_GREEN}${ICON_CHECKBOX}${RESET}  Anthropic"
-print "  ${FG_GREEN}${ICON_CHECKBOX}${RESET}  OpenAI"
-print "  ${FG_DIM}${ICON_SQUARE_O}${RESET}  OpenRouter"
-print ""
-
-print "  ${DIM}Option 3 — Filled/empty circles:${RESET}"
-print "  ${FG_GREEN}${ICON_CIRCLE}${RESET}  Anthropic"
-print "  ${FG_GREEN}${ICON_CIRCLE}${RESET}  OpenAI"
-print "  ${FG_DIM}${ICON_CIRCLE_O}${RESET}  OpenRouter"
-print ""
-
-print "  ${DIM}Option 4 — Pill toggle (powerline + nerd):${RESET}"
-print "  ${FG_DONE}${PL_LCURVE}${BG_DONE}${FG_DONE_TEXT}${BOLD}${ICON_CHECK}${RESET}${FG_DONE}${PL_RCURVE}${RESET} Anthropic"
-print "  ${FG_DONE}${PL_LCURVE}${BG_DONE}${FG_DONE_TEXT}${BOLD}${ICON_CHECK}${RESET}${FG_DONE}${PL_RCURVE}${RESET} OpenAI"
-print "  ${FG_PENDING}${PL_LCURVE}${BG_PENDING}${FG_PENDING_TEXT} ${RESET}${FG_PENDING}${PL_RCURVE}${RESET} OpenRouter"
-print ""
-
-print "  ${DIM}Combined — pill toggle + pill cursor:${RESET}"
-print "  ${FG_ACTIVE}${PL_LCURVE}${BG_ACTIVE}${FG_ACTIVE_TEXT}${BOLD} ${FG_GREEN}${ICON_CHECKBOX}${FG_ACTIVE_TEXT} Anthropic ${RESET}${FG_ACTIVE}${PL_RCURVE}${RESET}"
-print "    ${FG_GREEN}${ICON_CHECKBOX}${RESET}  OpenAI"
-print "    ${FG_DIM}${ICON_SQUARE_O}${RESET}  OpenRouter"
+# SKIPPED — keeping [✓]/[ ] checkbox style.
+# header "H. CHECKBOX — Nerd Icon Toggle"
+# print "  Replace [✓]/[ ] checkbox text with nerd font icons."
+# print "  Several options shown — toggle switches, checkbox icons, circles,"
+# print "  pill toggles, or combined pill cursor + checkbox icon."
+# print "  FILE: checklist.tsx — swap tick/checkbox rendering"
+# print ""
+#
+# print "  ${DIM}Option 1 — Toggle icons:${RESET}"
+# print "  ${FG_GREEN}${ICON_TOGGLE_ON}${RESET}  Anthropic"
+# print "  ${FG_GREEN}${ICON_TOGGLE_ON}${RESET}  OpenAI"
+# print "  ${FG_DIM}${ICON_TOGGLE_OFF}${RESET}  OpenRouter"
+# print ""
+#
+# print "  ${DIM}Option 2 — Checkbox icons:${RESET}"
+# print "  ${FG_GREEN}${ICON_CHECKBOX}${RESET}  Anthropic"
+# print "  ${FG_GREEN}${ICON_CHECKBOX}${RESET}  OpenAI"
+# print "  ${FG_DIM}${ICON_SQUARE_O}${RESET}  OpenRouter"
+# print ""
+#
+# print "  ${DIM}Option 3 — Filled/empty circles:${RESET}"
+# print "  ${FG_GREEN}${ICON_CIRCLE}${RESET}  Anthropic"
+# print "  ${FG_GREEN}${ICON_CIRCLE}${RESET}  OpenAI"
+# print "  ${FG_DIM}${ICON_CIRCLE_O}${RESET}  OpenRouter"
+# print ""
+#
+# print "  ${DIM}Option 4 — Pill toggle (powerline + nerd):${RESET}"
+# print "  ${FG_DONE}${PL_LCURVE}${BG_DONE}${FG_DONE_TEXT}${BOLD}${ICON_CHECK}${RESET}${FG_DONE}${PL_RCURVE}${RESET} Anthropic"
+# print "  ${FG_DONE}${PL_LCURVE}${BG_DONE}${FG_DONE_TEXT}${BOLD}${ICON_CHECK}${RESET}${FG_DONE}${PL_RCURVE}${RESET} OpenAI"
+# print "  ${FG_PENDING}${PL_LCURVE}${BG_PENDING}${FG_PENDING_TEXT} ${RESET}${FG_PENDING}${PL_RCURVE}${RESET} OpenRouter"
+# print ""
+#
+# print "  ${DIM}Combined — pill toggle + pill cursor:${RESET}"
+# print "  ${FG_ACTIVE}${PL_LCURVE}${BG_ACTIVE}${FG_ACTIVE_TEXT}${BOLD} ${FG_GREEN}${ICON_CHECKBOX}${FG_ACTIVE_TEXT} Anthropic ${RESET}${FG_ACTIVE}${PL_RCURVE}${RESET}"
+# print "    ${FG_GREEN}${ICON_CHECKBOX}${RESET}  OpenAI"
+# print "    ${FG_DIM}${ICON_SQUARE_O}${RESET}  OpenRouter"
 
 # ────────────────────────────────────────────────────────────────
 header "I. MODEL PICKER — Recommended Pill"
