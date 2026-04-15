@@ -1,5 +1,5 @@
 import { Text } from "ink";
-import { blendBadgeBg, getTheme, themeHex } from "../core/theme.ts";
+import { getTheme, themeHex } from "../core/theme.ts";
 import type { Badge } from "./border.ts";
 
 export function getWizardStops() {
@@ -8,12 +8,7 @@ export function getWizardStops() {
 
 export function getWizardBadge(): Badge {
   const t = getTheme();
-  return {
-    fg: t.status.info,
-    bg: blendBadgeBg(t.status.info, t.gradient.dim),
-    icon: "🧙",
-    label: "setup wizard",
-  };
+  return { ...t.badge.wizard, icon: "🧙", label: "setup wizard" };
 }
 
 export const WIZARD_CONTENT_WIDTH = 70;

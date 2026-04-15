@@ -2,18 +2,15 @@ import { type Color, colorHex, quantizeColor } from "./ansi.ts";
 import type { Appearance } from "./detect-appearance.ts";
 import { colorLevel } from "./output.ts";
 
+type BadgeColors = { fg: Color; bg: Color };
+
 export type ThemeTokens = {
   text: {
     primary: Color;
     secondary: Color;
     muted: Color;
     disabled: Color;
-  };
-  status: {
-    success: Color;
-    warning: Color;
-    error: Color;
-    info: Color;
+    accent: Color;
   };
   chrome: {
     border: Color;
@@ -26,10 +23,19 @@ export type ThemeTokens = {
     selection: Color;
     highlight: Color;
   };
+  select: {
+    selected: Color;
+  };
+  badge: {
+    wizard: BadgeColors;
+    riskLow: BadgeColors;
+    riskMedium: BadgeColors;
+    riskHigh: BadgeColors;
+  };
   gradient: {
     wizard: [Color, Color];
     riskLow: [Color, Color];
-    riskMed: [Color, Color];
+    riskMedium: [Color, Color];
     riskHigh: [Color, Color];
     dim: Color;
   };
@@ -43,12 +49,7 @@ export const DARK_THEME: ThemeTokens = {
     secondary: [170, 170, 195],
     muted: [115, 115, 140],
     disabled: [65, 65, 80],
-  },
-  status: {
-    success: [120, 230, 160],
-    warning: [255, 200, 80],
-    error: [255, 100, 100],
-    info: [120, 180, 255],
+    accent: [120, 180, 255],
   },
   chrome: {
     border: [60, 60, 100],
@@ -61,6 +62,15 @@ export const DARK_THEME: ThemeTokens = {
     selection: [26, 42, 77],
     highlight: [245, 200, 100],
   },
+  select: {
+    selected: [120, 230, 160],
+  },
+  badge: {
+    wizard: { fg: [120, 180, 255], bg: [78, 96, 146] },
+    riskLow: { fg: [120, 230, 160], bg: [78, 111, 118] },
+    riskMedium: { fg: [255, 200, 80], bg: [118, 102, 94] },
+    riskHigh: { fg: [255, 100, 100], bg: [118, 72, 100] },
+  },
   gradient: {
     wizard: [
       [120, 180, 255],
@@ -70,7 +80,7 @@ export const DARK_THEME: ThemeTokens = {
       [80, 220, 200],
       [60, 60, 100],
     ],
-    riskMed: [
+    riskMedium: [
       [255, 100, 200],
       [60, 60, 100],
     ],
@@ -86,16 +96,11 @@ export const DARK_THEME: ThemeTokens = {
 
 export const LIGHT_THEME: ThemeTokens = {
   text: {
-    primary: [25, 25, 40], // near-black for readability
-    secondary: [70, 70, 95],
+    primary: [0, 0, 0],
+    secondary: [45, 45, 70],
     muted: [105, 105, 130],
     disabled: [175, 175, 195],
-  },
-  status: {
-    success: [15, 125, 55],
-    warning: [160, 95, 0],
-    error: [190, 25, 45],
-    info: [25, 90, 190],
+    accent: [25, 90, 190],
   },
   chrome: {
     border: [170, 170, 195],
@@ -108,6 +113,15 @@ export const LIGHT_THEME: ThemeTokens = {
     selection: [210, 220, 245],
     highlight: [150, 100, 0],
   },
+  select: {
+    selected: [15, 125, 55],
+  },
+  badge: {
+    wizard: { fg: [25, 90, 190], bg: [218, 230, 248] },
+    riskLow: { fg: [15, 125, 55], bg: [215, 238, 220] },
+    riskMedium: { fg: [160, 95, 0], bg: [248, 232, 200] },
+    riskHigh: { fg: [190, 25, 45], bg: [248, 218, 218] },
+  },
   gradient: {
     wizard: [
       [25, 90, 190],
@@ -117,7 +131,7 @@ export const LIGHT_THEME: ThemeTokens = {
       [15, 150, 130],
       [170, 170, 195],
     ],
-    riskMed: [
+    riskMedium: [
       [175, 35, 115],
       [170, 170, 195],
     ],
@@ -152,24 +166,4 @@ export function resolveTheme(appearance: Appearance): ThemeTokens {
  */
 export function themeHex(c: Color): string {
   return colorHex(quantizeColor(c, colorLevel()));
-}
-
-/**
- * Blend a foreground toward the theme's dim endpoint to produce a badge
- * background that reads as "same hue, muted" rather than a heavy rectangle.
- *
- * Dark mode (fg brighter than dim): 30/70 pulls dark-tinted bg up to elevate.
- * Light mode (fg darker than dim): 18/82 keeps bg pale-tinted so dark text
- * on a near-white surface doesn't collapse into muddy gray.
- */
-export function blendBadgeBg(fg: Color, dim: Color): Color {
-  const fgSum = fg[0] + fg[1] + fg[2];
-  const dimSum = dim[0] + dim[1] + dim[2];
-  const r = fgSum < dimSum ? 0.18 : 0.3;
-  const inv = 1 - r;
-  return [
-    Math.round(fg[0] * r + dim[0] * inv),
-    Math.round(fg[1] * r + dim[1] * inv),
-    Math.round(fg[2] * r + dim[2] * inv),
-  ];
 }

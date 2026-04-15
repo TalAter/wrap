@@ -61,7 +61,7 @@ export function renderStyled(
   options: CLIFlag[],
   level: ColorLevel = colorLevel(),
 ): string {
-  const flagColor = getTheme().status.info;
+  const flagColor = getTheme().text.accent;
   const flagPrefix = fgCode(...flagColor, level);
   const flagReset = flagPrefix ? "\x1b[0m" : "";
   const colorizeFlag = (f: string) => `${flagPrefix}${f}${flagReset}`;

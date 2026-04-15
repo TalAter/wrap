@@ -311,7 +311,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.status.info)}>Plan: {plan}</Text>
+            <Text color={themeHex(theme.text.accent)}>Plan: {plan}</Text>
           </Box>
         </>
       )}

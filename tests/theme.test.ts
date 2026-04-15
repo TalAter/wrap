@@ -48,10 +48,6 @@ function assertValidTheme(theme: ThemeTokens, name: string) {
   for (const [key, color] of Object.entries(theme.text)) {
     assertValidColor(color, `${name}.text.${key}`);
   }
-  // Status tokens
-  for (const [key, color] of Object.entries(theme.status)) {
-    assertValidColor(color, `${name}.status.${key}`);
-  }
   // Chrome tokens
   for (const [key, color] of Object.entries(theme.chrome)) {
     assertValidColor(color, `${name}.chrome.${key}`);
@@ -59,6 +55,15 @@ function assertValidTheme(theme: ThemeTokens, name: string) {
   // Interactive tokens
   for (const [key, color] of Object.entries(theme.interactive)) {
     assertValidColor(color, `${name}.interactive.${key}`);
+  }
+  // Select tokens
+  for (const [key, color] of Object.entries(theme.select)) {
+    assertValidColor(color, `${name}.select.${key}`);
+  }
+  // Badge tokens (fg + bg per badge type)
+  for (const [key, colors] of Object.entries(theme.badge)) {
+    assertValidColor(colors.fg, `${name}.badge.${key}.fg`);
+    assertValidColor(colors.bg, `${name}.badge.${key}.bg`);
   }
   // Gradient endpoints
   for (const [key, stops] of Object.entries(theme.gradient)) {

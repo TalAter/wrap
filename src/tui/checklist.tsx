@@ -21,7 +21,7 @@ const BRAILLE = "⠶";
 
 export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) {
   const t = getTheme();
-  const CHECKED_COLOR = themeHex(t.status.success);
+  const CHECKED_COLOR = themeHex(t.select.selected);
   const DIM_COLOR = themeHex(t.text.muted);
   const CURSOR_COLOR = themeHex(t.interactive.cursor);
   const CURSOR_BG = themeHex(t.interactive.selection);

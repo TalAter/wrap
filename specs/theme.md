@@ -15,18 +15,27 @@ Code: `src/core/theme.ts`, `src/core/detect-appearance.ts`, `src/core/ansi.ts` (
 
 ```ts
 type ThemeTokens = {
-  text:        { primary, secondary, muted, disabled: Color };
-  status:      { success, warning, error, info: Color };
+  text:        { primary, secondary, muted, disabled, accent: Color };
   chrome:      { border, surface, accent, dim: Color };
   interactive: { cursor, selection, highlight: Color };
-  gradient:    {
-    wizard, riskLow, riskMed, riskHigh: [Color, Color]; // bright → dim endpoints
+  select:      { selected: Color }; // Select / checklist "chosen" indicator
+  badge: {
+    wizard, riskLow, riskMedium, riskHigh: { fg: Color; bg: Color };
+  };
+  gradient: {
+    wizard, riskLow, riskMedium, riskHigh: [Color, Color]; // bright → dim endpoints
     dim: Color;
   };
 };
 ```
 
 Add a token by adding a field to the type and filling it in `DARK_THEME` + `LIGHT_THEME`. Never ship a component with a one-off hex.
+
+### No cross-theme derivation
+
+Every theme authors **absolute** values. Light is never computed from dark (no inverting, no ratios, no "if fg darker than dim" heuristics). If two themes could reasonably diverge on a surface, it gets its own token. Within a theme, pointing two surfaces at the same token is fine — that's semantic reuse, not derivation.
+
+Badge backgrounds are authored per badge type (`badge.wizard.bg`, `badge.riskLow.bg`, etc.) rather than blended at render time. Changing a badge's look means editing two values (fg + bg), not tuning a blend function.
 
 ### Gradients are two endpoints
 
@@ -37,7 +46,7 @@ OKLAB interpolation between two endpoints produces a smooth ramp; hand-tuned 4�
 **Non-Ink code** (help renderer, chrome, ANSI output):
 ```ts
 import { getTheme } from "../core/theme.ts";
-const c = getTheme().status.error; // [r,g,b]
+const c = getTheme().text.accent; // [r,g,b]
 fgCode(...c, colorLevel());
 ```
 
