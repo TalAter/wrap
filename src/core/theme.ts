@@ -2,7 +2,7 @@ import { type Color, colorHex, quantizeColor } from "./ansi.ts";
 import type { Appearance } from "./detect-appearance.ts";
 import { colorLevel } from "./output.ts";
 
-type BadgeColors = { fg: Color; bg: Color };
+export type BadgeColors = { fg: Color; bg: Color };
 
 export type ThemeTokens = {
   text: {

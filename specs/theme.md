@@ -58,6 +58,20 @@ const theme = useTheme();
 
 **Always use `themeHex(color)` when handing hex to Ink**, never `colorHex()`. Ink's `<Text color="#abc">` emits truecolor escapes regardless of `FORCE_COLOR`. `themeHex` quantizes to the current level's palette first; `colorHex` is pure formatting and doesn't.
 
+### Select tokens
+
+`select.selected` is the green "chosen" indicator — used by the checklist `[✓]` tick and inkjs `Select`'s `selectedIndicator` glyph. Focused/idle row colors aren't separate tokens: they reuse `text.primary` and `text.secondary` directly, so Select rows can't drift from body text.
+
+### `@inkjs/ui` Select theming
+
+`@inkjs/ui` ships a Select component with hardcoded blue focus and green selected colors. To make Select honor the active theme, `ThemeProvider` (`src/tui/theme-context.tsx`) wraps children in inkjs's own `ThemeProvider` with an `extendTheme(defaultTheme, ...)` payload that maps:
+
+- `focusIndicator` / focused row label → `text.primary`
+- `selectedIndicator` / selected row label → `select.selected`
+- idle row label → `text.secondary`
+
+Any other inkjs-UI component that hardcodes color (Badge, Alert, etc.) needs the same treatment if used.
+
 ## Appearance detection
 
 Resolution chain (first hit wins, all steps are instant):

@@ -1,9 +1,9 @@
 import stringWidth from "string-width";
 import { type Color, interpolate } from "../core/ansi.ts";
 import { colorLevel } from "../core/output.ts";
-import { getTheme, themeHex } from "../core/theme.ts";
+import { type BadgeColors, getTheme, themeHex } from "../core/theme.ts";
 
-export type Badge = { fg: Color; bg: Color; icon: string; label: string };
+export type Badge = BadgeColors & { icon: string; label: string };
 
 export type BorderSegment = {
   key: string;
