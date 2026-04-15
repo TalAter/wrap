@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Config } from "../src/config/config.ts";
-import { resolveSettings } from "../src/config/resolve.ts";
+import type { Config, ResolvedConfig } from "../src/config/config.ts";
+import { applyModelOverride, resolveSettings } from "../src/config/resolve.ts";
 import type { Modifiers } from "../src/core/input.ts";
 
 function mods(opts: { flags?: string[]; values?: Record<string, string> } = {}): Modifiers {
@@ -68,9 +68,9 @@ describe("resolveSettings — number coercion", () => {
     expect(result.maxRounds).toBe(7);
   });
 
-  test("non-numeric CLI value throws with Config error prefix", () => {
+  test("non-numeric CLI value throws with setting name in the message", () => {
     expect(() => resolveSettings(mods({ values: { maxRounds: "abc" } }), {}, {})).toThrow(
-      /^Config error:/,
+      /Config error: maxRounds expected a number, got "abc"/,
     );
   });
 });
@@ -145,7 +145,86 @@ describe("resolveSettings — model is virtual", () => {
       { WRAP_MODEL: "openai" },
       {},
     );
-    // Model resolution is delegated to resolveProvider; Config has no `model` field.
+    // Model resolution happens in applyModelOverride; Config has no `model` field.
     expect((result as Record<string, unknown>).model).toBeUndefined();
+  });
+});
+
+describe("applyModelOverride", () => {
+  const baseConfig: ResolvedConfig = {
+    verbose: false,
+    noAnimation: false,
+    nerdFonts: false,
+    maxRounds: 5,
+    maxCapturedOutputChars: 200_000,
+    maxPipedInputChars: 200_000,
+    providers: {
+      anthropic: { apiKey: "sk-a", model: "claude-haiku-4-5" },
+      openai: { apiKey: "sk-o", model: "gpt-4o-mini" },
+    },
+    defaultProvider: "anthropic",
+  };
+
+  test("no override → config unchanged", () => {
+    const result = applyModelOverride(baseConfig, mods(), {});
+    expect(result).toBe(baseConfig);
+  });
+
+  test("CLI override sets defaultProvider and writes transient model into providers map", () => {
+    const result = applyModelOverride(
+      baseConfig,
+      mods({ values: { model: "openai:gpt-4.1" } }),
+      {},
+    );
+    expect(result.defaultProvider).toBe("openai");
+    expect(result.providers?.openai?.model).toBe("gpt-4.1");
+    expect(result.providers?.openai?.apiKey).toBe("sk-o");
+    // Untouched entry preserved
+    expect(result.providers?.anthropic?.model).toBe("claude-haiku-4-5");
+  });
+
+  test("env (WRAP_MODEL) override works when CLI absent", () => {
+    const result = applyModelOverride(baseConfig, mods(), { WRAP_MODEL: "openai" });
+    expect(result.defaultProvider).toBe("openai");
+    // No transient: smart match against configured provider, uses stored model
+    expect(result.providers?.openai?.model).toBe("gpt-4o-mini");
+  });
+
+  test("CLI override wins over WRAP_MODEL env", () => {
+    const result = applyModelOverride(baseConfig, mods({ values: { model: "anthropic" } }), {
+      WRAP_MODEL: "openai",
+    });
+    expect(result.defaultProvider).toBe("anthropic");
+  });
+
+  test("bare model name smart-matches to a provider", () => {
+    const result = applyModelOverride(baseConfig, mods({ values: { model: "gpt-4o-mini" } }), {});
+    expect(result.defaultProvider).toBe("openai");
+  });
+
+  test("unknown model name falls through to defaultProvider + transient", () => {
+    const result = applyModelOverride(baseConfig, mods({ values: { model: "custom-llama" } }), {});
+    expect(result.defaultProvider).toBe("anthropic");
+    expect(result.providers?.anthropic?.model).toBe("custom-llama");
+  });
+
+  test("invalid override propagates parse error", () => {
+    expect(() => applyModelOverride(baseConfig, mods({ values: { model: "" } }), {})).toThrow(
+      "Config error: --model value is empty.",
+    );
+  });
+
+  test("empty-string WRAP_MODEL treated as absent, no error", () => {
+    const result = applyModelOverride(baseConfig, mods(), { WRAP_MODEL: "" });
+    expect(result).toBe(baseConfig);
+  });
+
+  test(":model with no defaultProvider throws actionable error", () => {
+    const noDefault: Config = {
+      providers: { anthropic: { apiKey: "k", model: "m" } },
+    };
+    expect(() => applyModelOverride(noDefault, mods({ values: { model: ":gpt-4o" } }), {})).toThrow(
+      /Config error: --model ":gpt-4o" has no provider to target/,
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { ensureConfig } from "./config/ensure.ts";
-import { resolveSettings } from "./config/resolve.ts";
+import { applyModelOverride, resolveSettings } from "./config/resolve.ts";
 import { getConfig, setConfig } from "./config/store.ts";
 import { resolveAppearance } from "./core/detect-appearance.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
@@ -55,17 +55,14 @@ export async function main() {
     const prompt = input.type === "prompt" ? input.prompt : "";
 
     const fileConfig = await ensureConfig();
-    setConfig(resolveSettings(modifiers, process.env, fileConfig));
+    const base = resolveSettings(modifiers, process.env, fileConfig);
+    setConfig(applyModelOverride(base, modifiers, process.env));
 
     // Re-resolve theme now that config.appearance is available.
     const appearance = resolveAppearance(getConfig().appearance);
     setTheme(resolveTheme(appearance));
 
-    // Model is virtual — resolveSettings skips it. resolveProvider parses the
-    // override string (provider:model etc.) and short-circuits to the test
-    // sentinel if WRAP_TEST_RESPONSE is set.
-    const override = modifiers.values.get("model") ?? process.env.WRAP_MODEL;
-    const resolved = resolveProvider(getConfig(), override);
+    const resolved = resolveProvider(getConfig());
     const label = formatProvider(resolved);
     verbose(`Config loaded (${label})`);
 

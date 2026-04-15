@@ -134,11 +134,12 @@ A transient model the resolved provider's API rejects is passed through to the S
 
 ### Architecture
 
-Two layers with a pure resolver between:
+Three layers:
 
 1. **`ensureConfig`** (`src/config/ensure.ts`) — if `config.jsonc` exists, loads it via `loadConfig`; otherwise runs the wizard (see `config.md`). `loadConfig` in `src/config/config.ts` owns `Config` and `ProviderEntry` types; returns file ⊕ `WRAP_CONFIG`.
-2. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure: `(Config, override, env) → ResolvedProvider`. Parses the override, applies smart resolution, runs per-entry validation via the registry, produces the final tuple.
-3. **`initProvider`** (`src/llm/index.ts`) — dispatches `ResolvedProvider` to the right factory via the registry's `kind`.
+2. **`applyModelOverride`** (`src/config/resolve.ts`) — reads `--model`/`WRAP_MODEL` via SETTINGS, calls `parseModelOverride` to compute `{providerName, transientModel}`, then writes those into `config.defaultProvider` and `config.providers[name].model`. Throws on malformed overrides (empty, ambiguous, unknown built-in). After this step the config's own fields carry the user's intent — no separate override string floats around.
+3. **`resolveProvider`** (`src/llm/resolve-provider.ts`) — pure: `(Config, env?) → ResolvedProvider`. Reads `defaultProvider` and the matching entry, runs per-entry validation via the registry, produces the final tuple. Short-circuits to the test sentinel when `WRAP_TEST_RESPONSE`/`WRAP_TEST_RESPONSES` is set.
+4. **`initProvider`** (`src/llm/index.ts`) — dispatches `ResolvedProvider` to the right factory via the registry's `kind`.
 
 ```ts
 type ResolvedProvider = {
@@ -149,19 +150,28 @@ type ResolvedProvider = {
 };
 ```
 
-`parseArgs` in `src/core/input.ts` treats `--model`/`--provider` as value-taking modifiers. `main.ts` picks `modifiers.values.get("model") ?? process.env.WRAP_MODEL` and hands it to `resolveProvider`.
+`parseArgs` treats `--model`/`--provider` as value-taking modifiers (the `model` setting in SETTINGS). `main.ts` runs `applyModelOverride` between `resolveSettings` and `setConfig`, so by the time `resolveProvider` reads the store it's seeing the normalized config.
+
+### Override parsing
+
+`parseModelOverride(override, providers, defaultProvider) → {providerName, transientModel}` is the pure parse. Formats handled:
+
+- `provider:model` — that provider, that model (transient, not written to disk)
+- `provider` (configured key) — that provider's stored model
+- `:model` — default provider, different model
+- bare value — smart match: unique configured model, then known-provider diagnostic (error if built-in but not configured), then fall through to `defaultProvider` with the bare value as transient model
 
 ---
 
 ## Errors
 
-**Config-resolution failure** — single generic message when no LLM can be resolved (any of: `providers` missing/empty, `defaultProvider` unset or not in map, resolved entry has no `model`):
+**Config-resolution failure** — generic message when there's no signal to work with (`providers` missing/empty AND no `defaultProvider`):
 
 ```
 Config error: no LLM configured. Edit ~/.wrap/config.jsonc.
 ```
 
-One message is deliberate: the config wizard (out of scope) will diagnose causes interactively.
+Once `defaultProvider` is set (from file or from override normalization), errors become specific: `provider "X" not found in config.` / `provider "X" has no model set in config.` / per-entry validation messages. This is actionable — the user knows which thing is wrong.
 
 **Per-entry validation** (runs before the no-model check so a structurally invalid entry reports the actionable error):
 

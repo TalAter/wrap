@@ -9,6 +9,7 @@
 import { NoObjectGeneratedError } from "ai";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
+import { applyModelOverride } from "../src/config/resolve.ts";
 import { buildPromptScaffold } from "../src/llm/build-prompt.ts";
 import { formatContext } from "../src/llm/format-context.ts";
 import { initProvider } from "../src/llm/index.ts";
@@ -90,7 +91,12 @@ if (input.mode === "assemble") {
 const config = loadConfig();
 let provider: ReturnType<typeof initProvider>;
 try {
-  const resolved = resolveProvider(config, process.env.WRAP_MODEL);
+  const normalized = applyModelOverride(
+    config,
+    { flags: new Set(), values: new Map() },
+    process.env,
+  );
+  const resolved = resolveProvider(normalized);
   provider = initProvider(resolved);
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));

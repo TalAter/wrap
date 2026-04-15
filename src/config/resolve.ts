@@ -1,4 +1,5 @@
 import type { Modifiers } from "../core/input.ts";
+import { parseModelOverride } from "../llm/resolve-provider.ts";
 import type { Config, ResolvedConfig } from "./config.ts";
 import { SETTINGS, type Setting } from "./settings.ts";
 
@@ -12,8 +13,11 @@ import { SETTINGS, type Setting } from "./settings.ts";
  * is a complete Config. File fields not in SETTINGS (e.g. `providers`) pass
  * through untouched.
  *
- * `model` is virtual: its value is resolved separately via `resolveProvider`,
- * so the `model` setting is skipped here and does not appear in the output.
+ * `model` is special: its value doesn't become a `config.model` field because
+ * an override like `anthropic:claude-opus` normalizes into two existing
+ * fields — `defaultProvider` and `providers[name].model`. That normalization
+ * needs a populated `providers` map, so it lives in `applyModelOverride`
+ * (called from the session path in `main.ts`, not the pre-dispatch seed).
  */
 export function resolveSettings(
   modifiers: Modifiers,
@@ -59,7 +63,7 @@ function resolveOne(
     if (modifiers.flags.has(key)) return true;
   } else {
     const v = modifiers.values.get(key);
-    if (v !== undefined) return coerce(setting.type, v);
+    if (v !== undefined) return coerce(setting.type, v, key);
   }
 
   // Env layer
@@ -67,7 +71,7 @@ function resolveOne(
     const v = env[name];
     if (v === undefined) continue;
     if (setting.type === "boolean") return true;
-    return coerce(setting.type, v);
+    return coerce(setting.type, v, name);
   }
 
   // File layer
@@ -78,11 +82,71 @@ function resolveOne(
   return setting.default;
 }
 
-function coerce(type: "string" | "number", raw: string): string | number {
+function coerce(type: "string" | "number", raw: string, source: string): string | number {
   if (type === "string") return raw;
   const n = Number(raw);
   if (Number.isNaN(n)) {
-    throw new Error(`Config error: expected a number, got "${raw}".`);
+    throw new Error(`Config error: ${source} expected a number, got "${raw}".`);
   }
   return n;
+}
+
+/**
+ * Resolve the `--model`/`WRAP_MODEL` override (via SETTINGS.model sources) and
+ * normalize it into the config's `defaultProvider` and
+ * `providers[name].model` fields.
+ *
+ * Returns the input unchanged when no override is present. Throws on bad
+ * overrides (empty, ambiguous, unknown built-in) via `parseModelOverride`.
+ *
+ * Generic over Config vs ResolvedConfig: the function only touches fields
+ * that exist on bare `Config`, so callers that have a ResolvedConfig get one
+ * back and callers that have a Config get a Config back — no casts needed.
+ */
+export function applyModelOverride<T extends Config>(
+  config: T,
+  modifiers: Modifiers,
+  env: Record<string, string | undefined>,
+): T {
+  const override = readModelOverride(modifiers, env);
+  if (override === undefined) return config;
+
+  const providers = config.providers ?? {};
+  const { providerName, transientModel } = parseModelOverride(
+    override,
+    providers,
+    config.defaultProvider,
+  );
+
+  if (providerName === undefined) {
+    // `--model :x` or similar with no defaultProvider to attach the transient
+    // model to. Surface a specific message rather than letting resolveProvider
+    // throw the generic NO_LLM_ERROR downstream.
+    throw new Error(
+      `Config error: --model "${override}" has no provider to target. Set defaultProvider in config or use provider:model.`,
+    );
+  }
+
+  const next: T = { ...config, defaultProvider: providerName };
+  if (transientModel !== undefined) {
+    next.providers = {
+      ...providers,
+      [providerName]: { ...providers[providerName], model: transientModel },
+    };
+  }
+  return next;
+}
+
+/** Walk SETTINGS.model sources (CLI > env), treating empty env values as absent. */
+function readModelOverride(
+  modifiers: Modifiers,
+  env: Record<string, string | undefined>,
+): string | undefined {
+  const cli = modifiers.values.get("model");
+  if (cli !== undefined) return cli;
+  for (const name of SETTINGS.model.env ?? []) {
+    const v = env[name];
+    if (v !== undefined && v !== "") return v;
+  }
+  return undefined;
 }

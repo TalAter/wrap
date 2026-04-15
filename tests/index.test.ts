@@ -29,7 +29,7 @@ describe("wrap", () => {
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toBe("Config error: no LLM configured. Edit ~/.wrap/config.jsonc.\n");
+    expect(stderr).toBe('Config error: provider "openai" not found in config.\n');
   });
 
   test("errors when --model names a provider not in config", async () => {
