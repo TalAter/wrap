@@ -48,7 +48,15 @@ export function resolveSettings(
 }
 
 function isAnimationDisabledByEnv(env: Record<string, string | undefined>): boolean {
-  return "CI" in env || env.TERM === "dumb" || "NO_COLOR" in env;
+  return isCiActive(env) || env.TERM === "dumb" || "NO_COLOR" in env;
+}
+
+// CI is presence-ish but `CI=false` / `CI=0` is a real convention in shells
+// that inherit the var outside of an actual CI run.
+function isCiActive(env: Record<string, string | undefined>): boolean {
+  const v = env.CI;
+  if (v === undefined) return false;
+  return !FALSY.has(v.trim().toLowerCase());
 }
 
 function resolveOne(
@@ -98,7 +106,9 @@ function coerceBoolean(raw: string, source: string): boolean {
   const v = raw.trim().toLowerCase();
   if (TRUTHY.has(v)) return true;
   if (FALSY.has(v)) return false;
-  throw new Error(`Config error: ${source} expected a boolean, got "${raw}".`);
+  throw new Error(
+    `Config error: ${source} expected 1/true/yes/on or 0/false/no/off, got "${raw}".`,
+  );
 }
 
 /**

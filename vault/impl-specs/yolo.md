@@ -158,7 +158,7 @@ When the local rule engine is built: **yolo bypasses the rule engine too.** The 
 1. **Flag parsing:** `--yolo` sets `getConfig().yolo === true`.
 2. **Env var:** `WRAP_YOLO=1` sets yolo.
 3. **Config file:** `"yolo": true` in config.jsonc sets yolo.
-4. **Precedence:** CLI > env > file > default. `--yolo` overrides `WRAP_YOLO=0` (and `WRAP_YOLO=0` disables yolo when set via file config).
+4. **Precedence:** CLI > env > file > default. `--yolo` overrides `WRAP_YOLO=0`. `WRAP_YOLO=0` disables yolo (env value parsed, not presence-only).
 5. **Reducer: yolo skips dialog.** Mock a medium-risk final command → reducer returns `exiting { kind: "run" }` instead of `confirming`.
 6. **Reducer: yolo skips dialog for high-risk.** Same as above with high-risk.
 7. **Runner: yolo inlines non-final med/high.** With yolo=true, a non-final medium command executes inline (step-running event emitted) instead of exiting the generator.

@@ -21,6 +21,11 @@ describe("resolveSettings — precedence", () => {
     expect(result.noAnimation).toBe(true);
   });
 
+  test("falsy env value overrides truthy file config", () => {
+    const result = resolveSettings(mods(), { WRAP_NERD_FONTS: "0" }, { nerdFonts: true });
+    expect(result.nerdFonts).toBe(false);
+  });
+
   test("file wins over default when CLI and env absent", () => {
     const result = resolveSettings(mods(), {}, { verbose: true });
     expect(result.verbose).toBe(true);
@@ -42,7 +47,7 @@ describe("resolveSettings — precedence", () => {
   });
 });
 
-describe("resolveSettings — boolean coercion", () => {
+describe("resolveSettings — boolean env coercion", () => {
   test("truthy env values resolve to true", () => {
     for (const val of ["1", "true", "yes", "on", "TRUE", "Yes", " on "]) {
       const result = resolveSettings(mods(), { WRAP_NO_ANIMATION: val }, {});
@@ -50,36 +55,22 @@ describe("resolveSettings — boolean coercion", () => {
     }
   });
 
-  test("falsy env values resolve to false (and override file config)", () => {
+  test("falsy env values resolve to false", () => {
     for (const val of ["0", "false", "no", "off", "", "FALSE", " 0 "]) {
-      const result = resolveSettings(
-        mods(),
-        { WRAP_NO_ANIMATION: val },
-        { noAnimation: true },
-      );
+      const result = resolveSettings(mods(), { WRAP_NO_ANIMATION: val }, {});
       expect(result.noAnimation, `env value ${JSON.stringify(val)}`).toBe(false);
     }
   });
 
-  test("unrecognized env value throws with setting name in message", () => {
-    expect(() =>
-      resolveSettings(mods(), { WRAP_NO_ANIMATION: "maybe" }, {}),
-    ).toThrow(/Config error: WRAP_NO_ANIMATION expected a boolean, got "maybe"/);
+  test("unrecognized env value throws with setting name and accepted values", () => {
+    expect(() => resolveSettings(mods(), { WRAP_NO_ANIMATION: "maybe" }, {})).toThrow(
+      /Config error: WRAP_NO_ANIMATION expected 1\/true\/yes\/on or 0\/false\/no\/off, got "maybe"/,
+    );
   });
 
-  test("env var absent → file config wins", () => {
-    const result = resolveSettings(mods(), {}, { noAnimation: true });
-    expect(result.noAnimation).toBe(true);
-  });
-
-  test("WRAP_NERD_FONTS=1 enables nerdFonts", () => {
+  test("WRAP_NERD_FONTS wiring — =1 enables", () => {
     const result = resolveSettings(mods(), { WRAP_NERD_FONTS: "1" }, {});
     expect(result.nerdFonts).toBe(true);
-  });
-
-  test("WRAP_NERD_FONTS=0 disables nerdFonts even when file config enables", () => {
-    const result = resolveSettings(mods(), { WRAP_NERD_FONTS: "0" }, { nerdFonts: true });
-    expect(result.nerdFonts).toBe(false);
   });
 });
 
@@ -128,6 +119,13 @@ describe("resolveSettings — noAnimation aggregates env-wide signals", () => {
   test("CI env var forces noAnimation true", () => {
     const result = resolveSettings(mods(), { CI: "true" }, {});
     expect(result.noAnimation).toBe(true);
+  });
+
+  test("CI=false does not force noAnimation (shells inherit CI=false outside CI)", () => {
+    for (const val of ["false", "0", "no", "off", ""]) {
+      const result = resolveSettings(mods(), { CI: val }, {});
+      expect(result.noAnimation, `CI=${JSON.stringify(val)}`).toBe(false);
+    }
   });
 
   test("TERM=dumb forces noAnimation true", () => {
