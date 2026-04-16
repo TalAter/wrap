@@ -191,9 +191,11 @@ export async function* runLoop(
     }
 
     // response.type === "command"
-    const isNonFinalLow = response.final === false && response.risk_level === "low";
+    // Yolo broadens inline-step to any risk — the user opted out of the gate.
+    const canInlineStep =
+      response.final === false && (response.risk_level === "low" || getConfig().yolo);
 
-    if (!isNonFinalLow) {
+    if (!canInlineStep) {
       // Final commands (any risk) AND non-final med/high commands exit the
       // generator so the coordinator can run the confirmation dialog. The
       // distinction between "run" and "confirm-then-continue" is the
@@ -202,7 +204,7 @@ export async function* runLoop(
       return { type: "command", response, round };
     }
 
-    // Non-final low: execute inline as an intermediate step and loop.
+    // Inline-step path: execute and loop.
     if (isLastRound) {
       // The last-round instruction forbids final: false; if the model
       // ignored us we stop here without running the step.

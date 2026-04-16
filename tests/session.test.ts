@@ -138,6 +138,21 @@ describe("runSession — no TTY for medium command", () => {
     expect(exit).toBe(1);
     expect(stderr.text).toContain("requires confirmation");
   });
+
+  test("yolo + medium command without TTY → not blocked, runs and exits 0", async () => {
+    stderr.restore();
+    stderr = mockStderr({ isTTY: false });
+    seedTestConfig({ yolo: true });
+    const { provider } = makeProvider([
+      { type: "command", content: "echo ok", risk_level: "medium" } as CommandResponse,
+    ]);
+    const exit = await runSession("do it", provider, {
+      cwd: "/tmp",
+      resolvedProvider: TEST_RESOLVED_PROVIDER,
+    });
+    expect(exit).toBe(0);
+    expect(stderr.text).not.toContain("requires confirmation");
+  });
 });
 
 describe("runSession — multi-round step → reply", () => {

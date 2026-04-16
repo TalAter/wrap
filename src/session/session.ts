@@ -319,12 +319,14 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
     }
     if (final === undefined) return;
     // A medium/high command can't be confirmed without a dialog, and the
-    // initial loop is the only one without a dialog already mounted.
+    // initial loop is the only one without a dialog already mounted. Yolo
+    // has nothing to confirm — skip the gate.
     if (
       final.type === "command" &&
       final.response.risk_level !== "low" &&
       isInitialLoop &&
-      !process.stderr.isTTY
+      !process.stderr.isTTY &&
+      !getConfig().yolo
     ) {
       chrome(`Command requires confirmation (no TTY available): ${final.response.content}`);
       dispatch({ type: "block", command: final.response.content });

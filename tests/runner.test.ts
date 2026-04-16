@@ -123,6 +123,51 @@ describe("runLoop", () => {
     expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
   });
 
+  test("yolo + non-final medium: runs inline, pushes a step turn, continues the loop", async () => {
+    seedTestConfig({ yolo: true });
+    const { provider } = makeProvider([
+      {
+        type: "command",
+        final: false,
+        content: "echo discovered",
+        risk_level: "medium",
+        explanation: "check",
+      },
+      { type: "command", final: true, content: "echo done", risk_level: "low" },
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+    const { events, final } = await drain(
+      runLoop(provider, transcript, scaffold, state, makeOptions()),
+    );
+    expect(final.type).toBe("command");
+    const stepEvents = events.filter((e) => e.type === "step-running" || e.type === "step-output");
+    expect(stepEvents.length).toBe(2);
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
+  });
+
+  test("yolo + non-final high: runs inline (any non-low non-final runs in yolo)", async () => {
+    seedTestConfig({ yolo: true });
+    const { provider } = makeProvider([
+      {
+        type: "command",
+        final: false,
+        content: "echo danger",
+        risk_level: "high",
+        explanation: "cleanup",
+        // Present to skip runRound's scratchpad-retry path, which would
+        // consume the second mocked response.
+        _scratchpad: "noop",
+      },
+      { type: "command", final: true, content: "echo done", risk_level: "low" },
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+    const { events } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
+    expect(events.some((e) => e.type === "step-running")).toBe(true);
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
+  });
+
   test("non-final medium: returns to coordinator without executing", async () => {
     // Step 4 leaves confirmation for step 5, but runLoop must already
     // surface non-final non-low as a LoopReturn so the coordinator can

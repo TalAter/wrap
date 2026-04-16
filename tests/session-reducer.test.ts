@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { reduce } from "../src/session/reducer.ts";
 import type { AppState } from "../src/session/state.ts";
 import {
@@ -10,6 +10,11 @@ import {
   makeResponse,
   makeRound,
 } from "./helpers/state-fixtures.ts";
+import { seedTestConfig } from "./helpers.ts";
+
+beforeEach(() => {
+  seedTestConfig();
+});
 
 const lowCommand = makeResponse({ risk_level: "low", content: "echo hi" });
 const mediumCommand = makeResponse({ risk_level: "medium", content: "echo rm-a-fake" });
@@ -108,6 +113,48 @@ describe("reduce — thinking", () => {
       result: { type: "aborted" },
     });
     expect(next).toBe(state);
+  });
+
+  describe("yolo bypasses the confirmation dialog", () => {
+    test("yolo + medium final command → exiting{run, source: model}", () => {
+      seedTestConfig({ yolo: true });
+      const state: AppState = { tag: "thinking" };
+      const round = makeRound(mediumCommand);
+      const next = reduce(state, {
+        type: "loop-final",
+        result: { type: "command", response: mediumCommand, round },
+      });
+      expect(next.tag).toBe("exiting");
+      if (next.tag === "exiting" && next.outcome.kind === "run") {
+        expect(next.outcome.command).toBe("echo rm-a-fake");
+        expect(next.outcome.source).toBe("model");
+      }
+    });
+
+    test("yolo + high final command → exiting{run, source: model}", () => {
+      seedTestConfig({ yolo: true });
+      const state: AppState = { tag: "thinking" };
+      const round = makeRound(highCommand);
+      const next = reduce(state, {
+        type: "loop-final",
+        result: { type: "command", response: highCommand, round },
+      });
+      expect(next.tag).toBe("exiting");
+      if (next.tag === "exiting" && next.outcome.kind === "run") {
+        expect(next.outcome.source).toBe("model");
+      }
+    });
+
+    test("yolo + low final command → exiting{run} (same path as default)", () => {
+      seedTestConfig({ yolo: true });
+      const state: AppState = { tag: "thinking" };
+      const round = makeRound(lowCommand);
+      const next = reduce(state, {
+        type: "loop-final",
+        result: { type: "command", response: lowCommand, round },
+      });
+      expect(next.tag).toBe("exiting");
+    });
   });
 });
 

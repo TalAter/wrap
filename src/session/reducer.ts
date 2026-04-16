@@ -1,3 +1,4 @@
+import { getConfig } from "../config/store.ts";
 import type { AppEvent, AppState } from "./state.ts";
 
 /**
@@ -8,6 +9,10 @@ import type { AppEvent, AppState } from "./state.ts";
  * Side effects (aborting an in-flight loop, restarting the loop, mounting
  * the dialog, executing the command) are NOT here. They live in the
  * coordinator, which observes state changes and triggers them.
+ *
+ * One non-state input: `getConfig().yolo` is read in `reduceThinking` to
+ * bypass the confirmation dialog. Config is set once at startup and never
+ * mutates during a session, so transitions remain deterministic per run.
  */
 export function reduce(state: AppState, event: AppEvent): AppState {
   switch (state.tag) {
@@ -40,8 +45,10 @@ function reduceThinking(state: AppState & { tag: "thinking" }, event: AppEvent):
       // Initial final-low: skip the dialog and exec straight away. The
       // `final` check guards against a non-final low ever reaching the
       // reducer — runLoop handles those inline, but asserting it here
-      // keeps the asymmetric-dialog invariant honest.
-      if (r.response.risk_level === "low" && r.response.final !== false) {
+      // keeps the asymmetric-dialog invariant honest. Yolo joins this
+      // path at any risk level — the user opted out of the gate.
+      const autoExec = r.response.risk_level === "low" || getConfig().yolo;
+      if (autoExec && r.response.final !== false) {
         return {
           tag: "exiting",
           outcome: {
