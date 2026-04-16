@@ -71,6 +71,16 @@ describe("resolveSettings — boolean coercion", () => {
     const result = resolveSettings(mods(), {}, { noAnimation: true });
     expect(result.noAnimation).toBe(true);
   });
+
+  test("WRAP_NERD_FONTS=1 enables nerdFonts", () => {
+    const result = resolveSettings(mods(), { WRAP_NERD_FONTS: "1" }, {});
+    expect(result.nerdFonts).toBe(true);
+  });
+
+  test("WRAP_NERD_FONTS=0 disables nerdFonts even when file config enables", () => {
+    const result = resolveSettings(mods(), { WRAP_NERD_FONTS: "0" }, { nerdFonts: true });
+    expect(result.nerdFonts).toBe(false);
+  });
 });
 
 describe("resolveSettings — number coercion", () => {

@@ -63,6 +63,7 @@ export const SETTINGS = {
   nerdFonts: {
     type: "boolean",
     description: "Use Nerd Font glyphs in terminal output",
+    env: ["WRAP_NERD_FONTS"],
     default: false,
   },
   maxRounds: {
