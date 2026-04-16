@@ -56,7 +56,7 @@ describe("verbose e2e", () => {
     expect(stdout).toBe("hello\n");
     expect(stderr).toContain("LLM responded (command, low):");
     expect(stderr).toContain("echo hello");
-    expect(stderr).toContain("Executing command...");
+    expect(stderr).toContain("Running: echo hello");
     expect(stderr).toContain("Command exited (0)");
   });
 

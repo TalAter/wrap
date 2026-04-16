@@ -367,7 +367,7 @@ async function finaliseOutcome(
       entry.outcome = "error";
       throw new Error(outcome.message);
     case "run": {
-      verbose("Executing command...");
+      verbose(`Running: ${outcome.command}`);
       const stdinBlob =
         outcome.response.pipe_stdin && pipedInput ? new Blob([pipedInput]) : undefined;
       const exec = await executeShellCommand(outcome.command, {
