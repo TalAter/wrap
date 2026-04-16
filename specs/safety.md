@@ -44,7 +44,7 @@ The gate's behavior per Mode. Modes themselves are not yet wired — single path
 | **force-answer** | No execution possible (`type: reply`) | Safest mode by construction |
 | **confirm-all** | Confirm every command regardless of level | For cautious users or untrusted contexts |
 
-**Yolo × rule engine interaction:** open design question. Options: (a) yolo bypasses everything, (b) yolo bypasses LLM classification but the rule engine still gates `high`, (c) yolo bypasses all. Decide when yolo lands. The conservative default if undecided: rule-engine `high` still gates even under yolo — the patterns exist precisely because the LLM can be wrong, and yolo shouldn't disable the independent check.
+**Yolo × rule engine interaction:** resolved — yolo bypasses all gates. The rule engine still runs and escalates risk (useful for logging/verbose), but yolo auto-executes regardless of effective risk level. See `yolo.md`.
 
 <!-- FLAG: SPEC.md glossary lists five Modes; none exist in code. The execution gate is hard-coded to "default" semantics. When modes land, revisit every row above and write tests per row. -->
 
@@ -214,7 +214,7 @@ An attacker has to beat all five.
 ## TODO
 
 - [ ] Local rule engine — pattern list above, `classifyLocal()`, integration in `core/round.ts` ahead of the gate, unit tests per pattern
-- [ ] Decide yolo × rule-engine interaction; write the test that pins it
+- [x] Decide yolo × rule-engine interaction — yolo bypasses all gates (see `yolo.md`)
 - [ ] Adversarial eval examples — indirect phrasing, obfuscated, social engineering, pipe-to-shell
 - [ ] Piped-injection eval examples — gated on `pipedInput` bridge field
 - [ ] Trust boundary fence in user message assembly
