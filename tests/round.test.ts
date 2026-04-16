@@ -208,13 +208,13 @@ describe("runRound", () => {
       {
         _scratchpad: null,
         type: "command",
-        content: "rm -rf node_modules",
+        content: "echo rm-rf-node-modules-fake",
         risk_level: "high",
       } as CommandResponse,
       {
         _scratchpad: "Destructive: blow away deps for a clean install.",
         type: "command",
-        content: "rm -rf node_modules",
+        content: "echo rm-rf-node-modules-fake",
         risk_level: "high",
       } as CommandResponse,
     ]);
@@ -238,7 +238,7 @@ describe("runRound", () => {
       {
         _scratchpad: "Blowing away node_modules for a clean install.",
         type: "command",
-        content: "rm -rf node_modules",
+        content: "echo rm-rf-node-modules-fake",
         risk_level: "high",
       } as CommandResponse,
     ]);
@@ -272,13 +272,13 @@ describe("runRound", () => {
       {
         _scratchpad: null,
         type: "command",
-        content: "rm -rf node_modules",
+        content: "echo rm-rf-node-modules-fake",
         risk_level: "high",
       } as CommandResponse,
       {
         _scratchpad: null,
         type: "command",
-        content: "rm -rf node_modules",
+        content: "echo rm-rf-node-modules-fake",
         risk_level: "high",
       } as CommandResponse,
     ]);

@@ -49,7 +49,7 @@ describe("Dialog — confirming", () => {
   test("renders the explanation when present", () => {
     const state = makeConfirming({
       response: makeResponse({
-        content: "rm a",
+        content: "echo rm-a-fake",
         explanation: "removes the file",
       }),
     });
@@ -172,8 +172,8 @@ describe("Dialog — confirming", () => {
 describe("Dialog — editing", () => {
   test("renders the editable command from state.draft", () => {
     const state = makeEditing({
-      response: makeResponse({ content: "rm a" }),
-      draft: "rm -i a",
+      response: makeResponse({ content: "echo rm-a-fake" }),
+      draft: "echo rm-i-a-fake",
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
@@ -181,13 +181,13 @@ describe("Dialog — editing", () => {
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
-    expect(stripAnsi(lastFrame() ?? "")).toContain("rm -i a");
+    expect(stripAnsi(lastFrame() ?? "")).toContain("echo rm-i-a-fake");
   });
 
   test("typing dispatches draft-change", async () => {
     const state = makeEditing({
-      response: makeResponse({ content: "rm" }),
-      draft: "rm",
+      response: makeResponse({ content: "echo rm-fake" }),
+      draft: "echo rm-fake",
     });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
@@ -202,8 +202,8 @@ describe("Dialog — editing", () => {
 
   test("Enter on editing dispatches submit-edit with the draft", async () => {
     const state = makeEditing({
-      response: makeResponse({ content: "rm" }),
-      draft: "rm -i",
+      response: makeResponse({ content: "echo rm-fake" }),
+      draft: "echo rm-i-fake",
     });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
@@ -213,12 +213,12 @@ describe("Dialog — editing", () => {
     );
     stdin.write("\r");
     await tick();
-    expect(events).toContainEqual({ type: "submit-edit", text: "rm -i" });
+    expect(events).toContainEqual({ type: "submit-edit", text: "echo rm-i-fake" });
   });
 
   test("Enter on editing with blank draft does NOT dispatch submit-edit", async () => {
     const state = makeEditing({
-      response: makeResponse({ content: "rm" }),
+      response: makeResponse({ content: "echo rm-fake" }),
       draft: "   ",
     });
     const { dispatch, events } = captureDispatch();
@@ -550,7 +550,7 @@ describe("Dialog — multi-step slots", () => {
   test("executing-step renders the command, output slot, and abort hint", () => {
     const state = makeExecutingStep({
       response: makeResponse({
-        content: "git stash",
+        content: "echo git-stash-fake",
         final: false,
         risk_level: "medium",
       }),
@@ -563,7 +563,7 @@ describe("Dialog — multi-step slots", () => {
       </ThemeProvider>,
     );
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("git stash");
+    expect(text).toContain("echo git-stash-fake");
     expect(text).toContain("Saved working directory.");
     expect(text).toContain("abort step");
   });

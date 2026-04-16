@@ -20,3 +20,4 @@ Follow this cycle for every implementation change.
 - Refactor only after green (tests passing), not before
 - Tests use the subprocess helper (`tests/helpers.ts`) that spawns the real binary and captures stdout/stderr/exitCode (NOTE: This rule may need changing later as we separate integration and unit tests. Let the user know if you think it is time)
 - LLM and memory layers will be behind interfaces for mocking
+- **Test command strings must be harmless if executed.** The inline-step path calls the real shell, so a regression could actually run them. Use `echo rm-rf-fake`, `true`, `false` — never literal `rm`, `git stash`, `sudo`, `dd`, or `curl | sh`.

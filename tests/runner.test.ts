@@ -131,7 +131,7 @@ describe("runLoop", () => {
       {
         type: "command",
         final: false,
-        content: "git stash",
+        content: "echo git-stash-fake",
         risk_level: "medium",
         plan: "stash, test, then pop",
       },

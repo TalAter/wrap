@@ -205,23 +205,23 @@ describe("wrap", () => {
   test("command medium: prints command to stderr and exits 1", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("delete stuff", {
       type: "command",
-      content: "rm -rf /tmp/foo",
+      content: "echo rm-rf-tmp-foo-fake",
       risk_level: "medium",
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toContain("rm -rf /tmp/foo");
+    expect(stderr).toContain("echo rm-rf-tmp-foo-fake");
   });
 
   test("command high: prints command to stderr and exits 1", async () => {
     const { exitCode, stdout, stderr } = await wrapMock("nuke it", {
       type: "command",
-      content: "dd if=/dev/zero of=/dev/sda",
+      content: "echo dd-zero-sda-fake",
       risk_level: "high",
     });
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
-    expect(stderr).toContain("dd if=/dev/zero of=/dev/sda");
+    expect(stderr).toContain("echo dd-zero-sda-fake");
   });
 
   test("command medium: does not execute the command", async () => {

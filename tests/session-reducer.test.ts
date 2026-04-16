@@ -12,8 +12,8 @@ import {
 } from "./helpers/state-fixtures.ts";
 
 const lowCommand = makeResponse({ risk_level: "low", content: "echo hi" });
-const mediumCommand = makeResponse({ risk_level: "medium", content: "rm a" });
-const highCommand = makeResponse({ risk_level: "high", content: "rm -rf /" });
+const mediumCommand = makeResponse({ risk_level: "medium", content: "echo rm-a-fake" });
+const highCommand = makeResponse({ risk_level: "high", content: "echo rm-rf-fake" });
 
 describe("reduce — thinking", () => {
   test("loop-final command low → exiting{run, source: model}", () => {
@@ -94,10 +94,10 @@ describe("reduce — thinking", () => {
 
   test("block command → exiting{blocked}", () => {
     const state: AppState = { tag: "thinking" };
-    const next = reduce(state, { type: "block", command: "rm a" });
+    const next = reduce(state, { type: "block", command: "echo rm-a-fake" });
     expect(next.tag).toBe("exiting");
     if (next.tag === "exiting" && next.outcome.kind === "blocked") {
-      expect(next.outcome.command).toBe("rm a");
+      expect(next.outcome.command).toBe("echo rm-a-fake");
     }
   });
 
@@ -173,7 +173,7 @@ describe("reduce — confirming", () => {
 
 describe("reduce — editing", () => {
   test("key-esc → confirming with the original response/round", () => {
-    const state = makeEditing({ draft: "rm -rf wrong" });
+    const state = makeEditing({ draft: "echo rm-rf-wrong-fake" });
     const next = reduce(state, { type: "key-esc" });
     expect(next.tag).toBe("confirming");
     if (next.tag === "confirming") {
@@ -336,7 +336,7 @@ describe("reduce — executing-step", () => {
   const nonFinalMed = makeResponse({
     final: false,
     risk_level: "medium",
-    content: "git stash",
+    content: "echo git-stash-fake",
     plan: "stash, test, pop",
   });
 
@@ -423,9 +423,9 @@ describe("reduce — executing-step", () => {
 
   test("editing + submit-edit on non-final med → executing-step with edited content", () => {
     const state = makeEditing({ response: nonFinalMed });
-    const next = reduce(state, { type: "submit-edit", text: "git stash -u" });
+    const next = reduce(state, { type: "submit-edit", text: "echo git-stash-u-fake" });
     if (next.tag === "executing-step") {
-      expect(next.response.content).toBe("git stash -u");
+      expect(next.response.content).toBe("echo git-stash-u-fake");
       expect(next.response.final).toBe(false);
     } else {
       throw new Error(`expected executing-step, got ${next.tag}`);

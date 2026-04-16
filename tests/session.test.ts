@@ -129,7 +129,7 @@ describe("runSession — no TTY for medium command", () => {
     stderr.restore();
     stderr = mockStderr({ isTTY: false });
     const { provider } = makeProvider([
-      { type: "command", content: "rm a", risk_level: "medium" } as CommandResponse,
+      { type: "command", content: "echo rm-a-fake", risk_level: "medium" } as CommandResponse,
     ]);
     const exit = await runSession("delete it", provider, {
       cwd: "/tmp",

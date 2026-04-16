@@ -87,7 +87,7 @@ describe("buildPromptInput", () => {
     const confirmedCmd: CommandResponse = {
       type: "command",
       final: false,
-      content: "git stash",
+      content: "echo git-stash-fake",
       risk_level: "medium",
       plan: "Stash, test, then decide whether to pop.",
     };
