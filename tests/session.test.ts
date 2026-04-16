@@ -81,6 +81,19 @@ describe("runSession — initial answer", () => {
     expect(exit).toBe(0);
     expect(stdoutLines.join("")).toContain("the answer");
   });
+
+  test("yolo + answer: stdout output, exit 0 (yolo has no effect on replies)", async () => {
+    seedTestConfig({ yolo: true });
+    const { provider } = makeProvider([
+      { type: "reply", content: "the answer", risk_level: "low" } as CommandResponse,
+    ]);
+    const exit = await runSession("question?", provider, {
+      cwd: "/tmp",
+      resolvedProvider: TEST_RESOLVED_PROVIDER,
+    });
+    expect(exit).toBe(0);
+    expect(stdoutLines.join("")).toContain("the answer");
+  });
 });
 
 describe("runSession — exhausted", () => {

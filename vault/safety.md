@@ -1,8 +1,8 @@
 ---
 name: safety
 description: Risk classification, execution gates, local rule engine, prompt injection defenses
-Source: src/session/reducer.ts, src/session/session.ts, src/core/round.ts
-Last-synced: c54a1a5
+Source: src/session/reducer.ts, src/session/session.ts, src/core/round.ts, src/core/runner.ts, src/config/settings.ts
+Last-synced: e417d75
 ---
 
 # Safety
@@ -28,15 +28,38 @@ Wrap executes LLM-generated shell commands. The LLM is both generator and safety
 
 ## Modes
 
-Only `default` is implemented. Planned modes and their gate behavior:
+Gate behaviour per mode:
 
-- **default** — auto-exec low; confirm medium/high.
-- **yolo** — auto-exec everything.
-- **force-cmd** — as default; forces `type: command`.
-- **force-answer** — no execution possible (`type: reply`).
-- **confirm-all** — confirm every command regardless of level.
+- **default** — auto-exec low; confirm medium/high. Implemented.
+- **yolo** — auto-exec everything. Implemented. See below.
+- **force-cmd** — as default; forces `type: command`. Planned.
+- **force-answer** — no execution possible (`type: reply`). Planned.
+- **confirm-all** — confirm every command regardless of level. Planned.
 
-Yolo × rule engine: resolved. Yolo bypasses all gates. Rule engine still runs and escalates for logging/verbose, but never blocks execution. See `impl-specs/yolo.md`.
+### Yolo
+
+Opt-in skip of all confirmation gates. Enabled via `--yolo`, `WRAP_YOLO`, or `yolo: true` in config. Two behavioural deltas from default:
+
+1. **No confirmation dialog.** `reduceThinking` routes every final command directly to `exiting { kind: "run" }` regardless of `risk_level`.
+2. **Non-final steps inline regardless of risk.** `runLoop` broadens its inline-step condition to include medium/high when yolo is on — probes run inline instead of exiting the generator for dialog confirmation.
+
+The no-TTY block in `pumpLoop` is also skipped in yolo — there's nothing to confirm.
+
+**What yolo does NOT change:** LLM still reports `risk_level` (logged for audit). Rule engine (when built) still runs and escalates for logging. Retry/error handling identical. Answer-mode responses still print to stdout and exit 0. `exhausted` / `aborted` / `error` outcomes unchanged.
+
+**Yolo × rule engine:** yolo bypasses the rule engine too. The rule engine exists to catch LLM misclassification, but yolo's contract is "no gates, period." Users who want safety-with-convenience should use default mode (or future confirm-all).
+
+**Safety note.** Yolo disables every gate. The LLM could hallucinate `rm -rf /` and it will execute immediately. This is by design — the user explicitly opted in. The setting name and description make the risk clear.
+
+**Invocation**
+
+```bash
+w --yolo find all typescript files modified today
+WRAP_YOLO=1 w deploy to staging
+# or "yolo": true in ~/.wrap/config.jsonc
+```
+
+The `wy` shell alias (via `argv[0]` / symlink name) is planned but not built.
 
 ## Local rule engine (planned)
 
