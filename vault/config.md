@@ -34,7 +34,7 @@ Adding a setting = one entry. No drift.
 
 `resolveSettings(modifiers, env, fileConfig) → ResolvedConfig`
 
-- Boolean sources: CLI flag presence → `true`. Env var presence → `true`.
+- Boolean sources: CLI flag presence → `true`. Env var value parsed: `1/true/yes/on` → true; `0/false/no/off/""` → false (case-insensitive, trimmed); other values throw.
 - String sources: CLI flag value or env var value.
 - File layer: fields not in SETTINGS (like `providers`) pass through.
 

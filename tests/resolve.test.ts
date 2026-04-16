@@ -43,12 +43,28 @@ describe("resolveSettings — precedence", () => {
 });
 
 describe("resolveSettings — boolean coercion", () => {
-  test("env var presence is truthy regardless of value", () => {
-    const cases = ["1", "true", "yes", "0", "false", ""];
-    for (const val of cases) {
+  test("truthy env values resolve to true", () => {
+    for (const val of ["1", "true", "yes", "on", "TRUE", "Yes", " on "]) {
       const result = resolveSettings(mods(), { WRAP_NO_ANIMATION: val }, {});
       expect(result.noAnimation, `env value ${JSON.stringify(val)}`).toBe(true);
     }
+  });
+
+  test("falsy env values resolve to false (and override file config)", () => {
+    for (const val of ["0", "false", "no", "off", "", "FALSE", " 0 "]) {
+      const result = resolveSettings(
+        mods(),
+        { WRAP_NO_ANIMATION: val },
+        { noAnimation: true },
+      );
+      expect(result.noAnimation, `env value ${JSON.stringify(val)}`).toBe(false);
+    }
+  });
+
+  test("unrecognized env value throws with setting name in message", () => {
+    expect(() =>
+      resolveSettings(mods(), { WRAP_NO_ANIMATION: "maybe" }, {}),
+    ).toThrow(/Config error: WRAP_NO_ANIMATION expected a boolean, got "maybe"/);
   });
 
   test("env var absent → file config wins", () => {

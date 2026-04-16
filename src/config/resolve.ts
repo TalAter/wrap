@@ -70,7 +70,7 @@ function resolveOne(
   for (const name of setting.env ?? []) {
     const v = env[name];
     if (v === undefined) continue;
-    if (setting.type === "boolean") return true;
+    if (setting.type === "boolean") return coerceBoolean(v, name);
     return coerce(setting.type, v, name);
   }
 
@@ -89,6 +89,16 @@ function coerce(type: "string" | "number", raw: string, source: string): string 
     throw new Error(`Config error: ${source} expected a number, got "${raw}".`);
   }
   return n;
+}
+
+const TRUTHY = new Set(["1", "true", "yes", "on"]);
+const FALSY = new Set(["0", "false", "no", "off", ""]);
+
+function coerceBoolean(raw: string, source: string): boolean {
+  const v = raw.trim().toLowerCase();
+  if (TRUTHY.has(v)) return true;
+  if (FALSY.has(v)) return false;
+  throw new Error(`Config error: ${source} expected a boolean, got "${raw}".`);
 }
 
 /**

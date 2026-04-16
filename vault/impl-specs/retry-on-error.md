@@ -126,7 +126,7 @@ Retry is skipped when the command content matches any entry in a conservative di
 Honors all standard override layers (CLI > env > config > default):
 
 - Config: `retryOnError: boolean` in `~/.wrap/config.jsonc`. Default `true`.
-- Env: `WRAP_RETRY_ON_ERROR` — follows the existing env-var convention for booleans (presence = true). Matches `WRAP_NO_ANIMATION` / `WRAP_YOLO`.
+- Env: `WRAP_RETRY_ON_ERROR` — standard boolean env parsing (`1/true/yes/on` → true; `0/false/no/off/""` → false). Matches `WRAP_NO_ANIMATION` / `WRAP_YOLO`.
 - Flag: `w --no-retry-on-error ...` disables for one invocation.
 
 When disabled, behavior is today's: final command runs with pure inherit, exits with its code, no capture, no retry.
