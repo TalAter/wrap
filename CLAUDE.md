@@ -1,6 +1,6 @@
 # Wrap
 
-Wrap is a CLI tool that translates natural language into shell commands and runs them. Input: `w find all typescript files modified today` → runs `find . -name '*.ts' -mtime 0` and prints the result. Product spec and architecture docs live in `specs/`.
+Wrap is a CLI tool that translates natural language into shell commands and runs them. Input: `w find all typescript files modified today` → runs `find . -name '*.ts' -mtime 0` and prints the result.
 
 ## Stack
 
@@ -25,6 +25,10 @@ Aim for maximum test coverage.
 ## Editing prompts
 
 Wrap's LLM prompt is split across multiple files with a Python source of truth and a TS runtime mirror. Editing the wrong one silently breaks the optimizer or runtime. **Before changing any prompt text, read `.claude/skills/editing-prompts.md`.**
+
+## Vault
+
+Wrap has a vault at `vault/`. Read `vault/README.md` at session start. When working on a concept, read `vault/<concept>.md` before diving into code.
 
 ## Stop hook
 

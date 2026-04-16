@@ -1,6 +1,11 @@
-# Prompt Showcase
+---
+name: showcase
+description: Curated examples of Wrap working well
+Source: eval/examples/
+Last-synced: c54a1a5
+---
 
-Beautiful use cases that demonstrate how powerful Wrap is.
+# Prompt Showcase
 
 ---
 

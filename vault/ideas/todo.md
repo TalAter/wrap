@@ -1,13 +1,13 @@
 # Wrap — To Do
 
-All remaining implementation tasks. Completed features are omitted — see spec files for architecture reference.
+All remaining implementation tasks. Completed features are omitted — see `vault/` notes for architecture reference.
 
 ---
 
 ## Core Query Loop
 
 - [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
-- [ ] `truncateToLine()` utility — line-aware truncation for LLM context (see `specs/piped-input.md` § Truncation). Replace naive `slice()` in captured-output truncation (`runner.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
+- [ ] `truncateToLine()` utility — line-aware truncation for LLM context. Replace naive `slice()` in captured-output truncation (`runner.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
 - [ ] Verbose `Context: {N} memory facts, {T} tools, {F} CWD files` line before the first LLM call.
 
 ## Input & Invocation
@@ -16,9 +16,9 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
 
-## Execution & Safety (see specs/safety.md)
+## Execution & Safety (see [[safety]])
 
-- [ ] Local safety rule engine — pattern list, `classifyLocal()`, integration in `query.ts` (see `specs/safety.md`)
+- [ ] Local safety rule engine — pattern list, `classifyLocal()`, integration ahead of the execution gate (see [[safety]])
 - [ ] Verbose `Risk escalated: {llm} → {effective} (matched: {pattern})` line when the local rule engine overrides the LLM's level.
 - [ ] Adversarial eval samples — indirect phrasing, obfuscated commands, social engineering
 - [ ] Piped injection eval samples (`pipedInput` bridge support now available)
@@ -35,7 +35,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
-## Discovery & Steps (see specs/discovery.md)
+## Discovery & Steps (see [[discovery]])
 
 - [ ] Future: parse package.json scripts / Makefile targets into CWD context summary
 - [ ] Investigate whether non-final step rounds should be able to read stdin.
@@ -60,7 +60,7 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 - [ ] Lazy probing — on-demand discovery via agent loop non-final step commands (gets smarter over time)
 
-## Logging (see specs/logging.md for architecture)
+## Logging (see [[logging]])
 
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
@@ -77,7 +77,6 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 
 ## Configuration & First-Run
 
-- [x] First-run config wizard TUI — provider selection, API key entry, model selection. See `specs/config.md`.
 - [ ] Alias setup in wizard — scan available single-letter commands, detect shell, write glob-protected aliases to shell rc file
 - [ ] Full first-run flow: config wizard → alias setup → ready
 - [ ] Auto-generate `src/config/config.schema.json` from SETTINGS so the two can't drift — until then, adding a persistent setting means editing both.
@@ -90,9 +89,9 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] TUI components — radio buttons, checkboxes, free text input, editable fields
 - [ ] High contrast mode — backgrounds on dialogs, high contrast colors
 
-## Subcommands (see specs/subcommands.md)
+## Subcommands (see [[subcommands]])
 
-- [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See `specs/config.md` Future work. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
+- [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See [[config]]. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
 - [ ] `--memory` — view/manage memory
 
 ## Eval System
@@ -117,5 +116,5 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Piped input: temp-file buffering for very large inputs (avoid holding multi-GB strings in memory)
 - [ ] Piped input: `Bun.stdin.bytes()` for binary-safe re-piping (current `text()` corrupts non-UTF-8)
 - [ ] Piped input verbose lines — `Piped input: {size}`, `Piped input truncated: ...`, `Re-piping {size} to command stdin` when piping to the child. Empty pipes emit nothing.
-- [ ] Interactive mode — `w` with no args opens a free-text prompt area (see `specs/interactive-mode.md`). Blocked on TUI lib.
+- [ ] Interactive mode — `w` with no args opens a free-text prompt area (see [[interactive-mode]]). Blocked on TUI lib.
 - [ ] Contextual prompt sections — inject domain-specific context when CWD signals are present (e.g. if CWD listing contains `package.json`, include a brief section about Node project conventions like `<runner> run <script>` vs built-in subcommands). Keeps the base prompt general while giving the LLM targeted hints when they'd help most. Could also cover Makefile, Cargo.toml, pyproject.toml, etc.
