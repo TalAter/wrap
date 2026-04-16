@@ -19,7 +19,7 @@ All user-facing error messages must be clear, helpful, and non-technical. No sta
 
 ## Testing — TDD
 
-All implementation follows TDD. Always write a failing test before writing code. No exceptions. See `.claude/skills/tdd.md` for the full workflow.
+All implementation follows TDD. Always write a failing test before writing code. No exceptions. See `.claude/skills/testing.md` for the full workflow.
 Aim for maximum test coverage.
 
 ## Editing prompts

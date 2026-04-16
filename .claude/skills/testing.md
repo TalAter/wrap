@@ -1,8 +1,10 @@
 ---
-description: Strict TDD workflow for implementing features and fixes
+description: Testing conventions — TDD workflow and test-authoring rules
 ---
 
-# TDD Workflow
+# Testing
+
+## TDD workflow
 
 Follow this cycle for every implementation change.
 

@@ -31,7 +31,7 @@ Always true. If a concept note contradicts one of these, the note is wrong.
 1. **stdout is for useful output only.** All Wrap chrome (UI, notifications, etc) goes to stderr or `/dev/tty`. If wrap responds with `answer` that is the payload and can go in stdout.
 2. **No stdin contamination.** Drain stdin before the dialog goes interactive. Buffered keystrokes must never auto-confirm a command. See [[session]].
 3. **User-facing errors are plain language.** No stack traces, no internal names, no jargon. One prefix per category (e.g. `Config error:`).
-4. **TDD.** Write failing test first. See `.claude/skills/tdd.md`.
+4. **TDD.** Write failing test first. See `.claude/skills/testing.md`.
 
 ---
 
