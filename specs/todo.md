@@ -118,3 +118,4 @@ All remaining implementation tasks. Completed features are omitted — see spec 
 - [ ] Piped input: `Bun.stdin.bytes()` for binary-safe re-piping (current `text()` corrupts non-UTF-8)
 - [ ] Piped input verbose lines — `Piped input: {size}`, `Piped input truncated: ...`, `Re-piping {size} to command stdin` when piping to the child. Empty pipes emit nothing.
 - [ ] Interactive mode — `w` with no args opens a free-text prompt area (see `specs/interactive-mode.md`). Blocked on TUI lib.
+- [ ] Contextual prompt sections — inject domain-specific context when CWD signals are present (e.g. if CWD listing contains `package.json`, include a brief section about Node project conventions like `<runner> run <script>` vs built-in subcommands). Keeps the base prompt general while giving the LLM targeted hints when they'd help most. Could also cover Makefile, Cargo.toml, pyproject.toml, etc.
