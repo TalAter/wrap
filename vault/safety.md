@@ -46,6 +46,8 @@ Why: LLMs can be fooled (indirect phrasing, injection, weak models). Regex canno
 
 Planned patterns: `rm -rf` → high, `sudo` → medium, `dd if=` → high, `mkfs` → high, pipe-to-shell → high, `git reset --hard` → medium, base64-decode-and-execute → high. False positives intentional — a confirm is one keypress; a false-negative is unrecoverable.
 
+**Logging:** both `llm_risk` (what the LLM returned) and `effective_risk` (after rule escalation) go in the round log. Only `effective_risk` gates flow — dialog, execution, retry-on-error. Keeping both lets auditors see where the rule engine intervened.
+
 ## Prompt injection resistance (planned)
 
 Injection surfaces: piped input, probe/step results, error messages, thread history.
