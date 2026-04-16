@@ -68,6 +68,15 @@ describe("SETTINGS registry", () => {
     expect(keys).toContain("maxCapturedOutputChars");
     expect(keys).toContain("maxPipedInputChars");
     expect(keys).toContain("defaultProvider");
+    expect(keys).toContain("yolo");
+  });
+
+  test("yolo declares --yolo flag and WRAP_YOLO env and defaults false", () => {
+    const s = SETTINGS.yolo;
+    expect(s.type).toBe("boolean");
+    expect(s.flag).toContain("--yolo");
+    expect(s.env).toContain("WRAP_YOLO");
+    expect(s.default).toBe(false);
   });
 
   test("noAnimation declares both --no-animation flag and WRAP_NO_ANIMATION env", () => {
@@ -98,6 +107,7 @@ describe("SETTINGS registry", () => {
         "nerdFonts",
         "noAnimation",
         "verbose",
+        "yolo",
       ].sort(),
     );
   });

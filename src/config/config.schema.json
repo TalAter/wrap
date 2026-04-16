@@ -29,6 +29,11 @@
       "description": "Enable verbose mode. Surfaces internal pipeline steps on stderr.",
       "default": false
     },
+    "yolo": {
+      "type": "boolean",
+      "description": "Skip confirmation dialogs — auto-execute all commands regardless of risk. All safety gates disabled.",
+      "default": false
+    },
     "providers": {
       "type": "object",
       "description": "Map of provider name → entry. Known names: anthropic, openai, ollama, claude-code. Any other key is treated as an OpenAI-compatible endpoint and requires baseURL, apiKey, and model.",

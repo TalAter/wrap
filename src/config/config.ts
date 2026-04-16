@@ -17,6 +17,7 @@ export type Config = {
   verbose?: boolean;
   noAnimation?: boolean;
   nerdFonts?: boolean;
+  yolo?: boolean;
   appearance?: "auto" | "dark" | "light";
 };
 
@@ -28,6 +29,7 @@ export type ResolvedConfig = Config & {
   verbose: boolean;
   noAnimation: boolean;
   nerdFonts: boolean;
+  yolo: boolean;
   maxRounds: number;
   maxCapturedOutputChars: number;
   maxPipedInputChars: number;

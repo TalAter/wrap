@@ -34,6 +34,15 @@ export const SETTINGS = {
     flag: ["--verbose"],
     default: false,
   },
+  yolo: {
+    type: "boolean",
+    description:
+      "Skip confirmation dialogs — auto-execute all commands regardless of risk. All safety gates disabled.",
+    usage: "w --yolo",
+    flag: ["--yolo"],
+    env: ["WRAP_YOLO"],
+    default: false,
+  },
   noAnimation: {
     type: "boolean",
     description: "Disable animations",

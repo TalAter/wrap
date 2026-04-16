@@ -39,6 +39,7 @@ describe("resolveSettings — precedence", () => {
     expect(result.maxCapturedOutputChars).toBe(200_000);
     expect(result.maxPipedInputChars).toBe(200_000);
     expect(result.nerdFonts).toBe(false);
+    expect(result.yolo).toBe(false);
   });
 
   test("missing default leaves key undefined (not materialized)", () => {
@@ -100,6 +101,33 @@ describe("resolveSettings — CLI > env precedence", () => {
       {},
     );
     expect(result.noAnimation).toBe(true);
+  });
+});
+
+describe("resolveSettings — yolo precedence", () => {
+  test("--yolo CLI flag sets yolo true", () => {
+    const result = resolveSettings(mods({ flags: ["yolo"] }), {}, {});
+    expect(result.yolo).toBe(true);
+  });
+
+  test("WRAP_YOLO env sets yolo true (presence = true)", () => {
+    const result = resolveSettings(mods(), { WRAP_YOLO: "1" }, {});
+    expect(result.yolo).toBe(true);
+  });
+
+  test("file yolo:true is picked up when CLI/env absent", () => {
+    const result = resolveSettings(mods(), {}, { yolo: true });
+    expect(result.yolo).toBe(true);
+  });
+
+  test("--yolo CLI flag overrides WRAP_YOLO=0 (env presence = true)", () => {
+    const result = resolveSettings(mods({ flags: ["yolo"] }), { WRAP_YOLO: "0" }, {});
+    expect(result.yolo).toBe(true);
+  });
+
+  test("default is false", () => {
+    const result = resolveSettings(mods(), {}, {});
+    expect(result.yolo).toBe(false);
   });
 });
 
@@ -179,6 +207,7 @@ describe("applyModelOverride", () => {
     verbose: false,
     noAnimation: false,
     nerdFonts: false,
+    yolo: false,
     maxRounds: 5,
     maxCapturedOutputChars: 200_000,
     maxPipedInputChars: 200_000,
