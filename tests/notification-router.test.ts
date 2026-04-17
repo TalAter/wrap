@@ -2,17 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type Notification, notifications, resetNotifications } from "../src/core/notify.ts";
 import type { DialogHost } from "../src/session/dialog-host.ts";
 import { createNotificationRouter } from "../src/session/notification-router.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
-
-let stderr: MockStderr;
+import { capturedStderr as stderr } from "./preload.ts";
 
 beforeEach(() => {
   resetNotifications();
-  stderr = mockStderr();
 });
 
 afterEach(() => {
-  stderr.restore();
   resetNotifications();
 });
 

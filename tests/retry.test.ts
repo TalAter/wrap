@@ -6,6 +6,7 @@ import { fetchesUrl } from "../src/core/runner.ts";
 import { SPINNER_TEXT } from "../src/core/spinner.ts";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { capturedStdout as stdout } from "./preload.ts";
 
 const STUB_USAGE: LanguageModelUsage = {
   inputTokens: undefined,
@@ -115,23 +116,9 @@ describe("extractFailedText", () => {
 });
 
 describe("round retry in runSession", () => {
-  const originalConsoleLog = console.log;
-  let stdoutOutput: string[];
-  let stderr: MockStderr;
-
   beforeEach(async () => {
     const { seedTestConfig } = await import("./helpers.ts");
     seedTestConfig();
-    stdoutOutput = [];
-    console.log = (...args: unknown[]) => {
-      stdoutOutput.push(args.map(String).join(" "));
-    };
-    stderr = mockStderr();
-  });
-
-  afterEach(() => {
-    console.log = originalConsoleLog;
-    stderr.restore();
   });
 
   test("retries on structured output error and succeeds", async () => {
@@ -161,7 +148,7 @@ describe("round retry in runSession", () => {
     });
     expect(callCount).toBe(2);
     expect(exitCode).toBe(0);
-    expect(stdoutOutput.join("")).toContain("retried ok");
+    expect(stdout.text).toContain("retried ok");
   });
 
   test("does not retry on non-structured-output errors", async () => {
@@ -229,15 +216,9 @@ describe("round retry in runSession", () => {
 });
 
 describe("chrome spinner around LLM call", () => {
-  const originalConsoleLog = console.log;
   let stderr: MockStderr | null = null;
 
-  beforeEach(() => {
-    console.log = () => {};
-  });
-
   afterEach(() => {
-    console.log = originalConsoleLog;
     stderr?.restore();
     stderr = null;
   });

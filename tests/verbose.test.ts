@@ -1,18 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { resetVerboseTimer, verbose } from "../src/core/verbose.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 import { seedTestConfig } from "./helpers.ts";
-
-let stderr: MockStderr;
+import { capturedStderr as stderr } from "./preload.ts";
 
 beforeEach(() => {
   resetVerboseTimer();
   seedTestConfig();
-  stderr = mockStderr();
-});
-
-afterEach(() => {
-  stderr.restore();
 });
 
 describe("verbose module", () => {

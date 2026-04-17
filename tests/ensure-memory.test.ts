@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Provider } from "../src/llm/types.ts";
 import { ensureMemory, parseInitResponse } from "../src/memory/memory.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { capturedStderr as stderr } from "./preload.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-ensure-memory-test-"));
@@ -46,16 +46,6 @@ describe("parseInitResponse", () => {
 });
 
 describe("ensureMemory", () => {
-  let stderr: MockStderr;
-
-  beforeEach(() => {
-    stderr = mockStderr();
-  });
-
-  afterEach(() => {
-    stderr.restore();
-  });
-
   test("loads existing memory without calling LLM", async () => {
     const dir = tempDir();
     const memory = { "/": [{ fact: "Runs macOS" }] };

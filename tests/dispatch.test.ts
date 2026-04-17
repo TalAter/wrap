@@ -4,15 +4,12 @@ import { dispatch } from "../src/subcommands/dispatch.ts";
 // This avoids needing real subcommands for unit tests.
 import { commands } from "../src/subcommands/registry.ts";
 import type { Command } from "../src/subcommands/types.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { capturedStderr as stderr } from "./preload.ts";
 
 const originalExit = process.exit;
-let stderr: MockStderr | null = null;
 
 afterEach(() => {
   commands.length = 0;
-  stderr?.restore();
-  stderr = null;
   process.exit = originalExit;
 });
 
@@ -58,7 +55,6 @@ describe("dispatch", () => {
   });
 
   test("errors on unknown flag", async () => {
-    stderr = mockStderr();
     let exitCode: number | undefined;
     process.exit = ((code: number) => {
       exitCode = code;

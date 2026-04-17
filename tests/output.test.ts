@@ -1,17 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chrome, chromeRaw, colorLevel, shouldAnimate } from "../src/core/output.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 import { seedTestConfig } from "./helpers.ts";
-
-let stderr: MockStderr;
-
-beforeEach(() => {
-  stderr = mockStderr();
-});
-
-afterEach(() => {
-  stderr.restore();
-});
+import { capturedStderr as stderr } from "./preload.ts";
 
 describe("chrome", () => {
   test("writes message with trailing newline to stderr", () => {

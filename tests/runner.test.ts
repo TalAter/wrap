@@ -14,7 +14,6 @@ import {
 import type { Transcript } from "../src/core/transcript.ts";
 import type { PromptScaffold } from "../src/llm/build-prompt.ts";
 import type { Provider } from "../src/llm/types.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 import { seedTestConfig } from "./helpers.ts";
 
 const scaffold: PromptScaffold = {
@@ -23,17 +22,14 @@ const scaffold: PromptScaffold = {
   initialUserText: "",
 };
 
-let stderr: MockStderr;
 let tmpHome: string;
 
 beforeEach(() => {
   seedTestConfig();
-  stderr = mockStderr();
   tmpHome = mkdtempSync(join(tmpdir(), "wrap-runner-test-"));
 });
 
 afterEach(() => {
-  stderr.restore();
   rmSync(tmpHome, { recursive: true, force: true });
 });
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
 import { RoundError, runRound } from "../src/core/round.ts";
 import type { Transcript } from "../src/core/transcript.ts";
@@ -6,8 +6,8 @@ import { resetVerboseTimer } from "../src/core/verbose.ts";
 import type { PromptScaffold } from "../src/llm/build-prompt.ts";
 import type { Provider } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 import { seedTestConfig } from "./helpers.ts";
+import { capturedStderr as stderr } from "./preload.ts";
 
 const scaffold: PromptScaffold = {
   system: "system",
@@ -15,16 +15,9 @@ const scaffold: PromptScaffold = {
   initialUserText: "",
 };
 
-let stderr: MockStderr;
-
 beforeEach(() => {
-  stderr = mockStderr();
   seedTestConfig();
   resetVerboseTimer();
-});
-
-afterEach(() => {
-  stderr.restore();
 });
 
 function makeTranscript(): Transcript {

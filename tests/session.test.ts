@@ -15,30 +15,19 @@ import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import type { Provider } from "../src/llm/types.ts";
 import { resetDialogHostCache } from "../src/session/dialog-host.ts";
 import { runSession } from "../src/session/session.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
 import { seedTestConfig } from "./helpers.ts";
+import { capturedStderr as stderr, capturedStdout as stdout } from "./preload.ts";
 
-let stderr: MockStderr;
 let tmpHome: string;
-let originalConsoleLog: typeof console.log;
-let stdoutLines: string[];
 
 beforeEach(() => {
   seedTestConfig();
-  stderr = mockStderr();
   tmpHome = mkdtempSync(join(tmpdir(), "wrap-session-test-"));
   process.env.WRAP_HOME = tmpHome;
-  stdoutLines = [];
-  originalConsoleLog = console.log;
-  console.log = (...args: unknown[]) => {
-    stdoutLines.push(args.map((a) => String(a)).join(" "));
-  };
   resetDialogHostCache();
 });
 
 afterEach(() => {
-  stderr.restore();
-  console.log = originalConsoleLog;
   delete process.env.WRAP_HOME;
   rmSync(tmpHome, { recursive: true, force: true });
 });
@@ -79,7 +68,7 @@ describe("runSession — initial answer", () => {
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
     expect(exit).toBe(0);
-    expect(stdoutLines.join("")).toContain("the answer");
+    expect(stdout.text).toContain("the answer");
   });
 
   test("yolo + answer: stdout output, exit 0 (yolo has no effect on replies)", async () => {
@@ -92,7 +81,7 @@ describe("runSession — initial answer", () => {
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
     expect(exit).toBe(0);
-    expect(stdoutLines.join("")).toContain("the answer");
+    expect(stdout.text).toContain("the answer");
   });
 });
 
@@ -137,10 +126,16 @@ describe("runSession — error path", () => {
 });
 
 describe("runSession — no TTY for medium command", () => {
+  // Global `stderr` already captures writes; just toggle isTTY for these.
+  const origIsTTY = process.stderr.isTTY;
+  beforeEach(() => {
+    Object.defineProperty(process.stderr, "isTTY", { value: false, configurable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process.stderr, "isTTY", { value: origIsTTY, configurable: true });
+  });
+
   test("medium-risk command without TTY → blocked, exit 1", async () => {
-    // Force isTTY false via the existing mockStderr.
-    stderr.restore();
-    stderr = mockStderr({ isTTY: false });
     const { provider } = makeProvider([
       { type: "command", content: "echo rm-a-fake", risk_level: "medium" } as CommandResponse,
     ]);
@@ -153,8 +148,6 @@ describe("runSession — no TTY for medium command", () => {
   });
 
   test("yolo + medium command without TTY → not blocked, runs and exits 0", async () => {
-    stderr.restore();
-    stderr = mockStderr({ isTTY: false });
     seedTestConfig({ yolo: true });
     const { provider } = makeProvider([
       { type: "command", content: "echo ok", risk_level: "medium" } as CommandResponse,
@@ -179,7 +172,7 @@ describe("runSession — multi-round step → reply", () => {
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
     expect(exit).toBe(0);
-    expect(stdoutLines.join("")).toContain("the answer");
+    expect(stdout.text).toContain("the answer");
     // Verify the log entry has BOTH rounds (the step and the reply)
     const { readFileSync } = await import("node:fs");
     const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");

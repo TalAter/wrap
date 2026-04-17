@@ -6,17 +6,13 @@ import {
   resetNotifications,
   subscribe,
 } from "../src/core/notify.ts";
-import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
-
-let stderr: MockStderr;
+import { capturedStderr as stderr } from "./preload.ts";
 
 beforeEach(() => {
   resetNotifications();
-  stderr = mockStderr();
 });
 
 afterEach(() => {
-  stderr.restore();
   resetNotifications();
 });
 
