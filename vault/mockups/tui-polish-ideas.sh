@@ -9,8 +9,8 @@
 # fall back to existing glyphs via resolveIcon() / isNerdFonts().
 #
 # Sections:
-#   A. Wizard progress bar (replaces badge, progressive reveal)
-#   B. Narrow terminal fallback (dots + breadcrumbs)
+#   A. Wizard breadcrumbs (replaces badge, progressive reveal)
+#   B. Narrow terminal fallback (dots + compact breadcrumbs)
 #   C. Risk badges as curve pills
 #   D. Bottom border status pill + action bar in pill
 #   E. Key hint pill keycaps
@@ -131,11 +131,11 @@ header() {
 #  WIZARD
 # ════════════════════════════════════════════════════════════════
 
-header "A. WIZARD PROGRESS BAR — Top of Dialog"
-print "  Replaces the 🧙 badge in the wizard's top border with a progress bar."
+header "A. WIZARD BREADCRUMBS — Top of Dialog"
+print "  Replaces the 🧙 badge in the wizard's top border with breadcrumbs."
 print "  Left-aligned: curve pill on left (🧙 Setup Wizard), flame separators"
 print "  between steps. Only completed + current step shown — future steps"
-print "  hidden so the bar grows as the user progresses. Each completed step"
+print "  hidden so the trail grows as the user advances. Each completed step"
 print "  shows ✓ + its icon. Response dialog keeps existing badge (risk pill)."
 print "  FILES: border.ts, config-wizard-dialog.tsx, wizard/state.ts"
 print ""
@@ -192,13 +192,13 @@ print "${BG_ACTIVE}${FG_ACTIVE_TEXT}${BOLD} ${ICON_STAR} Default ${RESET}${FG_AC
 print "  ${FG_BLUE}│${RESET}                                                          ${FG_DIM}│${RESET}"
 
 # ────────────────────────────────────────────────────────────────
-header "B. NARROW TERMINAL PROGRESS — Compact Dots + Breadcrumbs"
-print "  Fallback when terminal is too narrow for the full progress bar (A)."
+header "B. NARROW TERMINAL BREADCRUMBS — Compact Dots + Icons"
+print "  Fallback when terminal is too narrow for the full breadcrumbs (A)."
 print "  Two options: filled/empty dot circles, or icon breadcrumbs with"
 print "  thin powerline separators (E0B1). Both show step position compactly."
 print ""
 
-print "  ${DIM}Dot progress (current = step 3):${RESET}"
+print "  ${DIM}Dot breadcrumbs (current = step 3):${RESET}"
 print "  ${FG_GREEN}${ICON_CIRCLE}${RESET} ${FG_GREEN}${ICON_CIRCLE}${RESET} ${FG_BLUE}${BOLD}${ICON_CIRCLE}${RESET} ${FG_DIM}${ICON_CIRCLE_O}${RESET}  ${FG_ACTIVE_TEXT}Model${RESET}"
 print ""
 
@@ -475,13 +475,13 @@ print "${FG_DIM} disable Claude Code${RESET}"
 
 header "K. WIZARD COMPLETION — Final Screen"
 print "  NEW SCREEN: Added after 'picking-default' in wizard state machine."
-print "  Shows: all-green progress bar, '✓ All set!' pill, config card with"
+print "  Shows: all-green breadcrumbs, '✓ All set!' pill, config card with"
 print "  provider/model/API key summary, 'Rerun with w --setup' hint, and"
 print "  ⏎ to continue to their original query."
 print "  FILES: wizard/state.ts (add 'complete' screen), config-wizard-dialog.tsx"
 print ""
 
-# Top border with full progress (all done)
+# Top border with full breadcrumbs (all done)
 print "  ${FG_BLUE}╭${dashes}╮${RESET}"
 print -n "  ${FG_BLUE}│${RESET}"
 print -n "${FG_WIZARD}${PL_LCURVE}${BG_WIZARD}${FG_WHITE}${BOLD} 🧙 Setup Wizard ${RESET}"
@@ -654,7 +654,7 @@ header "S. FULL WIZARD — Everything Together"
 print ""
 
 print "  ${FG_BLUE}╭${dashes}╮${RESET}"
-# Progress bar — step 2, only shows completed + current
+# Breadcrumbs — step 2, only shows completed + current
 print -n "  ${FG_BLUE}│${RESET}"
 print -n "${FG_WIZARD}${PL_LCURVE}${BG_WIZARD}${FG_WHITE}${BOLD} 🧙 Setup Wizard ${RESET}"
 print -n "${FG_WIZARD}${BG_DONE}${PL_RFLAME}${RESET}"
@@ -712,7 +712,7 @@ print ""
 print "  ${BOLD}Files to modify:${RESET}"
 print "  ${FG_BLUE}border.ts${RESET}                 C, D, F — badge pill, bottom status pill"
 print "  ${FG_BLUE}checklist.tsx${RESET}             G, H — cursor pill, toggle icons"
-print "  ${FG_BLUE}config-wizard-dialog.tsx${RESET}  A, B, I, J, K — progress bar, completion"
+print "  ${FG_BLUE}config-wizard-dialog.tsx${RESET}  A, B, I, J, K — breadcrumbs, completion"
 print "  ${FG_BLUE}response-dialog.tsx${RESET}       E, L, M — key hints, plan label, fold"
 print "  ${FG_BLUE}risk-presets.ts${RESET}            C — no change needed, just border.ts"
 print "  ${FG_BLUE}spinner.ts${RESET}                N — alternative spinner frames"
@@ -722,6 +722,6 @@ print ""
 print "  ${BOLD}New constants needed:${RESET}"
 print "  ${FG_WHITE}PL_LCURVE = '\\uE0B6'${RESET}    left curve"
 print "  ${FG_WHITE}PL_RCURVE = '\\uE0B4'${RESET}    right curve"
-print "  ${FG_WHITE}PL_RFLAME = '\\uE0C0'${RESET}    right flame (wizard progress only)"
-print "  ${FG_WHITE}PL_RTHIN  = '\\uE0B1'${RESET}    thin separator (breadcrumbs)"
+print "  ${FG_WHITE}PL_RFLAME = '\\uE0C0'${RESET}    right flame (breadcrumbs only)"
+print "  ${FG_WHITE}PL_RTHIN  = '\\uE0B1'${RESET}    thin separator (compact breadcrumbs)"
 print ""

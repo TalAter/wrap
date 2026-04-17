@@ -8,7 +8,7 @@ import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { Pill } from "./pill.tsx";
-import { getRiskPresets } from "./risk-presets.ts";
+import { getRiskPreset } from "./risk-presets.ts";
 import { InputFrame, TextInput } from "./text-input.tsx";
 import { useTheme } from "./theme-context.tsx";
 
@@ -305,12 +305,12 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         ? `${prefix}${EXECUTING_STEP_STATUS}`
         : undefined;
 
-  const preset = getRiskPresets()[riskLevel];
+  const preset = getRiskPreset(riskLevel);
 
   return (
     <Dialog
       gradientStops={preset.stops}
-      badge={preset.badge}
+      top={{ segs: [preset.pill], align: "right" }}
       bottomStatus={bottomStatus}
       naturalContentWidth={naturalContentWidth}
     >

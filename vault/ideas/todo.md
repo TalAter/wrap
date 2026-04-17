@@ -83,7 +83,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## Output & UI
 
-- [ ] Extract shared `KeyHints` component — `config-wizard-dialog.tsx` and `response-dialog.tsx` have near-identical implementations. Deduplicate into `src/tui/key-hints.tsx` with configurable indent.
+- [ ] Extract shared `KeyHints` component — `wizard-chrome.tsx` and `response-dialog.tsx` have near-identical implementations (indent + optional theme-prop threading differ). Deduplicate into `src/tui/key-hints.tsx` with configurable indent.
 - [ ] Visual identity — distinctive color scheme, emoji prefix, characterful messages
 - [ ] Answer rendering — colorful terminal markdown (syntax-highlighted code, bold/italic, lists). Blocked on TUI library.
 - [ ] TUI components — radio buttons, checkboxes, free text input, editable fields

@@ -1,13 +1,17 @@
 import { Box, type DOMElement, Text, useBoxMetrics, useWindowSize } from "ink";
 import { type ReactNode, type RefObject, useRef } from "react";
 import type { Color } from "../core/ansi.ts";
+import { isNerdFonts } from "../core/output.ts";
 import {
-  type Badge,
   type BorderSegment,
   bottomBorderSegments,
+  fitTop,
+  gradientRow,
   interpolateGradient,
+  type TopBadge,
   topBorderSegments,
 } from "./border.ts";
+import { pillWidth } from "./pill.tsx";
 
 const DIALOG_MARGIN = 4;
 const MIN_TOTAL_WIDTH = 5;
@@ -24,61 +28,58 @@ export function dialogInnerWidth(termCols: number, naturalContentWidth: number):
   return totalWidth - 4;
 }
 
-/**
- * Generic bordered-chrome dialog. Owns the terminal-centered outer layout,
- * width clamping, top/bottom borders (with optional badge + status), and
- * the left/right gradient bars sized to the measured inner content height.
- *
- * Knows nothing about what's inside — callers own the semantics and pass
- * primitive styling inputs (stops, badge) and their own children.
- */
 type DialogProps = {
-  /** Gradient ramp for the top border + left bar. */
   gradientStops: Color[];
-  /** Optional badge embedded in the top border (e.g. risk level, wizard badge). */
-  badge?: Badge;
-  /** Status text threaded into the bottom border (spinner, loading message, etc.). */
+  /** Dialog widens to fit the full pill; border falls back to narrow labels or drops it. */
+  top?: TopBadge;
   bottomStatus?: string;
-  /**
-   * Caller-computed max text width of the content. Dialog clamps this to
-   * the terminal width and adds 4 cells of padding for the borders.
-   */
   naturalContentWidth: number;
-  children: ReactNode;
+  /** Static JSX, or a render-prop that receives the resolved innerWidth. */
+  children: ReactNode | ((innerWidth: number) => ReactNode);
 };
 
 export function Dialog({
   gradientStops,
-  badge,
+  top,
   bottomStatus,
   naturalContentWidth,
   children,
 }: DialogProps) {
   const { columns: termCols, rows: termRows } = useWindowSize();
+  const nerd = isNerdFonts();
 
-  const innerWidth = dialogInnerWidth(termCols, naturalContentWidth);
+  // -2 for the two corners; innerWidth carries everything between them.
+  const pillNatural = top ? pillWidth(top.segs, nerd, false) : 0;
+  const effectiveNatural = Math.max(naturalContentWidth, pillNatural - 2);
+  const innerWidth = dialogInnerWidth(termCols, effectiveNatural);
   const totalWidth = innerWidth + 4;
+  const prepared = fitTop(top, totalWidth - 2, nerd, pillNatural);
 
   const middleRef = useRef<DOMElement>(null);
   const { height: measuredHeight } = useBoxMetrics(middleRef as RefObject<DOMElement>);
   const borderCount = Math.max(1, measuredHeight);
 
-  const leftBorderLines = Array.from({ length: borderCount }, (_, index) => ({
-    key: `left-${index}`,
-    color: interpolateGradient(index, borderCount, gradientStops),
+  const rightColor = interpolateGradient(
+    gradientStops.length - 1,
+    gradientStops.length,
+    gradientStops,
+  );
+  const leftLines = gradientRow(borderCount, gradientStops).map((color, i) => ({
+    key: `left-${i}`,
+    color,
   }));
-  const rightBorderLines = Array.from({ length: borderCount }, (_, index) => ({
-    key: `right-${index}`,
-  }));
+  const rightLines = leftLines.map((_, i) => ({ key: `right-${i}` }));
+
+  const body = typeof children === "function" ? children(innerWidth) : children;
 
   return (
     <Box width={termCols} height={termRows} justifyContent="center" alignItems="center">
       <Box flexDirection="column" width={totalWidth}>
-        <BorderLine segments={topBorderSegments(totalWidth, gradientStops, badge)} />
+        <BorderLine segments={topBorderSegments(totalWidth, gradientStops, prepared)} />
 
         <Box flexDirection="row" alignItems="flex-start">
           <Box flexDirection="column" width={2}>
-            {leftBorderLines.map((line) => (
+            {leftLines.map((line) => (
               <Text key={line.key} color={line.color}>
                 {"│ "}
               </Text>
@@ -92,19 +93,12 @@ export function Dialog({
             paddingTop={1}
             paddingBottom={1}
           >
-            {children}
+            {body}
           </Box>
 
           <Box flexDirection="column" width={2}>
-            {rightBorderLines.map((line) => (
-              <Text
-                key={line.key}
-                color={interpolateGradient(
-                  gradientStops.length - 1,
-                  gradientStops.length,
-                  gradientStops,
-                )}
-              >
+            {rightLines.map((line) => (
+              <Text key={line.key} color={rightColor}>
                 {" │"}
               </Text>
             ))}

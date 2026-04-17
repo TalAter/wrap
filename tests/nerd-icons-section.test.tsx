@@ -35,7 +35,7 @@ describe("NerdIconsSection", () => {
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("four icons");
-    expect(text).toContain("setup wizard");
+    expect(text).toContain("Setup Wizard");
   });
 
   test("selecting Yes returns nerdFonts: true", async () => {

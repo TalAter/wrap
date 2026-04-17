@@ -1,8 +1,9 @@
 import { Select } from "@inkjs/ui";
-import { Box, Text, useInput, useWindowSize } from "ink";
+import { Box, Text, useInput } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
 import { getConfig, updateConfig } from "../config/store.ts";
+import { isNerdFonts } from "../core/output.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import { getTheme, themeHex } from "../core/theme.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
@@ -10,15 +11,16 @@ import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initProviderWizardState, type ProviderWizardAction, reduce } from "../wizard/state.ts";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
-import { Dialog, dialogInnerWidth } from "./dialog.tsx";
+import { Dialog } from "./dialog.tsx";
 import { NerdIconsSection } from "./nerd-icons-section.tsx";
 import { TextInput } from "./text-input.tsx";
 import { WelcomeSection } from "./welcome-section.tsx";
 import {
-  getWizardBadge,
   getWizardStops,
   KeyHints,
+  stepIndexFromScreen,
   WIZARD_CONTENT_WIDTH,
+  wizardCrumbPill,
 } from "./wizard-chrome.tsx";
 
 const MAX_VISIBLE_OPTIONS = 8;
@@ -83,8 +85,7 @@ export function ProvidersSection({
   );
 
   const { screen } = state;
-  const { columns: termCols } = useWindowSize();
-  const innerWidth = dialogInnerWidth(termCols, WIZARD_CONTENT_WIDTH);
+  const segs = wizardCrumbPill(stepIndexFromScreen(screen.tag), isNerdFonts());
   let bottomStatus: string | undefined;
   if (screen.tag === "loading-models") {
     bottomStatus = "Loading models list…";
@@ -93,37 +94,41 @@ export function ProvidersSection({
   return (
     <Dialog
       gradientStops={getWizardStops()}
-      badge={getWizardBadge()}
+      top={{ segs, align: "left" }}
       bottomStatus={bottomStatus}
       naturalContentWidth={WIZARD_CONTENT_WIDTH}
     >
-      {screen.tag === "selecting-providers" && (
-        <ProviderSelectionScreen
-          checked={screen.checked}
-          cliAvailable={cliAvailable}
-          contentWidth={innerWidth}
-          dispatch={dispatch}
-        />
-      )}
-      {screen.tag === "loading-models" && <LoadingScreen />}
-      {screen.tag === "entering-key" && (
-        <ApiKeyScreen provider={screen.provider} draft={screen.draft} dispatch={dispatch} />
-      )}
-      {screen.tag === "picking-model" && (
-        <ModelPickerScreen
-          provider={screen.provider}
-          models={screen.models}
-          cursor={screen.cursor}
-          dispatch={dispatch}
-        />
-      )}
-      {screen.tag === "disclaimer" && <DisclaimerScreen dispatch={dispatch} />}
-      {screen.tag === "picking-default" && (
-        <DefaultPickerScreen
-          providers={state.pickedProviders}
-          cursor={screen.cursor}
-          dispatch={dispatch}
-        />
+      {(innerWidth) => (
+        <>
+          {screen.tag === "selecting-providers" && (
+            <ProviderSelectionScreen
+              checked={screen.checked}
+              cliAvailable={cliAvailable}
+              contentWidth={innerWidth}
+              dispatch={dispatch}
+            />
+          )}
+          {screen.tag === "loading-models" && <LoadingScreen />}
+          {screen.tag === "entering-key" && (
+            <ApiKeyScreen provider={screen.provider} draft={screen.draft} dispatch={dispatch} />
+          )}
+          {screen.tag === "picking-model" && (
+            <ModelPickerScreen
+              provider={screen.provider}
+              models={screen.models}
+              cursor={screen.cursor}
+              dispatch={dispatch}
+            />
+          )}
+          {screen.tag === "disclaimer" && <DisclaimerScreen dispatch={dispatch} />}
+          {screen.tag === "picking-default" && (
+            <DefaultPickerScreen
+              providers={state.pickedProviders}
+              cursor={screen.cursor}
+              dispatch={dispatch}
+            />
+          )}
+        </>
       )}
     </Dialog>
   );

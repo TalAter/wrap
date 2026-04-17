@@ -3,10 +3,10 @@ import { useState } from "react";
 import { getTheme, themeHex } from "../core/theme.ts";
 import { Dialog } from "./dialog.tsx";
 import {
-  getWizardBadge,
   getWizardStops,
   KeyHints,
   WIZARD_CONTENT_WIDTH,
+  wizardLabelPill,
 } from "./wizard-chrome.tsx";
 
 // Star Wars Nerd Font glyphs for detection
@@ -42,10 +42,15 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
     "No — they look like boxes or question marks",
   ];
 
+  const t = getTheme();
+  const active = themeHex(t.interactive.highlight);
+  const muted = themeHex(t.text.muted);
+  const bright = themeHex(t.text.primary);
+
   return (
     <Dialog
       gradientStops={getWizardStops()}
-      badge={getWizardBadge()}
+      top={{ segs: wizardLabelPill(), align: "left" }}
       naturalContentWidth={WIZARD_CONTENT_WIDTH}
     >
       <Box flexDirection="column">
@@ -56,18 +61,12 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
           {TEST_ICONS.join("  ")}
         </Text>
         <Text> </Text>
-        {options.map((label, i) => {
-          const t = getTheme();
-          const active = themeHex(t.interactive.highlight);
-          const muted = themeHex(t.text.muted);
-          const bright = themeHex(t.text.primary);
-          return (
-            <Text key={label}>
-              <Text color={i === cursor ? active : muted}>{i === cursor ? "  ❯ " : "    "}</Text>
-              <Text color={i === cursor ? bright : muted}>{label}</Text>
-            </Text>
-          );
-        })}
+        {options.map((label, i) => (
+          <Text key={label}>
+            <Text color={i === cursor ? active : muted}>{i === cursor ? "  ❯ " : "    "}</Text>
+            <Text color={i === cursor ? bright : muted}>{label}</Text>
+          </Text>
+        ))}
         <Text> </Text>
         <KeyHints
           items={[
