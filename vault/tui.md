@@ -2,7 +2,7 @@
 name: tui
 description: Ink dialog, three output tiers, custom borders, text input, action bar, host lifecycle
 Source: src/tui/, src/session/dialog-host.ts, src/session/notification-router.ts
-Last-synced: c54a1a5
+Last-synced: 4b44f55
 ---
 
 # TUI
@@ -32,17 +32,17 @@ Tier 2 exists so the "thinking…" spinner doesn't force an Ink load. Once the d
 
 Vertical stack: top border, 3-column row (left gradient / middle content / right dim border), bottom border.
 
-Why custom borders: Ink's native border supports one color per side — no vertical gradient, no in-border risk badge.
+Why custom borders: Ink's native border supports one color per side — no vertical gradient, no in-border pills.
 
 Middle column uses standard Ink flexbox for wrapping. Left border is per-row gradient colors. Right border is dim `[60,60,100]`.
 
-Width: `min(natural + 4, termCols - 4)`. `MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4` so action bar doesn't wrap on normal terminals.
+Width: `min(max(natural, pillFullWidth - 2) + 4, termCols - 4)`. Dialog widens to fit the full top pill when the terminal allows. `MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4` so action bar doesn't wrap on normal terminals. Render-prop children receive the resolved `innerWidth` so child layout doesn't re-derive the widening math.
 
 Height sync: first-pass estimate from content line counts; `useBoxMetrics` provides measured height. Mismatch → one extra render.
 
 ### Top border
 
-Embeds risk badge pill: `╭─── ⚠ medium risk ──╮`. Per-glyph gradient colors. Badge definitions co-located in `RISK` table in `border.ts` — tuning a risk level's look is one place.
+Holds one `PillSegment` chain — risk badge (single pill, right-aligned) or wizard breadcrumbs (multi-pill, left-aligned). Nerd mode wraps the chain with Powerline curves and flames between segments; plain mode butts padded bg pills. Border tries full labels, falls back to each segment's `labelNarrow`, drops the chain if neither fits. Per-glyph gradient colors across the rule. Risk pills live in `risk-presets.ts`; wizard pills in `wizard-chrome.ts`; primitive in `pill.tsx` (`pillSegments`, `pillWidth`).
 
 ### Bottom border
 

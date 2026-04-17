@@ -1,8 +1,8 @@
 ---
 name: wizard
 description: Interactive TUI that writes a valid config.jsonc on first run
-Source: src/wizard/, src/tui/config-wizard-dialog.tsx
-Last-synced: c54a1a5
+Source: src/wizard/, src/tui/config-wizard-dialog.tsx, src/tui/wizard-chrome.tsx, src/tui/nerd-icons-section.tsx
+Last-synced: 4b44f55
 ---
 
 # Wizard
@@ -23,7 +23,7 @@ Cancellation exits silently with status 0; the next `w` invocation re-triggers t
 
 Each section exports a component with the shape `(props: { onDone: (result: T) => void; onCancel: () => void; ...deps }) => JSX.Element` and a result type `T`.
 
-Current flow: `welcome` → `nerd-icons` → `providers` → `done`. All sections except welcome share the wizard gradient and the `🧙 setup wizard` badge.
+Current flow: `welcome` → `nerd-icons` → `providers` → `done`. Non-welcome sections share the wizard gradient. Nerd-icons carries a static `🧙 Setup Wizard` pill in the top border; provider screens carry a breadcrumbs pill chain — `Providers` → `API Key` → `Model` → `Default` — with done/active states driven by `stepIndexFromScreen(screen.tag)`.
 
 ### WizardResult
 
