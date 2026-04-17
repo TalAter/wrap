@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Color } from "../core/ansi.ts";
 import { getTheme, LIGHT_THEME, themeHex } from "../core/theme.ts";
 import {
@@ -9,7 +9,7 @@ import {
   FRAMES,
 } from "./welcome-animation-frames.ts";
 
-const BOUNDARY_HOLD_MS = 1000;
+const START_HOLD_MS = 1000;
 const FRAME_DURATION_SCALE = 1.5;
 
 type PaletteKey = "c0" | "c1" | "c2" | "c3";
@@ -29,46 +29,27 @@ const PALETTES: Record<"dark" | "light", Record<PaletteKey, Color>> = {
   },
 };
 
-export type Direction = 1 | -1;
-
-export type Step = {
+type Step = {
   nextIndex: number;
-  nextDirection: Direction;
   delayMs: number;
-};
+} | null;
 
-export function nextStep(
-  index: number,
-  direction: Direction,
-  frames: readonly AnimationFrame[],
-): Step {
-  if (frames.length <= 1) {
-    return { nextIndex: 0, nextDirection: direction, delayMs: BOUNDARY_HOLD_MS };
-  }
-  const current = frames[index];
+export function nextStep(index: number, frames: readonly AnimationFrame[]): Step {
   const lastIndex = frames.length - 1;
-  const atStart = index <= 0;
-  const atEnd = index >= lastIndex;
-  if (atEnd) {
-    return { nextIndex: lastIndex - 1, nextDirection: -1, delayMs: BOUNDARY_HOLD_MS };
-  }
-  if (atStart) {
-    return { nextIndex: 1, nextDirection: 1, delayMs: BOUNDARY_HOLD_MS };
-  }
-  const delayMs = (current?.duration ?? 0) * FRAME_DURATION_SCALE;
-  return { nextIndex: index + direction, nextDirection: direction, delayMs };
+  if (lastIndex <= 0) return null;
+  if (index >= lastIndex) return null;
+  if (index <= 0) return { nextIndex: 1, delayMs: START_HOLD_MS };
+  const delayMs = (frames[index]?.duration ?? 0) * FRAME_DURATION_SCALE;
+  return { nextIndex: index + 1, delayMs };
 }
 
 export function WelcomeAnimation() {
   const [frameIndex, setFrameIndex] = useState(0);
-  const directionRef = useRef<Direction>(1);
 
   useEffect(() => {
-    const step = nextStep(frameIndex, directionRef.current, FRAMES);
-    const id = setTimeout(() => {
-      directionRef.current = step.nextDirection;
-      setFrameIndex(step.nextIndex);
-    }, step.delayMs);
+    const step = nextStep(frameIndex, FRAMES);
+    if (!step) return;
+    const id = setTimeout(() => setFrameIndex(step.nextIndex), step.delayMs);
     return () => clearTimeout(id);
   }, [frameIndex]);
 
