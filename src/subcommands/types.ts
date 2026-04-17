@@ -1,3 +1,5 @@
+export type CompletionKind = "providers" | "shells";
+
 export type CLIFlag = {
   flag: string;
   aliases?: string[];
@@ -5,6 +7,7 @@ export type CLIFlag = {
   description: string;
   usage: string;
   help?: string;
+  completion?: CompletionKind;
 } & (
   | { kind: "command"; run: (args: string[]) => Promise<void> }
   | { kind: "option"; takesValue: boolean; env?: string[] }

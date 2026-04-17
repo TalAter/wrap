@@ -7,9 +7,11 @@ import type { Command } from "../src/subcommands/types.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 
 const originalExit = process.exit;
+const originalCommands = [...commands];
 
 afterEach(() => {
   commands.length = 0;
+  commands.push(...originalCommands);
   process.exit = originalExit;
 });
 

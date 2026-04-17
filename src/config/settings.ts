@@ -18,6 +18,7 @@ type BaseSetting = {
   help?: string;
   flag?: readonly string[];
   env?: readonly string[];
+  completion?: "providers";
 };
 
 export type BooleanSetting = BaseSetting & { type: "boolean"; default?: boolean };
@@ -68,6 +69,7 @@ export const SETTINGS = {
     ].join("\n"),
     flag: ["--model", "--provider"],
     env: ["WRAP_MODEL"],
+    completion: "providers",
   },
   nerdFonts: {
     type: "boolean",
