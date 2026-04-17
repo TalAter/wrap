@@ -70,7 +70,7 @@ export const DARK_THEME: ThemeTokens = {
     selected: [120, 230, 160],
   },
   badge: {
-    wizard: { fg: [120, 180, 255], bg: [30, 50, 90] },
+    wizard: { fg: [210, 210, 225], bg: [30, 50, 90] },
     riskLow: { fg: [102, 204, 136], bg: [25, 70, 60] },
     riskMedium: { fg: [255, 200, 80], bg: [80, 50, 20] },
     riskHigh: { fg: [255, 100, 100], bg: [80, 25, 25] },
@@ -125,7 +125,7 @@ export const LIGHT_THEME: ThemeTokens = {
     selected: [15, 125, 55],
   },
   badge: {
-    wizard: { fg: [25, 90, 190], bg: [150, 175, 220] },
+    wizard: { fg: [10, 20, 90], bg: [150, 175, 220] },
     riskLow: { fg: [15, 125, 55], bg: [215, 238, 220] },
     riskMedium: { fg: [160, 95, 0], bg: [248, 232, 200] },
     riskHigh: { fg: [190, 25, 45], bg: [248, 218, 218] },

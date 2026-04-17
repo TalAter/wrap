@@ -88,7 +88,9 @@ function SectionHeader({
   width?: number;
   spaceAbove: boolean;
 }) {
-  const leaderColor = themeHex(getTheme().chrome.dim);
+  const t = getTheme();
+  const leaderColor = themeHex(t.chrome.dim);
+  const labelColor = themeHex(t.text.secondary);
   const showBraille = !width || width >= label.length + 8;
   const text = showBraille ? ` ${label.toUpperCase()} ` : label.toUpperCase();
   const trailWidth = showBraille && width ? width - text.length - 2 : 0;
@@ -98,7 +100,7 @@ function SectionHeader({
       {spaceAbove && <Text> </Text>}
       <Text>
         {showBraille && <Text color={leaderColor}>{BRAILLE.repeat(2)}</Text>}
-        <Text bold dimColor>
+        <Text bold color={labelColor}>
           {text}
         </Text>
         {trailWidth > 0 && <Text color={leaderColor}>{BRAILLE.repeat(trailWidth)}</Text>}

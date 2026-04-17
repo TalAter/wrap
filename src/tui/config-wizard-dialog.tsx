@@ -88,7 +88,17 @@ export function ProvidersSection({
   const { screen } = state;
   const nerd = isNerdFonts();
   const stepIdx = stepIndexFromScreen(screen.tag);
-  const segs = wizardCrumbPill(stepIdx, nerd);
+  const activeProviderName =
+    screen.tag === "entering-key" || screen.tag === "picking-model" || screen.tag === "disclaimer"
+      ? screen.provider
+      : undefined;
+  const activeProviderMeta = activeProviderName
+    ? (API_PROVIDERS[activeProviderName] ?? CLI_PROVIDERS[activeProviderName])
+    : undefined;
+  const activeProvider = activeProviderMeta
+    ? { displayName: activeProviderMeta.displayName, nerdIcon: activeProviderMeta.nerdIcon }
+    : undefined;
+  const segs = wizardCrumbPill(stepIdx, nerd, activeProvider);
   const narrowSegs = wizardCrumbPillNarrow(stepIdx, nerd);
   let bottomStatus: string | undefined;
   if (screen.tag === "loading-models") {
