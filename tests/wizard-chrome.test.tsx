@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   stepIndexFromScreen,
   wizardCrumbPill,
+  wizardCrumbPillNarrow,
   wizardLabelPill,
 } from "../src/tui/wizard-chrome.tsx";
 import { seedTestConfig } from "./helpers.ts";
@@ -94,5 +95,53 @@ describe("wizardCrumbPill", () => {
     const segs = wizardCrumbPill(1, false);
     const active = segs[segs.length - 1];
     expect(active?.bold).toBe(true);
+  });
+});
+
+describe("wizardCrumbPillNarrow", () => {
+  test("drops the 'Setup Wizard' label segment", () => {
+    const segs = wizardCrumbPillNarrow(1, true);
+    expect(segs.every((s) => !s.label.includes("Setup Wizard"))).toBe(true);
+  });
+
+  test("emits one segment per step (done + active + future)", () => {
+    const segs = wizardCrumbPillNarrow(1, true);
+    expect(segs.length).toBe(4); // Providers done, API Key active, Model future, Default future
+  });
+
+  test("nerd + stepIndex 1 — done=✓, active=icon+label, future=icon only", () => {
+    const segs = wizardCrumbPillNarrow(1, true);
+    expect(segs[0]?.label).toBe("\uF00C"); // done: check only
+    expect(segs[1]?.label).toBe("\uF084 API Key"); // active: icon + label
+    expect(segs[1]?.bold).toBe(true);
+    expect(segs[2]?.label).toBe("\uF1B2"); // future Model: icon only
+    expect(segs[3]?.label).toBe("\uF005"); // future Default: icon only
+  });
+
+  test("plain + stepIndex 1 — done=✓, active=label, future=abbr", () => {
+    const segs = wizardCrumbPillNarrow(1, false);
+    expect(segs[0]?.label).toBe("✓");
+    expect(segs[1]?.label).toBe("API Key");
+    expect(segs[1]?.bold).toBe(true);
+    expect(segs[2]?.label).toBe("M");
+    expect(segs[3]?.label).toBe("D");
+  });
+
+  test("stepIndex 0 — no done, active first", () => {
+    const segs = wizardCrumbPillNarrow(0, false);
+    expect(segs.length).toBe(4);
+    expect(segs[0]?.label).toBe("Providers");
+    expect(segs[0]?.bold).toBe(true);
+  });
+
+  test("stepIndex past last — all done, no active/future", () => {
+    const segs = wizardCrumbPillNarrow(4, false);
+    expect(segs.length).toBe(4);
+    for (const s of segs) expect(s.label).toBe("✓");
+  });
+
+  test("active step has labelNarrow for ultra-tight fits", () => {
+    const segs = wizardCrumbPillNarrow(1, false);
+    expect(segs[1]?.labelNarrow).toBe("K");
   });
 });

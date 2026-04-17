@@ -6,7 +6,14 @@ import { type BorderSegment, type PillSegment, pillSegments, pillWidth } from ".
 
 export type { BorderSegment } from "./pill.tsx";
 
-export type TopBadge = { segs: PillSegment[]; align: "left" | "right" };
+export type TopBadge = {
+  segs: PillSegment[];
+  // Alternate shape used when `segs` can't fit the border at full labels.
+  // Prefer a structurally simpler pill (fewer/shorter segments) over shrinking
+  // `segs` via `labelNarrow`, since drastic narrowing loses information.
+  narrowSegs?: PillSegment[];
+  align: "left" | "right";
+};
 
 export type PreparedTop = {
   segments: BorderSegment[];
@@ -48,9 +55,17 @@ export function fitTop(
   if (full <= budget) {
     return { segments: pillSegments(top.segs, nerd, false), align: top.align, width: full };
   }
-  const narrow = pillWidth(top.segs, nerd, true);
-  if (narrow <= budget) {
-    return { segments: pillSegments(top.segs, nerd, true), align: top.align, width: narrow };
+  // narrowSegs (if provided) is a redesigned compact pill — prefer it over
+  // shrinking the wide pill's own labels, which loses structural context.
+  const candidates = top.narrowSegs?.length ? [top.narrowSegs] : [top.segs];
+  for (const segs of candidates) {
+    for (const narrow of [false, true]) {
+      if (narrow === false && segs === top.segs) continue; // already tried above
+      const w = pillWidth(segs, nerd, narrow);
+      if (w <= budget) {
+        return { segments: pillSegments(segs, nerd, narrow), align: top.align, width: w };
+      }
+    }
   }
   return undefined;
 }
@@ -64,7 +79,8 @@ export function topBorderSegments(
   if (totalWidth <= 0) return [];
   const colors = gradientRow(totalWidth, stops);
   const pillW = prepared?.width ?? 0;
-  const pillStart = prepared?.align === "right" ? totalWidth - 1 - pillW : 1;
+  // Pills get 1-cell breathing room from each corner so they don't bump into ╭/╮.
+  const pillStart = !prepared ? 1 : prepared.align === "right" ? totalWidth - 2 - pillW : 2;
 
   const out: BorderSegment[] = [];
   out.push({ key: "top-0", text: "╭", color: colors[0] });

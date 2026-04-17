@@ -21,6 +21,7 @@ import {
   stepIndexFromScreen,
   WIZARD_CONTENT_WIDTH,
   wizardCrumbPill,
+  wizardCrumbPillNarrow,
 } from "./wizard-chrome.tsx";
 
 const MAX_VISIBLE_OPTIONS = 8;
@@ -85,7 +86,10 @@ export function ProvidersSection({
   );
 
   const { screen } = state;
-  const segs = wizardCrumbPill(stepIndexFromScreen(screen.tag), isNerdFonts());
+  const nerd = isNerdFonts();
+  const stepIdx = stepIndexFromScreen(screen.tag);
+  const segs = wizardCrumbPill(stepIdx, nerd);
+  const narrowSegs = wizardCrumbPillNarrow(stepIdx, nerd);
   let bottomStatus: string | undefined;
   if (screen.tag === "loading-models") {
     bottomStatus = "Loading models list…";
@@ -94,7 +98,7 @@ export function ProvidersSection({
   return (
     <Dialog
       gradientStops={getWizardStops()}
-      top={{ segs, align: "left" }}
+      top={{ segs, narrowSegs, align: "left" }}
       bottomStatus={bottomStatus}
       naturalContentWidth={WIZARD_CONTENT_WIDTH}
     >

@@ -51,6 +51,28 @@ export function wizardLabelPill(): PillSegment[] {
   return [wizardSeg(getTheme())];
 }
 
+// Narrow variant: drops the "Setup Wizard" label; shows all steps (done/active/future)
+// so the user still sees where they are in the flow when the wide pill doesn't fit.
+export function wizardCrumbPillNarrow(stepIndex: number, nerd: boolean): PillSegment[] {
+  const t = getTheme();
+  const segs: PillSegment[] = [];
+  WIZARD_STEPS.forEach((step, i) => {
+    if (i < stepIndex) {
+      segs.push({ ...t.badge.stepDone, label: nerd ? ICON_CHECK : "✓" });
+    } else if (i === stepIndex) {
+      segs.push({
+        ...t.badge.stepActive,
+        label: nerd ? `${step.icon} ${step.label}` : step.label,
+        labelNarrow: nerd ? step.icon : step.abbr,
+        bold: true,
+      });
+    } else {
+      segs.push({ ...t.badge.stepPending, label: nerd ? step.icon : step.abbr });
+    }
+  });
+  return segs;
+}
+
 export function wizardCrumbPill(stepIndex: number, nerd: boolean): PillSegment[] {
   const t = getTheme();
   const segs: PillSegment[] = [wizardSeg(t)];

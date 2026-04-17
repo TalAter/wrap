@@ -147,7 +147,7 @@ describe("fitTop + topBorderSegments alignment + fit", () => {
       segs: [{ label: "LEFT", fg: [255, 255, 255], bg: [30, 30, 30] }],
       align: "left",
     };
-    expect(plainText(renderTop(60, stops, top))).toMatch(/^╭ LEFT /);
+    expect(plainText(renderTop(60, stops, top))).toMatch(/^╭─ LEFT /);
   });
 
   test("align right puts pill right before ╮", () => {
@@ -155,7 +155,7 @@ describe("fitTop + topBorderSegments alignment + fit", () => {
       segs: [{ label: "RIGHT", fg: [255, 255, 255], bg: [30, 30, 30] }],
       align: "right",
     };
-    expect(plainText(renderTop(60, stops, top))).toMatch(/ RIGHT ╮$/);
+    expect(plainText(renderTop(60, stops, top))).toMatch(/ RIGHT ─╮$/);
   });
 
   test("visual width stays equal to requested width with pill", () => {
@@ -203,6 +203,50 @@ describe("fitTop + topBorderSegments alignment + fit", () => {
     expect(stringWidth(text)).toBe(60);
     expect(text).toMatch(/^╭/);
     expect(text).toMatch(/╮$/);
+  });
+
+  test("fitTop uses narrowSegs when segs (full) does not fit", () => {
+    const top: TopBadge = {
+      segs: [
+        { label: "WIDE LABEL ONE", fg: [1, 1, 1], bg: [2, 2, 2] },
+        { label: "WIDE LABEL TWO", fg: [1, 1, 1], bg: [2, 2, 2] },
+      ],
+      narrowSegs: [{ label: "N", fg: [1, 1, 1], bg: [2, 2, 2] }],
+      align: "left",
+    };
+    const prepared = fitTop(top, 10, false);
+    expect(prepared).toBeDefined();
+    const text = plainText(prepared?.segments ?? []);
+    expect(text).toContain(" N ");
+    expect(text).not.toContain("WIDE");
+  });
+
+  test("fitTop prefers segs full over narrowSegs when both fit", () => {
+    const top: TopBadge = {
+      segs: [{ label: "WIDE", fg: [1, 1, 1], bg: [2, 2, 2] }],
+      narrowSegs: [{ label: "N", fg: [1, 1, 1], bg: [2, 2, 2] }],
+      align: "left",
+    };
+    const prepared = fitTop(top, 60, false);
+    expect(plainText(prepared?.segments ?? [])).toContain(" WIDE ");
+  });
+
+  test("fitTop falls through narrowSegs full → narrowSegs narrow", () => {
+    const top: TopBadge = {
+      segs: [{ label: "X".repeat(50), fg: [1, 1, 1], bg: [2, 2, 2] }],
+      narrowSegs: [
+        { label: "API Key", labelNarrow: "K", fg: [1, 1, 1], bg: [2, 2, 2] },
+        { label: "Model", labelNarrow: "M", fg: [1, 1, 1], bg: [2, 2, 2] },
+      ],
+      align: "left",
+    };
+    // Budget 8: narrowSegs full = " API Key " + " Model " = 16 — too big.
+    // narrowSegs narrow = " K " + " M " = 6 — fits.
+    const prepared = fitTop(top, 8, false);
+    const text = plainText(prepared?.segments ?? []);
+    expect(text).toContain(" K ");
+    expect(text).toContain(" M ");
+    expect(text).not.toContain("API Key");
   });
 });
 

@@ -48,12 +48,12 @@ export function Dialog({
   const { columns: termCols, rows: termRows } = useWindowSize();
   const nerd = isNerdFonts();
 
-  // -2 for the two corners; innerWidth carries everything between them.
+  // Border = ╭ + dash + pill + dash + ╮ — 4 chrome cells around the pill body.
   const pillNatural = top ? pillWidth(top.segs, nerd, false) : 0;
-  const effectiveNatural = Math.max(naturalContentWidth, pillNatural - 2);
+  const effectiveNatural = Math.max(naturalContentWidth, pillNatural);
   const innerWidth = dialogInnerWidth(termCols, effectiveNatural);
   const totalWidth = innerWidth + 4;
-  const prepared = fitTop(top, totalWidth - 2, nerd, pillNatural);
+  const prepared = fitTop(top, totalWidth - 4, nerd, pillNatural);
 
   const middleRef = useRef<DOMElement>(null);
   const { height: measuredHeight } = useBoxMetrics(middleRef as RefObject<DOMElement>);

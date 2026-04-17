@@ -34,6 +34,7 @@ export type ThemeTokens = {
     fold: BadgeColors;
     stepDone: BadgeColors;
     stepActive: BadgeColors;
+    stepPending: BadgeColors;
   };
   gradient: {
     wizard: [Color, Color];
@@ -70,12 +71,13 @@ export const DARK_THEME: ThemeTokens = {
   },
   badge: {
     wizard: { fg: [120, 180, 255], bg: [30, 50, 90] },
-    riskLow: { fg: [120, 230, 160], bg: [78, 111, 118] },
-    riskMedium: { fg: [255, 200, 80], bg: [118, 102, 94] },
-    riskHigh: { fg: [255, 100, 100], bg: [118, 72, 100] },
+    riskLow: { fg: [102, 204, 136], bg: [25, 70, 60] },
+    riskMedium: { fg: [255, 200, 80], bg: [80, 50, 20] },
+    riskHigh: { fg: [255, 100, 100], bg: [80, 25, 25] },
     fold: { fg: [210, 210, 225], bg: [60, 60, 100] },
     stepDone: { fg: [130, 220, 160], bg: [40, 90, 60] },
     stepActive: { fg: [180, 200, 255], bg: [60, 80, 160] },
+    stepPending: { fg: [100, 100, 140], bg: [50, 50, 80] },
   },
   gradient: {
     wizard: [
@@ -130,6 +132,7 @@ export const LIGHT_THEME: ThemeTokens = {
     fold: { fg: [45, 45, 70], bg: [210, 215, 230] },
     stepDone: { fg: [15, 110, 55], bg: [210, 240, 215] },
     stepActive: { fg: [30, 75, 190], bg: [210, 225, 250] },
+    stepPending: { fg: [130, 130, 155], bg: [220, 220, 230] },
   },
   gradient: {
     wizard: [
