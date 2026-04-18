@@ -59,8 +59,6 @@ WRAP_YOLO=1 w deploy to staging
 # or "yolo": true in ~/.wrap/config.jsonc
 ```
 
-The `wy` shell alias (via `argv[0]` / symlink name) is planned but not built.
-
 ## Local rule engine (planned)
 
 Fast deterministic pattern matching after LLM response parse, before the execution gate. **Can only escalate risk, never lower it.** `effective = max(llm_risk, rule_risk)`.

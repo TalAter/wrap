@@ -12,7 +12,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## Input & Invocation
 
-- [ ] Mode detection from argv[0] / symlink name (w, wy, w!, w?)
 - [ ] Alias setup — scan for available single-letter commands, write shell-specific glob-protected aliases (zsh `noglob`, bash `set -f`, fish fallback)
 - [ ] Mode auto-detection (LLM decides command vs answer when no explicit flag)
 
