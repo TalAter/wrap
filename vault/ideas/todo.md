@@ -102,11 +102,12 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## Build & Distribution
 
+- [ ] Homebrew formula for `wrap`. Use `generate_completions_from_executable(bin/"w", "--completion")` to auto-install zsh/bash/fish completions into Homebrew's managed completion dirs.
+- [ ] For any packager we ship through, wire up shell completion install. Each channel has its own mechanism (Homebrew's `generate_completions_from_executable`, distro packages staging pre-generated files into `/usr/share/bash-completion/completions/` etc.). Whenever a new distribution channel is added, completion install is part of that work.
+- [ ] Wizard backstop for shell completions.
+- [ ] Manual end-to-end test of shell completions on bash + fish after install. Automated `bash -n` / `fish --no-execute` tests cover syntax only — real UX (tab behavior, provider colon suffix, alias exclusion) needs a human in each shell.
 - [ ] Man page (`man wrap`)
 - [ ] tldr page
-- [ ] Shell completions (bash/zsh/fish) — `w --completion <shell>` prints script. User redirects to shell's completion dir.
-- [ ] Shell completions: manual end-to-end test on bash + fish after install. Automated tests only verify `bash -n` / `fish --no-execute` syntax — real completion UX (tab behavior, provider colon suffix, alias exclusion) needs a human in each shell to confirm.
-- [ ] Shell completions: auto-install via package managers. Homebrew formula: `generate_completions_from_executable(bin/"w", "--completion")`. Add equivalent for any other packager we ship (apt/dnf/pacman — maintainer runs generator at package-build time into `/usr/share/bash-completion/completions/` etc). curl install.sh + npm `postinstall`: print instructions only, don't edit rc. Wizard: offer to write completion file on first run as backstop for non-brew users.
 
 ## Future Ideas
 
