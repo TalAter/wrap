@@ -126,7 +126,7 @@ export type SessionOutcome =
   | { kind: "error"; message: string };
 
 /** Action IDs used by the action bar in `confirming`. */
-export type ActionId = "run" | "cancel" | "edit" | "followup" | "describe" | "copy";
+export type ActionId = "run" | "cancel" | "edit" | "followup" | "copy";
 
 /** Everything the reducer accepts. */
 export type AppEvent =

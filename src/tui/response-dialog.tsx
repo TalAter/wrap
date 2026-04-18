@@ -23,7 +23,6 @@ type ResponseDialogProps = {
 const ACTION_ITEMS = [
   { id: "cancel", label: "No", primary: true, hotkey: "n" },
   { id: "run", label: "Yes", primary: true, hotkey: "y" },
-  { id: "describe", label: "Describe", primary: false, hotkey: "d" },
   { id: "edit", label: "Edit", primary: false, hotkey: "e" },
   { id: "followup", label: "Follow-up", primary: false, hotkey: "f" },
   { id: "copy", label: "Copy", primary: false, hotkey: "c" },

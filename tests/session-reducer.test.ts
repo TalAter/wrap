@@ -196,12 +196,6 @@ describe("reduce — confirming", () => {
     }
   });
 
-  test("key-action describe → state by reference (no-op)", () => {
-    const state = makeConfirming();
-    const next = reduce(state, { type: "key-action", action: "describe" });
-    expect(next).toBe(state);
-  });
-
   test("key-action copy → state by reference (no-op)", () => {
     const state = makeConfirming();
     const next = reduce(state, { type: "key-action", action: "copy" });

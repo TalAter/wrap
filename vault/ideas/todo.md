@@ -28,7 +28,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 - [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
 - [ ] Show context indicators in dialog — piped input, prior step output, etc. (user has no visibility into what informed the command)
 - [ ] Dialog styling — border, syntax-highlighted command, risk indicator
-- [ ] `[D]escribe` option — send command back to LLM for detailed explanation
 - [ ] `[C]opy` option — copy command to clipboard
 - [ ] Responsive action bar — shrink/abbreviate action buttons when dialog is narrow to avoid sprawling layout
 - [ ] Arrow key shortcuts in dialog — Up enters edit mode, Down exits (same as Esc)
@@ -50,7 +49,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## LLM Integration
 
-- [ ] CLI provider terms-of-service disclaimer on first use
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
 - [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the display label lives separately on `ResolvedProvider` and is computed via `formatProvider(resolved)`. Code that holds a `Provider` and wants to display the model has to be passed the resolved provider too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `formatProvider(resolved)`, and update test fixtures to set `label: "test / test"`. After this lands, drop the `model` field from `LoopOptions` / `RunRoundOptions` and read `provider.label` directly inside `runRound` and `runLoop`.
 - [ ] Migrate openai-compat kind from `@ai-sdk/openai` + baseURL to `@ai-sdk/openai-compatible`. The latter is Vercel's recommended wrapper for generic OpenAI-compatible endpoints (LM Studio, NVIDIA NIM, Ollama, OpenRouter, Groq, Mistral, etc.), exposes a `supportsStructuredOutputs` flag, and decouples our code from OpenAI-specific quirks. Today `src/llm/providers/ai-sdk.ts` uses `@ai-sdk/openai` + `baseURL` for Ollama which still works, but the idiomatic path is worth adopting before we add more openai-compat providers through the config wizard.

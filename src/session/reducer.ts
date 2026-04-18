@@ -128,9 +128,8 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
           draft: "",
           outputSlot: state.outputSlot,
         };
-      case "describe":
       case "copy":
-        // Deferred actions — no-op for now.
+        // Deferred action — no-op for now.
         return state;
     }
   }
