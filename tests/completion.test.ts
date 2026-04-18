@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../src/llm/providers/registry.ts";
 import {
   completionCmd,
+  generateBashCompletion,
+  generateCompletion,
+  generateFishCompletion,
   generateZshCompletion,
   runCompletion,
 } from "../src/subcommands/completion.ts";
@@ -10,6 +13,18 @@ import type { Command } from "../src/subcommands/types.ts";
 import { wrap } from "./helpers.ts";
 
 const providers = [...Object.keys(API_PROVIDERS), ...Object.keys(CLI_PROVIDERS)];
+
+async function assertSyntax(bin: string, flag: string, script: string): Promise<void> {
+  const proc = Bun.spawn([bin, flag], {
+    stdin: new Blob([script]),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const exitCode = await proc.exited;
+  const stderr = await new Response(proc.stderr).text();
+  expect(stderr).toBe("");
+  expect(exitCode).toBe(0);
+}
 
 describe("generateZshCompletion", () => {
   const script = generateZshCompletion({ commands, options, providers });
@@ -92,7 +107,7 @@ describe("generateZshCompletion", () => {
   });
 
   test("--completion exposes the supported-shells list as its value completer", () => {
-    expect(script).toContain("--completion=[Print shell completion script]:shell:(zsh)");
+    expect(script).toContain("--completion=[Print shell completion script]:shell:(zsh bash fish)");
   });
 
   test("boolean options have no value slot", () => {
@@ -129,16 +144,118 @@ describe("generateZshCompletion", () => {
   });
 
   const zshPath = Bun.which("zsh");
-  test.skipIf(!zshPath)("generated script passes `zsh -n` syntax check", async () => {
-    const proc = Bun.spawn([zshPath as string, "-n"], {
-      stdin: new Blob([script]),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const exitCode = await proc.exited;
-    const stderr = await new Response(proc.stderr).text();
-    expect(stderr).toBe("");
-    expect(exitCode).toBe(0);
+  test.skipIf(!zshPath)("generated script passes `zsh -n` syntax check", () =>
+    assertSyntax(zshPath as string, "-n", script),
+  );
+});
+
+describe("generateBashCompletion", () => {
+  const script = generateBashCompletion({ commands, options, providers });
+
+  test("defines _w function and registers via `complete -F _w w`", () => {
+    expect(script).toContain("_w()");
+    expect(script).toContain("complete -F _w w");
+  });
+
+  test("includes every flag and alias in the flag completion word list", () => {
+    for (const flag of [...commands, ...options]) {
+      expect(script).toContain(flag.flag);
+      for (const alias of flag.aliases ?? []) expect(script).toContain(alias);
+    }
+  });
+
+  test("wires provider completion for options with completion=providers", () => {
+    const providerFlags = [...commands, ...options]
+      .filter((f) => f.completion === "providers")
+      .flatMap((f) => [f.flag, ...(f.aliases ?? [])]);
+    expect(providerFlags.length).toBeGreaterThan(0);
+    for (const name of providerFlags) {
+      expect(script).toContain(name);
+    }
+    for (const p of providers) expect(script).toContain(`${p}:`);
+  });
+
+  test("uses compopt -o nospace for provider colon behavior", () => {
+    expect(script).toContain("compopt -o nospace");
+  });
+
+  test("wires shell completion for --completion", () => {
+    expect(script).toContain("zsh bash fish");
+  });
+
+  const bashPath = Bun.which("bash");
+  test.skipIf(!bashPath)("passes `bash -n` syntax check", () =>
+    assertSyntax(bashPath as string, "-n", script),
+  );
+});
+
+describe("generateFishCompletion", () => {
+  const script = generateFishCompletion({ commands, options, providers });
+
+  test("emits `complete -c w` lines", () => {
+    expect(script).toContain("complete -c w");
+  });
+
+  test("uses -l for long flags and -s for short flags", () => {
+    for (const flag of [...commands, ...options]) {
+      for (const name of [flag.flag, ...(flag.aliases ?? [])]) {
+        if (name.startsWith("--")) expect(script).toContain(`-l ${name.slice(2)}`);
+        else if (name.startsWith("-")) expect(script).toContain(`-s ${name.slice(1)}`);
+      }
+    }
+  });
+
+  test("attaches a -d segment on every flag line", () => {
+    const lines = script.split("\n");
+    for (const flag of [...commands, ...options]) {
+      for (const name of [flag.flag, ...(flag.aliases ?? [])]) {
+        const token = name.startsWith("--") ? `-l ${name.slice(2)}` : `-s ${name.slice(1)}`;
+        const line = lines.find((l: string) => l.includes(` ${token} `) || l.endsWith(` ${token}`));
+        expect(line).toBeDefined();
+        expect(line).toContain(" -d ");
+      }
+    }
+  });
+
+  test("marks value-taking flags with -x and wires provider/shell lists", () => {
+    expect(script).toMatch(/-l model[^\n]*-x[^\n]*-a '[^']*anthropic/);
+    expect(script).toMatch(/-l completion[^\n]*-x[^\n]*-a 'zsh bash fish'/);
+  });
+
+  test("escapes backslash and apostrophe in descriptions", () => {
+    const rogue: Command[] = [
+      {
+        kind: "command",
+        flag: "--rogue",
+        id: "rogue",
+        description: "It's risky\\",
+        usage: "w --rogue",
+        run: async () => {},
+      },
+    ];
+    const rogueScript = generateFishCompletion({ commands: rogue, options: [], providers: [] });
+    expect(rogueScript).toContain("It\\'s risky\\\\");
+  });
+
+  const fishPath = Bun.which("fish");
+  test.skipIf(!fishPath)("passes `fish --no-execute` syntax check", () =>
+    assertSyntax(fishPath as string, "--no-execute", script),
+  );
+});
+
+describe("generateCompletion dispatcher", () => {
+  const registry = { commands, options, providers };
+
+  test("zsh dispatches to generateZshCompletion", () => {
+    expect(generateCompletion("zsh", registry)).toBe(generateZshCompletion(registry));
+  });
+
+  test("bash dispatches to generateBashCompletion", () => {
+    expect(generateCompletion("bash", registry)).toBe(generateBashCompletion(registry));
+  });
+
+  test("fish dispatches to generateFishCompletion", () => {
+    expect(generateCompletion("fish", registry)).toBe(generateFishCompletion(registry));
   });
 });
 
@@ -169,18 +286,28 @@ describe("runCompletion", () => {
     expect(result.error).toContain("one argument");
   });
 
+  test("accepts bash and fish", () => {
+    expect(runCompletion(["bash"])).toBe("ok");
+    expect(runCompletion(["fish"])).toBe("ok");
+  });
+
   test("rejects unsupported shell with supported list and hint", () => {
-    const result = runCompletion(["bash"]);
+    const result = runCompletion(["powershell"]);
     expect(result).not.toBe("ok");
     if (result === "ok") return;
-    expect(result.error).toContain("bash");
+    expect(result.error).toContain("powershell");
     expect(result.error).toContain("zsh");
+    expect(result.error).toContain("bash");
+    expect(result.error).toContain("fish");
     expect(result.error).toContain("w --help completion");
   });
 });
 
 describe("--completion subcommand end-to-end", () => {
-  test("prints zsh script to stdout with zero exit", async () => {
+  // One e2e per subcommand verifies the CLI plumbing (stdout discipline, exit
+  // code, no stderr chrome). Per-shell output is covered by the dispatcher
+  // unit tests — no need to spawn a subprocess per shell.
+  test("prints script to stdout with zero exit and no stderr", async () => {
     const result = await wrap("--completion zsh");
     expect(result.exitCode).toBe(0);
     expect(result.stdout.startsWith("#compdef w\n")).toBe(true);

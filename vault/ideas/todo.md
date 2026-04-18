@@ -105,6 +105,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 - [ ] Man page (`man wrap`)
 - [ ] tldr page
 - [ ] Shell completions (bash/zsh/fish) — `w --completion <shell>` prints script. User redirects to shell's completion dir.
+- [ ] Shell completions: manual end-to-end test on bash + fish after install. Automated tests only verify `bash -n` / `fish --no-execute` syntax — real completion UX (tab behavior, provider colon suffix, alias exclusion) needs a human in each shell to confirm.
 - [ ] Shell completions: auto-install via package managers. Homebrew formula: `generate_completions_from_executable(bin/"w", "--completion")`. Add equivalent for any other packager we ship (apt/dnf/pacman — maintainer runs generator at package-build time into `/usr/share/bash-completion/completions/` etc). curl install.sh + npm `postinstall`: print instructions only, don't edit rc. Wizard: offer to write completion file on first run as backstop for non-brew users.
 
 ## Future Ideas
