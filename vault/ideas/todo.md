@@ -2,6 +2,8 @@
 
 All remaining implementation tasks. Completed features are omitted — see `vault/` notes for architecture reference.
 
+In-flight impl specs: `vault/impl-specs/input-file.md` (reframe piped input as a file on disk; drops `pipe_stdin`; fixes interactive-TTY bug).
+
 ---
 
 ## Core Query Loop
@@ -30,7 +32,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 - [ ] `[C]opy` option — copy command to clipboard
 - [ ] Responsive action bar — shrink/abbreviate action buttons when dialog is narrow to avoid sprawling layout
 - [ ] Arrow key shortcuts in dialog — Up enters edit mode, Down exits (same as Esc)
-- [ ] Interactive command detection + TTY handoff (vim, top, ssh, sudo)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
 ## Discovery & Steps (see [[discovery]])
@@ -111,11 +112,8 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 - [ ] Model-switching shorthand — e.g., `W` (uppercase) uses premium model, `w` uses default
 - [ ] Shell keybinding integration — keybinding reads raw line buffer (`$BUFFER` in zsh, `$READLINE_LINE` in bash) and sends to Wrap. Fully bypasses shell expansion (globs, `$()`, backticks). Aliases only protect against globs; this is the complete solution.
-- [ ] Speculative LLM call for large piped input — check if command can consume stdin directly
 - [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (non-final steps still execute).
-- [ ] Piped input: `--full` flag to send complete content to LLM without truncation
-- [ ] Piped input: temp-file buffering for very large inputs (avoid holding multi-GB strings in memory)
-- [ ] Piped input: `Bun.stdin.bytes()` for binary-safe re-piping (current `text()` corrupts non-UTF-8)
-- [ ] Piped input verbose lines — `Piped input: {size}`, `Piped input truncated: ...`, `Re-piping {size} to command stdin` when piping to the child. Empty pipes emit nothing.
+- [ ] Piped input: `--full` flag to send complete content to LLM without truncation (affects prompt preview only; the on-disk input file is always full).
+- [ ] Piped input verbose lines — `Input file: {path} ({size})`, `Preview truncated: ...`. Empty pipes emit nothing.
 - [ ] Interactive mode — `w` with no args opens a free-text prompt area (see [[interactive-mode]]). Blocked on TUI lib.
 - [ ] Contextual prompt sections — inject domain-specific context when CWD signals are present (e.g. if CWD listing contains `package.json`, include a brief section about Node project conventions like `<runner> run <script>` vs built-in subcommands). Keeps the base prompt general while giving the LLM targeted hints when they'd help most. Could also cover Makefile, Cargo.toml, pyproject.toml, etc.
