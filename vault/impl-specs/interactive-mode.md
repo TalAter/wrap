@@ -25,11 +25,13 @@ Subcommand flags (`--help`, `--version`, `--log`) short-circuit before this chec
 `src/main.ts`:
 
 1. `none + !TTY + !pipedInput` → `--help`, exit.
-2. `none + !TTY + pipedInput` → fall through to `runSession` with empty prompt; pipe IS the prompt (existing behavior).
+2. `none + !TTY + pipedInput` → call `runSession(prompt="")`; pipe IS the prompt (existing behavior).
 3. `ensureConfig` (wizard if needed). On first-run wizard completion, print `✓ wrap configured — run w again to start wrapping` via `chrome()`, exit 0. Don't auto-launch compose.
-4. `none + TTY` → mount compose dialog → submitted text becomes `prompt` → fall through to `runSession`.
+4. `none + TTY` → call `runSession(prompt="")`. The compose dialog is a state *inside* the session, not a pre-step.
 
-`createTempDir()` must run before compose mounts (Ctrl-G needs `$WRAP_TEMP_DIR`). Move its call above the compose-mount step.
+Compose lives inside `runSession`: when the initial `prompt` is empty AND `process.stdin.isTTY`, the session's initial state is `composing-user-prompt` instead of today's `thinking`. User types, dispatches `submit-user-prompt`, the reducer transitions to `processing-user-prompt`, and the coordinator hook (see §State) bootstraps the transcript with `draft` and starts the pump loop. Compose mount, submit, and handoff are all expressed through the state machine — no second Ink lifecycle outside `runSession`.
+
+`createTempDir()` runs before `runSession` (as today — see `main.ts`), so `$WRAP_TEMP_DIR` is available when Ctrl-G fires inside compose.
 
 ---
 
