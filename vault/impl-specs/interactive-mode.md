@@ -39,7 +39,7 @@ Existing follow-up tags get suffixed for clarity alongside the new initial-compo
 - `composing` → `composing-followup`
 - `processing` → `processing-followup`
 
-Updates landing across `src/session/state.ts`, `src/session/reducer.ts`, `src/session/session.ts`, `src/tui/response-dialog.tsx`.
+Renames + new tag additions + new event all land across `src/session/state.ts`, `src/session/reducer.ts`, `src/session/session.ts`, `src/tui/response-dialog.tsx`.
 
 New event `submit-user-prompt { text: string }`. Distinct from `submit-followup` because the coordinator handles them differently: `submit-user-prompt` bootstraps the very first user turn from empty transcript; `submit-followup` appends to an existing transcript.
 
@@ -61,19 +61,30 @@ New tag `processing-user-prompt` (mirror of `processing-followup` for the first 
 - `notification chrome` → updates `status`.
 - Add to `isDialogTag()`.
 
-Coordinator post-transition hook on entering `processing-user-prompt`: push initial user turn from `draft`, start pump loop. Mirrors how `processing-followup` does the equivalent for follow-up turns.
+Coordinator post-transition hook on entering `processing-user-prompt`: push a `user` transcript turn carrying `draft` as its content (see `src/core/transcript.ts` for turn shape), reset `loopState.budgetRemaining`, start the pump loop via `startPumpLoop`. Mirrors how `processing-followup` bootstraps follow-up turns.
 
 ---
 
 ## Dialog
 
-`composing-user-prompt` view:
-- Top border: `compose` pill, left-aligned. No risk pill.
-- Left border: low-risk blue gradient.
-- Body: TextInput fills the dialog. No command fold, no explanation, no plan, no output slot.
+Both new tags render through the existing response-dialog shell.
+
+### `composing-user-prompt` view
+
+- Top border: `compose` pill, left-aligned. Build using `PillSegment` (`src/tui/pill.tsx`) — same primitive used by the wizard breadcrumbs. No risk pill.
+- Left border: low-risk blue gradient via `getRiskPreset("low").stops` (`src/tui/risk-presets.ts`).
+- Body: TextInput (`multiline: true`) fills the dialog. No command fold, no explanation, no plan, no output slot.
 - Bottom hint: `⏎ to send  |  ctrl+G to edit in <Editor>  |  Esc to exit`. Hides the `ctrl+G` segment when no editor resolved (see §Editor).
 
-Width: standard dialog widening rule. Height: TextInput starts at 3 visible rows, grows with content up to `Math.max(3, terminalRows - 6)`, then vertical scroll keeps cursor in view.
+### `processing-user-prompt` view
+
+Same dialog shell. TextInput switches to `readOnly` rendering the submitted `draft`. No hint; bottom border shows the status spinner (same pattern as `processing-followup` — see `response-dialog.tsx` `bottomStatus` derivation).
+
+### Keys and sizing
+
+`Ctrl+X Ctrl+E` is an alias for `Ctrl+G` (bash/zsh readline convention). Only `Ctrl+G` is shown in the hint. Implementation: track "saw Ctrl+X within last 500ms" in a local ref; if the next keystroke is Ctrl+E within that window, dispatch the same action as Ctrl+G; otherwise clear the ref and let the key fall through.
+
+Width: standard dialog widening rule (see [[tui]]). Height: TextInput starts at 3 visible rows, grows with content up to `Math.max(3, terminalRows - DIALOG_CHROME_ROWS)`, then vertical scroll keeps cursor in view. `DIALOG_CHROME_ROWS = 6` (2 border + 2 padding + 1 pill/spacer + 1 hint).
 
 Hint pulls the editor display name from the `EDITORS` record (see §Editor handoff) — unknown → basename. If the resolved hint overflows, fall back to `⏎ send  |  ctrl+G edit  |  Esc exit`.
 
@@ -103,13 +114,17 @@ type BaseEditable = {
 
 Stay string-based. Add derived helpers (pure functions of `text + offset`):
 - `upLine()` / `downLine()` — move by logical line, snap column.
-- `row` / `col` getters — derived from `text.slice(0, offset)`.
+- `row` / `col` getters — logical row and column; `row = text.slice(0, offset).split("\n").length - 1`, `col = offset - lastIndexOf("\n", offset-1) - 1` (zero-based).
 
-Existing methods (`insert`, `backspace`, `wordLeft`, `killToEnd`, etc.) already operate on the flat string and need no change. `killToEnd` deletes to end-of-buffer (existing semantics) — adequate for both modes.
+For rendering, the dialog also needs VISUAL row/col because logical rows soft-wrap inside `innerWidth`:
+- `visualRow(innerWidth) = sum over lines[0..row-1] of max(1, ceil(stringWidth(line) / innerWidth)) + floor(stringWidth(lines[row].slice(0, col)) / innerWidth)`.
+- `visualCol(innerWidth) = stringWidth(lines[row].slice(0, col)) mod innerWidth`.
+
+Existing methods (`insert`, `backspace`, `wordLeft`, `killToEnd`, etc.) already operate on the flat string and need no change. `killToEnd` keeps existing semantics (deletes to end-of-buffer).
 
 ### Submit vs newline
 
-`multiline: false` (default): plain Enter → `onSubmit`. `\n` is rejected by `insert` (paste containing `\n` strips them, matches existing single-line assumption).
+`multiline: false` (default): plain Enter → `onSubmit`. `Cursor.insert` filters `\n` characters from the incoming string in this mode — doesn't throw, doesn't drop the whole string, just strips the newlines and inserts the rest. Preserves existing single-line paste behavior.
 
 `multiline: true`: plain Enter (`\r` outside a paste block, no trailing `\`) → `onSubmit`. Newline inserted on:
 - **Shift+Enter** — via kitty / modifyOtherKeys (see §Keyboard protocol).
@@ -139,16 +154,16 @@ Cursor visual position on wrapped lines requires width-aware row/col computation
 
 ### Buffer cap (multiline only)
 
-Soft cap 256KB. On overflow (typed, pasted, edited via Ctrl-G), truncate at the last complete UTF-8 code point ≤ 256KB and show `paste truncated — for large input, pipe with cat file | w` in the bottom border. Banner clears on next keystroke.
+Soft cap 256KB. Enforcement lives in one helper, `clampBufferSize(text): { value: string; truncated: boolean }`, called from every source that can grow the buffer: `Cursor.insert` (large paste), paste handler, editor-return handler. When `truncated === true`, show `paste truncated — for large input, pipe with cat file | w` in the bottom border. Banner clears on next keystroke. Truncation cuts at the last complete UTF-8 code point ≤ 256KB.
 
 ### Paste policy (multiline only)
 
 Bracketed paste bytes: normalize `\r\n` → `\n`, strip NUL and C0 controls except `\t` / `\n`. Other bytes verbatim (UTF-8). Paste arrives as one atomic insert; cursor lands at paste end.
 
-Paste safety:
-- 5s timeout after `\x1b[200~` with no matching `\x1b[201~` → flush accumulated, reset.
-- Esc during paste → discard partial, reset, return to editing.
-- Accumulator bounded at 256KB.
+Paste safety lives in the raw-stdin parser (see §Keyboard protocol) which owns the paste-mode flag:
+- 5s timeout after `\x1b[200~` with no matching `\x1b[201~` → flush accumulated as if a close marker arrived, reset paste-mode flag.
+- Esc keypress while paste-mode is active → discard accumulator, reset flag, forward Esc to Ink.
+- Accumulator bounded at 256KB; further bytes flush-and-reset.
 
 ---
 
@@ -168,7 +183,11 @@ On unmount:
 
 Mount order: stdin drain (1024 bytes per [[tui]]) FIRST, then write protocol-enable bytes. Drain ahead of enable prevents an in-flight paste's `\x1b[200~` from being eaten.
 
-Parser sits between Node's `stdin.on('data', …)` and Ink. Accumulate a small byte buffer per chunk: scan for complete CSI sequences (terminator after CSI start), emit matched modified-key events to the TextInput, forward unmatched bytes onward to Ink. Handles split-across-chunk sequences. Two CSI shapes:
+Parser is a stdin middleware. Ink 7 installs its own `data` listener on `process.stdin`; a second listener in parallel breaks byte ordering. Approach: on compose mount, detach Ink's stdin reader (keep a handle), install our parser as the sole listener, and have the parser forward everything it doesn't match to Ink's reader as if it arrived directly. On unmount, restore Ink's listener. Rendered in code via Node `stdin.off(...)` + `stdin.on(...)` around the compose lifecycle.
+
+The parser maintains a small byte buffer per chunk: scan for complete CSI sequences (terminator after CSI start), emit matched modified-key events directly to the TextInput (via a ref-based emitter the compose dialog passes down), forward unmatched bytes to Ink. Handles split-across-chunk sequences by holding the trailing partial for the next chunk. Tracks a paste-mode flag between `\x1b[200~` and `\x1b[201~` (see §TextInput paste safety).
+
+Two CSI shapes for modified keys:
 
 - Kitty: `CSI keycode ; modifier u` — regex `/\x1b\[(\d+);(\d+)u/`, groups `(keycode, modifier)`.
 - modifyOtherKeys: `CSI 27 ; modifier ; keycode ~` — regex `/\x1b\[27;(\d+);(\d+)~/`, groups `(modifier, keycode)`.
@@ -203,6 +222,7 @@ const EDITORS: Record<string, EditorMeta>;
 // cursor:          { displayName: "Cursor",           waitFlag: "-w",     gui: true }
 // windsurf:        { displayName: "Windsurf",         waitFlag: "-w",     gui: true }
 // codium:          { displayName: "VSCodium",         waitFlag: "-w",     gui: true }
+// antigravity:     { displayName: "Antigravity",      waitFlag: "-w",     gui: true }
 // subl:            { displayName: "Sublime Text",     waitFlag: "--wait", gui: true }
 // atom:            { displayName: "Atom",             waitFlag: "--wait", gui: true }
 //
@@ -230,9 +250,24 @@ GUI editors without a known wait flag (e.g. `notepad++`, `gedit`) are omitted fr
 
 Temp file via `createTempDir()` at `$WRAP_TEMP_DIR/prompt.md`. Write buffer → spawn (`Bun.spawn`, stdio `inherit`, `await proc.exited`) → on exit read file, trim trailing `\n`, delete temp file → update buffer.
 
-Terminal-owning editors: unmount Ink before spawn (editor needs the TTY); remount after exit. The keyboard-protocol modes pop via the standard unmount teardown.
+Terminal-owning editors: the editor inherits stdio and needs the TTY in line mode, not raw mode. Ordering:
 
-GUI editors (`gui: true`): keep Ink mounted, set the TextInput's `editingExternal` prop (see §TextInput), spawn editor. When `proc.exited` resolves, clear the prop and update the buffer.
+1. Unmount Ink.
+2. Call `process.stdin.setRawMode(false)` explicitly.
+3. Write keyboard-protocol pop bytes (kitty, modifyOtherKeys, bracketed paste — see §Keyboard protocol).
+4. `Bun.spawn` the editor with stdio `inherit`; `await proc.exited`.
+5. Remount Ink. Ink re-enters raw mode and re-applies the protocol modes as part of compose mount.
+
+Step 2 is load-bearing. Ink's unmount does not always clear raw mode — the flag remains latched on `process.stdin`, and the child editor inherits a raw-mode TTY. Symptom: `vim` / `nano` receive no character-at-a-time input (or wedged escape sequences), display is broken until the user force-exits. Explicitly dropping raw mode after unmount guarantees the editor sees a normal line-discipline TTY. The re-enable on step 5 is handled by Ink itself on mount — do not call `setRawMode(true)` manually or it races Ink.
+
+GUI editors (`gui: true`): keep Ink mounted. The compose dialog owns the editor lifecycle via a local `useEffect` — no new reducer event:
+
+1. On Ctrl-G: write buffer to temp file; set local `editorOpen = true`; TextInput renders with `editingExternal={true}`.
+2. `await Bun.spawn(...).exited`.
+3. Read temp file, delete it, run through `clampBufferSize`, dispatch `{ type: "draft-change", text }` to update draft.
+4. Clear `editorOpen`; TextInput returns to editable.
+
+Keeps the reducer unaware of editor async flow — the side-effect is local to the dialog component.
 
 Editor exit handling:
 - Exit 0 + non-empty file → replace buffer.
@@ -322,4 +357,4 @@ Piped stdin keeps existing behavior: pipe IS the prompt, no TUI.
 9. **Follow-up TextInput swap:** flip `multiline: true` on the existing follow-up TextInput call site. State tag unchanged (already renamed in slice 1).
 10. **Discoverability + logging:** Examples block in `--help`; `input_source` on `LogEntry`; `--verbose` prompt-trace echo on teardown.
 
-TDD per project rule. Unit-test the kitty / modifyOtherKeys parser against fixture byte strings. Integration-test the `main.ts` branch with a mock TTY.
+TDD per project rule. Unit-test the kitty / modifyOtherKeys parser against fixture byte strings. Unit-test `clampBufferSize` (UTF-8 boundary, below-cap passthrough, above-cap truncation). Integration-test the `main.ts` branch with a mock TTY — if no mock-TTY harness exists today, build one in slice 4 (smallest touch: a `StdinSource`-like seam parallel to `src/core/piped-input.ts` for the TTY path).
