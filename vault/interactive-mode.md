@@ -13,11 +13,8 @@ When `w` runs with no user prompt on a TTY, Wrap enters a free-text input area. 
 
 ## Design
 
-- **Trigger:** no CLI args AND stdin is a TTY. Piped stdin does not trigger it.
-- **Single-shot.** After submit, tear down the TUI, process text as CLI args, exit. No REPL loop — conversational mode is a separate future feature.
-- **Multiline editor.** Enter submits, Shift-Enter inserts newline. Ctrl-G opens `$EDITOR` with current buffer; on save, text returns for review. Empty/discarded editor file cancels the handoff, not the session. Ctrl-C exits.
-- **Output.** Single-shot means no special handling. TUI collects input, tears down, then normal stdout rules apply.
-
-## Open questions
-
-- **Piped stdin + no args:** `echo "context" | w` — treat piped text as the prompt (skip interactive mode). Entering a TUI on piped stdin is impossible anyway.
+- **Trigger:** no CLI args AND stdin is a TTY. Piped stdin always skips compose — pipe IS the prompt.
+- **Single-shot.** One invocation = one submitted prompt. No REPL loop — conversational mode is a separate future feature.
+- **Multiline + paste-safe editor.** Plain Enter submits; multiple newline mechanisms cover terminals without modified-key support. Bracketed paste keeps embedded newlines literal.
+- **External editor handoff.** Ctrl-G opens the user's `$EDITOR` with the current buffer; saved text returns to compose.
+- **Handoff to round.** Submit morphs the dialog in place into thinking → `confirming` (or answer). Same shell as [[follow-up]].
