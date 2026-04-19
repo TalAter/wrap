@@ -91,6 +91,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 - [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See [[config]]. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
 - [ ] `--memory` — view/manage memory
+- [ ] `--forget` — delete Wrap's memory and exit (with confirmation prompt)
 
 ## Eval System
 
