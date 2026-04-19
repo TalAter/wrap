@@ -28,7 +28,9 @@ Wrap's LLM prompt is split across multiple files with a Python source of truth a
 
 ## Vault
 
-Wrap has a vault at `vault/`. Read `vault/README.md` at session start. When working on a concept, read `vault/<concept>.md` before diving into code.
+Wrap has a vault at `vault/`. The index is auto-loaded below. When working on a concept, read `vault/<concept>.md` before diving into code.
+
+@vault/README.md
 
 ## Stop hook
 
