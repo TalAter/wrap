@@ -153,6 +153,7 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 ### Config & CLI
 - [[config]] — sources, precedence, SETTINGS registry, file schema
 - [[subcommands]] — subcommands and modifier flags
+- [[forget]] — `w --forget` wipes persisted user data
 
 ### Observability
 - [[logging]] — JSONL logs
