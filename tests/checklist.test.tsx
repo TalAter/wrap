@@ -46,9 +46,7 @@ beforeEach(() => {
 describe("Checklist", () => {
   test("Enter with empty selection does nothing by default", async () => {
     const spy: { value: string[] | null } = { value: null };
-    const { stdin } = render(
-      <Harness initial={new Set()} onSubmit={(v) => (spy.value = v)} />,
-    );
+    const { stdin } = render(<Harness initial={new Set()} onSubmit={(v) => (spy.value = v)} />);
     await wait();
     stdin.write("\r");
     await wait();
