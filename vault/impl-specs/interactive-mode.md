@@ -31,7 +31,7 @@ Subcommand flags (`--help`, `--version`, `--log`) short-circuit before this chec
 
 Compose lives inside `runSession`: when the initial `prompt` is empty AND `process.stdin.isTTY`, the session's initial state is `composing-user-prompt` instead of today's `thinking`. User types, dispatches `submit-user-prompt`, the reducer transitions to `processing-user-prompt`, and the coordinator hook (see §State) bootstraps the transcript with `draft` and starts the pump loop. Compose mount, submit, and handoff are all expressed through the state machine — no second Ink lifecycle outside `runSession`.
 
-`createTempDir()` runs before `runSession` (as today — see `main.ts`), so `$WRAP_TEMP_DIR` is available when Ctrl-G fires inside compose.
+`$WRAP_TEMP_DIR` is created lazily via `ensureTempDir()`. The Ctrl-G editor handoff calls `ensureTempDir()` itself before writing `prompt.md`, so compose works even when no shell has been spawned yet.
 
 ---
 
@@ -250,7 +250,7 @@ Lookup key = `basename(resolved).replace(/\.exe$/i, "")` — strips directory an
 
 GUI editors without a known wait flag (e.g. `notepad++`, `gedit`) are omitted from `EDITORS` on purpose. Including them without a wait mechanism means Wrap reads an empty file because the editor forks instantly; better to fall back to the generic "unknown editor → terminal-owning" path, which at least surfaces the mismatch obviously.
 
-Temp file via `createTempDir()` at `$WRAP_TEMP_DIR/prompt.md`. Write buffer → spawn (`Bun.spawn`, stdio `inherit`, `await proc.exited`) → on exit read file, trim trailing `\n`, delete temp file → update buffer.
+Temp file via `ensureTempDir()` at `$WRAP_TEMP_DIR/prompt.md`. Write buffer → spawn (`Bun.spawn`, stdio `inherit`, `await proc.exited`) → on exit read file, trim trailing `\n`, delete temp file → update buffer.
 
 Terminal-owning editors: the editor inherits stdio and needs the TTY in line mode, not raw mode. Ordering:
 
@@ -355,7 +355,7 @@ Piped stdin keeps existing behavior: pipe IS the prompt, no TUI.
 5. **Bracketed paste:** enable + parse; CRLF + C0 strip; 5s + Esc + 256KB safety nets.
 6. **Kitty + modifyOtherKeys:** raw-stdin parser; push/pop via exposed/generalized `ensureExitGuard`; drain-before-enable ordering.
 7. **Placeholder:** sample set; static random pick on mount; hide on keystroke or paste-start.
-8. **Editor handoff:** `src/core/editor.ts` (`resolveEditor`, `EDITORS`); Ctrl-G; temp file via `createTempDir`; terminal-owning unmount path; GUI `editingExternal` path.
+8. **Editor handoff:** `src/core/editor.ts` (`resolveEditor`, `EDITORS`); Ctrl-G; temp file via `ensureTempDir`; terminal-owning unmount path; GUI `editingExternal` path.
 9. **Follow-up TextInput swap:** flip `multiline: true` on the existing follow-up TextInput call site. State tag unchanged (already renamed in slice 1).
 10. **Discoverability + logging:** Examples block in `--help`; `input_source` on `LogEntry`; `--verbose` prompt-trace echo on teardown.
 

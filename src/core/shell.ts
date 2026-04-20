@@ -20,6 +20,8 @@
  * the user's terminal), while inherit mode passes through the parent's stdin
  * so interactive commands (vim, less, etc.) still work.
  */
+import { ensureTempDir } from "../fs/temp.ts";
+
 type ShellExecBase = {
   exitCode: number;
   /** Wall-clock duration in milliseconds, rounded to an integer. */
@@ -54,6 +56,9 @@ export async function executeShellCommand(
   options: ShellExecOptions,
 ): Promise<CaptureResult | InheritResult> {
   const shell = process.env.SHELL || "sh";
+  // Create $WRAP_TEMP_DIR on demand. The spawned shell inherits process.env,
+  // so setting it here is enough — no need to pass it explicitly.
+  ensureTempDir();
   const start = performance.now();
 
   if (options.mode === "capture") {

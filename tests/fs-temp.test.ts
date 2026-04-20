@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { executeShellCommand } from "../src/core/shell.ts";
-import { createTempDir, dirStats, formatSize, formatTempDirSection } from "../src/fs/temp.ts";
+import { dirStats, ensureTempDir, formatSize, formatTempDirSection } from "../src/fs/temp.ts";
 
-describe("createTempDir", () => {
+describe("ensureTempDir", () => {
   let prev: string | undefined;
 
   beforeEach(() => {
@@ -20,35 +20,34 @@ describe("createTempDir", () => {
     else process.env.WRAP_TEMP_DIR = prev;
   });
 
-  test("creates a dir and exports WRAP_TEMP_DIR to process.env", () => {
-    const path = createTempDir();
+  test("creates a dir and exports WRAP_TEMP_DIR on first call", () => {
+    const path = ensureTempDir();
     expect(process.env.WRAP_TEMP_DIR).toBe(path);
-    expect(path.length).toBeGreaterThan(0);
-    // Directory exists and is writable.
+    expect(existsSync(path)).toBe(true);
     writeFileSync(join(path, "probe.txt"), "hello");
   });
 
-  test("each invocation gets a distinct dir", () => {
-    const a = createTempDir();
-    const b = createTempDir();
-    expect(a).not.toBe(b);
-    rmSync(a, { recursive: true, force: true });
+  test("is idempotent within a process — second call reuses the dir", () => {
+    const a = ensureTempDir();
+    const b = ensureTempDir();
+    expect(a).toBe(b);
   });
 
-  test("executeShellCommand inherits WRAP_TEMP_DIR into the spawned shell", async () => {
-    // Regression: Bun.spawn does NOT inherit process.env unless you pass
-    // `env` explicitly. executeShellCommand pipes process.env through;
-    // this test pins that contract so a future refactor can't silently
-    // break env inheritance for the temp dir or anything else.
+  test("executeShellCommand creates the temp dir lazily and inherits it", async () => {
+    // Bun.spawn does NOT inherit process.env unless you pass `env` explicitly.
+    // This test also pins the lazy-creation contract: no dir exists before
+    // the first shell exec, and the dir is created on demand.
     const prevShell = process.env.SHELL;
     process.env.SHELL = "/bin/sh";
     try {
-      const path = createTempDir();
+      expect(process.env.WRAP_TEMP_DIR).toBeUndefined();
       const exec = await executeShellCommand('printf %s "$WRAP_TEMP_DIR"', {
         mode: "capture",
       });
       expect(exec.exitCode).toBe(0);
-      expect(exec.stdout).toBe(path);
+      expect(exec.stdout.length).toBeGreaterThan(0);
+      expect(exec.stdout).toBe(process.env.WRAP_TEMP_DIR as string);
+      expect(existsSync(exec.stdout)).toBe(true);
     } finally {
       if (prevShell === undefined) delete process.env.SHELL;
       else process.env.SHELL = prevShell;
@@ -62,7 +61,8 @@ describe("formatTempDirSection", () => {
 
   beforeEach(() => {
     prev = process.env.WRAP_TEMP_DIR;
-    dir = createTempDir();
+    delete process.env.WRAP_TEMP_DIR;
+    dir = ensureTempDir();
   });
 
   afterEach(() => {
@@ -90,10 +90,65 @@ describe("formatTempDirSection", () => {
     expect(section).not.toContain(dir);
   });
 
-  test("returns an empty-state section when WRAP_TEMP_DIR is unset", () => {
+  test("returns an empty-state section when WRAP_TEMP_DIR is unset, without creating a dir", () => {
     delete process.env.WRAP_TEMP_DIR;
     const section = formatTempDirSection();
     expect(section).toContain("(empty)");
+    // Must not have created one as a side effect — lazy creation is the whole point.
+    expect(process.env.WRAP_TEMP_DIR).toBeUndefined();
+  });
+});
+
+describe("lazy temp dir — end-to-end round flow", () => {
+  // Simulates the real sequence across LLM rounds:
+  //   round 1: prompt is assembled (empty section) → LLM returns a shell
+  //   command that writes to $WRAP_TEMP_DIR → shell exec creates the dir and
+  //   runs the command → round 2: prompt is reassembled and now lists the
+  //   file. The lazy-creation change rewires this path; this test pins it
+  //   end-to-end so a future refactor can't silently break it.
+  let prevTempDir: string | undefined;
+  let prevShell: string | undefined;
+
+  beforeEach(() => {
+    prevTempDir = process.env.WRAP_TEMP_DIR;
+    prevShell = process.env.SHELL;
+    delete process.env.WRAP_TEMP_DIR;
+    process.env.SHELL = "/bin/sh";
+  });
+
+  afterEach(() => {
+    const created = process.env.WRAP_TEMP_DIR;
+    if (created) rmSync(created, { recursive: true, force: true });
+    if (prevTempDir === undefined) delete process.env.WRAP_TEMP_DIR;
+    else process.env.WRAP_TEMP_DIR = prevTempDir;
+    if (prevShell === undefined) delete process.env.SHELL;
+    else process.env.SHELL = prevShell;
+  });
+
+  test("round 1 empty → shell writes a file → round 2 lists the file", async () => {
+    // Round 1: nothing has run yet, env var is unset, section is empty, and
+    // no directory has been created on disk.
+    expect(process.env.WRAP_TEMP_DIR).toBeUndefined();
+    const round1 = formatTempDirSection();
+    expect(round1).toContain("(empty)");
+    expect(process.env.WRAP_TEMP_DIR).toBeUndefined();
+
+    // LLM generates a shell command that writes to $WRAP_TEMP_DIR. The
+    // dir is created lazily inside executeShellCommand.
+    const exec = await executeShellCommand(
+      'printf %s "hello" > "$WRAP_TEMP_DIR/installer.sh"',
+      { mode: "capture" },
+    );
+    expect(exec.exitCode).toBe(0);
+    const dir = process.env.WRAP_TEMP_DIR;
+    expect(dir).toBeDefined();
+    expect(existsSync(join(dir as string, "installer.sh"))).toBe(true);
+
+    // Round 2: prompt reassembled. The file written in round 1 now appears.
+    const round2 = formatTempDirSection();
+    expect(round2).toContain("installer.sh");
+    expect(round2).not.toContain("(empty)");
+    expect(round2).not.toContain(dir as string);
   });
 });
 

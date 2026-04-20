@@ -4,15 +4,19 @@ import { join } from "node:path";
 import promptConstants from "../prompt.constants.json";
 
 /**
- * Create a per-invocation temp directory and export its path to
- * `process.env.WRAP_TEMP_DIR`. Subsequent spawned shells inherit the env var
- * automatically (Bun.spawn inherits by default). Returns the absolute path.
+ * Lazily create the per-invocation temp directory and export its path to
+ * `process.env.WRAP_TEMP_DIR`. Idempotent within a process: subsequent calls
+ * return the same path. Call this immediately before you need the directory
+ * (e.g. before spawning a shell) — many `w` runs never spawn shells and
+ * should not leave a directory behind on disk.
  *
  * Cleanup is deferred: no exit handler, no signal trap. Rationale: a future
  * resume flow may want to pick up where a previous `w` left off, and the OS
  * cleans `$TMPDIR` on its own schedule as a backstop.
  */
-export function createTempDir(): string {
+export function ensureTempDir(): string {
+  const existing = process.env.WRAP_TEMP_DIR;
+  if (existing) return existing;
   const path = mkdtempSync(join(tmpdir(), "wrap-scratch-"));
   process.env.WRAP_TEMP_DIR = path;
   return path;
@@ -22,6 +26,9 @@ export function createTempDir(): string {
  * Build the temp-dir section that goes into the prompt context each round.
  * Lists every entry under `$WRAP_TEMP_DIR` recursively, with file sizes for
  * leaves. Returns an empty-state section when the dir is empty or unset.
+ *
+ * Does NOT create the dir — that would defeat lazy creation. If nothing has
+ * written to the dir yet, the env var may be unset and the section is empty.
  *
  * The section uses the env-var form (`$WRAP_TEMP_DIR`) rather than the
  * literal path. The LLM must never see the absolute path, so commands it

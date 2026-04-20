@@ -12,7 +12,6 @@ import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { loadWatchlist } from "./discovery/watchlist.ts";
 import { getWrapHome } from "./fs/home.ts";
-import { createTempDir } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
 import { formatProvider } from "./llm/types.ts";
@@ -68,9 +67,6 @@ export async function main() {
 
     const provider = initProvider(resolved);
     verbose(`Provider initialized (${label})`);
-
-    const tempDir = createTempDir();
-    verbose(`Temp dir: ${tempDir}`);
 
     const wrapHome = getWrapHome();
     const watchlist = loadWatchlist(wrapHome);
