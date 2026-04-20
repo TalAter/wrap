@@ -135,10 +135,9 @@ describe("lazy temp dir — end-to-end round flow", () => {
 
     // LLM generates a shell command that writes to $WRAP_TEMP_DIR. The
     // dir is created lazily inside executeShellCommand.
-    const exec = await executeShellCommand(
-      'printf %s "hello" > "$WRAP_TEMP_DIR/installer.sh"',
-      { mode: "capture" },
-    );
+    const exec = await executeShellCommand('printf %s "hello" > "$WRAP_TEMP_DIR/installer.sh"', {
+      mode: "capture",
+    });
     expect(exec.exitCode).toBe(0);
     const dir = process.env.WRAP_TEMP_DIR;
     expect(dir).toBeDefined();
