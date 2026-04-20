@@ -1,3 +1,5 @@
+import { openSync } from "node:fs";
+import { ReadStream } from "node:tty";
 import type { ProviderEntry } from "../config/config.ts";
 import type { WizardCallbacks } from "../tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
@@ -7,6 +9,37 @@ export type DialogHost = {
   rerender(props: { state: AppState; dispatch: (e: AppEvent) => void }): void;
   unmount(): void;
 };
+
+/**
+ * Pick the Node stream Ink should read keystrokes from. When wrap was piped
+ * into (`echo x | w …`), `process.stdin` is a drained pipe; Ink's internal
+ * `setRawMode` fails on a non-TTY fd and the ensuing error-render path
+ * collides on React keys and loops indefinitely (the reconciler reports
+ * stack-trace strings as duplicate child keys). Opening `/dev/tty` fresh
+ * gives the dialog a real tty for keyboard input regardless of how wrap was
+ * invoked. `isTTY` is forced true on the constructed stream because
+ * `tty.ReadStream(fd)` doesn't auto-detect it and Ink gates raw-mode support
+ * on that flag. Returns `{ stream: process.stdin, fd: null }` when the
+ * parent already has a TTY, or when `/dev/tty` can't be opened (headless
+ * contexts — Ink will still fail there, but the pre-existing pathology is
+ * already observable and not made worse by this helper).
+ */
+export function chooseDialogStdin(deps?: {
+  isTTY?: boolean | undefined;
+  tryOpenTty?: () => number;
+}): { stream: NodeJS.ReadStream; fd: number | null } {
+  const isTTY = deps?.isTTY ?? process.stdin.isTTY;
+  if (isTTY) return { stream: process.stdin, fd: null };
+  const open = deps?.tryOpenTty ?? (() => openSync("/dev/tty", "r"));
+  try {
+    const fd = open();
+    const stream = new ReadStream(fd);
+    (stream as unknown as { isTTY: boolean }).isTTY = true;
+    return { stream: stream as unknown as NodeJS.ReadStream, fd };
+  } catch {
+    return { stream: process.stdin, fd: null };
+  }
+}
 
 export type WizardResult = {
   entries: Record<string, ProviderEntry>;
@@ -58,9 +91,11 @@ export function mountResponseDialog(props: {
     throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
   }
   const { ink, react, ResponseDialog, ThemeProvider: TP } = responseCached;
+  const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
   const app = ink.render(
     react.createElement(TP, null, react.createElement(ResponseDialog, props)),
     {
+      stdin,
       stdout: process.stderr,
       patchConsole: false,
       alternateScreen: true,
@@ -72,6 +107,9 @@ export function mountResponseDialog(props: {
     },
     unmount() {
       app.unmount();
+      if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+        (stdin as { destroy: () => void }).destroy();
+      }
     },
   };
 }
@@ -96,20 +134,28 @@ export async function mountConfigWizardDialog(callbacks: {
   const { ConfigWizardDialog } = wizardCached;
 
   return new Promise<WizardResult | null>((resolve) => {
+    const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
+    const cleanup = () => {
+      app.unmount();
+      if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+        (stdin as { destroy: () => void }).destroy();
+      }
+    };
     const props: WizardCallbacks = {
       ...callbacks,
       onDone: (result) => {
-        app.unmount();
+        cleanup();
         resolve(result);
       },
       onCancel: () => {
-        app.unmount();
+        cleanup();
         resolve(null);
       },
     };
     const app = ink.render(
       react.createElement(TP, null, react.createElement(ConfigWizardDialog, props)),
       {
+        stdin,
         stdout: process.stderr,
         patchConsole: false,
         alternateScreen: true,
