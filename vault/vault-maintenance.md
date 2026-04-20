@@ -53,19 +53,23 @@ One paragraph: what + why.
 - Small feature → fold into larger concept, delete impl spec.
 - Note >~400 lines or mixed concerns → split, update links.
 
-## Compaction
+## Per-feature compaction
 
-Human-triggered after feature lands on main.
+Runs on the feature branch **before** merging to main — the final step of the feature.
 
 1. Rebase from main; resolve conflicts; tests pass. Then touch vault.
 2. Read `impl-specs/<feature>.md`.
 3. Identify affected concept notes.
 4. **Rewrite** them. No appending. Goal: coherent current-state.
 5. Update `Source:` and `Last-synced`.
-6. Delete impl spec.
-7. If rewrite is unsafe or too big, stop. Leave `REWRITE-NEEDED: <one sentence>` in impl spec. Escalate. No hallucinated fixes.
+6. Delete the impl spec.
+7. If rewrite is unsafe or too big, stop. Leave `REWRITE-NEEDED: <one sentence>` in the impl spec. Escalate. No hallucinated fixes.
 
-Mid-feature: impl spec is yours to churn. Concept notes only change during compaction.
+Mid-feature: impl spec is yours to churn. Concept notes only change at the compaction step above.
+
+## General compaction
+
+Human-triggered, occasional. A broad audit across the whole vault to catch drift that accumulated across several features — terminology that shifted, overlaps between notes, stale `Last-synced` shas, index entries pointing at notes that no longer match their scope. Not part of any one feature's branch; run independently when the vault feels saggy.
 
 ## Anti-patterns
 

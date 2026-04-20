@@ -71,7 +71,7 @@ Planned patterns: `rm -rf` → high, `sudo` → medium, `dd if=` → high, `mkfs
 
 ## Prompt injection resistance (planned)
 
-Injection surfaces: piped input, probe/step results, error messages, thread history.
+Injection surfaces: attached input (materialized at `$WRAP_TEMP_DIR/input`; preview lands in the prompt), probe/step results, error messages, thread history.
 
 Planned defenses:
 - **Trust fence** — instruction between untrusted context and user request. Leverages LLM recency bias. Build first.

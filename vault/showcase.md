@@ -33,13 +33,13 @@ Shows: multi-step reasoning, real-world utility, "Wrap figures it out" magic.
 $ cat 50GB.log | w explain the error on line 12,570,000
 ```
 
-Wrap shows the first 200KB of piped input to the LLM to give it context about the file's format, and notes the input is truncated. The LLM doesn't try to find the line in the truncated preview. Instead, it runs an intermediate command:
+Wrap materializes the pipe to disk at `$WRAP_TEMP_DIR/input` and shows the LLM the first 200KB as a preview with a "Preview truncated" marker. The LLM doesn't try to find the line in the preview. Instead, it runs an intermediate command against the full file on disk:
 
 ```
-sed -n '12570000p' (piped through the full 50GB stdin)
+sed -n '12570000p' $WRAP_TEMP_DIR/input
 ```
 
-Wrap pipes the full file through `sed`, which extracts that single line in seconds. The line comes back to the LLM. Now it has exactly what it needs:
+`sed` extracts that single line in seconds. The line comes back to the LLM. Now it has exactly what it needs:
 
 ```
 → "That error is a connection pool exhaustion — the app opened 500+ DB
@@ -48,7 +48,7 @@ Wrap pipes the full file through `sed`, which extracts that single line in secon
 
 One prompt. The LLM figured out it couldn't answer from the preview, used a surgical intermediate step to extract the exact line, then explained it. The user never left the terminal, never opened the file, never scrolled to line 12 million.
 
-Shows: piped input, smart multi-step strategy, LLM reasoning about its own limitations, surgical precision on huge files.
+Shows: piped input handling, smart multi-step strategy, LLM reasoning about its own limitations, surgical precision on huge files.
 
 ---
 

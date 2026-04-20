@@ -55,7 +55,7 @@ When a command crosses the invocation boundary (clipboard, shell history), `$WRA
 ## Echo projection
 
 `buildPromptInput` renders transcript turns via `projectResponseForEcho`:
-- **Include:** `type`, `content`, `risk_level`, `final`, `plan` (when set), `pipe_stdin` (when set).
+- **Include:** `type`, `content`, `risk_level`, `final`, `plan` (when set).
 - **Strip:** `explanation` (user-facing, wastes tokens), `memory_updates` / `memory_updates_message` / `watchlist_additions` (already actioned), `_scratchpad` (each round plans fresh — see [[scratchpad]]).
 
 Single place that decides which fields the LLM sees across rounds.

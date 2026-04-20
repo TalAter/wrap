@@ -2,8 +2,6 @@
 
 All remaining implementation tasks. Completed features are omitted — see `vault/` notes for architecture reference.
 
-In-flight impl specs: `vault/impl-specs/input-file.md` (reframe piped input as a file on disk; drops `pipe_stdin`; fixes interactive-TTY bug).
-
 ---
 
 ## Core Query Loop
@@ -22,12 +20,12 @@ In-flight impl specs: `vault/impl-specs/input-file.md` (reframe piped input as a
 - [ ] Local safety rule engine — pattern list, `classifyLocal()`, integration ahead of the execution gate (see [[safety]])
 - [ ] Verbose `Risk escalated: {llm} → {effective} (matched: {pattern})` line when the local rule engine overrides the LLM's level.
 - [ ] Adversarial eval samples — indirect phrasing, obfuscated commands, social engineering
-- [ ] Piped injection eval samples (`pipedInput` bridge support now available)
+- [ ] Attached-input injection eval samples (bridge wires `attachedInputPreview` / path / size / truncated)
 - [ ] Nonce delimiters for untrusted prompt sections
-- [ ] System prompt instruction: piped input is data, not instructions
+- [ ] System prompt instruction: attached input is data, not instructions
 - [ ] Trust boundary fence in user message assembly
 - [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
-- [ ] Show context indicators in dialog — piped input, prior step output, etc. (user has no visibility into what informed the command)
+- [ ] Show context indicators in dialog — attached input, prior step output, etc. (user has no visibility into what informed the command)
 - [ ] Dialog styling — border, syntax-highlighted command, risk indicator
 - [ ] `[C]opy` option — copy command to clipboard
 - [ ] Responsive action bar — shrink/abbreviate action buttons when dialog is narrow to avoid sprawling layout
@@ -113,7 +111,7 @@ In-flight impl specs: `vault/impl-specs/input-file.md` (reframe piped input as a
 - [ ] Model-switching shorthand — e.g., `W` (uppercase) uses premium model, `w` uses default
 - [ ] Shell keybinding integration — keybinding reads raw line buffer (`$BUFFER` in zsh, `$READLINE_LINE` in bash) and sends to Wrap. Fully bypasses shell expansion (globs, `$()`, backticks). Aliases only protect against globs; this is the complete solution.
 - [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (non-final steps still execute).
-- [ ] Piped input: `--full` flag to send complete content to LLM without truncation (affects prompt preview only; the on-disk input file is always full).
-- [ ] Piped input verbose lines — `Input file: {path} ({size})`, `Preview truncated: ...`. Empty pipes emit nothing.
+- [ ] Attached input: `--full` flag to send the complete content to the LLM without truncation (affects prompt preview only; the on-disk input file is always full).
+- [ ] Attached input verbose lines — `Input file: {path} ({size})`, `Preview truncated: ...`. Empty pipes emit nothing.
 - [ ] Interactive mode — `w` with no args opens a free-text prompt area (see [[interactive-mode]]). Blocked on TUI lib.
 - [ ] Contextual prompt sections — inject domain-specific context when CWD signals are present (e.g. if CWD listing contains `package.json`, include a brief section about Node project conventions like `<runner> run <script>` vs built-in subcommands). Keeps the base prompt general while giving the LLM targeted hints when they'd help most. Could also cover Makefile, Cargo.toml, pyproject.toml, etc.

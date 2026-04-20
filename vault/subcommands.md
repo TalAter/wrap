@@ -41,7 +41,7 @@ Registry at `src/subcommands/registry.ts` is the single source of truth. Options
 ## Invariants
 
 - **Short-circuit.** Commands run before `ensureConfig`, provider init, memory. Handle their own prerequisites.
-- **No args + no pipe → `--help`.** No args + pipe → empty user prompt (piped input is the context).
+- **No args + no pipe → `--help`.** No args + pipe → empty user prompt (the piped content is the context). See [[piped-input]].
 - **Unknown flag → exit 1** with specific flag name on stderr.
 
 ## Decisions

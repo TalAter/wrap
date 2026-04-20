@@ -136,7 +136,7 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 - [[multi-step]] — non-final commands and multi-round flows
 - [[follow-up]] — in-dialog refinement
 - [[safety]] — risk classification and execution gates
-- [[piped-input]] — stdin handling
+- [[piped-input]] — stdin materialization + file-based prompt framing
 
 ### LLM
 - [[llm]] — providers, prompt scaffold, structured output

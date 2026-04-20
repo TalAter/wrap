@@ -48,7 +48,7 @@ The runner combines these with the evolving transcript each round via `buildProm
 
 ### Composition
 
-System prompt: `instruction` + `memoryRecencyInstruction` + `toolsScopeInstruction` + `voiceInstructions` + (if piped input) `pipedInputInstruction` + (if a schema is attached) `schemaInstruction` + `schemaText`. All joined with blank lines.
+System prompt: `instruction` + `memoryRecencyInstruction` + `toolsScopeInstruction` + `voiceInstructions` + (if stdin was piped) `attachedInputInstruction` + (if a schema is attached) `schemaInstruction` + `schemaText`. All joined with blank lines.
 
 Message ordering (cache-friendly):
 
@@ -68,7 +68,7 @@ Message ordering (cache-friendly):
 
 Delegated to pure functions:
 
-- `formatContext()` in `src/llm/format-context.ts` — turns memory (filtered by cwd prefix, sectioned by scope), tools, cwd files, cwd, and the piped-input flag into a single context string.
+- `formatContext()` in `src/llm/format-context.ts` — turns memory (filtered by cwd prefix, sectioned by scope), tools, cwd files, cwd, the piped-stdout flag, and the attached-input preview (see [[piped-input]]) into a single context string.
 - `buildPromptScaffold()` in `src/llm/build-prompt.ts` — assembles `system` + `prefixMessages` + `initialUserText` from prompt config, context string, and query.
 
 Inputs come from [[memory]] and [[discovery]].
