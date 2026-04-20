@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, statSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import promptConstants from "../prompt.constants.json";
@@ -66,8 +66,48 @@ function walk(root: string, rel: string, out: string[]): void {
   }
 }
 
-function formatSize(bytes: number): string {
+export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}K`;
   return `${Math.round(bytes / (1024 * 1024))}M`;
+}
+
+/**
+ * Recursive file count + byte sum under `root`. Missing path → {0,0}.
+ * Symlinks counted as one entry via `lstat` (size of the link, not target);
+ * never traverses into symlinked directories.
+ */
+export function dirStats(root: string): { files: number; bytes: number } {
+  let files = 0;
+  let bytes = 0;
+  const stack: string[] = [root];
+  while (stack.length > 0) {
+    const path = stack.pop() as string;
+    let entries: string[];
+    try {
+      entries = readdirSync(path);
+    } catch {
+      continue;
+    }
+    for (const name of entries) {
+      const child = join(path, name);
+      let info: { isDir: boolean; isSymlink: boolean; size: number };
+      try {
+        const s = lstatSync(child);
+        info = { isDir: s.isDirectory(), isSymlink: s.isSymbolicLink(), size: s.size };
+      } catch {
+        continue;
+      }
+      if (info.isSymlink) {
+        files++;
+        bytes += info.size;
+      } else if (info.isDir) {
+        stack.push(child);
+      } else {
+        files++;
+        bytes += info.size;
+      }
+    }
+  }
+  return { files, bytes };
 }
