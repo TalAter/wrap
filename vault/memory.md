@@ -24,6 +24,8 @@ Write semantics:
 
 Corrupt file → actionable error using `prettyPath`. No auto-recovery.
 
+Wipe with `w --forget` (see [[forget]]).
+
 ## Prompt assembly
 
 Iterate scopes in stored order. Include if CWD is at or below. Sections: `/` → `## System facts`, others → `## Facts about {absolute_path}` (full path so LLM can reference exact scope). Empty sections omitted.

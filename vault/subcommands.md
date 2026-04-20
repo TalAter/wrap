@@ -28,6 +28,7 @@ Registry at `src/subcommands/registry.ts` is the single source of truth. Options
 | `--help` | `-h` | Auto-generated from registry. TTY: animated gradient logo. `w --help <name>` prints per-flag detail. |
 | `--version` | `-v` | Reads `package.json`. |
 | `--log` | — | Log viewer. See [[logging]]. |
+| `--forget` | — | Delete persisted user data (memory, logs, cache, temp files). `--yolo` skips the interactive dialog. See [[forget]]. |
 
 ## Modifier options
 
