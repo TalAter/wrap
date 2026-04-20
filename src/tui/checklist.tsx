@@ -13,13 +13,22 @@ type Props = {
   checked: Set<string>;
   /** Total visual width available for headers with dot leaders. */
   width?: number;
+  /** When true, Enter fires `onSubmit([])` even with zero items selected. */
+  allowEmptySubmit?: boolean;
   onToggle: (value: string) => void;
   onSubmit: (values: string[]) => void;
 };
 
 const BRAILLE = "⠶";
 
-export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) {
+export function Checklist({
+  items,
+  checked,
+  width,
+  allowEmptySubmit = false,
+  onToggle,
+  onSubmit,
+}: Props) {
   const t = getTheme();
   const CHECKED_COLOR = themeHex(t.select.selected);
   const DIM_COLOR = themeHex(t.text.muted);
@@ -41,7 +50,7 @@ export function Checklist({ items, checked, width, onToggle, onSubmit }: Props) 
     } else if (input === " ") {
       const item = items[cursorIndex];
       if (item?.type === "option") onToggle(item.value);
-    } else if (key.return && checked.size > 0) {
+    } else if (key.return && (checked.size > 0 || allowEmptySubmit)) {
       onSubmit([...checked]);
     }
   });
