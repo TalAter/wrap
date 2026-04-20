@@ -89,18 +89,16 @@ export async function main() {
       verbose(`CWD: ${countCwdFiles(cwdFiles)} files listed`);
     }
 
-    process.exit(
-      await runSession(prompt, provider, {
-        memory,
-        cwd,
-        resolvedProvider: resolved,
-        tools,
-        cwdFiles,
-        pipedInput,
-      }),
-    );
+    process.exitCode = await runSession(prompt, provider, {
+      memory,
+      cwd,
+      resolvedProvider: resolved,
+      tools,
+      cwdFiles,
+      pipedInput,
+    });
   } catch (e) {
     chrome(e instanceof Error ? e.message : String(e));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }

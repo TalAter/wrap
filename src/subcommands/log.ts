@@ -40,7 +40,9 @@ export function searchEntries(entries: object[], term: string): object[] {
   return entries.filter((e) => JSON.stringify(e).toLowerCase().includes(lower));
 }
 
-function parseArgs(args: string[]): { n: number | null; search: string | null; raw: boolean } {
+type ParsedArgs = { n: number | null; search: string | null; raw: boolean };
+
+function parseArgs(args: string[]): ParsedArgs | null {
   let n: number | null = null;
   let search: string | null = null;
   let raw = false;
@@ -51,7 +53,7 @@ function parseArgs(args: string[]): { n: number | null; search: string | null; r
     } else if (/^-\d+$/.test(arg)) {
       chrome("Invalid argument: N must be a non-negative integer.");
       chrome("Usage: w --log [search] [N] [--raw]");
-      process.exit(1);
+      return null;
     } else {
       const parsed = Number.parseInt(arg, 10);
       if (!Number.isNaN(parsed) && parsed >= 0 && String(parsed) === arg) {
@@ -63,7 +65,7 @@ function parseArgs(args: string[]): { n: number | null; search: string | null; r
       } else {
         chrome("Only one search term allowed.");
         chrome("Usage: w --log [search] [N] [--raw]");
-        process.exit(1);
+        return null;
       }
     }
   }
@@ -105,7 +107,12 @@ export const logCmd: Command = {
     "  --raw     Output raw JSONL instead of pretty-printed",
   ].join("\n"),
   run: async (args) => {
-    const { n, search, raw } = parseArgs(args);
+    const parsed = parseArgs(args);
+    if (!parsed) {
+      process.exitCode = 1;
+      return;
+    }
+    const { n, search, raw } = parsed;
     const writer = raw || !isTTY() ? writeRaw : writePretty;
 
     if (n === 0) return;

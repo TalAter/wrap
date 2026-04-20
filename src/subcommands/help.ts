@@ -241,7 +241,7 @@ export const helpCmd: Command = {
 
     if (args.length > 1) {
       chrome("--help takes at most one argument.");
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
 
@@ -250,7 +250,7 @@ export const helpCmd: Command = {
     const flag = allFlags.find((f) => f.flag === `--${name}`);
     if (!flag) {
       chrome(`Unknown flag: ${args[0]}`);
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
 

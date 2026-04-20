@@ -6,13 +6,12 @@ import { commands } from "../src/subcommands/registry.ts";
 import type { Command } from "../src/subcommands/types.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 
-const originalExit = process.exit;
 const originalCommands = [...commands];
 
 afterEach(() => {
   commands.length = 0;
   commands.push(...originalCommands);
-  process.exit = originalExit;
+  process.exitCode = 0;
 });
 
 function mockCommand(overrides: Partial<Command> = {}): Command {
@@ -56,13 +55,24 @@ describe("dispatch", () => {
     expect(cmd.run).toHaveBeenCalledWith(["arg"]);
   });
 
-  test("errors on unknown flag", async () => {
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-    }) as never;
-    await dispatch("--nope", []);
-    expect(exitCode).toBe(1);
+  test("errors on unknown flag without hard-exiting", async () => {
+    // Regression: dispatch used to call process.exit(1) synchronously,
+    // which killed the event loop before pending OSC 11 appearance
+    // detection could read its reply from /dev/tty. The reply then leaked
+    // into the parent shell (visible as e.g. "11;rgb:2828/2c2c/3434").
+    // Dispatch must set exitCode + return so the loop can drain.
+    const hardExit = mock(() => {
+      throw new Error("dispatch should not call process.exit");
+    });
+    const originalExit = process.exit;
+    process.exit = hardExit as never;
+    try {
+      await dispatch("--nope", []);
+    } finally {
+      process.exit = originalExit;
+    }
+    expect(hardExit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
     expect(stderr.text).toContain("Unknown flag: --nope");
   });
 });

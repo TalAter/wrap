@@ -12,7 +12,7 @@ export const versionCmd: Command = {
   run: async (args) => {
     if (args.length > 0) {
       chrome("--version does not take an argument.");
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
     process.stdout.write(`${pkg.version}\n`);

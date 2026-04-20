@@ -217,7 +217,7 @@ export const completionCmd: Command = {
     const result = runCompletion(args);
     if (result !== "ok") {
       chrome(result.error);
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
     const shell = args[0] as Shell;
