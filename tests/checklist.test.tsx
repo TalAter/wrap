@@ -45,39 +45,35 @@ beforeEach(() => {
 
 describe("Checklist", () => {
   test("Enter with empty selection does nothing by default", async () => {
-    let submitted: string[] | null = null;
+    const spy: { value: string[] | null } = { value: null };
     const { stdin } = render(
-      <Harness initial={new Set()} onSubmit={(v) => (submitted = v)} />,
+      <Harness initial={new Set()} onSubmit={(v) => (spy.value = v)} />,
     );
     await wait();
     stdin.write("\r");
     await wait();
-    expect(submitted).toBeNull();
+    expect(spy.value).toBeNull();
   });
 
   test("Enter with a selection fires onSubmit", async () => {
-    let submitted: string[] | null = null;
+    const spy: { value: string[] | null } = { value: null };
     const { stdin } = render(
-      <Harness initial={new Set(["a"])} onSubmit={(v) => (submitted = v)} />,
+      <Harness initial={new Set(["a"])} onSubmit={(v) => (spy.value = v)} />,
     );
     await wait();
     stdin.write("\r");
     await wait();
-    expect(submitted).toEqual(["a"]);
+    expect(spy.value).toEqual(["a"]);
   });
 
   test("Enter with empty selection fires onSubmit([]) when allowEmptySubmit=true", async () => {
-    let submitted: string[] | null = null;
+    const spy: { value: string[] | null } = { value: null };
     const { stdin } = render(
-      <Harness
-        initial={new Set()}
-        allowEmptySubmit
-        onSubmit={(v) => (submitted = v)}
-      />,
+      <Harness initial={new Set()} allowEmptySubmit onSubmit={(v) => (spy.value = v)} />,
     );
     await wait();
     stdin.write("\r");
     await wait();
-    expect(submitted).toEqual([]);
+    expect(spy.value).toEqual([]);
   });
 });

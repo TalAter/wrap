@@ -3,11 +3,11 @@ import { getConfig } from "../config/store.ts";
 import { chrome } from "../core/output.ts";
 import { getWrapHome } from "../fs/home.ts";
 import {
+  type DeleteResult,
   deleteCache,
   deleteLogs,
   deleteMemory,
   deleteScratch,
-  type DeleteResult,
 } from "./forget-delete.ts";
 import {
   cacheFootprint,
@@ -86,11 +86,7 @@ export const forgetCmd: Command = {
   },
 };
 
-function performDeletes(
-  selected: Bucket[],
-  wrapHome: string,
-  tmpBase: string,
-): DeleteResult[] {
+function performDeletes(selected: Bucket[], wrapHome: string, tmpBase: string): DeleteResult[] {
   const out: DeleteResult[] = [];
   for (const bucket of selected) {
     switch (bucket) {

@@ -2,11 +2,7 @@ import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import stringWidth from "string-width";
 import { getTheme, themeHex } from "../core/theme.ts";
-import {
-  type Footprint,
-  formatFootprint,
-  type Unit,
-} from "../subcommands/forget-footprint.ts";
+import { type Footprint, formatFootprint, type Unit } from "../subcommands/forget-footprint.ts";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog } from "./dialog.tsx";
 
@@ -45,9 +41,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
     if (key.escape) onCancel();
   });
 
-  const items: ChecklistItem[] = ROWS.map((r) =>
-    toItem(r, footprints[r.value]),
-  );
+  const items: ChecklistItem[] = ROWS.map((r) => toItem(r, footprints[r.value]));
 
   const toggle = (value: string) => {
     setChecked((prev) => {
