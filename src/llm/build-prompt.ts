@@ -9,7 +9,7 @@ export type PromptConfig = {
   voiceInstructions: string;
   tempDirPrinciple: string;
   finalFlagInstruction: string;
-  pipedInputInstruction?: string;
+  attachedInputInstruction?: string;
   fewShotExamples: ReadonlyArray<{ readonly input: string; readonly output: string }>;
   fewShotSeparator: string;
   sectionUserRequest: string;
@@ -52,8 +52,8 @@ export function buildPromptScaffold(
     config.tempDirPrinciple,
     config.finalFlagInstruction,
   ];
-  if (config.pipedInputInstruction) {
-    systemParts.push(config.pipedInputInstruction);
+  if (config.attachedInputInstruction) {
+    systemParts.push(config.attachedInputInstruction);
   }
   if (config.schemaText) {
     systemParts.push(`${config.schemaInstruction}\n${config.schemaText}`);

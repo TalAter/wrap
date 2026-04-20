@@ -100,8 +100,7 @@ function formatStepBody(output: string, exitCode: number): string {
  * an assistant-turn site must go through this function, never the raw
  * response.
  *
- * **Include:** `type`, `content`, `risk_level`, `final`, `plan` (when set),
- * `pipe_stdin` (when set).
+ * **Include:** `type`, `content`, `risk_level`, `final`, `plan` (when set).
  * **Strip:** `explanation` (user-facing, wastes tokens, invites misuse as a
  * scratchpad), `memory_updates` / `memory_updates_message` / `watchlist_additions`
  * (already actioned by the runner).
@@ -114,7 +113,6 @@ function projectResponseForEcho(response: CommandResponse): Record<string, unkno
     risk_level: response.risk_level,
   };
   if (response.plan != null) out.plan = response.plan;
-  if (response.pipe_stdin) out.pipe_stdin = response.pipe_stdin;
   return out;
 }
 

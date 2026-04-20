@@ -1,5 +1,5 @@
-import { truncateMiddle } from "../core/truncate.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
+import { formatSize } from "../fs/temp.ts";
 import type { Memory } from "../memory/types.ts";
 
 export type FormatContextParams = {
@@ -8,15 +8,17 @@ export type FormatContextParams = {
   cwdFiles?: string;
   cwd: string;
   piped?: boolean;
-  pipedInput?: string;
-  maxPipedInputChars?: number;
+  attachedInputPath?: string;
+  attachedInputSize?: number;
+  attachedInputPreview?: string;
+  attachedInputTruncated?: boolean;
   constants: {
     sectionSystemFacts: string;
     sectionFactsAbout: string;
     sectionDetectedTools: string;
     sectionUnavailableTools: string;
     sectionCwdFiles: string;
-    sectionPipedInput: string;
+    sectionAttachedInput: string;
     cwdPrefix: string;
     pipedOutputInstruction: string;
   };
@@ -24,13 +26,32 @@ export type FormatContextParams = {
 
 /** Build the context string from memory, tools, piped flag, and cwd. Pure function. */
 export function formatContext(params: FormatContextParams): string {
-  const { memory, tools, cwdFiles, cwd, piped, pipedInput, maxPipedInputChars, constants } = params;
+  const {
+    memory,
+    tools,
+    cwdFiles,
+    cwd,
+    piped,
+    attachedInputPath,
+    attachedInputSize,
+    attachedInputPreview,
+    attachedInputTruncated,
+    constants,
+  } = params;
   const sections: string[] = [];
 
-  if (pipedInput) {
-    const content =
-      maxPipedInputChars != null ? truncateMiddle(pipedInput, maxPipedInputChars) : pipedInput;
-    sections.push(`${constants.sectionPipedInput}\n${content}`);
+  if (attachedInputPreview !== undefined) {
+    const lines: string[] = [constants.sectionAttachedInput];
+    if (attachedInputPath !== undefined) {
+      const sizeStr = attachedInputSize !== undefined ? ` (${formatSize(attachedInputSize)})` : "";
+      lines.push(`Path: ${attachedInputPath}${sizeStr}`);
+    }
+    if (attachedInputTruncated) {
+      lines.push("Preview truncated — the file on disk carries the full original bytes.");
+    }
+    lines.push("");
+    lines.push(attachedInputPreview);
+    sections.push(lines.join("\n"));
   }
 
   const cwdSlash = cwd.endsWith("/") ? cwd : `${cwd}/`;

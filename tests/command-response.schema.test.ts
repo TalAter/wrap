@@ -176,7 +176,10 @@ describe("CommandResponseSchema", () => {
     expect(CommandResponseSchema.parse(input).watchlist_additions).toEqual([]);
   });
 
-  test("parses response with pipe_stdin true", () => {
+  test("ignores stray pipe_stdin field from old LLM responses", () => {
+    // Field was removed from the schema (input is now read via shell
+    // redirection from $WRAP_TEMP_DIR/input). Old responses that still carry
+    // it must parse cleanly rather than blowing up.
     const input = {
       type: "command",
       content: "wc -l",
@@ -184,17 +187,7 @@ describe("CommandResponseSchema", () => {
       pipe_stdin: true,
     };
     const result = CommandResponseSchema.parse(input);
-    expect(result.pipe_stdin).toBe(true);
-  });
-
-  test("allows pipe_stdin to be omitted", () => {
-    const input = { type: "command", content: "ls", risk_level: "low" };
-    expect(CommandResponseSchema.parse(input).pipe_stdin).toBeUndefined();
-  });
-
-  test("allows pipe_stdin false", () => {
-    const input = { type: "command", content: "ls", risk_level: "low", pipe_stdin: false };
-    expect(CommandResponseSchema.parse(input).pipe_stdin).toBe(false);
+    expect("pipe_stdin" in result).toBe(false);
   });
 
   test("final defaults to true when omitted", () => {

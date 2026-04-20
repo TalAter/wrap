@@ -31,7 +31,14 @@ export type SessionOptions = {
   resolvedProvider: ResolvedProvider;
   tools?: ToolProbeResult | null;
   cwdFiles?: string;
-  pipedInput?: string;
+  /** Absolute path to the materialized attached-input file. Absent when no input was piped. */
+  attachedInputPath?: string;
+  /** Size of the attached-input file in bytes. */
+  attachedInputSize?: number;
+  /** UTF-8 preview of the attached input (possibly truncated) for the prompt. */
+  attachedInputPreview?: string;
+  /** True when the preview was shortened from the full content. */
+  attachedInputTruncated?: boolean;
 };
 
 /**
@@ -49,30 +56,31 @@ export async function runSession(
   const config = getConfig();
   const maxRounds = config.maxRounds;
   const maxCapturedOutput = config.maxCapturedOutputChars;
-  const maxPipedInput = config.maxPipedInputChars;
   const memory = options.memory ?? {};
 
   const entry = createLogEntry({
     prompt,
     cwd: options.cwd,
-    pipedInput: options.pipedInput,
+    attachedInputPreview: options.attachedInputPreview,
+    attachedInputPath: options.attachedInputPath,
+    attachedInputSize: options.attachedInputSize,
     memory,
     provider: options.resolvedProvider,
     promptHash: PROMPT_HASH,
   });
 
-  const scaffold = assemblePromptScaffold(
-    {
-      prompt,
-      cwd: options.cwd,
-      memory,
-      tools: options.tools,
-      cwdFiles: options.cwdFiles,
-      pipedInput: options.pipedInput,
-      piped: !process.stdout.isTTY,
-    },
-    maxPipedInput,
-  );
+  const scaffold = assemblePromptScaffold({
+    prompt,
+    cwd: options.cwd,
+    memory,
+    tools: options.tools,
+    cwdFiles: options.cwdFiles,
+    attachedInputPath: options.attachedInputPath,
+    attachedInputSize: options.attachedInputSize,
+    attachedInputPreview: options.attachedInputPreview,
+    attachedInputTruncated: options.attachedInputTruncated,
+    piped: !process.stdout.isTTY,
+  });
 
   const transcript: Transcript = [];
   transcript.push({ kind: "user", text: scaffold.initialUserText });
@@ -82,7 +90,6 @@ export async function runSession(
     cwd: options.cwd,
     wrapHome,
     model,
-    pipedInput: options.pipedInput,
   };
 
   // Kicked off in parallel with the first LLM call so the first-mount
@@ -153,10 +160,8 @@ export async function runSession(
   ): Promise<void> {
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
-    const stdinBlob =
-      response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
     try {
-      const exec = await executeShellCommand(response.content, { mode: "capture", stdinBlob });
+      const exec = await executeShellCommand(response.content, { mode: "capture" });
       if (ctrl.signal.aborted) return;
       let stepOutput = exec.stdout;
       if (exec.stderr.trim()) {
@@ -236,7 +241,7 @@ export async function runSession(
     // stdio command writes. The listener stays subscribed so verbose/chrome
     // lines from the exec phase still route through the bus.
     router.teardownDialog();
-    exitCode = await finaliseOutcome(outcome, entry, options.pipedInput);
+    exitCode = await finaliseOutcome(outcome, entry);
   } finally {
     unsubscribe();
     router.teardownDialog();
@@ -340,11 +345,7 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   }
 }
 
-async function finaliseOutcome(
-  outcome: SessionOutcome,
-  entry: LogEntry,
-  pipedInput: string | undefined,
-): Promise<number> {
+async function finaliseOutcome(outcome: SessionOutcome, entry: LogEntry): Promise<number> {
   switch (outcome.kind) {
     case "answer":
       console.log(outcome.content);
@@ -368,12 +369,7 @@ async function finaliseOutcome(
       throw new Error(outcome.message);
     case "run": {
       verbose(`Running: ${outcome.command}`);
-      const stdinBlob =
-        outcome.response.pipe_stdin && pipedInput ? new Blob([pipedInput]) : undefined;
-      const exec = await executeShellCommand(outcome.command, {
-        mode: "inherit",
-        stdinBlob,
-      });
+      const exec = await executeShellCommand(outcome.command, { mode: "inherit" });
       // The round is the same reference held in `entry.rounds` (eager-logged
       // by pumpLoop), so this in-place mutation lands in the JSONL flush.
       outcome.round.exec_ms = exec.exec_ms;

@@ -259,63 +259,74 @@ describe("formatContext", () => {
     expect(cwdFilesIdx).toBeLessThan(cwdIdx);
   });
 
-  describe("piped input", () => {
-    test("includes piped input section when pipedInput is provided", () => {
-      const result = formatContext(makeParams({ pipedInput: "some log content" }));
-      expect(result).toContain("## Piped input");
+  describe("attached input", () => {
+    test("includes attached input section when preview is provided", () => {
+      const result = formatContext(
+        makeParams({
+          attachedInputPath: "/tmp/wrap-scratch-abc/input",
+          attachedInputSize: 16,
+          attachedInputPreview: "some log content",
+        }),
+      );
+      expect(result).toContain("## Attached input");
+      expect(result).toContain("Path: /tmp/wrap-scratch-abc/input (16B)");
       expect(result).toContain("some log content");
     });
 
-    test("piped input is the first section (before memory facts)", () => {
+    test("attached input is the first section (before memory facts)", () => {
       const result = formatContext(
         makeParams({
-          pipedInput: "log data",
+          attachedInputPath: "/tmp/wrap-scratch-abc/input",
+          attachedInputSize: 8,
+          attachedInputPreview: "log data",
           memory: { "/": [{ fact: "macOS" }] },
         }),
       );
-      const pipedIdx = result.indexOf("## Piped input");
+      const pipedIdx = result.indexOf("## Attached input");
       const factsIdx = result.indexOf("## System facts");
       expect(pipedIdx).toBeLessThan(factsIdx);
     });
 
-    test("no piped input section when pipedInput is undefined", () => {
+    test("no attached input section when preview is undefined", () => {
       const result = formatContext(makeParams());
-      expect(result).not.toContain("## Piped input");
+      expect(result).not.toContain("## Attached input");
     });
 
-    test("truncates when exceeding maxPipedInputChars", () => {
-      const longContent = "x".repeat(500);
+    test("emits 'Preview truncated' line when attachedInputTruncated is true", () => {
       const result = formatContext(
-        makeParams({ pipedInput: longContent, maxPipedInputChars: 200 }),
+        makeParams({
+          attachedInputPath: "/tmp/wrap-scratch-abc/input",
+          attachedInputSize: 500,
+          attachedInputPreview: "shortened preview",
+          attachedInputTruncated: true,
+        }),
       );
-      expect(result).toContain("…truncated");
-      expect(result).toContain("of 500 chars");
-      // Should not contain the full untruncated content
-      expect(result).not.toContain("x".repeat(500));
+      expect(result).toContain("Preview truncated");
+      expect(result).toContain("shortened preview");
     });
 
-    test("truncation note shows correct character counts", () => {
-      const longContent = "x".repeat(500);
+    test("no 'Preview truncated' line when attachedInputTruncated is false", () => {
       const result = formatContext(
-        makeParams({ pipedInput: longContent, maxPipedInputChars: 200 }),
+        makeParams({
+          attachedInputPath: "/tmp/wrap-scratch-abc/input",
+          attachedInputSize: 13,
+          attachedInputPreview: "short content",
+          attachedInputTruncated: false,
+        }),
       );
-      expect(result).toContain("of 500 chars");
-      expect(result).toMatch(/showing first \d+ and last \d+/);
+      expect(result).toContain("short content");
+      expect(result).not.toContain("Preview truncated");
     });
 
-    test("no truncation note when under limit", () => {
+    test("shows path line with size even without truncation", () => {
       const result = formatContext(
-        makeParams({ pipedInput: "short content", maxPipedInputChars: 200000 }),
+        makeParams({
+          attachedInputPath: "/tmp/wrap-scratch-abc/input",
+          attachedInputSize: 2048,
+          attachedInputPreview: "content here",
+        }),
       );
-      expect(result).toContain("## Piped input\n");
-      expect(result).not.toContain("truncated");
-    });
-
-    test("no truncation when maxPipedInputChars is not set", () => {
-      const longContent = "x".repeat(500);
-      const result = formatContext(makeParams({ pipedInput: longContent }));
-      expect(result).toContain(longContent);
-      expect(result).not.toContain("truncated");
+      expect(result).toContain("Path: /tmp/wrap-scratch-abc/input (2K)");
     });
   });
 });

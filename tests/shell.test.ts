@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { executeShellCommand } from "../src/core/shell.ts";
+import { chooseChildStdin, executeShellCommand } from "../src/core/shell.ts";
 
 // Pin SHELL=sh for stable behavior — zsh emits "can't change option: zle"
 // warnings to stderr when invoked with -i from a non-TTY, which would
@@ -46,19 +46,48 @@ describe("executeShellCommand (capture mode)", () => {
     expect(Number.isInteger(result.exec_ms)).toBe(true);
   });
 
-  test("forwards a Blob to stdin and the command can read it", async () => {
-    const result = await executeShellCommand("cat", {
-      mode: "capture",
-      stdinBlob: new Blob(["piped input here"]),
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("piped input here");
-  });
-
   test("reports the shell that was used", async () => {
     const result = await executeShellCommand("true", { mode: "capture" });
     expect(typeof result.shell).toBe("string");
     expect(result.shell.length).toBeGreaterThan(0);
+  });
+});
+
+describe("chooseChildStdin", () => {
+  test("returns 'inherit' when parent stdin is a TTY", () => {
+    const result = chooseChildStdin({ isTTY: true, tryOpenTty: () => 42 });
+    expect(result).toBe("inherit");
+  });
+
+  test("opens /dev/tty when parent stdin is not a TTY", () => {
+    let opened = false;
+    const result = chooseChildStdin({
+      isTTY: false,
+      tryOpenTty: () => {
+        opened = true;
+        return 99;
+      },
+    });
+    expect(opened).toBe(true);
+    expect(result).toBe(99);
+  });
+
+  test("falls back to 'ignore' when /dev/tty is unopenable", () => {
+    const result = chooseChildStdin({
+      isTTY: false,
+      tryOpenTty: () => {
+        throw new Error("ENXIO");
+      },
+    });
+    expect(result).toBe("ignore");
+  });
+
+  test("treats isTTY undefined as non-TTY (pipe invocation)", () => {
+    const result = chooseChildStdin({
+      isTTY: undefined,
+      tryOpenTty: () => 7,
+    });
+    expect(result).toBe(7);
   });
 });
 

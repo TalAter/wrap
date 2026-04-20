@@ -9,10 +9,13 @@ export type QueryContext = {
   prompt: string;
   cwd: string;
   memory: Memory;
-  pipedInput?: string;
   tools?: ToolProbeResult | null;
   cwdFiles?: string;
   piped?: boolean;
+  attachedInputPath?: string;
+  attachedInputSize?: number;
+  attachedInputPreview?: string;
+  attachedInputTruncated?: boolean;
 };
 
 /**
@@ -21,18 +24,17 @@ export type QueryContext = {
  * at startup; the runner re-uses `system` + `prefixMessages` on every
  * `runRound` call via `buildPromptInput`.
  */
-export function assemblePromptScaffold(
-  ctx: QueryContext,
-  maxPipedInputChars?: number,
-): PromptScaffold {
+export function assemblePromptScaffold(ctx: QueryContext): PromptScaffold {
   const contextString = formatContext({
     memory: ctx.memory,
     tools: ctx.tools,
     cwdFiles: ctx.cwdFiles,
     cwd: ctx.cwd,
     piped: ctx.piped,
-    pipedInput: ctx.pipedInput,
-    maxPipedInputChars,
+    attachedInputPath: ctx.attachedInputPath,
+    attachedInputSize: ctx.attachedInputSize,
+    attachedInputPreview: ctx.attachedInputPreview,
+    attachedInputTruncated: ctx.attachedInputTruncated,
     constants: promptConstants,
   });
 
@@ -46,7 +48,10 @@ export function assemblePromptScaffold(
       voiceInstructions: promptConstants.voiceInstructions,
       tempDirPrinciple: promptConstants.tempDirPrinciple,
       finalFlagInstruction: promptConstants.finalFlagInstruction,
-      pipedInputInstruction: ctx.pipedInput ? promptConstants.pipedInputInstruction : undefined,
+      attachedInputInstruction:
+        ctx.attachedInputPreview !== undefined
+          ? promptConstants.attachedInputInstruction
+          : undefined,
       fewShotExamples: promptOptimized.fewShotExamples,
       fewShotSeparator: promptConstants.fewShotSeparator,
       sectionUserRequest: promptConstants.sectionUserRequest,

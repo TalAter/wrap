@@ -40,7 +40,7 @@ with open(CONSTANTS_PATH) as _f:
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
 
-def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None, extra_messages=None, last_round=False, piped_input=None):
+def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None, extra_messages=None, last_round=False, attached_input=None):
     """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
     payload_dict = {
         "mode": mode,
@@ -59,8 +59,13 @@ def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped
         payload_dict["extraMessages"] = extra_messages
     if last_round:
         payload_dict["lastRound"] = True
-    if piped_input is not None:
-        payload_dict["pipedInput"] = piped_input
+    if attached_input is not None:
+        # Eval synthesizes the path + size from the example's inline content;
+        # real invocations materialize to disk at $WRAP_TEMP_DIR/input.
+        payload_dict["attachedInputPath"] = "$WRAP_TEMP_DIR/input"
+        payload_dict["attachedInputSize"] = len(attached_input.encode("utf-8"))
+        payload_dict["attachedInputPreview"] = attached_input
+        payload_dict["attachedInputTruncated"] = False
     payload = json.dumps(payload_dict)
     try:
         result = subprocess.run(
@@ -141,8 +146,8 @@ def make_signature(schema_text: str):
             desc="Whether this is the last available round (LLM must respond with final:true or reply)",
             default="",
         )
-        piped_input: str = dspy.InputField(
-            desc="Content piped to stdin (e.g. from cat file | w explain this)",
+        attached_input: str = dspy.InputField(
+            desc="Preview of content the user piped to stdin (e.g. `cat file | w explain this`). In the runtime, the full bytes live on disk at $WRAP_TEMP_DIR/input; commands read via file argument or shell redirection.",
             default="",
         )
         natural_language_query: str = dspy.InputField(
@@ -173,7 +178,7 @@ class WrapPredictor(dspy.Module):
         cwd_files = kwargs.get("cwd_files")
         extra_messages = kwargs.get("extra_messages")
         last_round = kwargs.get("last_round", False)
-        piped_input = kwargs.get("piped_input")
+        attached_input = kwargs.get("attached_input")
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -186,7 +191,7 @@ class WrapPredictor(dspy.Module):
             cwd_files=cwd_files,
             extra_messages=extra_messages,
             last_round=last_round,
-            piped_input=piped_input if piped_input else None,
+            attached_input=attached_input if attached_input else None,
         )
 
         # response_json as JSON string: DSPy signature declares it as str,
@@ -210,7 +215,7 @@ def _example_key(ex):
     em = getattr(ex, "extra_messages", None)
     if em:
         extra_msg_hash = hashlib.md5(json.dumps(em, sort_keys=True).encode()).hexdigest()[:8]
-    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), extra_msg_hash, assertions_hash, getattr(ex, "piped_input", None))
+    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), extra_msg_hash, assertions_hash, getattr(ex, "attached_input", None))
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
@@ -265,10 +270,10 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
                 cwd_files=ex.get("cwd_files"),
                 extra_messages=ex.get("extra_messages"),
                 last_round=ex.get("last_round", False),
-                piped_input=ex.get("pipedInput"),
+                attached_input=ex.get("attachedInput", ex.get("pipedInput")),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
-            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "extra_messages", "last_round", "piped_input", "natural_language_query")
+            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "extra_messages", "last_round", "attached_input", "natural_language_query")
         )
     return dspy_examples
 
@@ -342,8 +347,8 @@ def build_prompt_hash_manifest(
         ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
         ["CWD_PREFIX", CONSTANTS["cwdPrefix"]],
         ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
-        ["SECTION_PIPED_INPUT", CONSTANTS["sectionPipedInput"]],
-        ["PIPED_INPUT_INSTRUCTION", CONSTANTS["pipedInputInstruction"]],
+        ["SECTION_ATTACHED_INPUT", CONSTANTS["sectionAttachedInput"]],
+        ["ATTACHED_INPUT_INSTRUCTION", CONSTANTS["attachedInputInstruction"]],
         ["FEW_SHOT_EXAMPLES", demos or []],
     ]
 
@@ -379,7 +384,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
     results = []
     for ex in examples:
         cwd_files = getattr(ex, "cwd_files", None)
-        piped_input = getattr(ex, "piped_input", None)
+        attached_input = getattr(ex, "attached_input", None)
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
@@ -390,7 +395,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
             piped=ex.piped,
             query=ex.natural_language_query,
             cwd_files=cwd_files,
-            piped_input=piped_input if piped_input else None,
+            attached_input=attached_input if attached_input else None,
         )
         s = 0.0 if error_type else score(response, ex.assertions)
         results.append({
@@ -422,7 +427,7 @@ def save_eval_results(
         _trial_scores.items(),
         key=lambda x: sum(s for s, _ in x[1]) / len(x[1]),
     ):
-        query, cwd, piped, _cwd_files, _extra_msg_hash, _assertions_hash, piped_input = key
+        query, cwd, piped, _cwd_files, _extra_msg_hash, _assertions_hash, attached_input = key
         total = len(entries)
         perfect = sum(1 for s, _ in entries if s >= 1.0)
         avg = sum(s for s, _ in entries) / total

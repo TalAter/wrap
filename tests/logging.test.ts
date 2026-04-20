@@ -45,28 +45,47 @@ describe("createLogEntry", () => {
     expect(entry.version.length).toBeGreaterThan(0);
   });
 
-  test("includes piped_input when provided", () => {
-    const entry = createLogEntry({ ...defaults, pipedInput: "hello world" });
-    expect(entry.piped_input).toBe("hello world");
+  test("includes attached_input when provided", () => {
+    const entry = createLogEntry({
+      ...defaults,
+      attachedInputPath: "/tmp/wrap-scratch-abc/input",
+      attachedInputSize: 11,
+      attachedInputPreview: "hello world",
+    });
+    expect(entry.attached_input?.path).toBe("/tmp/wrap-scratch-abc/input");
+    expect(entry.attached_input?.size).toBe(11);
+    expect(entry.attached_input?.preview).toBe("hello world");
   });
 
-  test("truncates piped_input to 1000 chars in log", () => {
+  test("truncates attached_input preview to 1000 chars in log", () => {
     const long = "x".repeat(5000);
-    const entry = createLogEntry({ ...defaults, pipedInput: long });
-    expect(entry.piped_input).toHaveLength(1000 + "\n[…truncated, 5000 chars total]".length);
-    expect(entry.piped_input).toStartWith("x".repeat(1000));
-    expect(entry.piped_input).toEndWith("[…truncated, 5000 chars total]");
+    const entry = createLogEntry({
+      ...defaults,
+      attachedInputPath: "/tmp/wrap-scratch-abc/input",
+      attachedInputSize: 5000,
+      attachedInputPreview: long,
+    });
+    expect(entry.attached_input?.preview).toHaveLength(
+      1000 + "\n[…truncated, 5000 chars total]".length,
+    );
+    expect(entry.attached_input?.preview).toStartWith("x".repeat(1000));
+    expect(entry.attached_input?.preview).toEndWith("[…truncated, 5000 chars total]");
   });
 
-  test("does not truncate piped_input at exactly 1000 chars", () => {
+  test("does not truncate attached_input preview at exactly 1000 chars", () => {
     const exact = "x".repeat(1000);
-    const entry = createLogEntry({ ...defaults, pipedInput: exact });
-    expect(entry.piped_input).toBe(exact);
+    const entry = createLogEntry({
+      ...defaults,
+      attachedInputPath: "/tmp/wrap-scratch-abc/input",
+      attachedInputSize: 1000,
+      attachedInputPreview: exact,
+    });
+    expect(entry.attached_input?.preview).toBe(exact);
   });
 
-  test("omits piped_input when not provided", () => {
+  test("omits attached_input when not provided", () => {
     const entry = createLogEntry(defaults);
-    expect("piped_input" in entry).toBe(false);
+    expect("attached_input" in entry).toBe(false);
   });
 
   test("includes memory when provided", () => {
@@ -181,14 +200,16 @@ describe("serializeEntry", () => {
       promptHash: "abc",
     });
     const parsed = JSON.parse(serializeEntry(entry));
-    expect("piped_input" in parsed).toBe(false);
+    expect("attached_input" in parsed).toBe(false);
   });
 
   test("includes all present fields", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
-      pipedInput: "stdin data",
+      attachedInputPath: "/tmp/wrap-scratch-abc/input",
+      attachedInputSize: 10,
+      attachedInputPreview: "stdin data",
       provider: { name: "claude-code", model: "haiku" },
       promptHash: "abc",
     });
@@ -203,7 +224,7 @@ describe("serializeEntry", () => {
       execution: { command: "ls", exit_code: 0, shell: "/bin/zsh" },
     });
     const parsed = JSON.parse(serializeEntry(entry));
-    expect(parsed.piped_input).toBe("stdin data");
+    expect(parsed.attached_input?.preview).toBe("stdin data");
     expect(parsed.outcome).toBe("success");
     expect(parsed.rounds[0].parsed.content).toBe("ls");
     expect(parsed.rounds[0].execution.exit_code).toBe(0);

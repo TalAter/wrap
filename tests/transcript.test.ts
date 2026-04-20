@@ -48,7 +48,6 @@ function project(r: CommandResponse): Record<string, unknown> {
     risk_level: r.risk_level,
   };
   if (r.plan != null) out.plan = r.plan;
-  if (r.pipe_stdin) out.pipe_stdin = r.pipe_stdin;
   return out;
 }
 

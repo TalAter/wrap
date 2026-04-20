@@ -45,7 +45,6 @@ export function makeOptions(overrides: Partial<LoopOptions> = {}): LoopOptions {
     cwd: "/tmp",
     wrapHome: "/tmp",
     model: formatProvider(TEST_RESOLVED_PROVIDER),
-    pipedInput: undefined,
     showSpinner: false,
     ...overrides,
   };

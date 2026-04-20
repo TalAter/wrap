@@ -218,14 +218,21 @@ describe("scoped memory in prompt", () => {
     expect(result.system).toContain("dry wit");
   });
 
-  test("piped input instruction in system prompt when pipedInput present", () => {
-    const result = assemblePromptScaffold(makeContext({ pipedInput: "some data" }));
-    expect(result.system).toContain("Piped input serves as");
+  test("attached input instruction in system prompt when preview present", () => {
+    const result = assemblePromptScaffold(
+      makeContext({
+        attachedInputPath: "/tmp/wrap-scratch-abc/input",
+        attachedInputSize: 9,
+        attachedInputPreview: "some data",
+      }),
+    );
+    expect(result.system).toContain("$WRAP_TEMP_DIR/input");
+    expect(result.system).toContain("file on disk");
   });
 
-  test("no piped input instruction in system prompt when no pipedInput", () => {
+  test("no attached input instruction in system prompt when no preview", () => {
     const result = assemblePromptScaffold(makeContext());
-    expect(result.system).not.toContain("Piped input serves as");
+    expect(result.system).not.toContain("$WRAP_TEMP_DIR/input");
   });
 });
 
@@ -267,36 +274,58 @@ describe("tools output in prompt", () => {
   });
 });
 
-describe("piped input in prompt", () => {
-  test("pipedInput shows up in initial user text", () => {
-    const text = userText(makeContext({ pipedInput: "error log content here" }));
-    expect(text).toContain("## Piped input");
+describe("attached input in prompt", () => {
+  test("preview shows up in initial user text", () => {
+    const text = userText(
+      makeContext({
+        attachedInputPath: "/tmp/wrap-scratch-abc/input",
+        attachedInputSize: 22,
+        attachedInputPreview: "error log content here",
+      }),
+    );
+    expect(text).toContain("## Attached input");
     expect(text).toContain("error log content here");
   });
 
-  test("pipedInput appears before memory facts", () => {
+  test("attached input appears before memory facts", () => {
     const text = userText(
       makeContext({
-        pipedInput: "log data",
+        attachedInputPath: "/tmp/wrap-scratch-abc/input",
+        attachedInputSize: 8,
+        attachedInputPreview: "log data",
         memory: { "/": [{ fact: "macOS" }] },
       }),
     );
-    const pipedIdx = text.indexOf("## Piped input");
+    const pipedIdx = text.indexOf("## Attached input");
     const factsIdx = text.indexOf("## System facts");
     expect(pipedIdx).toBeLessThan(factsIdx);
   });
 
   test("user request section omitted when prompt is empty", () => {
-    const text = userText(makeContext({ prompt: "", pipedInput: "piped content" }));
+    const text = userText(
+      makeContext({
+        prompt: "",
+        attachedInputPath: "/tmp/wrap-scratch-abc/input",
+        attachedInputSize: 13,
+        attachedInputPreview: "piped content",
+      }),
+    );
     expect(text).not.toContain("## User's request");
-    expect(text).toContain("## Piped input");
+    expect(text).toContain("## Attached input");
     expect(text).toContain("piped content");
   });
 
-  test("user request section present when prompt is non-empty with piped input", () => {
-    const text = userText(makeContext({ prompt: "explain this", pipedInput: "error log" }));
+  test("user request section present when prompt is non-empty with attached input", () => {
+    const text = userText(
+      makeContext({
+        prompt: "explain this",
+        attachedInputPath: "/tmp/wrap-scratch-abc/input",
+        attachedInputSize: 9,
+        attachedInputPreview: "error log",
+      }),
+    );
     expect(text).toContain("## User's request\nexplain this");
-    expect(text).toContain("## Piped input");
+    expect(text).toContain("## Attached input");
   });
 });
 

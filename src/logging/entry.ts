@@ -39,7 +39,21 @@ export type LogEntry = {
   version: string;
   prompt: string;
   cwd: string;
-  piped_input?: string;
+  /**
+   * Recorded when stdin was piped.
+   * - `path` is ephemeral — the per-invocation temp dir is removed by the OS
+   *   on its own schedule. Useful for debugging against contemporaneous env
+   *   logs; log consumers should not assume the file still exists.
+   * - `size` is raw byte count.
+   * - `preview` is UTF-8 decoded text (possibly truncated to 1000 chars in
+   *   the log; binary content renders as a short summary). `size` and
+   *   `preview.length` will disagree for binary and truncated content.
+   */
+  attached_input?: {
+    path: string;
+    size: number;
+    preview: string;
+  };
   memory?: Memory;
   provider: ResolvedProvider;
   prompt_hash: string;
@@ -50,7 +64,9 @@ export type LogEntry = {
 export function createLogEntry(params: {
   prompt: string;
   cwd: string;
-  pipedInput?: string;
+  attachedInputPath?: string;
+  attachedInputSize?: number;
+  attachedInputPreview?: string;
   memory?: Memory;
   provider: ResolvedProvider;
   promptHash: string;
@@ -66,12 +82,21 @@ export function createLogEntry(params: {
     rounds: [],
     outcome: "error",
   };
-  if (params.pipedInput !== undefined) {
-    const LOG_PIPED_INPUT_MAX = 1000;
-    entry.piped_input =
-      params.pipedInput.length > LOG_PIPED_INPUT_MAX
-        ? `${params.pipedInput.slice(0, LOG_PIPED_INPUT_MAX)}\n[…truncated, ${params.pipedInput.length} chars total]`
-        : params.pipedInput;
+  if (
+    params.attachedInputPath !== undefined &&
+    params.attachedInputSize !== undefined &&
+    params.attachedInputPreview !== undefined
+  ) {
+    const LOG_PREVIEW_MAX = 1000;
+    const preview =
+      params.attachedInputPreview.length > LOG_PREVIEW_MAX
+        ? `${params.attachedInputPreview.slice(0, LOG_PREVIEW_MAX)}\n[…truncated, ${params.attachedInputPreview.length} chars total]`
+        : params.attachedInputPreview;
+    entry.attached_input = {
+      path: params.attachedInputPath,
+      size: params.attachedInputSize,
+      preview,
+    };
   }
   if (params.memory && Object.keys(params.memory).length > 0) {
     entry.memory = params.memory;

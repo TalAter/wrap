@@ -21,7 +21,6 @@ WEIGHTS = {
     "watchlist_additions_pattern": 1.0,
     "watchlist_additions_min_count": 1.0,
     "no_memory_updates": 2.0,
-    "pipe_stdin_expected": 2.0,
 }
 
 
@@ -155,13 +154,6 @@ def score(response: dict, assertions: dict) -> float:
         checks.append((
             "watchlist_additions_min_count",
             len(additions) >= assertions["watchlist_additions_min_count"],
-        ))
-
-    # pipe_stdin must match expected boolean
-    if "pipe_stdin_expected" in assertions:
-        checks.append((
-            "pipe_stdin_expected",
-            response.get("pipe_stdin", False) == assertions["pipe_stdin_expected"],
         ))
 
     if not checks:

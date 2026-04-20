@@ -68,9 +68,6 @@ export const CommandResponseSchema = z.object({
   // When returning a command that installs a tool, use watchlist_additions instead of
   // memory_updates to note that tool and others in the category.
   watchlist_additions: z.array(z.string()).nullable().optional(),
-  // When true, the full original piped input is fed to the command's stdin.
-  // Only meaningful for command/probe types. Omit or set false when not needed.
-  pipe_stdin: z.boolean().optional(),
 });
 // SCHEMA_END
 

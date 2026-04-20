@@ -281,28 +281,28 @@ describe("loadConfig", () => {
       expect(mp.minimum).toBe(1000);
     });
 
-    test("configSchema.maxPipedInputChars default matches SETTINGS", () => {
-      const mp = configSchema.properties.maxPipedInputChars;
+    test("configSchema.maxAttachedInputChars default matches SETTINGS", () => {
+      const mp = configSchema.properties.maxAttachedInputChars;
       expect(mp.type).toBe("integer");
-      expect(mp.default).toBe(SETTINGS.maxPipedInputChars.default);
+      expect(mp.default).toBe(SETTINGS.maxAttachedInputChars.default);
       expect(mp.minimum).toBe(1000);
     });
   });
 
-  describe("maxPipedInputChars", () => {
+  describe("maxAttachedInputChars", () => {
     test("reads from config file", () => {
       const dir = tempDir();
-      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxPipedInputChars: 50000 }));
+      writeFileSync(join(dir, "config.jsonc"), JSON.stringify({ maxAttachedInputChars: 50000 }));
       const config = loadConfig({ WRAP_HOME: dir });
-      expect(config.maxPipedInputChars).toBe(50000);
+      expect(config.maxAttachedInputChars).toBe(50000);
     });
 
     test("reads from WRAP_CONFIG", () => {
       const config = loadConfig({
         WRAP_HOME: tempDir(),
-        WRAP_CONFIG: JSON.stringify({ maxPipedInputChars: 100000 }),
+        WRAP_CONFIG: JSON.stringify({ maxAttachedInputChars: 100000 }),
       });
-      expect(config.maxPipedInputChars).toBe(100000);
+      expect(config.maxAttachedInputChars).toBe(100000);
     });
 
     test("undefined when not set", () => {
@@ -310,7 +310,7 @@ describe("loadConfig", () => {
         WRAP_HOME: tempDir(),
         WRAP_CONFIG: JSON.stringify({}),
       });
-      expect(config.maxPipedInputChars).toBeUndefined();
+      expect(config.maxAttachedInputChars).toBeUndefined();
     });
   });
 });

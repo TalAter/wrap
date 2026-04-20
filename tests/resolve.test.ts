@@ -37,7 +37,7 @@ describe("resolveSettings — precedence", () => {
     expect(result.noAnimation).toBe(false);
     expect(result.maxRounds).toBe(5);
     expect(result.maxCapturedOutputChars).toBe(200_000);
-    expect(result.maxPipedInputChars).toBe(200_000);
+    expect(result.maxAttachedInputChars).toBe(200_000);
     expect(result.nerdFonts).toBe(false);
     expect(result.yolo).toBe(false);
   });
@@ -210,7 +210,7 @@ describe("applyModelOverride", () => {
     yolo: false,
     maxRounds: 5,
     maxCapturedOutputChars: 200_000,
-    maxPipedInputChars: 200_000,
+    maxAttachedInputChars: 200_000,
     providers: {
       anthropic: { apiKey: "sk-a", model: "claude-haiku-4-5" },
       openai: { apiKey: "sk-o", model: "gpt-4o-mini" },

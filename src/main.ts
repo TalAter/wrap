@@ -1,17 +1,20 @@
+import { chmod, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ensureConfig } from "./config/ensure.ts";
 import { applyModelOverride, resolveSettings } from "./config/resolve.ts";
 import { getConfig, setConfig } from "./config/store.ts";
+import { buildAttachedInputPreview, readAttachedInput } from "./core/attached-input.ts";
 import { resolveAppearance } from "./core/detect-appearance.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
-import { readPipedInput } from "./core/piped-input.ts";
 import { resolveTheme, setTheme } from "./core/theme.ts";
 import { verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { loadWatchlist } from "./discovery/watchlist.ts";
 import { getWrapHome } from "./fs/home.ts";
+import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
 import { formatProvider } from "./llm/types.ts";
@@ -44,9 +47,9 @@ export async function main() {
       return;
     }
 
-    const pipedInput = await readPipedInput();
+    const attachedInputBytes = await readAttachedInput();
 
-    if (input.type === "none" && !pipedInput) {
+    if (input.type === "none" && !attachedInputBytes) {
       await dispatch("--help", []);
       return;
     }
@@ -67,6 +70,32 @@ export async function main() {
 
     const provider = initProvider(resolved);
     verbose(`Provider initialized (${label})`);
+
+    let attachedInputPath: string | undefined;
+    let attachedInputSize: number | undefined;
+    let attachedInputPreview: string | undefined;
+    let attachedInputTruncated = false;
+    if (attachedInputBytes) {
+      // Materializing the pipe to disk is the only non-shell-exec path that
+      // needs the temp dir, so create it eagerly here rather than waiting for
+      // ensureTempDir's lazy call inside executeShellCommand.
+      const tempDir = ensureTempDir();
+      attachedInputPath = join(tempDir, "input");
+      // Mode passed upfront so the initial file is never more permissive than
+      // 0o600 (umask can only further restrict). Explicit chmod afterwards
+      // guarantees exactly 0o600 even under a weird umask, so the next process
+      // reading this path can rely on the mode.
+      await writeFile(attachedInputPath, attachedInputBytes, { mode: 0o600 });
+      await chmod(attachedInputPath, 0o600);
+      attachedInputSize = attachedInputBytes.byteLength;
+      const built = buildAttachedInputPreview(
+        attachedInputBytes,
+        getConfig().maxAttachedInputChars,
+      );
+      attachedInputPreview = built.preview;
+      attachedInputTruncated = built.truncated;
+      verbose(`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`);
+    }
 
     const wrapHome = getWrapHome();
     const watchlist = loadWatchlist(wrapHome);
@@ -91,7 +120,10 @@ export async function main() {
       resolvedProvider: resolved,
       tools,
       cwdFiles,
-      pipedInput,
+      attachedInputPath,
+      attachedInputSize,
+      attachedInputPreview,
+      attachedInputTruncated,
     });
   } catch (e) {
     chrome(e instanceof Error ? e.message : String(e));

@@ -13,7 +13,7 @@ export type Config = {
   defaultProvider?: string;
   maxRounds?: number;
   maxCapturedOutputChars?: number;
-  maxPipedInputChars?: number;
+  maxAttachedInputChars?: number;
   verbose?: boolean;
   noAnimation?: boolean;
   nerdFonts?: boolean;
@@ -32,7 +32,7 @@ export type ResolvedConfig = Config & {
   yolo: boolean;
   maxRounds: number;
   maxCapturedOutputChars: number;
-  maxPipedInputChars: number;
+  maxAttachedInputChars: number;
 };
 
 // Compile-time drift check: every SETTINGS entry with a `default` must be a

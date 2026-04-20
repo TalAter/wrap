@@ -66,7 +66,7 @@ describe("SETTINGS registry", () => {
     expect(keys).toContain("nerdFonts");
     expect(keys).toContain("maxRounds");
     expect(keys).toContain("maxCapturedOutputChars");
-    expect(keys).toContain("maxPipedInputChars");
+    expect(keys).toContain("maxAttachedInputChars");
     expect(keys).toContain("defaultProvider");
     expect(keys).toContain("yolo");
   });
@@ -102,7 +102,7 @@ describe("SETTINGS registry", () => {
     expect(withDefaults).toEqual(
       [
         "maxCapturedOutputChars",
-        "maxPipedInputChars",
+        "maxAttachedInputChars",
         "maxRounds",
         "nerdFonts",
         "noAnimation",

@@ -24,7 +24,6 @@ export type LoopOptions = {
   wrapHome: string;
   /** Display label for the active provider, e.g. "anthropic / claude-sonnet-4-6". */
   model: string;
-  pipedInput?: string;
   signal?: AbortSignal;
   /**
    * Forwarded to `runRound` per iteration. The session sets this true for the
@@ -219,12 +218,7 @@ export async function* runLoop(
     };
     verbose(`Step: ${response.content}`);
 
-    const stdinBlob =
-      response.pipe_stdin && options.pipedInput ? new Blob([options.pipedInput]) : undefined;
-    const exec = await executeShellCommand(response.content, {
-      mode: "capture",
-      stdinBlob,
-    });
+    const exec = await executeShellCommand(response.content, { mode: "capture" });
 
     // Orphan-turn prevention: same idea as the post-runRound check. Without
     // this, an Esc during the step await would still push the step turn.

@@ -18,9 +18,9 @@
       "minimum": 1000,
       "default": 200000
     },
-    "maxPipedInputChars": {
+    "maxAttachedInputChars": {
       "type": "integer",
-      "description": "Maximum characters of piped stdin sent to the LLM. Longer input is truncated but the full content is still available for re-piping to commands. Default: 200000 (~200KB).",
+      "description": "Maximum characters of the attached-input preview shown to the LLM. Longer input is previewed truncated but the full bytes are on disk at $WRAP_TEMP_DIR/input for commands to use. Default: 200000 (~200KB).",
       "minimum": 1000,
       "default": 200000
     },

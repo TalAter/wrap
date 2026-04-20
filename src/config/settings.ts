@@ -87,9 +87,10 @@ export const SETTINGS = {
     description: "Max chars of command output captured and sent back to the LLM",
     default: 200_000,
   },
-  maxPipedInputChars: {
+  maxAttachedInputChars: {
     type: "number",
-    description: "Max chars of piped stdin forwarded to the LLM",
+    description:
+      "Max chars of the attached-input preview shown to the LLM (full bytes always on disk at $WRAP_TEMP_DIR/input)",
     default: 200_000,
   },
   defaultProvider: {

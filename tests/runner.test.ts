@@ -51,7 +51,6 @@ function makeOptions(overrides?: Partial<LoopOptions>): LoopOptions {
     cwd: "/tmp",
     wrapHome: tmpHome,
     model: "test / model",
-    pipedInput: undefined,
     showSpinner: false,
     ...overrides,
   };

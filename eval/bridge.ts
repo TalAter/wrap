@@ -38,8 +38,10 @@ const contextString = formatContext({
   cwdFiles: input.cwdFiles,
   cwd: input.cwd,
   piped: input.piped,
-  pipedInput: input.pipedInput,
-  maxPipedInputChars: input.maxPipedInputChars,
+  attachedInputPath: input.attachedInputPath,
+  attachedInputSize: input.attachedInputSize,
+  attachedInputPreview: input.attachedInputPreview,
+  attachedInputTruncated: input.attachedInputTruncated,
   constants: promptConstants,
 });
 
@@ -53,7 +55,10 @@ const scaffold = buildPromptScaffold(
     voiceInstructions: promptConstants.voiceInstructions,
     tempDirPrinciple: promptConstants.tempDirPrinciple,
     finalFlagInstruction: promptConstants.finalFlagInstruction,
-    pipedInputInstruction: input.pipedInput ? promptConstants.pipedInputInstruction : undefined,
+    attachedInputInstruction:
+      input.attachedInputPreview !== undefined
+        ? promptConstants.attachedInputInstruction
+        : undefined,
     fewShotExamples: input.fewShotExamples,
     fewShotSeparator: promptConstants.fewShotSeparator,
     sectionUserRequest: promptConstants.sectionUserRequest,

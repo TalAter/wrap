@@ -476,10 +476,10 @@ describe("piped input", () => {
     expect(stdout).toContain("Usage:");
   });
 
-  test("pipe_stdin: true — command receives piped content on stdin", async () => {
+  test("shell redirection from $WRAP_TEMP_DIR/input — command reads full bytes", async () => {
     const { exitCode, stdout } = await wrapMock(
       "count lines",
-      { type: "command", content: "wc -l", risk_level: "low", pipe_stdin: true },
+      { type: "command", content: "wc -l < $WRAP_TEMP_DIR/input", risk_level: "low" },
       undefined,
       "line1\nline2\nline3\n",
     );
@@ -487,10 +487,43 @@ describe("piped input", () => {
     expect(stdout.trim()).toBe("3");
   });
 
-  test("pipe_stdin: false — command does not receive piped content", async () => {
+  test("file argument form — interactive tools see the path, not stdin", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "show the size",
+      {
+        type: "command",
+        content:
+          "stat -f '%z' $WRAP_TEMP_DIR/input 2>/dev/null || stat -c '%s' $WRAP_TEMP_DIR/input",
+        risk_level: "low",
+      },
+      undefined,
+      "abcde",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("5");
+  });
+
+  test("$WRAP_TEMP_DIR/input exists with 0o600 mode after pipe", async () => {
+    const { exitCode, stdout } = await wrapMock(
+      "read mode",
+      {
+        type: "command",
+        // macOS `stat -f %Lp` and GNU `stat -c %a` both print the octal mode.
+        content:
+          "stat -f '%Lp' $WRAP_TEMP_DIR/input 2>/dev/null || stat -c '%a' $WRAP_TEMP_DIR/input",
+        risk_level: "low",
+      },
+      undefined,
+      "hello",
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("600");
+  });
+
+  test("command without redirection does not receive attached bytes via stdin", async () => {
     const { exitCode, stdout } = await wrapMock(
       "list files",
-      { type: "command", content: "echo hello", risk_level: "low", pipe_stdin: false },
+      { type: "command", content: "echo hello", risk_level: "low" },
       undefined,
       "this should not be piped",
     );
@@ -498,16 +531,15 @@ describe("piped input", () => {
     expect(stdout).toBe("hello\n");
   });
 
-  test("pipe_stdin: true on step — step receives piped content", async () => {
+  test("non-final step can redirect from $WRAP_TEMP_DIR/input", async () => {
     const { exitCode, stdout } = await wrapMock(
       "count lines",
       [
         {
           type: "command",
           final: false,
-          content: "wc -l",
+          content: "wc -l < $WRAP_TEMP_DIR/input",
           risk_level: "low",
-          pipe_stdin: true,
         },
         { type: "reply", content: "3 lines", risk_level: "low" },
       ],
@@ -531,7 +563,7 @@ describe("piped input", () => {
     expect(stdout).not.toContain("wrap v");
   });
 
-  test("piped input logged in entry", async () => {
+  test("attached input logged with path, size, and preview", async () => {
     const { wrapHome } = await wrapMock(
       "explain",
       { type: "reply", content: "ok", risk_level: "low" },
@@ -540,10 +572,13 @@ describe("piped input", () => {
     );
     const logPath = join(wrapHome, "logs", "wrap.jsonl");
     const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
-    expect(entry.piped_input).toBe("log data here");
+    expect(entry.attached_input.preview).toBe("log data here");
+    expect(entry.attached_input.size).toBe("log data here".length);
+    expect(entry.attached_input.path).toContain("wrap-scratch-");
+    expect(entry.attached_input.path).toEndWith("/input");
   });
 
-  test("large piped input truncated in log", async () => {
+  test("large attached input preview truncated in log", async () => {
     const largeInput = "x".repeat(5000);
     const { wrapHome } = await wrapMock(
       "explain",
@@ -553,11 +588,12 @@ describe("piped input", () => {
     );
     const logPath = join(wrapHome, "logs", "wrap.jsonl");
     const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
-    expect(entry.piped_input).toContain("[…truncated, 5000 chars total]");
-    expect(entry.piped_input.length).toBeLessThan(5000);
+    expect(entry.attached_input.preview).toContain("[…truncated,");
+    expect(entry.attached_input.preview.length).toBeLessThan(5000);
+    expect(entry.attached_input.size).toBe(5000);
   });
 
-  test("no piped input: log omits piped_input field", async () => {
+  test("no attached input: log omits attached_input field", async () => {
     const { wrapHome } = await wrapMock("hello", {
       type: "reply",
       content: "ok",
@@ -565,6 +601,6 @@ describe("piped input", () => {
     });
     const logPath = join(wrapHome, "logs", "wrap.jsonl");
     const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
-    expect("piped_input" in entry).toBe(false);
+    expect("attached_input" in entry).toBe(false);
   });
 });
