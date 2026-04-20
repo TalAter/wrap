@@ -1,0 +1,153 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  deleteCache,
+  deleteLogs,
+  deleteMemory,
+  deleteScratch,
+} from "../src/subcommands/forget-delete.ts";
+
+describe("deleteMemory", () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "wrap-del-mem-"));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("missing files → removed false, no errors", () => {
+    expect(deleteMemory(home)).toEqual({ removed: false, errors: [] });
+  });
+
+  test("removes memory.json + tool-watchlist.json", () => {
+    writeFileSync(join(home, "memory.json"), "{}");
+    writeFileSync(join(home, "tool-watchlist.json"), "[]");
+    const r = deleteMemory(home);
+    expect(r).toEqual({ removed: true, errors: [] });
+    expect(existsSync(join(home, "memory.json"))).toBe(false);
+    expect(existsSync(join(home, "tool-watchlist.json"))).toBe(false);
+  });
+
+  test("removes memory.json when watchlist missing", () => {
+    writeFileSync(join(home, "memory.json"), "{}");
+    const r = deleteMemory(home);
+    expect(r.removed).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(existsSync(join(home, "memory.json"))).toBe(false);
+  });
+
+  test("does not touch config.jsonc", () => {
+    writeFileSync(join(home, "memory.json"), "{}");
+    writeFileSync(join(home, "config.jsonc"), "{}");
+    deleteMemory(home);
+    expect(existsSync(join(home, "config.jsonc"))).toBe(true);
+  });
+});
+
+describe("deleteLogs", () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "wrap-del-log-"));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("missing log → removed false", () => {
+    expect(deleteLogs(home)).toEqual({ removed: false, errors: [] });
+  });
+
+  test("removes wrap.jsonl", () => {
+    mkdirSync(join(home, "logs"));
+    writeFileSync(join(home, "logs", "wrap.jsonl"), "{}\n");
+    const r = deleteLogs(home);
+    expect(r).toEqual({ removed: true, errors: [] });
+    expect(existsSync(join(home, "logs", "wrap.jsonl"))).toBe(false);
+  });
+});
+
+describe("deleteCache", () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "wrap-del-cache-"));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("missing cache dir → removed false", () => {
+    expect(deleteCache(home)).toEqual({ removed: false, errors: [] });
+  });
+
+  test("removes whole cache dir recursively", () => {
+    mkdirSync(join(home, "cache"));
+    mkdirSync(join(home, "cache", "sub"));
+    writeFileSync(join(home, "cache", "a"), "x");
+    writeFileSync(join(home, "cache", "sub", "b"), "y");
+    const r = deleteCache(home);
+    expect(r.removed).toBe(true);
+    expect(existsSync(join(home, "cache"))).toBe(false);
+  });
+
+  test("removes symlink inside cache but not the symlink target", () => {
+    const target = mkdtempSync(join(tmpdir(), "wrap-cache-target-"));
+    try {
+      writeFileSync(join(target, "survives.txt"), "important");
+      mkdirSync(join(home, "cache"));
+      symlinkSync(target, join(home, "cache", "link-to-target"));
+      const r = deleteCache(home);
+      expect(r.removed).toBe(true);
+      expect(existsSync(join(home, "cache"))).toBe(false);
+      // The symlink target directory must still exist with contents intact.
+      expect(existsSync(target)).toBe(true);
+      expect(readFileSync(join(target, "survives.txt"), "utf-8")).toBe("important");
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("deleteScratch", () => {
+  let base: string;
+
+  beforeEach(() => {
+    base = mkdtempSync(join(tmpdir(), "wrap-del-scratch-base-"));
+  });
+
+  afterEach(() => {
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  test("no matching dirs → removed false", () => {
+    expect(deleteScratch(base)).toEqual({ removed: false, errors: [] });
+  });
+
+  test("removes every wrap-scratch-* under tmpBase", () => {
+    mkdirSync(join(base, "wrap-scratch-aaa"));
+    writeFileSync(join(base, "wrap-scratch-aaa", "f"), "x");
+    mkdirSync(join(base, "wrap-scratch-bbb"));
+    const r = deleteScratch(base);
+    expect(r.removed).toBe(true);
+    expect(existsSync(join(base, "wrap-scratch-aaa"))).toBe(false);
+    expect(existsSync(join(base, "wrap-scratch-bbb"))).toBe(false);
+  });
+
+  test("leaves non-matching entries alone", () => {
+    mkdirSync(join(base, "wrap-scratch-keep-prefix"));
+    mkdirSync(join(base, "other-dir"));
+    writeFileSync(join(base, "loose-file"), "x");
+    deleteScratch(base);
+    expect(existsSync(join(base, "other-dir"))).toBe(true);
+    expect(existsSync(join(base, "loose-file"))).toBe(true);
+    expect(existsSync(join(base, "wrap-scratch-keep-prefix"))).toBe(false);
+  });
+});
