@@ -1,5 +1,6 @@
 import { SETTINGS, type Setting } from "../config/settings.ts";
 import { completionCmd } from "./completion.ts";
+import { forgetCmd } from "./forget.ts";
 import { helpCmd } from "./help.ts";
 import { logCmd } from "./log.ts";
 import type { Command, Option } from "./types.ts";
@@ -27,7 +28,7 @@ function settingToOption(id: string, s: FlaggedSetting): Option {
   };
 }
 
-export const commands: Command[] = [logCmd, helpCmd, versionCmd, completionCmd];
+export const commands: Command[] = [logCmd, helpCmd, versionCmd, completionCmd, forgetCmd];
 
 export const options: Option[] = (Object.entries(SETTINGS) as [string, Setting][])
   .filter(hasFlag)
