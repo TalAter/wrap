@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "bun test tests/command-response.schema.test.ts tests/parse-response.test.ts"
+  },
+  "mutate": ["src/command-response.schema.ts", "src/core/parse-response.ts"],
+  "coverageAnalysis": "off",
+  "reporters": ["html", "clear-text", "progress"],
+  "timeoutMS": 15000,
+  "concurrency": 4,
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true
+}

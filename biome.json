@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
   "files": {
-    "includes": ["**", "!.claude/worktrees", "!eval/results"]
+    "includes": ["**", "!.claude/worktrees", "!eval/results", "!.stryker-tmp", "!reports"]
   },
   "formatter": {
     "indentStyle": "space",
