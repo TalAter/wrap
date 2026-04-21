@@ -1,8 +1,19 @@
+export type SpawnResult = {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+};
+
+/**
+ * Run a subprocess with a piped stdin payload and read all three streams.
+ * Non-zero exit is returned, not thrown — callers decide whether to raise
+ * or (for wire capture) persist the failed run.
+ */
 export async function spawnAndRead(
   cmd: string[],
   prompt: string,
   opts?: { cwd?: string },
-): Promise<string> {
+): Promise<SpawnResult> {
   const proc = Bun.spawn(cmd, {
     stdin: Buffer.from(prompt),
     cwd: opts?.cwd,
@@ -14,8 +25,5 @@ export async function spawnAndRead(
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
-  if (exitCode !== 0) {
-    throw new Error(stderr.trim() || `${cmd[0]} failed`);
-  }
-  return stdout.trim();
+  return { stdout, stderr, exit_code: exitCode };
 }
