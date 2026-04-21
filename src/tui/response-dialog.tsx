@@ -1,4 +1,4 @@
-import { Box, Text, useAnimation, useInput, useStdin, useWindowSize } from "ink";
+import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
 import { useEffect, useState } from "react";
 import stringWidth from "string-width";
 import { getConfig } from "../config/store.ts";
@@ -6,7 +6,9 @@ import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import type { ThemeTokens } from "../core/theme.ts";
 import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
+import { ActionBar, type ActionItem } from "./action-bar.tsx";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
+import { type KeyBinding, useKeyBindings } from "./key-bindings.ts";
 import { Pill } from "./pill.tsx";
 import { getRiskPreset } from "./risk-presets.ts";
 import { InputFrame, TextInput } from "./text-input.tsx";
@@ -18,33 +20,37 @@ type ResponseDialogProps = {
 };
 
 // `id` is the stable handle for dispatch — labels are presentation only.
-// Convention: hotkey is the lowercased first letter of `label` so the action
-// bar can underline `label[0]` as the keybinding hint.
+// Hotkey is `label[0]` (case-insensitive), and ActionBar renders it underlined.
 const ACTION_ITEMS = [
-  { id: "cancel", label: "No", primary: true, hotkey: "n" },
-  { id: "run", label: "Yes", primary: true, hotkey: "y" },
-  { id: "edit", label: "Edit", primary: false, hotkey: "e" },
-  { id: "followup", label: "Follow-up", primary: false, hotkey: "f" },
-  { id: "copy", label: "Copy", primary: false, hotkey: "c" },
+  { id: "cancel", label: "No", primary: true },
+  { id: "run", label: "Yes", primary: true },
+  { id: "edit", label: "Edit", primary: false },
+  { id: "followup", label: "Follow-up", primary: false },
+  { id: "copy", label: "Copy", primary: false },
 ] as const satisfies ReadonlyArray<{
   id: ActionId;
   label: string;
   primary: boolean;
-  hotkey: string;
 }>;
 const ACTION_BAR_WIDTH = 61;
 const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
 
-const EDIT_HINTS = [
-  { combo: "⏎", label: "to run", primary: true },
-  { combo: "Esc", label: "to discard changes" },
-] as const;
-const COMPOSE_HINTS = [
-  { combo: "⏎", label: "to send", primary: true },
-  { combo: "Esc", label: "to cancel" },
-] as const;
-const PROCESS_HINTS = [{ combo: "Esc", label: "to abort" }] as const;
-const EXECUTING_STEP_HINTS = [{ combo: "Esc", label: "to abort step" }] as const;
+const ACTION_BAR_ITEMS: readonly ActionItem[] = ACTION_ITEMS.map((a) => ({
+  glyph: (a.label[0] as string).toUpperCase(),
+  label: a.label,
+  primary: a.primary,
+}));
+
+const EDIT_HINT_ITEMS: readonly ActionItem[] = [
+  { glyph: "⏎", label: "to run", primary: true },
+  { glyph: "Esc", label: "to discard changes" },
+];
+const COMPOSE_HINT_ITEMS: readonly ActionItem[] = [
+  { glyph: "⏎", label: "to send", primary: true },
+  { glyph: "Esc", label: "to cancel" },
+];
+const PROCESS_HINT_ITEMS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort" }];
+const EXECUTING_STEP_HINT_ITEMS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort step" }];
 
 /** Border status shown while a follow-up call is in flight before any chrome event arrives. */
 export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
@@ -237,54 +243,38 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       : foldCommand(command, maxCommandRows, textWidth);
 
   // Esc dispatches key-esc in every mode except confirming (which has its
-  // own handler below with arrow nav, hotkeys, etc.).
-  useInput(
-    (_input, key) => {
-      if (key.escape) dispatch({ type: "key-esc" });
-    },
-    {
-      isActive:
-        state.tag === "editing" ||
-        state.tag === "composing" ||
-        state.tag === "processing" ||
-        state.tag === "executing-step",
-    },
-  );
+  // own binding list below).
+  useKeyBindings([{ on: "escape", do: () => dispatch({ type: "key-esc" }) }], {
+    isActive:
+      state.tag === "editing" ||
+      state.tag === "composing" ||
+      state.tag === "processing" ||
+      state.tag === "executing-step",
+  });
 
-  // Confirming-mode key handling: arrow nav (local), Enter on highlight,
-  // hotkeys, and Esc → cancel.
-  useInput(
-    (input, key) => {
-      if (key.escape) {
-        dispatch({ type: "key-esc" });
-        return;
-      }
-      // q is an alias for cancel that doesn't fit the hotkey table (not the
-      // first letter of any label).
-      if (input === "q") {
-        dispatch({ type: "key-action", action: "cancel" });
-        return;
-      }
-      if (key.leftArrow) {
-        setSelectedIndex((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (key.rightArrow) {
-        setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1));
-        return;
-      }
-      if (key.return) {
+  // Confirming-mode key handling. `q` is an alias for cancel that doesn't
+  // fit the hotkey table (no label starts with it). Ctrl+c and bare `c` both
+  // work because the matcher blocks bare char triggers when any modifier is
+  // held — so order between them is irrelevant.
+  const dispatchAction = (id: ActionId) => dispatch({ type: "key-action", action: id });
+  const confirmingBindings: KeyBinding[] = [
+    { on: "escape", do: () => dispatch({ type: "key-esc" }) },
+    { on: ["n", "q", { key: "c", ctrl: true }], do: () => dispatchAction("cancel") },
+    { on: "y", do: () => dispatchAction("run") },
+    { on: "e", do: () => dispatchAction("edit") },
+    { on: "f", do: () => dispatchAction("followup") },
+    { on: "c", do: () => dispatchAction("copy") },
+    { on: "left", do: () => setSelectedIndex((i) => Math.max(0, i - 1)) },
+    { on: "right", do: () => setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1)) },
+    {
+      on: "return",
+      do: () => {
         const item = ACTION_ITEMS[selectedIndex];
-        if (item) dispatch({ type: "key-action", action: item.id });
-        return;
-      }
-      const hotkeyMatch = ACTION_ITEMS.find((a) => a.hotkey === input);
-      if (hotkeyMatch) {
-        dispatch({ type: "key-action", action: hotkeyMatch.id });
-      }
+        if (item) dispatchAction(item.id);
+      },
     },
-    { isActive: state.tag === "confirming" },
-  );
+  ];
+  useKeyBindings(confirmingBindings, { isActive: state.tag === "confirming" });
 
   const noAnimation = getConfig().noAnimation;
   const spinnerActive =
@@ -380,89 +370,19 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       <Text> </Text>
       <Text> </Text>
       {state.tag === "editing" ? (
-        <KeyHints items={EDIT_HINTS} theme={theme} />
+        <ActionBar items={EDIT_HINT_ITEMS} />
       ) : state.tag === "composing" ? (
-        <KeyHints items={COMPOSE_HINTS} theme={theme} />
+        <ActionBar items={COMPOSE_HINT_ITEMS} />
       ) : state.tag === "processing" ? (
-        <KeyHints items={PROCESS_HINTS} theme={theme} />
+        <ActionBar items={PROCESS_HINT_ITEMS} />
       ) : state.tag === "executing-step" ? (
-        <KeyHints items={EXECUTING_STEP_HINTS} theme={theme} />
+        <ActionBar items={EXECUTING_STEP_HINT_ITEMS} />
       ) : (
-        <ActionBar selectedIndex={selectedIndex} theme={theme} />
+        <Text>
+          <Text color={themeHex(theme.text.primary)}>{"   Run command? "}</Text>
+          <ActionBar items={ACTION_BAR_ITEMS} focusedIndex={selectedIndex} />
+        </Text>
       )}
     </Dialog>
-  );
-}
-
-type HintItem = { combo: string; label: string; primary?: boolean };
-
-function KeyHints({ items, theme }: { items: readonly HintItem[]; theme: ThemeTokens }) {
-  const divider = themeHex(theme.text.disabled);
-  const highlight = themeHex(theme.interactive.highlight);
-  const secondary = themeHex(theme.text.secondary);
-  const muted = themeHex(theme.text.muted);
-
-  return (
-    <Text>
-      <Text>{"   "}</Text>
-      {items.map((item, i) => (
-        <Text key={item.combo}>
-          {i > 0 ? <Text color={divider}>{"  │  "}</Text> : null}
-          <Text bold color={item.primary ? highlight : secondary}>
-            {item.combo}
-          </Text>
-          <Text color={muted}>{` ${item.label}`}</Text>
-        </Text>
-      ))}
-    </Text>
-  );
-}
-
-function ActionBar({ selectedIndex, theme }: { selectedIndex: number; theme: ThemeTokens }) {
-  const primary = themeHex(theme.text.primary);
-  const divider = themeHex(theme.text.disabled);
-  const highlight = themeHex(theme.interactive.highlight);
-  const secondary = themeHex(theme.text.secondary);
-  const muted = themeHex(theme.text.muted);
-  const accentBg = themeHex(theme.chrome.accent);
-
-  // Brighter variant for selected primary actions
-  const highlightBright = themeHex([
-    Math.min(255, theme.interactive.highlight[0] + 10),
-    Math.min(255, theme.interactive.highlight[1] + 20),
-    Math.min(255, theme.interactive.highlight[2] + 20),
-  ]);
-
-  return (
-    <Text>
-      <Text color={primary}>{"   Run command? "}</Text>
-      {ACTION_ITEMS.map((item, i) => {
-        const isSelected = i === selectedIndex;
-        const accent = item.primary
-          ? isSelected
-            ? highlightBright
-            : highlight
-          : isSelected
-            ? primary
-            : secondary;
-        const dimColor = isSelected ? themeHex(theme.text.primary) : muted;
-        const bg = isSelected ? accentBg : undefined;
-
-        return (
-          <Text key={item.label}>
-            {i === 2 ? <Text color={divider}>{" │ "}</Text> : null}
-            <Text backgroundColor={bg}>
-              {" "}
-              <Text bold underline color={accent}>
-                {item.label[0]}
-              </Text>
-              <Text color={dimColor} bold={isSelected}>
-                {item.label.slice(1)}
-              </Text>{" "}
-            </Text>
-          </Text>
-        );
-      })}
-    </Text>
   );
 }
