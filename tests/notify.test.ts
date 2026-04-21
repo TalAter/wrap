@@ -89,6 +89,19 @@ describe("notifications bus", () => {
     expect(stderr.text).toBe("raw verbose line\n");
   });
 
+  test("llm-wire is dropped on the no-listener path (listener-only)", () => {
+    emit({ kind: "llm-wire", wire: { request_wire: { kind: "test" } } });
+    expect(stderr.text).toBe("");
+  });
+
+  test("llm-wire is delivered to subscribed listeners", () => {
+    const seen: Notification[] = [];
+    subscribe((n) => seen.push(n));
+    emit({ kind: "llm-wire", wire: { request_wire: { kind: "test" } } });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual({ kind: "llm-wire", wire: { request_wire: { kind: "test" } } });
+  });
+
   test("step-output is dropped on the no-listener path (dialog-only)", () => {
     // step-output carries the captured intermediate command output that was
     // pushed back to the LLM. It's meant for the dialog's output slot

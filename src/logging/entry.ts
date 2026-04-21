@@ -9,6 +9,34 @@ function redactProvider(provider: ResolvedProvider): ResolvedProvider {
   return { ...provider, apiKey: suffix };
 }
 
+/**
+ * Wire-level capture of a single LLM physical call. Only populated when
+ * `logTraces` is enabled. Each shape is a discriminated union keyed on the
+ * transport the provider uses.
+ */
+export type WireRequest =
+  | { kind: "http"; body: unknown }
+  | { kind: "subprocess"; argv: string[]; stdin: string }
+  | { kind: "test" };
+
+export type WireResponse =
+  | { kind: "http"; body: unknown; usage?: unknown; finishReason?: string }
+  | { kind: "subprocess"; stdout: string; stderr?: string; exit_code: number }
+  | { kind: "test" };
+
+/**
+ * Bundle emitted by a provider after every physical LLM call. `runRound`
+ * subscribes to the notification bus and drains one WireCapture per attempt.
+ * A broken wire-builder surfaces as `wire_capture_error`; the invocation
+ * still succeeds.
+ */
+export type WireCapture = {
+  request_wire?: WireRequest;
+  response_wire?: WireResponse;
+  raw_response?: string;
+  wire_capture_error?: string;
+};
+
 export type Execution = {
   command: string;
   exit_code: number;
