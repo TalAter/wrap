@@ -1,10 +1,12 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { useState } from "react";
 import stringWidth from "string-width";
-import { getTheme, themeHex } from "../core/theme.ts";
+import { getTheme } from "../core/theme.ts";
 import { type Footprint, formatFootprint, type Unit } from "../subcommands/forget-footprint.ts";
+import { ActionBar, type ActionItem } from "./action-bar.tsx";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog } from "./dialog.tsx";
+import { useKeyBindings } from "./key-bindings.ts";
 
 export type Footprints = {
   memory: Footprint;
@@ -24,7 +26,14 @@ const ROWS: RowSpec[] = [
   { value: "scratch", name: "Temp files", unit: "dirs" },
 ];
 
-const CONTENT_WIDTH = 52;
+const CONTENT_WIDTH = 60;
+
+const HINT_ITEMS: readonly ActionItem[] = [
+  { glyph: "↑↓", label: "move" },
+  { glyph: "Space", label: "toggle" },
+  { glyph: "⏎", label: "forget", primary: true },
+  { glyph: "Esc", label: "cancel" },
+];
 
 type Props = {
   footprints: Footprints;
@@ -37,9 +46,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
     () => new Set<string>(ROWS.map((r) => r.value)),
   );
 
-  useInput((_input, key) => {
-    if (key.escape) onCancel();
-  });
+  useKeyBindings([{ on: "escape", do: onCancel }]);
 
   const items: ChecklistItem[] = ROWS.map((r) => toItem(r, footprints[r.value]));
 
@@ -66,9 +73,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
           onSubmit={onSubmit}
         />
         <Text> </Text>
-        <Text color={themeHex(t.text.muted)}>
-          {"   ↑↓ move · space toggle · enter forget · esc cancel"}
-        </Text>
+        <ActionBar items={HINT_ITEMS} />
       </Box>
     </Dialog>
   );
