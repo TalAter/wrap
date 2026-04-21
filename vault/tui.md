@@ -2,7 +2,7 @@
 name: tui
 description: Ink dialog, three output tiers, custom borders, text input, action bar, host lifecycle
 Source: src/tui/, src/session/dialog-host.ts, src/session/notification-router.ts
-Last-synced: 203c52d
+Last-synced: 0f71703
 ---
 
 # TUI
@@ -58,7 +58,7 @@ Why custom: `ink-text-input` can't be styled with `backgroundColor` and lacks wo
 
 ## Action bar
 
-Every dialog's bottom row renders through one component: `src/tui/action-bar.tsx`. Items are `{ glyph, label, primary? }`. A single ASCII letter matching `label[0]` renders approve-style (underlined hotkey inside the label); anything else renders combo-style (`<glyph> <label>`). Items share a `  │  ` divider and a 3-space indent. `focusedIndex` is decoration only — ActionBar owns no keys.
+Every dialog's bottom row renders through one component: `src/tui/action-bar.tsx`. Items are `{ glyph, label, primary? }`. A single ASCII letter matching `label[0]` renders approve-style (underlined hotkey inside the label); anything else renders combo-style (`<glyph> <label>`). Items share a `" │ "` divider. `focusedIndex` is decoration only — ActionBar owns no keys. ActionBar renders items flush; callers wrap in `<Box paddingLeft={3}>` for the standard gutter. Optional `dividerAfter: readonly number[]` replaces the between-every-pair default with dividers only after the listed indices — ResponseDialog's confirming bar passes `[1]` to keep the primary/secondary group break.
 
 ResponseDialog's confirming bar: Yes/No/Edit/Follow-up/Copy. Hotkeys `y`/`n`/`e`/`f`/`c` come from `label[0]`; `q` and Ctrl+C also cancel. `←`/`→` navigate, `Enter` activates the focused item. Same bindings for every risk level — explicit selection + confirmation model provides sufficient safety.
 
