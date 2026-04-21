@@ -22,6 +22,9 @@ export type ThemeTokens = {
     cursor: Color;
     selection: Color;
     highlight: Color;
+    /** Brighter variant of `highlight` used for the focused primary item
+     *  in an ActionBar, so the selection reads as an active pill. */
+    highlightBright: Color;
   };
   select: {
     selected: Color;
@@ -65,6 +68,7 @@ export const DARK_THEME: ThemeTokens = {
     cursor: [102, 153, 255],
     selection: [26, 42, 77],
     highlight: [245, 200, 100],
+    highlightBright: [255, 220, 120],
   },
   select: {
     selected: [120, 230, 160],
@@ -120,6 +124,7 @@ export const LIGHT_THEME: ThemeTokens = {
     cursor: [30, 75, 195],
     selection: [210, 220, 245],
     highlight: [150, 100, 0],
+    highlightBright: [160, 120, 20],
   },
   select: {
     selected: [15, 125, 55],

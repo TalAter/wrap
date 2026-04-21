@@ -43,11 +43,7 @@ export function ActionBar({ items, focusedIndex }: ActionBarProps) {
   const secondary = themeHex(t.text.secondary);
   const muted = themeHex(t.text.muted);
   const accentBg = themeHex(t.chrome.accent);
-  const highlightBright = themeHex([
-    Math.min(255, t.interactive.highlight[0] + 10),
-    Math.min(255, t.interactive.highlight[1] + 20),
-    Math.min(255, t.interactive.highlight[2] + 20),
-  ]);
+  const highlightBright = themeHex(t.interactive.highlightBright);
 
   return (
     <Text>

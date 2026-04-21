@@ -382,7 +382,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         <ActionBar items={EXECUTING_STEP_HINT_ITEMS} />
       ) : (
         <Text>
-          <Text color={themeHex(theme.text.primary)}>{"   Run command? "}</Text>
+          <Text color={themeHex(theme.text.primary)}>{"Run command?"}</Text>
           <ActionBar items={ACTION_BAR_ITEMS} focusedIndex={selectedIndex} />
         </Text>
       )}
