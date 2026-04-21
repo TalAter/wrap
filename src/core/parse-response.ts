@@ -15,14 +15,16 @@ export class StructuredOutputError extends Error {
   }
 }
 
-const FENCE_RE = /^```\w*\s*\n([\s\S]*)\n```\s*$/;
+// Input is pre-trimmed, so the closing fence is always at end-of-string.
+const FENCE_RE = /^```\w*\s*\n([\s\S]*)\n```$/;
 
 /** Strip markdown code fences only if the entire response is a single fenced block. */
 export function stripFences(text: string): string {
   const trimmed = text.trim();
   const match = trimmed.match(FENCE_RE);
   if (!match) return trimmed;
-  const inner = match[1] ?? "";
+  // Capture group 1 (`[\s\S]*`) is guaranteed by the regex when match succeeds.
+  const inner = match[1] as string;
   // If there are more triple backticks inside, this isn't a single clean block
   if (inner.includes("```")) return trimmed;
   return inner.trim();

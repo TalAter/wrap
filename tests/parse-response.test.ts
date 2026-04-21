@@ -36,6 +36,11 @@ describe("stripFences", () => {
     const input = 'Here is the command:\n```json\n{"type": "command"}\n```\n';
     expect(stripFences(input)).toBe(input.trim());
   });
+
+  test("trims whitespace inside the captured fenced block", () => {
+    const input = '```json\n   {"type": "command"}   \n```';
+    expect(stripFences(input)).toBe('{"type": "command"}');
+  });
 });
 
 describe("parseResponse with fenced input", () => {

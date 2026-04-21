@@ -96,6 +96,14 @@ describe("CommandResponseSchema", () => {
     expect(() => CommandResponseSchema.parse(input)).toThrow();
   });
 
+  test("accepts every documented risk_level (low, medium, high)", () => {
+    for (const risk_level of ["low", "medium", "high"] as const) {
+      const input = { type: "command", content: "rm -rf /tmp/x", risk_level };
+      const result = CommandResponseSchema.parse(input);
+      expect(result.risk_level).toBe(risk_level);
+    }
+  });
+
   test("requires type field", () => {
     const input = { content: "ls", risk_level: "low" };
     expect(() => CommandResponseSchema.parse(input)).toThrow();
