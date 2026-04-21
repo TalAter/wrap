@@ -171,10 +171,10 @@ export async function* runLoop(
 
     yield { type: "round-complete", round };
 
-    const response = round.parsed;
+    const response = round.attempts.at(-1)?.parsed;
     if (!response) {
-      // runRound's contract guarantees parsed is set on success — defensive.
-      throw new Error("runRound returned a round without parsed");
+      // runRound's contract guarantees the last attempt has parsed on success — defensive.
+      throw new Error("runRound returned a round without a parsed final attempt");
     }
 
     handleMemoryUpdates(response, options.wrapHome, options.cwd);

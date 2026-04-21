@@ -19,7 +19,10 @@ export function makeResponse(overrides: Partial<CommandResponse> = {}): CommandR
 }
 
 export function makeRound(parsed?: CommandResponse): Round {
-  return { parsed: parsed ?? makeResponse(), llm_ms: 12 };
+  return {
+    attempts: [{ parsed: parsed ?? makeResponse(), llm_ms: 12 }],
+    llm_ms: 12,
+  };
 }
 
 export function makeConfirming(overrides: Partial<ConfirmingState> = {}): ConfirmingState {

@@ -159,12 +159,12 @@ describe("addRound", () => {
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    const round: Round = { raw_response: '{"type":"answer"}' };
+    const round: Round = { attempts: [{ raw_response: '{"type":"answer"}' }] };
     addRound(entry, round);
     expect(entry.rounds).toHaveLength(1);
     const saved = entry.rounds[0];
     if (!saved) throw new Error("expected a round");
-    expect(saved.raw_response).toBe('{"type":"answer"}');
+    expect(saved.attempts[0]?.raw_response).toBe('{"type":"answer"}');
   });
 
   test("accumulates multiple rounds", () => {
@@ -174,8 +174,10 @@ describe("addRound", () => {
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    addRound(entry, { raw_response: "first", parse_error: "bad json" });
-    addRound(entry, { raw_response: '{"type":"command"}' });
+    addRound(entry, {
+      attempts: [{ raw_response: "first", error: { kind: "parse", message: "bad json" } }],
+    });
+    addRound(entry, { attempts: [{ raw_response: '{"type":"command"}' }] });
     expect(entry.rounds).toHaveLength(2);
   });
 });
@@ -215,37 +217,42 @@ describe("serializeEntry", () => {
     });
     entry.outcome = "success";
     addRound(entry, {
-      parsed: {
-        type: "command",
-        content: "ls",
-        risk_level: "low",
-        final: true,
-      },
+      attempts: [
+        {
+          parsed: {
+            type: "command",
+            content: "ls",
+            risk_level: "low",
+            final: true,
+          },
+        },
+      ],
       execution: { command: "ls", exit_code: 0, shell: "/bin/zsh" },
     });
     const parsed = JSON.parse(serializeEntry(entry));
     expect(parsed.attached_input?.preview).toBe("stdin data");
     expect(parsed.outcome).toBe("success");
-    expect(parsed.rounds[0].parsed.content).toBe("ls");
+    expect(parsed.rounds[0].attempts[0].parsed.content).toBe("ls");
     expect(parsed.rounds[0].execution.exit_code).toBe(0);
-    expect("raw_response" in parsed.rounds[0]).toBe(false);
+    expect("raw_response" in parsed.rounds[0].attempts[0]).toBe(false);
   });
 
-  test("omits null-valued round fields", () => {
+  test("omits null-valued attempt fields on parse failure", () => {
     const entry = createLogEntry({
       prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    addRound(entry, { raw_response: "garbage", parse_error: "bad json" });
+    addRound(entry, {
+      attempts: [{ raw_response: "garbage", error: { kind: "parse", message: "bad json" } }],
+    });
     const parsed = JSON.parse(serializeEntry(entry));
-    const round = parsed.rounds[0];
-    expect("raw_response" in round).toBe(true);
-    expect("parse_error" in round).toBe(true);
-    expect("parsed" in round).toBe(false);
-    expect("execution" in round).toBe(false);
-    expect("provider_error" in round).toBe(false);
+    const attempt = parsed.rounds[0].attempts[0];
+    expect("raw_response" in attempt).toBe(true);
+    expect(attempt.error.kind).toBe("parse");
+    expect("parsed" in attempt).toBe(false);
+    expect("execution" in parsed.rounds[0]).toBe(false);
   });
 
   test("does not contain newlines (single JSONL line)", () => {
@@ -345,7 +352,7 @@ describe("logging integration", () => {
     expect(entry.outcome).toBe("success");
     expect(entry.prompt).toBe("list files");
     expect(entry.rounds).toHaveLength(1);
-    expect(entry.rounds[0].parsed.type).toBe("command");
+    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("command");
     expect(entry.rounds[0].execution.command).toBe("echo hello");
     expect(entry.rounds[0].execution.exit_code).toBe(0);
     expect(entry.rounds[0].execution.shell).toBe(process.env.SHELL || "sh");
@@ -362,7 +369,7 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("success");
-    expect(entry.rounds[0].parsed.type).toBe("reply");
+    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("reply");
     expect(entry.rounds[0].execution).toBeUndefined();
     // Invocation-level fields
     expect(entry.id).toMatch(/^[0-9a-f]{8}-/);
@@ -378,8 +385,8 @@ describe("logging integration", () => {
     expect(typeof entry.rounds[0].llm_ms).toBe("number");
     expect("exec_ms" in entry.rounds[0]).toBe(false);
     // Successful parse omits raw_response
-    expect(entry.rounds[0].parsed).toBeDefined();
-    expect("raw_response" in entry.rounds[0]).toBe(false);
+    expect(entry.rounds[0].attempts.at(-1).parsed).toBeDefined();
+    expect("raw_response" in entry.rounds[0].attempts.at(-1)).toBe(false);
   });
 
   test("empty content logs with outcome 'error'", async () => {
@@ -390,7 +397,7 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("error");
-    expect(entry.rounds[0].parsed.type).toBe("reply");
+    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("reply");
   });
 
   test("parse error logs provider_error", async () => {
@@ -405,7 +412,12 @@ describe("logging integration", () => {
     const entry = readLog(home);
     expect(entry.outcome).toBe("error");
     expect(entry.rounds).toHaveLength(1);
-    expect(entry.rounds[0].provider_error).toBeDefined();
+    // The test provider throws a raw JSON SyntaxError from its own JSON.parse,
+    // which is not recognized as a structured-output error by the retry
+    // ladder — so it surfaces on the first attempt as a provider-kind error.
+    const firstAttempt = entry.rounds[0].attempts[0];
+    expect(firstAttempt.error.kind).toBe("provider");
+    expect(firstAttempt.error.message).toBeDefined();
   });
 
   test("non-low risk command logs with outcome 'blocked' (no TTY)", async () => {
@@ -416,7 +428,7 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("blocked");
-    expect(entry.rounds[0].parsed.content).toBe("echo rm-rf-fake");
+    expect(entry.rounds[0].attempts.at(-1).parsed.content).toBe("echo rm-rf-fake");
     expect(entry.rounds[0].execution).toBeUndefined();
   });
 

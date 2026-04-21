@@ -53,8 +53,8 @@ describe("runRound", () => {
       model: "test",
       showSpinner: false,
     });
-    expect(round.parsed?.type).toBe("command");
-    expect(round.parsed?.content).toBe("ls");
+    expect(round.attempts.at(-1)?.parsed?.type).toBe("command");
+    expect(round.attempts.at(-1)?.parsed?.content).toBe("ls");
     expect(typeof round.llm_ms).toBe("number");
   });
 
@@ -67,7 +67,7 @@ describe("runRound", () => {
       model: "test",
       showSpinner: false,
     });
-    expect(round.parsed?.type).toBe("reply");
+    expect(round.attempts.at(-1)?.parsed?.type).toBe("reply");
   });
 
   test("the LLM sees a temp-dir listing as live context each round", async () => {
@@ -130,7 +130,8 @@ describe("runRound", () => {
     }
     expect(thrown).toBeInstanceOf(RoundError);
     if (thrown instanceof RoundError) {
-      expect(thrown.round.parsed).toBeDefined();
+      expect(thrown.round.attempts.at(-1)?.parsed).toBeDefined();
+      expect(thrown.round.attempts.at(-1)?.error?.kind).toBe("empty");
     }
   });
 
@@ -154,7 +155,8 @@ describe("runRound", () => {
     if (thrown instanceof RoundError) {
       expect(thrown.message).toContain("test / model");
       expect(thrown.message).toContain("network down");
-      expect(thrown.round.provider_error).toBe("network down");
+      expect(thrown.round.attempts[0]?.error?.kind).toBe("provider");
+      expect(thrown.round.attempts[0]?.error?.message).toBe("network down");
     }
   });
 
@@ -217,7 +219,9 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(captured.calls).toBe(2);
-    expect(round.parsed?._scratchpad).toBe("Destructive: blow away deps for a clean install.");
+    expect(round.attempts.at(-1)?.parsed?._scratchpad).toBe(
+      "Destructive: blow away deps for a clean install.",
+    );
     // The retry call must include the scratchpadRequiredInstruction
     const userMessages = captured.lastInput?.messages.filter((m) => m.role === "user") ?? [];
     const hasDirective = userMessages.some(
@@ -281,7 +285,7 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(captured.calls).toBe(2);
-    expect(round.parsed?.type).toBe("command");
+    expect(round.attempts.at(-1)?.parsed?.type).toBe("command");
   });
 
   test("retries once on a structured-output parse failure", async () => {
@@ -302,6 +306,6 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(calls).toBe(2);
-    expect(round.parsed?.content).toBe("ls");
+    expect(round.attempts.at(-1)?.parsed?.content).toBe("ls");
   });
 });

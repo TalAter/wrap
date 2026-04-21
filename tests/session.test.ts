@@ -178,9 +178,9 @@ describe("runSession — multi-round step → reply", () => {
     const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
     expect(entry.rounds).toHaveLength(2);
-    expect(entry.rounds[0].parsed.type).toBe("command");
-    expect(entry.rounds[0].parsed.final).toBe(false);
-    expect(entry.rounds[1].parsed.type).toBe("reply");
+    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("command");
+    expect(entry.rounds[0].attempts.at(-1).parsed.final).toBe(false);
+    expect(entry.rounds[1].attempts.at(-1).parsed.type).toBe("reply");
   });
 
   test("captured step output never lands on stderr (only the chrome explanation does)", async () => {

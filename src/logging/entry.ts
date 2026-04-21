@@ -43,12 +43,46 @@ export type Execution = {
   shell: string;
 };
 
-export type Round = {
+/**
+ * Categorical error reported per Attempt. Parsing failures, provider errors,
+ * and empty-content responses are distinct enough that consumers want to
+ * discriminate without string-matching a free-text message.
+ */
+export type AttemptError =
+  | { kind: "parse"; message: string }
+  | { kind: "provider"; message: string }
+  | { kind: "empty"; message: string };
+
+/**
+ * One physical LLM call inside a round. Up to four per round: initial →
+ * json-retry → scratchpad-retry → json-retry of scratchpad. Every successful
+ * ladder appends at least one.
+ *
+ * Detail-mode-gated fields (`request`, `request_wire`, `response_wire`) are
+ * only populated when the user opts in via `logTraces`. `raw_response` keeps
+ * its always-on-parse-failure behavior plus always-on-success when
+ * `logTraces` is on.
+ */
+export type Attempt = {
+  request?: import("../llm/types.ts").PromptInput;
+  request_wire?: WireRequest;
   raw_response?: string;
-  parse_error?: string;
-  provider_error?: string;
+  response_wire?: WireResponse;
   parsed?: CommandResponse;
+  error?: AttemptError;
+  wire_capture_error?: string;
+  llm_ms?: number;
+};
+
+export type Round = {
+  /**
+   * Canonical record of the round's LLM calls — always length >= 1 when the
+   * round reaches the loggable state. `runRound` appends one attempt per
+   * physical call before deciding whether to retry.
+   */
+  attempts: Attempt[];
   execution?: Execution;
+  /** Wall-clock sum across attempts. Kept round-level for back-compat jq patterns. */
   llm_ms?: number;
   exec_ms?: number;
   /**

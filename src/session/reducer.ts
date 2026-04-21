@@ -158,9 +158,9 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
     // User-override on a non-final med/high step: route into `executing-step`
     // with a response that carries the edited bytes, so the coordinator
     // captures the same way as a model-authored step. The round's audit log
-    // still holds `round.parsed.content` (the original model bytes) and
-    // `round.execution.command` (what actually ran), so auditors can tell
-    // them apart.
+    // still holds `round.attempts.at(-1).parsed.content` (the original model
+    // bytes) and `round.execution.command` (what actually ran), so auditors
+    // can tell them apart.
     if (isNonFinalConfirm(state.response)) {
       return {
         tag: "executing-step",

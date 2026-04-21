@@ -4,7 +4,7 @@ import { formatTempDirSection } from "../fs/temp.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import type { PromptInput, Provider } from "../llm/types.ts";
-import type { Round } from "../logging/entry.ts";
+import type { Attempt, Round } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
 import { StructuredOutputError } from "./parse-response.ts";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
@@ -25,33 +25,6 @@ export function extractFailedText(e: unknown): string {
   return "";
 }
 
-/**
- * Call the LLM; on a structured-output parse failure, retry once with the
- * broken output appended so the model can self-correct.
- */
-export async function callWithRetry(
-  provider: Provider,
-  input: PromptInput,
-): Promise<CommandResponse> {
-  try {
-    return (await runCommandPrompt(provider, input)) as CommandResponse;
-  } catch (e) {
-    if (!isStructuredOutputError(e)) throw e;
-    verbose("LLM parse error, retrying...");
-    return runCommandPrompt(provider, {
-      system: input.system,
-      messages: [
-        ...input.messages,
-        { role: "assistant" as const, content: extractFailedText(e) },
-        {
-          role: "user" as const,
-          content: promptConstants.jsonRetryInstruction,
-        },
-      ],
-    }) as Promise<CommandResponse>;
-  }
-}
-
 export type RunRoundOptions = {
   isLastRound: boolean;
   /** Display label for the active provider, for the error message wrapper. */
@@ -60,19 +33,14 @@ export type RunRoundOptions = {
    * Show the chrome spinner around the LLM call. The session passes `true`
    * for the initial loop in `thinking` (no dialog), `false` for follow-up
    * loops in `processing` (the dialog has its own bottom-border spinner).
-   * Spinner lifecycle is per LLM call (per `runRound`), not per loop —
-   * between iterations, the spinner is stopped, so chrome lines emitted by
-   * the loop (memory updates, step explanations) land on a clean stderr row
-   * instead of racing the spinner's `\r`-rewritten frame.
    */
   showSpinner: boolean;
 };
 
 /**
  * Typed error thrown by `runRound` on any failure that occurs after enough
- * of a round shape exists to be loggable. Carries the partial `Round` (with
- * `provider_error` populated, or `parsed` populated for the empty-response
- * case) so the loop can yield it via `round-complete` BEFORE re-throwing —
+ * of a round shape exists to be loggable. Carries the partial `Round` so
+ * the loop can yield it via `round-complete` BEFORE re-throwing —
  * preserving the eager-log guarantee.
  */
 export class RoundError extends Error {
@@ -101,23 +69,79 @@ function verboseResponse(response: CommandResponse): void {
   }
 }
 
+/** Append an assistant+user turn pair suffixing a retry onto an input. */
+function appendJsonRetry(input: PromptInput, failedText: string): PromptInput {
+  return {
+    system: input.system,
+    messages: [
+      ...input.messages,
+      { role: "assistant", content: failedText },
+      { role: "user", content: promptConstants.jsonRetryInstruction },
+    ],
+  };
+}
+
 /**
- * Run a single LLM round. Handles one in-round retry:
- *   - structured-output parse failures (retried once with the broken text
- *     echoed back so the model can self-correct)
+ * Execute a single physical LLM call, append an `Attempt` to `round.attempts`,
+ * and return the parsed response OR `undefined` when a parse failure should
+ * trigger the ladder's next retry step. Provider errors re-throw so the
+ * coordinator can wrap them.
+ */
+async function callOne(
+  provider: Provider,
+  round: Round,
+  input: PromptInput,
+): Promise<CommandResponse | undefined> {
+  const attempt: Attempt = {};
+  round.attempts.push(attempt);
+  const t0 = performance.now();
+  try {
+    const response = (await runCommandPrompt(provider, input)) as CommandResponse;
+    attempt.llm_ms = Math.round(performance.now() - t0);
+    attempt.parsed = response;
+    return response;
+  } catch (e) {
+    attempt.llm_ms = Math.round(performance.now() - t0);
+    if (isStructuredOutputError(e)) {
+      attempt.raw_response = extractFailedText(e);
+      attempt.error = {
+        kind: "parse",
+        message: e instanceof Error ? e.message : String(e),
+      };
+      return undefined;
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    attempt.error = { kind: "provider", message: msg };
+    throw e;
+  }
+}
+
+function sumAttemptMs(round: Round): number {
+  let total = 0;
+  for (const a of round.attempts) total += a.llm_ms ?? 0;
+  return total;
+}
+
+/**
+ * Run a single LLM round. Drives the retry ladder directly — up to four
+ * physical calls per round, each appended as an `Attempt` before the ladder
+ * decides whether to continue:
  *
- * Reads the transcript via `buildPromptInput(transcript, scaffold, directives)`.
- * Does NOT mutate the transcript — that's the caller's job. Meta-directives
- * like `isLastRound` and the live-context block live ONLY inside the local
- * `directives` arg passed to `buildPromptInput`; they never enter the
- * persistent transcript, so there is nothing to clean up after the call
- * returns.
+ *   1. Initial call.
+ *   2. If parse failed → json-retry (echo failed text + `jsonRetryInstruction`).
+ *   3. If parsed a high-risk command with null scratchpad → scratchpad-retry.
+ *   4. If 3 failed to parse → json-retry of the scratchpad attempt.
  *
- * On success: returns a `Round` with `parsed` and `llm_ms` populated.
+ * Meta-directives (`isLastRound`, live temp-dir context) live only inside the
+ * local `directives` arg to `buildPromptInput`; they never enter the
+ * persistent transcript, so there is nothing to clean up after the call.
  *
- * On failure: throws a `RoundError` carrying the partial `Round`. The loop
+ * On success: returns `Round` with `attempts[].at(-1).parsed` set and
+ * `round.llm_ms` summed across attempts.
+ *
+ * On failure: throws `RoundError` carrying the partial `Round`. The loop
  * catches it, yields `round-complete` with the partial round (so it gets
- * logged), then re-throws to the coordinator.
+ * logged), then re-throws.
  */
 export async function runRound(
   provider: Provider,
@@ -125,56 +149,83 @@ export async function runRound(
   scaffold: PromptScaffold,
   options: RunRoundOptions,
 ): Promise<Round> {
-  const round: Round = {};
-  const llmStart = performance.now();
+  const round: Round = { attempts: [] };
   const stopSpinner = options.showSpinner ? startChromeSpinner(SPINNER_TEXT) : () => {};
-  let response: CommandResponse;
   try {
-    const directives: AttemptDirectives = {
-      liveContext: formatTempDirSection(),
-    };
-    if (options.isLastRound) directives.isLastRound = true;
-    response = await callWithRetry(provider, buildPromptInput(transcript, scaffold, directives));
+    const baseDirectives: AttemptDirectives = { liveContext: formatTempDirSection() };
+    if (options.isLastRound) baseDirectives.isLastRound = true;
 
-    // High-risk destructive commands must carry a scratchpad so the reasoning
-    // is visible in logs and to anyone reviewing the confirm panel. Retry
-    // once if the model skipped it. A still-null retry is accepted — don't
-    // retry-storm; the confirm panel remains the final safety layer.
+    const baseInput = buildPromptInput(transcript, scaffold, baseDirectives);
+
+    // Step 1: initial call.
+    let response = await callOne(provider, round, baseInput);
+
+    // Step 2: json-retry on parse failure.
+    if (response === undefined) {
+      verbose("LLM parse error, retrying...");
+      const failedText = round.attempts[round.attempts.length - 1]?.raw_response ?? "";
+      response = await callOne(provider, round, appendJsonRetry(baseInput, failedText));
+      if (response === undefined) {
+        // Parse failed twice in a row — surface the last attempt's error.
+        const last = round.attempts[round.attempts.length - 1];
+        const msg = last?.error?.message ?? "LLM parse error";
+        round.llm_ms = sumAttemptMs(round);
+        throw new RoundError(`LLM error (${options.model}): ${msg}`, round);
+      }
+    }
+
+    // Step 3: scratchpad-retry for high-risk + null scratchpad. Accept a
+    // still-null scratchpad without storming the model; the confirm panel
+    // remains the final safety layer.
     if (
       response.type === "command" &&
       response.risk_level === "high" &&
       response._scratchpad == null
     ) {
-      response = await callWithRetry(
-        provider,
-        buildPromptInput(transcript, scaffold, {
-          ...directives,
-          scratchpadRequiredRetry: { rejectedResponse: response },
-        }),
-      );
+      const scratchDirectives: AttemptDirectives = {
+        ...baseDirectives,
+        scratchpadRequiredRetry: { rejectedResponse: response },
+      };
+      const scratchInput = buildPromptInput(transcript, scaffold, scratchDirectives);
+      let scratchResponse = await callOne(provider, round, scratchInput);
+
+      // Step 4: json-retry of the scratchpad attempt.
+      if (scratchResponse === undefined) {
+        verbose("LLM parse error, retrying...");
+        const failedText = round.attempts[round.attempts.length - 1]?.raw_response ?? "";
+        scratchResponse = await callOne(provider, round, appendJsonRetry(scratchInput, failedText));
+      }
+
+      if (scratchResponse !== undefined) response = scratchResponse;
+      // If scratchpad path's parse-retry still failed, we keep the original
+      // response; the round's last attempt carries the parse error for audit,
+      // but `response` remains valid for execution. Same "don't retry-storm"
+      // principle as accepting a still-null scratchpad.
     }
+
+    verboseResponse(response);
+
+    round.llm_ms = sumAttemptMs(round);
+
+    if (!response.content.trim()) {
+      const last = round.attempts[round.attempts.length - 1];
+      if (last) {
+        last.error = { kind: "empty", message: "LLM returned an empty response." };
+      }
+      throw new RoundError("LLM returned an empty response.", round);
+    }
+
+    return round;
   } catch (e) {
-    // Stop the spinner before logging so the error line lands on a clean row
-    // instead of being glued to the trailing spinner frame.
-    stopSpinner();
+    if (e instanceof RoundError) throw e;
+    // Provider-level error (non-structured). The failing attempt already
+    // carries `error.kind: "provider"`; wrap with the model label so the
+    // user sees which provider/model rejected.
     const errMsg = e instanceof Error ? e.message : String(e);
     verbose(`LLM error: ${errMsg}`);
-    round.provider_error = errMsg;
-    round.llm_ms = Math.round(performance.now() - llmStart);
-    // Wrap with the attempted provider/model so the user sees what was tried —
-    // bare SDK messages give no hint that it's the *provider* rejecting.
+    round.llm_ms = sumAttemptMs(round);
     throw new RoundError(`LLM error (${options.model}): ${errMsg}`, round);
   } finally {
     stopSpinner();
   }
-  round.llm_ms = Math.round(performance.now() - llmStart);
-  round.parsed = response;
-
-  verboseResponse(response);
-
-  if (!response.content.trim()) {
-    throw new RoundError("LLM returned an empty response.", round);
-  }
-
-  return round;
 }
