@@ -46,6 +46,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
     () => new Set<string>(ROWS.map((r) => r.value)),
   );
 
+  // Esc is the dialog's own. ↑↓/Space/Enter belong to Checklist.
   useKeyBindings([{ on: "escape", do: onCancel }]);
 
   const items: ChecklistItem[] = ROWS.map((r) => toItem(r, footprints[r.value]));

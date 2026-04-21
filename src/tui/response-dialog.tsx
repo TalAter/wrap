@@ -252,18 +252,21 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       state.tag === "executing-step",
   });
 
-  // Confirming-mode key handling. `q` is an alias for cancel that doesn't
-  // fit the hotkey table (no label starts with it). Ctrl+c and bare `c` both
-  // work because the matcher blocks bare char triggers when any modifier is
-  // held — so order between them is irrelevant.
+  // Confirming-mode key handling. Hotkeys derive from `label[0]` so renaming
+  // a label re-routes its hotkey automatically. `cancel` also accepts `q` and
+  // Ctrl+C; these extras are safe next to a bare `c` Copy binding because the
+  // matcher blocks bare char triggers when any modifier is held.
   const dispatchAction = (id: ActionId) => dispatch({ type: "key-action", action: id });
+  const hotkeyBindings: KeyBinding[] = ACTION_ITEMS.map((item) => {
+    const hotkey = (item.label[0] as string).toLowerCase();
+    return {
+      on: item.id === "cancel" ? [hotkey, "q", { key: "c", ctrl: true }] : hotkey,
+      do: () => dispatchAction(item.id),
+    };
+  });
   const confirmingBindings: KeyBinding[] = [
     { on: "escape", do: () => dispatch({ type: "key-esc" }) },
-    { on: ["n", "q", { key: "c", ctrl: true }], do: () => dispatchAction("cancel") },
-    { on: "y", do: () => dispatchAction("run") },
-    { on: "e", do: () => dispatchAction("edit") },
-    { on: "f", do: () => dispatchAction("followup") },
-    { on: "c", do: () => dispatchAction("copy") },
+    ...hotkeyBindings,
     { on: "left", do: () => setSelectedIndex((i) => Math.max(0, i - 1)) },
     { on: "right", do: () => setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1)) },
     {

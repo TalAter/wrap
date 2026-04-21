@@ -148,4 +148,26 @@ describe("useKeyBindings", () => {
     await wait();
     expect(fired).toEqual(["sp"]);
   });
+
+  test("object trigger with shift-only modifier does not fire on plain key", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(
+      <Harness bindings={[{ on: { key: "a", shift: true }, do: () => fired.push("a") }]} />,
+    );
+    await wait();
+    // Plain 'a' has no shift — should not fire.
+    stdin.write("a");
+    await wait();
+    expect(fired).toEqual([]);
+  });
+
+  test("bare char does not fire when meta (alt) is held", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(<Harness bindings={[{ on: "b", do: () => fired.push("b") }]} />);
+    await wait();
+    // Alt+b: ESC-b prefix is how many terminals encode meta. Ink sets key.meta.
+    stdin.write("\x1bb");
+    await wait();
+    expect(fired).toEqual([]);
+  });
 });
