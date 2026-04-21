@@ -1,0 +1,6 @@
+- file: src/core/parse-response.ts
+  mutator: StringLiteral
+  original: '"StructuredOutputError"'
+  mutated: '""'
+  reason: error.name is cosmetic; detection uses message.includes in round.ts
+  added: 2026-04-21
