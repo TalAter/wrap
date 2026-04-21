@@ -2,7 +2,7 @@
 name: tui
 description: Ink dialog, three output tiers, custom borders, text input, action bar, host lifecycle
 Source: src/tui/, src/session/dialog-host.ts, src/session/notification-router.ts
-Last-synced: 4b44f55
+Last-synced: 203c52d
 ---
 
 # TUI
@@ -58,13 +58,15 @@ Why custom: `ink-text-input` can't be styled with `backgroundColor` and lacks wo
 
 ## Action bar
 
-`ACTION_ITEMS` const table of `{ id, label, primary, hotkey }`. Hotkeys: `y` run, `n`/`q`/`Esc` cancel, `d` describe, `e` edit, `f` follow-up, `c` copy. `←`/`→` navigate, `Enter` activates. Shortcut letter is bold + underlined.
+Every dialog's bottom row renders through one component: `src/tui/action-bar.tsx`. Items are `{ glyph, label, primary? }`. A single ASCII letter matching `label[0]` renders approve-style (underlined hotkey inside the label); anything else renders combo-style (`<glyph> <label>`). Items share a `  │  ` divider and a 3-space indent. `focusedIndex` is decoration only — ActionBar owns no keys.
 
-Same keybindings for every risk level — dialog's explicit selection + confirmation model provides sufficient safety.
+ResponseDialog's confirming bar: Yes/No/Edit/Follow-up/Copy. Hotkeys `y`/`n`/`e`/`f`/`c` come from `label[0]`; `q` and Ctrl+C also cancel. `←`/`→` navigate, `Enter` activates the focused item. Same bindings for every risk level — explicit selection + confirmation model provides sufficient safety.
 
 ## Input handling
 
-`useInput` gated by `{ isActive: state.tag === "<tag>" }`. Four handlers: confirming, editing, composing, processing. Printable keys in editing/composing go through TextInput.
+One hook: `src/tui/key-bindings.ts`. Dialogs declare `{ on: trigger, do: callback }` lists and call `useKeyBindings(bindings, { isActive })`. Triggers are NamedKey strings (`return`, `escape`, `up`, …), single chars (case-insensitive, blocked by ctrl/meta), or `{ key, ctrl?, shift?, meta? }` objects for exact modifier combos. First match in declaration order wins.
+
+ResponseDialog gates its confirming bindings by `state.tag === "confirming"` and its Esc binding by the other editing/composing/processing/executing-step tags. Printable keys in editing/composing go through TextInput's own input path.
 
 ## Dialog states
 
