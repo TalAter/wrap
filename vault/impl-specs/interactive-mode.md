@@ -1,5 +1,7 @@
 # Interactive mode
 
+> **Note on drift from main.** Since this spec was first drafted (c2f979f / 3eb95b6), main picked up: ActionBar + useKeyBindings consolidation in ResponseDialog (25e5da0, 0f71703, fbdf422), Round.attempts[] log shape (e925b2d, orthogonal here), and confirmation that Ink 7 ships `usePaste` + kitty-aware `parseKeypress`. The spec below has been updated to reflect all three — the main simplification is §Keyboard protocol, which no longer describes a custom stdin parser.
+
 > When `w` runs with no positional input on a TTY, open a multiline TUI composer. User types the prompt without shell quoting, brace expansion, command substitution, or single-line constraints. On submit, the dialog morphs in place through thinking → confirming (or answer), same as follow-up.
 
 ## Motivation
@@ -63,7 +65,7 @@ New tag `processing-user-prompt` (mirror of `processing-followup` for the first 
 - `notification chrome` → updates `status`.
 - Add to `isDialogTag()`.
 
-Coordinator post-transition hook on entering `processing-user-prompt`: push a `user` transcript turn carrying `draft` as its content (see `src/core/transcript.ts` for turn shape), reset `loopState.budgetRemaining`, start the pump loop via `startPumpLoop`. Mirrors how `processing-followup` bootstraps follow-up turns.
+Coordinator post-transition hook on entering `processing-user-prompt`: push a `user` transcript turn carrying `draft` as its content (see `src/core/transcript.ts` for turn shape), reset `loopState.budgetRemaining = maxRounds`, call `startPumpLoop({ isInitialLoop: true, followupText: undefined })` (session.ts:217). Mirrors how `processing-followup` bootstraps follow-up turns (session.ts:146,178). The Round.attempts[] refactor (e925b2d) is internal to runner — doesn't change this bootstrap path.
 
 ---
 
@@ -76,19 +78,21 @@ Both new tags render through the existing response-dialog shell.
 - Top border: `compose` pill, left-aligned. Build using `PillSegment` (`src/tui/pill.tsx`) — same primitive used by the wizard breadcrumbs. No risk pill.
 - Left border: low-risk blue gradient via `getRiskPreset("low").stops` (`src/tui/risk-presets.ts`).
 - Body: TextInput (`multiline: true`) fills the dialog. No command fold, no explanation, no plan, no output slot.
-- Bottom hint: `⏎ to send  |  ctrl+G to edit in <Editor>  |  Esc to exit`. Hides the `ctrl+G` segment when no editor resolved (see §Editor).
+- Bottom bar: shared `ActionBar` (`src/tui/action-bar.tsx`) with glyph+label items — `⏎ send`, `ctrl+G edit in <Editor>`, `Esc cancel`. Pattern mirrors existing `COMPOSE_HINT_ITEMS` in `src/tui/response-dialog.tsx`. Add a new `COMPOSE_USER_PROMPT_HINT_ITEMS` constant alongside it. Hide the `ctrl+G` item when no editor resolved (see §Editor). If the bar overflows inner width, ActionBar already handles compaction.
 
 ### `processing-user-prompt` view
 
-Same dialog shell. TextInput switches to `readOnly` rendering the submitted `draft`. No hint; bottom border shows the status spinner (same pattern as `processing-followup` — see `response-dialog.tsx` `bottomStatus` derivation).
+Same dialog shell. TextInput switches to `readOnly` rendering the submitted `draft`. Bottom bar: `PROCESS_HINT_ITEMS` (reuse existing — `Esc to abort`); status spinner runs in the bottom border via `bottomStatus` derivation, same as `processing-followup`.
 
 ### Keys and sizing
 
-`Ctrl+X Ctrl+E` is an alias for `Ctrl+G` (bash/zsh readline convention). Only `Ctrl+G` is shown in the hint. Implementation: track "saw Ctrl+X within last 500ms" in a local ref; if the next keystroke is Ctrl+E within that window, dispatch the same action as Ctrl+G; otherwise clear the ref and let the key fall through.
+Key routing uses the shared `useKeyBindings` hook (`src/tui/key-bindings.ts`) — NOT raw `useInput`. The compose dialog's bindings list is gated by `isActive: state.tag === "composing-user-prompt"`, matching the pattern already used for `editing` / `composing` / `processing` in `response-dialog.tsx`. Bindings: `escape` → `key-esc`, `{ key: "g", ctrl: true }` → open editor, `{ key: "j", ctrl: true }` → insert newline.
+
+`Ctrl+X Ctrl+E` is an alias for `Ctrl+G` (bash/zsh readline convention). Only `Ctrl+G` is shown in the bar. Implementation: track "saw Ctrl+X within last 500ms" in a local ref; if the next keystroke is Ctrl+E within that window, dispatch the same action as Ctrl+G; otherwise clear the ref and let the key fall through.
 
 Width: standard dialog widening rule (see [[tui]]). Height: TextInput starts at 3 visible rows, grows with content up to `Math.max(3, terminalRows - DIALOG_CHROME_ROWS)`, then vertical scroll keeps cursor in view. `DIALOG_CHROME_ROWS = 6` (2 border + 2 padding + 1 pill/spacer + 1 hint).
 
-Hint pulls the editor display name from the `EDITORS` record (see §Editor handoff) — unknown → basename. If the resolved hint overflows, fall back to `⏎ send  |  ctrl+G edit  |  Esc exit`.
+Bar items pull the editor display name from the `EDITORS` record (see §Editor handoff) — unknown → basename. ActionBar handles overflow compaction itself.
 
 ---
 
@@ -128,11 +132,11 @@ Existing methods (`insert`, `backspace`, `wordLeft`, `killToEnd`, etc.) already 
 
 `multiline: false` (default): plain Enter → `onSubmit`. `Cursor.insert` filters `\n` characters from the incoming string in this mode — doesn't throw, doesn't drop the whole string, just strips the newlines and inserts the rest. Preserves existing single-line paste behavior.
 
-`multiline: true`: plain Enter (`\r` outside a paste block, no trailing `\`) → `onSubmit`. Newline inserted on:
-- **Shift+Enter** — via kitty / modifyOtherKeys (see §Keyboard protocol).
-- **Ctrl+J** (`0x0A`) — universal fallback.
+`multiline: true`: plain Enter (no trailing `\`) → `onSubmit`. Newline inserted on:
+- **Shift+Enter** — via kitty protocol; surfaces to `useInput` as `key.shift && key.return` (Ink 7 parses kitty CSI-u natively — see §Keyboard protocol).
+- **Ctrl+J** (`0x0A`) — universal fallback. Surfaces as `key.ctrl && input === "j"`.
 - **Backslash-Enter** — buffer ends with `\` and Enter is pressed; strip the `\`, insert `\n`.
-- **Inside bracketed paste** — newlines between `\x1b[200~` and `\x1b[201~` are literal.
+- **Inside bracketed paste** — newlines arrive literally inside `usePaste`'s atomic text argument (Ink 7 owns the paste channel).
 
 Empty-buffer Enter is a no-op.
 
@@ -160,43 +164,30 @@ Soft cap 256KB. Enforcement lives in one helper, `clampBufferSize(text): { value
 
 ### Paste policy (multiline only)
 
-Bracketed paste bytes: normalize `\r\n` → `\n`, strip NUL and C0 controls except `\t` / `\n`. Other bytes verbatim (UTF-8). Paste arrives as one atomic insert; cursor lands at paste end.
+Ink 7's `usePaste` hook (`src/tui/... via ink`) owns bracketed paste: auto-enables `\x1b[?2004h` on mount, auto-disables on unmount, emits the full pasted string atomically, and keeps paste bytes out of `useInput`. Ink also handles the CSI pending-across-chunks case and wraps a paste-in-progress across multiple stdin chunks.
 
-Paste safety lives in the raw-stdin parser (see §Keyboard protocol) which owns the paste-mode flag:
-- 5s timeout after `\x1b[200~` with no matching `\x1b[201~` → flush accumulated as if a close marker arrived, reset paste-mode flag.
-- Esc keypress while paste-mode is active → discard accumulator, reset flag, forward Esc to Ink.
-- Accumulator bounded at 256KB; further bytes flush-and-reset.
+What's left for us in the `usePaste` handler:
+- Normalize `\r\n` → `\n`, strip NUL and C0 controls except `\t` / `\n`.
+- Run the sanitized string through `clampBufferSize` before inserting.
+- Cursor lands at paste end.
+
+No custom 5s timeout, Esc-during-paste accumulator reset, or accumulator byte cap — Ink's parser owns the paste-mode flag and buffers until `\x1b[201~` arrives or stdin closes.
 
 ---
 
 ## Keyboard protocol
 
-On compose mount:
-- `\x1b[>1u` — kitty disambiguate push.
-- `\x1b[>4;2m` — xterm modifyOtherKeys level 2.
-- `\x1b[?2004h` — bracketed paste.
+**Ink 7 does the heavy lifting.** `parseKeypress` (`ink/build/parse-keypress.js`) parses kitty CSI-u natively — Shift+Enter arrives in `useInput` as `{ return: true, shift: true }`, Ctrl+J as `{ ctrl: true }` with `input === "j"`, printable chars as `text`, all with Ink's own pending-across-chunks buffering (`createInputParser`). `usePaste` owns bracketed paste (see §TextInput Paste policy). No custom stdin parser needed.
 
-On unmount:
-- `\x1b[<u` — kitty pop.
-- `\x1b[>4m` — modifyOtherKeys reset.
-- `\x1b[?2004l` — bracketed paste off.
+What we still own:
 
-`ensureExitGuard()` in `src/core/spinner.ts` is currently file-private. Export it (or a sibling `registerExitTeardown(bytes)`) and generalize so multiple subscribers can register teardown bytes; teardown writes pop bytes before Ink's restore.
+**Kitty enable/disable bytes.** Ink does not write `\x1b[>1u` / `\x1b[<u` itself — without them, most terminals send Shift+Enter as plain `\r` and the shift bit is lost. On compose mount: drain stdin (1024 bytes per [[tui]]) then write `\x1b[>1u`. On unmount: write `\x1b[<u`. Bracketed paste enable/disable is handled by `usePaste` automatically — do not also send `\x1b[?2004h` ourselves.
 
-Mount order: stdin drain (1024 bytes per [[tui]]) FIRST, then write protocol-enable bytes. Drain ahead of enable prevents an in-flight paste's `\x1b[200~` from being eaten.
+Drop modifyOtherKeys. Ink's `parseKeypress` does not match the `CSI 27;m;code~` shape (`fnKeyRe` skips it), so enabling `\x1b[>4;2m` would produce no usable events. The Ctrl+J and `\`+Enter fallbacks cover terminals without kitty.
 
-Parser is a stdin middleware. Ink 7 installs its own `data` listener on `process.stdin`; a second listener in parallel breaks byte ordering. Approach: on compose mount, detach Ink's stdin reader (keep a handle), install our parser as the sole listener, and have the parser forward everything it doesn't match to Ink's reader as if it arrived directly. On unmount, restore Ink's listener. Rendered in code via Node `stdin.off(...)` + `stdin.on(...)` around the compose lifecycle.
+**Exit-guard teardown.** `ensureExitGuard()` in `src/core/spinner.ts` is currently file-private and registers a single teardown for the cursor-show sequence. Generalize it (export `registerExitTeardown(bytes)` or similar) so multiple subscribers can register pop bytes; compose registers `\x1b[<u` there. Teardown runs on SIGINT / crash before Ink's restore so a killed Wrap never leaves the terminal in kitty mode.
 
-The parser maintains a small byte buffer per chunk: scan for complete CSI sequences (terminator after CSI start), emit matched modified-key events directly to the TextInput (via a ref-based emitter the compose dialog passes down), forward unmatched bytes to Ink. Handles split-across-chunk sequences by holding the trailing partial for the next chunk. Tracks a paste-mode flag between `\x1b[200~` and `\x1b[201~` (see §TextInput paste safety).
-
-Two CSI shapes for modified keys:
-
-- Kitty: `CSI keycode ; modifier u` — regex `/\x1b\[(\d+);(\d+)u/`, groups `(keycode, modifier)`.
-- modifyOtherKeys: `CSI 27 ; modifier ; keycode ~` — regex `/\x1b\[27;(\d+);(\d+)~/`, groups `(modifier, keycode)`.
-
-Keycode 13 = Enter. Modifier `1 + shift(1) + alt(2) + ctrl(4) + super(8)` → mod 2 = Shift, mod 5 = Ctrl.
-
-tmux: silent. `\`+Enter / Ctrl+J / paste cover the case without `extended-keys on`.
+tmux: silent. Without `extended-keys on` kitty doesn't propagate through, but Ctrl+J / `\`+Enter / paste cover the case without any flag.
 
 ---
 
@@ -343,6 +334,9 @@ Piped stdin keeps existing behavior: pipe IS the prompt, no TUI.
 - **256KB buffer cap.** Above this, Ink reflow freezes per keystroke.
 - **Static placeholder, no rotation.** Motion while typing distracts.
 - **Skip Ink unmount for GUI editors.** They don't take the TTY — unmounting is pure flicker.
+- **Lean on Ink 7's `parseKeypress` + `usePaste`; no custom stdin parser.** Ink 7 parses kitty CSI-u natively (Shift+Enter, Ctrl+letter, printable text field), and `usePaste` owns bracketed paste with atomic strings. A parallel stdin listener or detach-and-forward scheme would duplicate Ink's work and break byte ordering. We write only the kitty enable/disable bytes — the rest comes free.
+- **Drop modifyOtherKeys (`\x1b[>4;2m`).** Ink's `parseKeypress` doesn't match `CSI 27;m;code~`, so enabling it yields no usable events. Kitty + Ctrl+J + `\`+Enter is sufficient coverage.
+- **Bottom bar uses shared `ActionBar` + `useKeyBindings`.** Post-dates the original spec — `src/tui/response-dialog.tsx` consolidated onto these primitives in commit 25e5da0. Compose follows the same pattern; no fresh `useInput` hooks.
 
 ---
 
@@ -350,13 +344,12 @@ Piped stdin keeps existing behavior: pipe IS the prompt, no TUI.
 
 1. **State tag renames + cancel→0:** rename `composing` → `composing-followup`, `processing` → `processing-followup` across `state.ts`, `reducer.ts`, `session.ts`, `response-dialog.tsx`. Rewire `cancel` outcome to exit 0. Reducer tests stay green (rename only).
 2. **Cursor line helpers:** add `upLine`, `downLine`, `row`, `col` to `Cursor`. Unit-test against multiline strings.
-3. **TextInput `multiline` prop + `editingExternal`:** discriminated-union prop; Enter behavior branched; `\n` rejected on insert when single-line. Soft-wrap render + cursor visual. New TextInput tests for: Shift+Enter inserts `\n`, Ctrl+J inserts `\n`, backslash-Enter conversion, paste `\n` preserved/stripped, plain Enter submits in both modes, `editingExternal` disables input + renders label. Existing tests stay green.
-4. **Trigger + new tags:** main.ts reorder; add `composing-user-prompt` + `processing-user-prompt` to state union, reducer, `isDialogTag`. New event `submit-user-prompt`. Coordinator hook on entering `processing-user-prompt`: push initial user turn from `draft`, start pump loop. Compose dialog renders TextInput with `multiline`. Reducer-level unit tests for both new tags' transitions.
-5. **Bracketed paste:** enable + parse; CRLF + C0 strip; 5s + Esc + 256KB safety nets.
-6. **Kitty + modifyOtherKeys:** raw-stdin parser; push/pop via exposed/generalized `ensureExitGuard`; drain-before-enable ordering.
-7. **Placeholder:** sample set; static random pick on mount; hide on keystroke or paste-start.
-8. **Editor handoff:** `src/core/editor.ts` (`resolveEditor`, `EDITORS`); Ctrl-G; temp file via `ensureTempDir`; terminal-owning unmount path; GUI `editingExternal` path.
-9. **Follow-up TextInput swap:** flip `multiline: true` on the existing follow-up TextInput call site. State tag unchanged (already renamed in slice 1).
-10. **Discoverability + logging:** Examples block in `--help`; `input_source` on `LogEntry`; `--verbose` prompt-trace echo on teardown.
+3. **TextInput `multiline` prop + `editingExternal`:** discriminated-union prop; Enter behavior branched via `useKeyBindings` entries (`{ key: "j", ctrl: true }`, shift+return, backslash-return); `\n` rejected on insert when single-line. Soft-wrap render + cursor visual. Paste via Ink's `usePaste` — sanitize + `clampBufferSize` on the emitted string. New TextInput tests for: Shift+Enter inserts `\n`, Ctrl+J inserts `\n`, backslash-Enter conversion, paste `\n` preserved/stripped, plain Enter submits in both modes, `editingExternal` disables input + renders label. Existing tests stay green.
+4. **Trigger + new tags:** main.ts reorder; add `composing-user-prompt` + `processing-user-prompt` to state union, reducer, `isDialogTag`. New event `submit-user-prompt`. Coordinator hook on entering `processing-user-prompt`: push initial user turn from `draft`, start pump loop via `startPumpLoop` (session.ts:217), reset `loopState.budgetRemaining`. Compose dialog renders TextInput with `multiline` inside ResponseDialog using a new state-keyed render block alongside the existing `composing` / `processing` branch at response-dialog.tsx:355. Reducer-level unit tests for both new tags' transitions.
+5. **Kitty enable/disable + exit-guard generalization:** write `\x1b[>1u` on compose mount (after stdin drain), `\x1b[<u` on unmount; generalize `ensureExitGuard` in `src/core/spinner.ts` to accept multiple teardown-byte subscribers; register `\x1b[<u` there. No custom parser — Ink 7's `parseKeypress` + `usePaste` cover everything. No modifyOtherKeys.
+6. **Placeholder:** sample set; static random pick on mount; hide on keystroke or paste-start.
+7. **Editor handoff:** `src/core/editor.ts` (`resolveEditor`, `EDITORS`); Ctrl-G via `useKeyBindings`; temp file via `ensureTempDir` (`src/fs/temp.ts`); terminal-owning unmount path; GUI `editingExternal` path.
+8. **Follow-up TextInput swap:** flip `multiline: true` on the existing follow-up TextInput call site. State tag unchanged (already renamed in slice 1).
+9. **Discoverability + logging:** Examples block in `--help`; `input_source` on `LogEntry`; `--verbose` prompt-trace echo on teardown.
 
-TDD per project rule. Unit-test the kitty / modifyOtherKeys parser against fixture byte strings. Unit-test `clampBufferSize` (UTF-8 boundary, below-cap passthrough, above-cap truncation). Integration-test the `main.ts` branch with a mock TTY — if no mock-TTY harness exists today, build one in slice 4 (smallest touch: a `StdinSource`-like seam parallel to `src/core/piped-input.ts` for the TTY path).
+TDD per project rule. Unit-test `clampBufferSize` (UTF-8 boundary, below-cap passthrough, above-cap truncation). Unit-test the backslash-Enter + Ctrl+J + Shift+Enter paths through TextInput's `useKeyBindings` bindings using `ink-testing-library`. Integration-test the `main.ts` branch with a mock TTY — if no mock-TTY harness exists today, build one in slice 4 (smallest touch: a `StdinSource`-like seam parallel to `src/core/piped-input.ts` for the TTY path).
