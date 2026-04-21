@@ -13,17 +13,17 @@
     "optimize": "docker build -t wrap-dspy -f eval/dspy/Dockerfile . && docker run --rm -v \"$(pwd)/eval/examples\":/app/eval/examples -v \"$(pwd)/eval/results\":/app/eval/results -v \"$(pwd)/eval/dspy\":/app/eval/dspy -v \"$(pwd)/eval/bridge.ts\":/app/eval/bridge.ts -v \"$(pwd)/src\":/app/src --env-file eval/dspy/.env wrap-dspy && bunx biome format src/prompt.optimized.json --write"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.11",
+    "@biomejs/biome": "^2.4.12",
     "@types/bun": "latest",
     "@types/react": "^19.2.14",
     "ink-testing-library": "^4.0.0"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.68",
-    "@ai-sdk/openai": "^3.0.52",
+    "@ai-sdk/anthropic": "^3.0.71",
+    "@ai-sdk/openai": "^3.0.53",
     "@inkjs/ui": "^2.0.0",
-    "ai": "^6.0.156",
-    "ink": "^7.0.0",
+    "ai": "^6.0.168",
+    "ink": "^7.0.1",
     "jsonc-parser": "^3.3.1",
     "react": "^19.2.5",
     "string-width": "^8.2.0",
