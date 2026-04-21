@@ -74,3 +74,11 @@ Successful commands, non-zero exits, answers, empty content, malformed JSON, pro
 - **Full memory snapshot per entry.** `cwd` in entry lets reader reconstruct scope matching. Avoids duplicating filtering logic.
 - **System prompt as hash only.** Reproducibility without per-entry bloat. Match to prompt version in git.
 - **Sensitive data logged verbatim.** Same threat model as `~/.bash_history` — local file. API keys redacted to last 4 chars.
+- **`attempts[]` always present, even length 1.** One canonical shape. Non-detailed mode keeps attempt records sparse.
+- **Wire capture plumbed over the notification bus.** `PromptInput` stays pure data, providers don't import logging types, and the pattern matches the house convention for cross-cutting observability (`chrome`, `verbose`, `step-output`).
+- **Wire request body stripped of `system` + `messages`.** They duplicate `attempt.request`. What remains is the SDK-added delta (model, max_tokens, tools, tool_choice). Trade-off: `cache_control` markers are lost; cache debugging falls back to `response_wire.usage.cache_read_input_tokens`.
+- **Structured `AttemptError` with `kind`.** Categorical (`parse` / `provider` / `empty`) beats free-text matching for consumers.
+- **Per-attempt `llm_ms` + round-level sum.** Per-attempt enables retry-cost analysis; round-level sum kept for back-compat jq patterns.
+- **No headers, no subprocess env dict.** Simpler than maintaining a redaction allowlist. Body carries enough for debugging.
+- **No size cap on detailed logs.** Opt-in; the user owns the bloat. No log rotation (pre-existing concern).
+- **Memory-init LLM calls excluded.** Feature targets the command/answer prompt. Memory-init has its own lifecycle; providers still emit `llm-wire` there but no one subscribes.
