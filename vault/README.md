@@ -42,8 +42,9 @@ Canonical vocabulary. Use consistently; do not invent synonyms.
 **Execution**
 - **Invocation** — one complete Wrap run: parse → config → memory → query → log.
 - **Query** — the LLM interaction loop within an invocation.
-- **Round** — one LLM call → parsed response → optional execution. Probes, commands, error-fix attempts, and answers are each one round.
+- **Round** — one LLM interaction → parsed response → optional execution. Probes, commands, error-fix attempts, and answers are each one round. A round may contain multiple `Attempt`s.
 - **Round retry** — re-attempt within a round when the response could not be parsed. Not a new round.
+- **Attempt** — one physical LLM call inside a round. Up to four per round (initial → json-retry → scratchpad-retry → scratchpad's json-retry). Each Attempt records its own `parsed`/`error`/`raw_response`/`llm_ms`, plus request and wire bodies when `logTraces` is on.
 - **Session** — runtime loop owning app state, dialog lifecycle, notification routing. See [[session]].
 - **Mode** — how Wrap is invoked (default, yolo, force-cmd, force-answer, confirm-all). Only `default` is implemented.
 - **Subcommand** — CLI sub-action accessed via flag (`--log`, `--help`, `--version`).
@@ -90,6 +91,7 @@ Canonical vocabulary. Use consistently; do not invent synonyms.
 **Logging & eval**
 - **Log** — raw invocation records in JSONL at `~/.wrap/logs/wrap.jsonl`.
 - **LogEntry** — record of one invocation.
+- **Log traces** — opt-in detailed capture of full prompt and wire-level bodies per Attempt. Off by default. See [[logging]].
 - **Example** — curated input/output pair for eval. Not "sample" or "training data".
 - **Eval** — offline scoring against examples.
 - **Optimization** — using eval results to improve the prompt (DSPy).
