@@ -219,6 +219,8 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(captured.calls).toBe(2);
+    expect(round.attempts).toHaveLength(2);
+    expect(round.attempts[0]?.parsed?._scratchpad).toBeNull();
     expect(round.attempts.at(-1)?.parsed?._scratchpad).toBe(
       "Destructive: blow away deps for a clean install.",
     );
@@ -306,6 +308,28 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(calls).toBe(2);
+    expect(round.attempts).toHaveLength(2);
+    expect(round.attempts[0]?.error?.kind).toBe("parse");
+    expect(round.attempts[0]?.parsed).toBeUndefined();
     expect(round.attempts.at(-1)?.parsed?.content).toBe("ls");
+  });
+
+  test("sums llm_ms across attempts into round.llm_ms", async () => {
+    let calls = 0;
+    const provider: Provider = {
+      runPrompt: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("invalid JSON: whatever");
+        return { type: "command", content: "ls", risk_level: "low" } as CommandResponse;
+      },
+    };
+    const round = await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    expect(round.attempts).toHaveLength(2);
+    const per = round.attempts.reduce((sum, a) => sum + (a.llm_ms ?? 0), 0);
+    expect(round.llm_ms).toBe(per);
   });
 });
