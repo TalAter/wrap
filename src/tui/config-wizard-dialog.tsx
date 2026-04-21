@@ -1,5 +1,5 @@
 import { Select } from "@inkjs/ui";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ProviderEntry } from "../config/config.ts";
 import { getConfig, updateConfig } from "../config/store.ts";
@@ -10,14 +10,15 @@ import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initProviderWizardState, type ProviderWizardAction, reduce } from "../wizard/state.ts";
+import { ActionBar } from "./action-bar.tsx";
 import { Checklist, type ChecklistItem } from "./checklist.tsx";
 import { Dialog } from "./dialog.tsx";
+import { useKeyBindings } from "./key-bindings.ts";
 import { NerdIconsSection } from "./nerd-icons-section.tsx";
 import { TextInput } from "./text-input.tsx";
 import { WelcomeSection } from "./welcome-section.tsx";
 import {
   getWizardStops,
-  KeyHints,
   stepIndexFromScreen,
   WIZARD_CONTENT_WIDTH,
   wizardCrumbPill,
@@ -72,16 +73,16 @@ export function ProvidersSection({
     }
   }, [state.screen.tag, state.builtEntries, state.defaultProvider, onDone]);
 
-  useInput(
-    (_input, key) => {
-      if (key.escape) {
-        if (state.screen.tag === "disclaimer") {
-          dispatch({ type: "skip-disclaimer" });
-        } else {
-          onCancel();
-        }
-      }
-    },
+  useKeyBindings(
+    [
+      {
+        on: "escape",
+        do: () => {
+          if (state.screen.tag === "disclaimer") dispatch({ type: "skip-disclaimer" });
+          else onCancel();
+        },
+      },
+    ],
     { isActive: state.screen.tag !== "done" },
   );
 
@@ -253,14 +254,14 @@ function ProviderSelectionScreen({
         onSubmit={handleSubmit}
       />
       <Text> </Text>
-      <KeyHints
+      <ActionBar
         items={
           checked.size > 0
             ? [
-                { combo: "Space", label: "to toggle" },
-                { combo: "⏎", label: "to continue", primary: true },
+                { glyph: "Space", label: "to toggle" },
+                { glyph: "⏎", label: "to continue", primary: true },
               ]
-            : [{ combo: "Space", label: "to toggle" }]
+            : [{ glyph: "Space", label: "to toggle" }]
         }
       />
     </Box>
@@ -310,7 +311,7 @@ function ApiKeyScreen({
         onSubmit={() => dispatch({ type: "submit-key" })}
       />
       <Text> </Text>
-      <KeyHints items={[{ combo: "⏎", label: "to continue", primary: true }]} />
+      <ActionBar items={[{ glyph: "⏎", label: "to continue", primary: true }]} />
     </Box>
   );
 }
@@ -329,15 +330,18 @@ function ModelPickerScreen({
   const api = API_PROVIDERS[provider];
   const [selected, setSelected] = useState(models[0]?.id ?? "");
 
-  useInput((_input, key) => {
-    if (key.return) {
-      const idx = models.findIndex((m) => m.id === selected);
-      if (idx >= 0) {
-        if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
-        dispatch({ type: "submit-model" });
-      }
-    }
-  });
+  useKeyBindings([
+    {
+      on: "return",
+      do: () => {
+        const idx = models.findIndex((m) => m.id === selected);
+        if (idx >= 0) {
+          if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
+          dispatch({ type: "submit-model" });
+        }
+      },
+    },
+  ]);
 
   const options = models.map((m) => ({
     label: m.recommended ? `${m.id}  ✦ Recommended` : m.id,
@@ -354,10 +358,10 @@ function ModelPickerScreen({
         visibleOptionCount={Math.min(MAX_VISIBLE_OPTIONS, models.length)}
       />
       <Text> </Text>
-      <KeyHints
+      <ActionBar
         items={[
-          { combo: "↑↓", label: "to move" },
-          { combo: "⏎", label: "to continue", primary: true },
+          { glyph: "↑↓", label: "to move" },
+          { glyph: "⏎", label: "to continue", primary: true },
         ]}
       />
     </Box>
@@ -365,9 +369,7 @@ function ModelPickerScreen({
 }
 
 function DisclaimerScreen({ dispatch }: { dispatch: React.Dispatch<ProviderWizardAction> }) {
-  useInput((_input, key) => {
-    if (key.return) dispatch({ type: "accept-disclaimer" });
-  });
+  useKeyBindings([{ on: "return", do: () => dispatch({ type: "accept-disclaimer" }) }]);
 
   return (
     <Box flexDirection="column">
@@ -377,10 +379,10 @@ function DisclaimerScreen({ dispatch }: { dispatch: React.Dispatch<ProviderWizar
         own terms — bring your own subscription and credentials.
       </Text>
       <Text> </Text>
-      <KeyHints
+      <ActionBar
         items={[
-          { combo: "⏎", label: "to accept", primary: true },
-          { combo: "Esc", label: "to skip this provider" },
+          { glyph: "⏎", label: "to accept", primary: true },
+          { glyph: "Esc", label: "to skip this provider" },
         ]}
       />
     </Box>
@@ -398,15 +400,18 @@ function DefaultPickerScreen({
 }) {
   const [selected, setSelected] = useState(providers[0] ?? "");
 
-  useInput((_input, key) => {
-    if (key.return) {
-      const idx = providers.indexOf(selected);
-      if (idx >= 0) {
-        if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
-        dispatch({ type: "submit-default" });
-      }
-    }
-  });
+  useKeyBindings([
+    {
+      on: "return",
+      do: () => {
+        const idx = providers.indexOf(selected);
+        if (idx >= 0) {
+          if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
+          dispatch({ type: "submit-default" });
+        }
+      },
+    },
+  ]);
 
   const options = providers.map((name) => ({
     label: API_PROVIDERS[name]?.displayName ?? CLI_PROVIDERS[name]?.displayName ?? name,
@@ -419,10 +424,10 @@ function DefaultPickerScreen({
       <Text> </Text>
       <Select options={options} onChange={setSelected} />
       <Text> </Text>
-      <KeyHints
+      <ActionBar
         items={[
-          { combo: "↑↓", label: "to move" },
-          { combo: "⏎", label: "to select", primary: true },
+          { glyph: "↑↓", label: "to move" },
+          { glyph: "⏎", label: "to select", primary: true },
         ]}
       />
     </Box>

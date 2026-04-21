@@ -1,8 +1,10 @@
-import { Box, Text, useInput, useWindowSize } from "ink";
+import { Box, Text, useWindowSize } from "ink";
+import { ActionBar } from "./action-bar.tsx";
 import { DIALOG_CHROME_HEIGHT, DIALOG_CHROME_WIDTH, Dialog } from "./dialog.tsx";
+import { useKeyBindings } from "./key-bindings.ts";
 import { WelcomeAnimation } from "./welcome-animation.tsx";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./welcome-animation-frames.ts";
-import { getWizardStops, KeyHints, WIZARD_CONTENT_WIDTH } from "./wizard-chrome.tsx";
+import { getWizardStops, WIZARD_CONTENT_WIDTH } from "./wizard-chrome.tsx";
 
 type WelcomeSectionProps = {
   onDone: () => void;
@@ -19,10 +21,10 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
   const showAnimation = columns >= ANIMATION_MIN_TERM_COLS && termRows >= ANIMATION_MIN_TERM_ROWS;
   const contentWidth = showAnimation ? ANIMATION_CONTENT_WIDTH : WIZARD_CONTENT_WIDTH;
 
-  useInput((_input, key) => {
-    if (key.escape) onCancel();
-    else if (key.return) onDone();
-  });
+  useKeyBindings([
+    { on: "escape", do: onCancel },
+    { on: "return", do: onDone },
+  ]);
 
   const textBlock = (
     <Box flexDirection="column">
@@ -35,10 +37,10 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
   );
 
   const keyHints = (
-    <KeyHints
+    <ActionBar
       items={[
-        { combo: "⏎", label: "to continue", primary: true },
-        { combo: "Esc", label: "to cancel" },
+        { glyph: "⏎", label: "to continue", primary: true },
+        { glyph: "Esc", label: "to cancel" },
       ]}
     />
   );

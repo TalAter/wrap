@@ -1,13 +1,10 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { useState } from "react";
 import { getTheme, themeHex } from "../core/theme.ts";
+import { ActionBar } from "./action-bar.tsx";
 import { Dialog } from "./dialog.tsx";
-import {
-  getWizardStops,
-  KeyHints,
-  WIZARD_CONTENT_WIDTH,
-  wizardLabelPill,
-} from "./wizard-chrome.tsx";
+import { useKeyBindings } from "./key-bindings.ts";
+import { getWizardStops, WIZARD_CONTENT_WIDTH, wizardLabelPill } from "./wizard-chrome.tsx";
 
 // Star Wars Nerd Font glyphs for detection
 const TEST_ICONS = [
@@ -27,15 +24,12 @@ type NerdIconsSectionProps = {
 export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
   const [cursor, setCursor] = useState(0); // 0 = Yes, 1 = No
 
-  useInput((_input, key) => {
-    if (key.escape) {
-      onCancel();
-    } else if (key.return) {
-      onDone({ nerdFonts: cursor === 0 });
-    } else if (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) {
-      setCursor((c) => (c === 0 ? 1 : 0));
-    }
-  });
+  const toggleCursor = () => setCursor((c) => (c === 0 ? 1 : 0));
+  useKeyBindings([
+    { on: "escape", do: onCancel },
+    { on: "return", do: () => onDone({ nerdFonts: cursor === 0 }) },
+    { on: ["up", "down", "left", "right"], do: toggleCursor },
+  ]);
 
   const options = [
     "Yes — enable icons throughout Wrap",
@@ -68,10 +62,10 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
           </Text>
         ))}
         <Text> </Text>
-        <KeyHints
+        <ActionBar
           items={[
-            { combo: "↑↓", label: "to move" },
-            { combo: "⏎", label: "to select", primary: true },
+            { glyph: "↑↓", label: "to move" },
+            { glyph: "⏎", label: "to select", primary: true },
           ]}
         />
       </Box>

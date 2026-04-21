@@ -1,5 +1,4 @@
-import { Text } from "ink";
-import { getTheme, type ThemeTokens, themeHex } from "../core/theme.ts";
+import { getTheme, type ThemeTokens } from "../core/theme.ts";
 import type { ProviderScreen } from "../wizard/state.ts";
 import type { PillSegment } from "./pill.tsx";
 
@@ -109,29 +108,4 @@ export function wizardCrumbPill(
     });
   }
   return segs;
-}
-
-type HintItem = { combo: string; label: string; primary?: boolean };
-
-export function KeyHints({ items }: { items: readonly HintItem[] }) {
-  const t = getTheme();
-  const divider = themeHex(t.text.disabled);
-  const highlight = themeHex(t.interactive.highlight);
-  const secondary = themeHex(t.text.secondary);
-  const muted = themeHex(t.text.muted);
-
-  return (
-    <Text>
-      <Text>{"  "}</Text>
-      {items.map((item, i) => (
-        <Text key={item.combo}>
-          {i > 0 ? <Text color={divider}>{"  │  "}</Text> : null}
-          <Text bold color={item.primary ? highlight : secondary}>
-            {item.combo}
-          </Text>
-          <Text color={muted}>{` ${item.label}`}</Text>
-        </Text>
-      ))}
-    </Text>
-  );
 }
