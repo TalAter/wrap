@@ -18,6 +18,7 @@ export type Config = {
   noAnimation?: boolean;
   nerdFonts?: boolean;
   yolo?: boolean;
+  logTraces?: boolean;
   appearance?: "auto" | "dark" | "light";
 };
 
@@ -30,6 +31,7 @@ export type ResolvedConfig = Config & {
   noAnimation: boolean;
   nerdFonts: boolean;
   yolo: boolean;
+  logTraces: boolean;
   maxRounds: number;
   maxCapturedOutputChars: number;
   maxAttachedInputChars: number;

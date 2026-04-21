@@ -34,6 +34,11 @@
       "description": "Skip confirmation dialogs — auto-execute all commands regardless of risk. All safety gates disabled.",
       "default": false
     },
+    "logTraces": {
+      "type": "boolean",
+      "description": "Capture full LLM prompts and wire-level responses in the invocation log. Off by default.",
+      "default": false
+    },
     "providers": {
       "type": "object",
       "description": "Map of provider name → entry. Known names: anthropic, openai, ollama, claude-code. Any other key is treated as an OpenAI-compatible endpoint and requires baseURL, apiKey, and model.",

@@ -40,6 +40,22 @@ describe("resolveSettings — precedence", () => {
     expect(result.maxAttachedInputChars).toBe(200_000);
     expect(result.nerdFonts).toBe(false);
     expect(result.yolo).toBe(false);
+    expect(result.logTraces).toBe(false);
+  });
+
+  test("--log-traces flag sets logTraces=true", () => {
+    const result = resolveSettings(mods({ flags: ["logTraces"] }), {}, {});
+    expect(result.logTraces).toBe(true);
+  });
+
+  test("WRAP_LOG_TRACES=1 sets logTraces=true", () => {
+    const result = resolveSettings(mods(), { WRAP_LOG_TRACES: "1" }, {});
+    expect(result.logTraces).toBe(true);
+  });
+
+  test("file config logTraces=true overrides default", () => {
+    const result = resolveSettings(mods(), {}, { logTraces: true });
+    expect(result.logTraces).toBe(true);
   });
 
   test("missing default leaves key undefined (not materialized)", () => {
@@ -208,6 +224,7 @@ describe("applyModelOverride", () => {
     noAnimation: false,
     nerdFonts: false,
     yolo: false,
+    logTraces: false,
     maxRounds: 5,
     maxCapturedOutputChars: 200_000,
     maxAttachedInputChars: 200_000,

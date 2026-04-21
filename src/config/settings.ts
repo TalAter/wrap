@@ -77,6 +77,15 @@ export const SETTINGS = {
     env: ["WRAP_NERD_FONTS"],
     default: false,
   },
+  logTraces: {
+    type: "boolean",
+    description:
+      "Capture full LLM prompts and wire-level responses in the invocation log. Off by default.",
+    usage: "w --log-traces",
+    flag: ["--log-traces"],
+    env: ["WRAP_LOG_TRACES"],
+    default: false,
+  },
   maxRounds: {
     type: "number",
     description: "Max LLM rounds per prompt before giving up",

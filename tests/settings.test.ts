@@ -69,6 +69,15 @@ describe("SETTINGS registry", () => {
     expect(keys).toContain("maxAttachedInputChars");
     expect(keys).toContain("defaultProvider");
     expect(keys).toContain("yolo");
+    expect(keys).toContain("logTraces");
+  });
+
+  test("logTraces declares --log-traces flag, WRAP_LOG_TRACES env, defaults false", () => {
+    const s = SETTINGS.logTraces;
+    expect(s.type).toBe("boolean");
+    expect(s.flag).toContain("--log-traces");
+    expect(s.env).toContain("WRAP_LOG_TRACES");
+    expect(s.default).toBe(false);
   });
 
   test("yolo declares --yolo flag and WRAP_YOLO env and defaults false", () => {
@@ -101,6 +110,7 @@ describe("SETTINGS registry", () => {
       .sort();
     expect(withDefaults).toEqual(
       [
+        "logTraces",
         "maxCapturedOutputChars",
         "maxAttachedInputChars",
         "maxRounds",
