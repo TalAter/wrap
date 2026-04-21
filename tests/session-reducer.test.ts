@@ -190,8 +190,8 @@ describe("reduce — confirming", () => {
   test("key-action followup → composing with empty draft", () => {
     const state = makeConfirming();
     const next = reduce(state, { type: "key-action", action: "followup" });
-    expect(next.tag).toBe("composing");
-    if (next.tag === "composing") {
+    expect(next.tag).toBe("composing-followup");
+    if (next.tag === "composing-followup") {
       expect(next.draft).toBe("");
     }
   });
@@ -255,8 +255,8 @@ describe("reduce — composing", () => {
   test("draft-change → composing with new draft", () => {
     const state = makeComposing({ draft: "" });
     const next = reduce(state, { type: "draft-change", text: "be safer" });
-    expect(next.tag).toBe("composing");
-    if (next.tag === "composing") {
+    expect(next.tag).toBe("composing-followup");
+    if (next.tag === "composing-followup") {
       expect(next.draft).toBe("be safer");
     }
   });
@@ -264,8 +264,8 @@ describe("reduce — composing", () => {
   test("submit-followup text → processing with draft preserved and no status", () => {
     const state = makeComposing();
     const next = reduce(state, { type: "submit-followup", text: "be safer" });
-    expect(next.tag).toBe("processing");
-    if (next.tag === "processing") {
+    expect(next.tag).toBe("processing-followup");
+    if (next.tag === "processing-followup") {
       expect(next.draft).toBe("be safer");
       expect(next.status).toBeUndefined();
     }
@@ -276,8 +276,8 @@ describe("reduce — processing", () => {
   test("key-esc → composing with draft preserved", () => {
     const state = makeProcessing({ draft: "be safer" });
     const next = reduce(state, { type: "key-esc" });
-    expect(next.tag).toBe("composing");
-    if (next.tag === "composing") {
+    expect(next.tag).toBe("composing-followup");
+    if (next.tag === "composing-followup") {
       expect(next.draft).toBe("be safer");
     }
   });
@@ -288,8 +288,8 @@ describe("reduce — processing", () => {
       type: "notification",
       notification: { kind: "chrome", text: "Probing the database" },
     });
-    expect(next.tag).toBe("processing");
-    if (next.tag === "processing") {
+    expect(next.tag).toBe("processing-followup");
+    if (next.tag === "processing-followup") {
       expect(next.status).toBe("Probing the database");
     }
   });
@@ -417,7 +417,7 @@ describe("reduce — executing-step", () => {
       type: "notification",
       notification: { kind: "step-output", text: "processing-body" },
     });
-    if (next.tag === "processing") {
+    if (next.tag === "processing-followup") {
       expect(next.outputSlot).toBe("processing-body");
     } else {
       throw new Error(`expected processing, got ${next.tag}`);

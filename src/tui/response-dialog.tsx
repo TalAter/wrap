@@ -21,7 +21,7 @@ type ResponseDialogProps = {
 
 // `id` is the stable handle for dispatch — labels are presentation only.
 // Hotkey is `label[0]` (case-insensitive), and ActionBar renders it underlined.
-const ACTION_ITEMS = [
+const CONFIRMING_ACTIONS = [
   { id: "cancel", label: "No", primary: true },
   { id: "run", label: "Yes", primary: true },
   { id: "edit", label: "Edit", primary: false },
@@ -32,25 +32,25 @@ const ACTION_ITEMS = [
   label: string;
   primary: boolean;
 }>;
-const ACTION_BAR_WIDTH = 61;
-const MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4;
+const CONFIRMING_BAR_WIDTH = 61;
+const MIN_INNER_WIDTH = CONFIRMING_BAR_WIDTH + 4;
 
-const ACTION_BAR_ITEMS: readonly ActionItem[] = ACTION_ITEMS.map((a) => ({
+const CONFIRMING_BAR_ITEMS: readonly ActionItem[] = CONFIRMING_ACTIONS.map((a) => ({
   glyph: (a.label[0] as string).toUpperCase(),
   label: a.label,
   primary: a.primary,
 }));
 
-const EDIT_HINT_ITEMS: readonly ActionItem[] = [
+const EDIT_COMMAND_ACTIONS: readonly ActionItem[] = [
   { glyph: "⏎", label: "to run", primary: true },
   { glyph: "Esc", label: "to discard changes" },
 ];
-const COMPOSE_HINT_ITEMS: readonly ActionItem[] = [
+const FOLLOWUP_COMPOSE_ACTIONS: readonly ActionItem[] = [
   { glyph: "⏎", label: "to send", primary: true },
   { glyph: "Esc", label: "to cancel" },
 ];
-const PROCESS_HINT_ITEMS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort" }];
-const EXECUTING_STEP_HINT_ITEMS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort step" }];
+const PROCESSING_ACTIONS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort" }];
+const EXECUTING_STEP_ACTIONS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort step" }];
 
 /** Border status shown while a follow-up call is in flight before any chrome event arrives. */
 export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
@@ -204,12 +204,13 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   const explanation = dialogResponse?.explanation ?? undefined;
   const plan = dialogResponse?.plan ?? undefined;
   const draft = "draft" in state ? state.draft : "";
-  const status = state.tag === "processing" ? state.status : undefined;
+  const status = state.tag === "processing-followup" ? state.status : undefined;
   const outputSlot = "outputSlot" in state ? state.outputSlot : undefined;
 
   // Width + height calculation — caller owns this since it knows what will render.
   const { columns: termCols, rows: termRows } = useWindowSize();
-  const showFollowupInput = state.tag === "composing" || state.tag === "processing";
+  const showFollowupInput =
+    state.tag === "composing-followup" || state.tag === "processing-followup";
   const naturalContentWidth = Math.max(
     stringWidth(command),
     explanation ? stringWidth(explanation) : 0,
@@ -247,8 +248,8 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   useKeyBindings([{ on: "escape", do: () => dispatch({ type: "key-esc" }) }], {
     isActive:
       state.tag === "editing" ||
-      state.tag === "composing" ||
-      state.tag === "processing" ||
+      state.tag === "composing-followup" ||
+      state.tag === "processing-followup" ||
       state.tag === "executing-step",
   });
 
@@ -257,7 +258,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   // Ctrl+C; these extras are safe next to a bare `c` Copy binding because the
   // matcher blocks bare char triggers when any modifier is held.
   const dispatchAction = (id: ActionId) => dispatch({ type: "key-action", action: id });
-  const hotkeyBindings: KeyBinding[] = ACTION_ITEMS.map((item) => {
+  const hotkeyBindings: KeyBinding[] = CONFIRMING_ACTIONS.map((item) => {
     const hotkey = (item.label[0] as string).toLowerCase();
     return {
       on: item.id === "cancel" ? [hotkey, "q", { key: "c", ctrl: true }] : hotkey,
@@ -268,11 +269,14 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     { on: "escape", do: () => dispatch({ type: "key-esc" }) },
     ...hotkeyBindings,
     { on: "left", do: () => setSelectedIndex((i) => Math.max(0, i - 1)) },
-    { on: "right", do: () => setSelectedIndex((i) => Math.min(ACTION_ITEMS.length - 1, i + 1)) },
+    {
+      on: "right",
+      do: () => setSelectedIndex((i) => Math.min(CONFIRMING_ACTIONS.length - 1, i + 1)),
+    },
     {
       on: "return",
       do: () => {
-        const item = ACTION_ITEMS[selectedIndex];
+        const item = CONFIRMING_ACTIONS[selectedIndex];
         if (item) dispatchAction(item.id);
       },
     },
@@ -281,7 +285,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
 
   const noAnimation = getConfig().noAnimation;
   const spinnerActive =
-    !noAnimation && (state.tag === "processing" || state.tag === "executing-step");
+    !noAnimation && (state.tag === "processing-followup" || state.tag === "executing-step");
   const { frame: spinnerIndex } = useAnimation({
     interval: SPINNER_INTERVAL,
     isActive: spinnerActive,
@@ -291,7 +295,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     : null;
   const prefix = spinnerFrame ? `${spinnerFrame} ` : "";
   const bottomStatus =
-    state.tag === "processing"
+    state.tag === "processing-followup"
       ? `${prefix}${status ?? FOLLOWUP_FALLBACK_STATUS}`
       : state.tag === "executing-step"
         ? `${prefix}${EXECUTING_STEP_STATUS}`
@@ -352,10 +356,10 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
           </Box>
         </>
       )}
-      {(state.tag === "composing" || state.tag === "processing") && (
+      {(state.tag === "composing-followup" || state.tag === "processing-followup") && (
         <>
           <Text> </Text>
-          {state.tag === "composing" ? (
+          {state.tag === "composing-followup" ? (
             <TextInput
               value={state.draft}
               onChange={(t) => dispatch({ type: "draft-change", text: t })}
@@ -374,17 +378,21 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       <Text> </Text>
       <Box paddingLeft={3}>
         {state.tag === "editing" ? (
-          <ActionBar items={EDIT_HINT_ITEMS} />
-        ) : state.tag === "composing" ? (
-          <ActionBar items={COMPOSE_HINT_ITEMS} />
-        ) : state.tag === "processing" ? (
-          <ActionBar items={PROCESS_HINT_ITEMS} />
+          <ActionBar items={EDIT_COMMAND_ACTIONS} />
+        ) : state.tag === "composing-followup" ? (
+          <ActionBar items={FOLLOWUP_COMPOSE_ACTIONS} />
+        ) : state.tag === "processing-followup" ? (
+          <ActionBar items={PROCESSING_ACTIONS} />
         ) : state.tag === "executing-step" ? (
-          <ActionBar items={EXECUTING_STEP_HINT_ITEMS} />
+          <ActionBar items={EXECUTING_STEP_ACTIONS} />
         ) : (
           <Text>
             <Text color={themeHex(theme.text.primary)}>{"Run command? "}</Text>
-            <ActionBar items={ACTION_BAR_ITEMS} focusedIndex={selectedIndex} dividerAfter={[1]} />
+            <ActionBar
+              items={CONFIRMING_BAR_ITEMS}
+              focusedIndex={selectedIndex}
+              dividerAfter={[1]}
+            />
           </Text>
         )}
       </Box>

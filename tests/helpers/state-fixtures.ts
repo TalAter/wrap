@@ -49,7 +49,7 @@ export function makeEditing(overrides: Partial<EditingState> = {}): EditingState
 export function makeComposing(overrides: Partial<ComposingState> = {}): ComposingState {
   const response = overrides.response ?? makeResponse();
   return {
-    tag: "composing",
+    tag: "composing-followup",
     response,
     round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? "",
@@ -60,7 +60,7 @@ export function makeComposing(overrides: Partial<ComposingState> = {}): Composin
 export function makeProcessing(overrides: Partial<ProcessingState> = {}): ProcessingState {
   const response = overrides.response ?? makeResponse();
   return {
-    tag: "processing",
+    tag: "processing-followup",
     response,
     round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? "be safer",

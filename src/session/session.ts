@@ -108,7 +108,7 @@ export async function runSession(
   let currentLoopAbort: AbortController | null = null;
 
   const router = createNotificationRouter({
-    isDialogLive: () => state.tag === "processing" || state.tag === "executing-step",
+    isDialogLive: () => state.tag === "processing-followup" || state.tag === "executing-step",
     onDialogNotification: (n) => dispatch({ type: "notification", notification: n }),
   });
 
@@ -122,7 +122,7 @@ export async function runSession(
     // cancelled even if its result was about to land.
     if (
       event.type === "key-esc" &&
-      (state.tag === "processing" || state.tag === "executing-step")
+      (state.tag === "processing-followup" || state.tag === "executing-step")
     ) {
       currentLoopAbort?.abort();
     }
@@ -137,7 +137,7 @@ export async function runSession(
       return;
     }
     const entered = state.tag !== prevTag;
-    if (entered && state.tag === "processing") {
+    if (entered && state.tag === "processing-followup") {
       // submit-followup just landed. The previous `candidate_command` turn
       // is already in the transcript, so pushing a user turn here gives the
       // LLM `[..., candidate, user]` — no message-history hygiene needed.

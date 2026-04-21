@@ -28,7 +28,7 @@ const ROWS: RowSpec[] = [
 
 const CONTENT_WIDTH = 60;
 
-const HINT_ITEMS: readonly ActionItem[] = [
+const FORGET_ACTIONS: readonly ActionItem[] = [
   { glyph: "↑↓", label: "move" },
   { glyph: "Space", label: "toggle" },
   { glyph: "⏎", label: "forget", primary: true },
@@ -75,7 +75,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
         />
         <Text> </Text>
         <Box paddingLeft={3}>
-          <ActionBar items={HINT_ITEMS} />
+          <ActionBar items={FORGET_ACTIONS} />
         </Box>
       </Box>
     </Dialog>

@@ -4,7 +4,7 @@ import type { LoopReturn } from "../core/runner.ts";
 import type { Round } from "../logging/entry.ts";
 
 /** All states the session can be in. The dialog is mounted iff `tag` is one
- *  of the dialog tags (confirming, editing, composing, processing,
+ *  of the dialog tags (confirming, editing, composing-followup, processing-followup,
  *  executing-step). */
 export type AppState =
   | ThinkingState
@@ -56,20 +56,20 @@ export type EditingState = {
 
 /** User typing a follow-up. */
 export type ComposingState = {
-  tag: "composing";
+  tag: "composing-followup";
   response: CommandResponse;
   round: Round;
-  /** Live follow-up text. Preserved into processing and back. */
+  /** Live follow-up text. Preserved into processing-followup and back. */
   draft: string;
   outputSlot?: string;
 };
 
 /** Follow-up call in flight, dialog visible with status. */
 export type ProcessingState = {
-  tag: "processing";
+  tag: "processing-followup";
   response: CommandResponse;
   round: Round;
-  /** The follow-up text the user submitted; preserved so Esc → composing keeps it. */
+  /** The follow-up text the user submitted; preserved so Esc → composing-followup keeps it. */
   draft: string;
   /** Latest chrome line, shown in the bottom border. */
   status?: string;
@@ -139,7 +139,7 @@ export type AppEvent =
    * have been confirmed so the reducer can route to `exiting{blocked}`.
    */
   | { type: "block"; command: string }
-  // ──── from the notification bus (relayed by the coordinator while in `processing`) ────
+  // ──── from the notification bus (relayed by the coordinator while in `processing-followup`) ────
   | { type: "notification"; notification: Notification }
   // ──── from the dialog ────
   | { type: "key-action"; action: ActionId }
@@ -153,8 +153,8 @@ export function isDialogTag(tag: AppState["tag"]): boolean {
   return (
     tag === "confirming" ||
     tag === "editing" ||
-    tag === "composing" ||
-    tag === "processing" ||
+    tag === "composing-followup" ||
+    tag === "processing-followup" ||
     tag === "executing-step"
   );
 }

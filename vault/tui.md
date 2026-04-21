@@ -36,7 +36,7 @@ Why custom borders: Ink's native border supports one color per side — no verti
 
 Middle column uses standard Ink flexbox for wrapping. Left border is per-row gradient colors. Right border is dim `[60,60,100]`.
 
-Width: `min(max(natural, pillFullWidth - 2) + 4, termCols - 4)`. Dialog widens to fit the full top pill when the terminal allows. `MIN_INNER_WIDTH = ACTION_BAR_WIDTH + 4` so action bar doesn't wrap on normal terminals. Render-prop children receive the resolved `innerWidth` so child layout doesn't re-derive the widening math.
+Width: `min(max(natural, pillFullWidth - 2) + 4, termCols - 4)`. Dialog widens to fit the full top pill when the terminal allows. `MIN_INNER_WIDTH = CONFIRMING_BAR_WIDTH + 4` so action bar doesn't wrap on normal terminals. Render-prop children receive the resolved `innerWidth` so child layout doesn't re-derive the widening math.
 
 Height sync: first-pass estimate from content line counts; `useBoxMetrics` provides measured height. Mismatch → one extra render.
 
@@ -46,7 +46,7 @@ Holds one `PillSegment` chain — risk badge (single pill, right-aligned) or wiz
 
 ### Bottom border
 
-All dim. Optional status segment (spinner + chrome text during `processing`) in near-white `#d2d2e1`. Falls back to plain border if status can't fit.
+All dim. Optional status segment (spinner + chrome text during `processing-followup`) in near-white `#d2d2e1`. Falls back to plain border if status can't fit.
 
 ## Text input
 
@@ -66,7 +66,7 @@ ResponseDialog's confirming bar: Yes/No/Edit/Follow-up/Copy. Hotkeys `y`/`n`/`e`
 
 One hook: `src/tui/key-bindings.ts`. Dialogs declare `{ on: trigger, do: callback }` lists and call `useKeyBindings(bindings, { isActive })`. Triggers are NamedKey strings (`return`, `escape`, `up`, …), single chars (case-insensitive, blocked by ctrl/meta), or `{ key, ctrl?, shift?, meta? }` objects for exact modifier combos. First match in declaration order wins.
 
-ResponseDialog gates its confirming bindings by `state.tag === "confirming"` and its Esc binding by the other editing/composing/processing/executing-step tags. Printable keys in editing/composing go through TextInput's own input path.
+ResponseDialog gates its confirming bindings by `state.tag === "confirming"` and its Esc binding by the other editing/composing-followup/processing-followup/executing-step tags. Printable keys in editing/composing-followup go through TextInput's own input path.
 
 ## Dialog states
 
@@ -74,14 +74,14 @@ ResponseDialog gates its confirming bindings by `state.tag === "confirming"` and
 |---|---|---|
 | `confirming` | command, explanation | action bar |
 | `editing` | editable TextInput | `⏎ to run, Esc to discard` |
-| `composing` | command, explanation, follow-up TextInput | `⏎ to send, Esc to discard` |
-| `processing` | command, explanation, follow-up (read-only) | `Esc to cancel` + border spinner |
+| `composing-followup` | command, explanation, follow-up TextInput | `⏎ to send, Esc to discard` |
+| `processing-followup` | command, explanation, follow-up (read-only) | `Esc to cancel` + border spinner |
 | `executing-step` | spinner, previous output | step status |
 
 ## Decisions
 
 - **3-column layout over Ink borderStyle.** Enables per-glyph gradient and in-border badge.
-- **Single TextInput, not two components.** Editing and composing must match visually. Discriminated union makes read-only path skip `useInput`.
+- **Single TextInput, not two components.** Editing and composing-followup must match visually. Discriminated union makes read-only path skip `useInput`.
 - **Lazy-loaded, not tree-shaken.** Dynamic import is simpler and sufficient for a run-once CLI.
 - **Alt-screen for dialog.** Protects scrollback from Ink re-render artifacts.
 - **`describe` action (planned) must not consume a round.** It's an explanation side-channel, not part of the command-generation loop.

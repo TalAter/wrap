@@ -22,9 +22,9 @@ export function reduce(state: AppState, event: AppEvent): AppState {
       return reduceConfirming(state, event);
     case "editing":
       return reduceEditing(state, event);
-    case "composing":
+    case "composing-followup":
       return reduceComposing(state, event);
-    case "processing":
+    case "processing-followup":
       return reduceProcessing(state, event);
     case "executing-step":
       return reduceExecutingStep(state, event);
@@ -122,7 +122,7 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
         };
       case "followup":
         return {
-          tag: "composing",
+          tag: "composing-followup",
           response: state.response,
           round: state.round,
           draft: "",
@@ -186,7 +186,10 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
   return state;
 }
 
-function reduceComposing(state: AppState & { tag: "composing" }, event: AppEvent): AppState {
+function reduceComposing(
+  state: AppState & { tag: "composing-followup" },
+  event: AppEvent,
+): AppState {
   if (event.type === "key-esc") {
     return {
       tag: "confirming",
@@ -200,7 +203,7 @@ function reduceComposing(state: AppState & { tag: "composing" }, event: AppEvent
   }
   if (event.type === "submit-followup") {
     return {
-      tag: "processing",
+      tag: "processing-followup",
       response: state.response,
       round: state.round,
       draft: event.text,
@@ -211,10 +214,13 @@ function reduceComposing(state: AppState & { tag: "composing" }, event: AppEvent
   return state;
 }
 
-function reduceProcessing(state: AppState & { tag: "processing" }, event: AppEvent): AppState {
+function reduceProcessing(
+  state: AppState & { tag: "processing-followup" },
+  event: AppEvent,
+): AppState {
   if (event.type === "key-esc") {
     return {
-      tag: "composing",
+      tag: "composing-followup",
       response: state.response,
       round: state.round,
       draft: state.draft,

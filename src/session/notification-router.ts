@@ -14,9 +14,9 @@ import type { DialogHost } from "./dialog-host.ts";
  *     stderr writes during alt-screen would land in the alt buffer and
  *     disappear on exit.
  *
- *   - **Dialog mounted AND `isDialogLive()` (i.e. `processing` or
+ *   - **Dialog mounted AND `isDialogLive()` (i.e. `processing-followup` or
  *     `executing-step`)**: ALSO call `onDialogNotification` so the
- *     coordinator can dispatch a `notification` event. In `processing`,
+ *     coordinator can dispatch a `notification` event. In `processing-followup`,
  *     the reducer routes chrome → bottom-border status and step-output →
  *     output slot. In `executing-step`, only step-output is meaningful.
  *
@@ -43,7 +43,7 @@ export type NotificationRouterOptions = {
   onDialogNotification: (n: Notification) => void;
   /**
    * Called once per emit to ask whether the session is in a state that
-   * wants live notification updates — currently `processing` or
+   * wants live notification updates — currently `processing-followup` or
    * `executing-step`. Pulled rather than pushed so the router doesn't
    * have to mirror the coordinator's state.
    */
