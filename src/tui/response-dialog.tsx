@@ -372,20 +372,22 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       )}
       <Text> </Text>
       <Text> </Text>
-      {state.tag === "editing" ? (
-        <ActionBar items={EDIT_HINT_ITEMS} />
-      ) : state.tag === "composing" ? (
-        <ActionBar items={COMPOSE_HINT_ITEMS} />
-      ) : state.tag === "processing" ? (
-        <ActionBar items={PROCESS_HINT_ITEMS} />
-      ) : state.tag === "executing-step" ? (
-        <ActionBar items={EXECUTING_STEP_HINT_ITEMS} />
-      ) : (
-        <Text>
-          <Text color={themeHex(theme.text.primary)}>{"Run command?"}</Text>
-          <ActionBar items={ACTION_BAR_ITEMS} focusedIndex={selectedIndex} />
-        </Text>
-      )}
+      <Box paddingLeft={3}>
+        {state.tag === "editing" ? (
+          <ActionBar items={EDIT_HINT_ITEMS} />
+        ) : state.tag === "composing" ? (
+          <ActionBar items={COMPOSE_HINT_ITEMS} />
+        ) : state.tag === "processing" ? (
+          <ActionBar items={PROCESS_HINT_ITEMS} />
+        ) : state.tag === "executing-step" ? (
+          <ActionBar items={EXECUTING_STEP_HINT_ITEMS} />
+        ) : (
+          <Text>
+            <Text color={themeHex(theme.text.primary)}>{"Run command? "}</Text>
+            <ActionBar items={ACTION_BAR_ITEMS} focusedIndex={selectedIndex} dividerAfter={[1]} />
+          </Text>
+        )}
+      </Box>
     </Dialog>
   );
 }

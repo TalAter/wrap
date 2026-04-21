@@ -74,7 +74,9 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
           onSubmit={onSubmit}
         />
         <Text> </Text>
-        <ActionBar items={HINT_ITEMS} />
+        <Box paddingLeft={3}>
+          <ActionBar items={HINT_ITEMS} />
+        </Box>
       </Box>
     </Dialog>
   );

@@ -23,6 +23,13 @@ type ActionBarProps = {
    * are wired by the caller's `useKeyBindings`.
    */
   focusedIndex?: number;
+  /**
+   * When omitted: render a divider between every adjacent pair of items.
+   * When provided: render a divider ONLY after the listed item indices.
+   * Use this to carve groups — e.g. `[1]` on a 5-item bar draws a single
+   * divider between items 1 and 2, leaving the rest unseparated.
+   */
+  dividerAfter?: readonly number[];
 };
 
 const LETTER_RE = /^[A-Za-z]$/;
@@ -35,7 +42,7 @@ function isApproveStyle(item: ActionItem): boolean {
   );
 }
 
-export function ActionBar({ items, focusedIndex }: ActionBarProps) {
+export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps) {
   const t = getTheme();
   const primary = themeHex(t.text.primary);
   const divider = themeHex(t.text.disabled);
@@ -44,14 +51,15 @@ export function ActionBar({ items, focusedIndex }: ActionBarProps) {
   const muted = themeHex(t.text.muted);
   const accentBg = themeHex(t.chrome.accent);
   const highlightBright = themeHex(t.interactive.highlightBright);
+  const hasDivider = (i: number): boolean =>
+    i > 0 && (dividerAfter === undefined ? true : dividerAfter.includes(i - 1));
 
   return (
     <Text>
-      <Text>{"   "}</Text>
       {items.map((item, i) => {
         const isFocused = focusedIndex === i;
         const bg = isFocused ? accentBg : undefined;
-        const dividerNode = i > 0 ? <Text color={divider}>{"  │  "}</Text> : null;
+        const dividerNode = hasDivider(i) ? <Text color={divider}>{" │ "}</Text> : null;
 
         if (isApproveStyle(item)) {
           const accent = item.primary

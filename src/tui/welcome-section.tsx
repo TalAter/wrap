@@ -37,12 +37,14 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
   );
 
   const keyHints = (
-    <ActionBar
-      items={[
-        { glyph: "⏎", label: "to continue", primary: true },
-        { glyph: "Esc", label: "to cancel" },
-      ]}
-    />
+    <Box paddingLeft={3}>
+      <ActionBar
+        items={[
+          { glyph: "⏎", label: "to continue", primary: true },
+          { glyph: "Esc", label: "to cancel" },
+        ]}
+      />
+    </Box>
   );
 
   return (

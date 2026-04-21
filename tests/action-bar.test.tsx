@@ -73,10 +73,46 @@ describe("ActionBar", () => {
     expect(text).toContain("│");
   });
 
-  test("leading indent (3 spaces) present", async () => {
+  test("renders items flush with no built-in left padding", async () => {
+    // Callers own left indentation via Box paddingLeft; ActionBar is pure items.
     const { lastFrame } = render(<ActionBar items={[{ glyph: "⏎", label: "x" }]} />);
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text.startsWith("   ")).toBe(true);
+    expect(text.startsWith("⏎")).toBe(true);
+  });
+
+  test("dividerAfter=[] renders no dividers between items", async () => {
+    const items: ActionItem[] = [
+      { glyph: "A", label: "Alpha" },
+      { glyph: "B", label: "Beta" },
+      { glyph: "G", label: "Gamma" },
+    ];
+    const { lastFrame } = render(<ActionBar items={items} dividerAfter={[]} />);
+    await wait();
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).not.toContain("│");
+    expect(text).toContain("Alpha");
+    expect(text).toContain("Beta");
+    expect(text).toContain("Gamma");
+  });
+
+  test("dividerAfter=[1] places exactly one divider between items 1 and 2", async () => {
+    const items: ActionItem[] = [
+      { glyph: "A", label: "Alpha" },
+      { glyph: "B", label: "Beta" },
+      { glyph: "G", label: "Gamma" },
+      { glyph: "D", label: "Delta" },
+    ];
+    const { lastFrame } = render(<ActionBar items={items} dividerAfter={[1]} />);
+    await wait();
+    const text = stripAnsi(lastFrame() ?? "");
+    const pipeCount = (text.match(/│/g) ?? []).length;
+    expect(pipeCount).toBe(1);
+    // Divider must fall between Beta and Gamma.
+    const betaIdx = text.indexOf("Beta");
+    const gammaIdx = text.indexOf("Gamma");
+    const pipeIdx = text.indexOf("│");
+    expect(pipeIdx).toBeGreaterThan(betaIdx);
+    expect(pipeIdx).toBeLessThan(gammaIdx);
   });
 });

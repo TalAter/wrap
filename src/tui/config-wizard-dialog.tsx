@@ -254,16 +254,18 @@ function ProviderSelectionScreen({
         onSubmit={handleSubmit}
       />
       <Text> </Text>
-      <ActionBar
-        items={
-          checked.size > 0
-            ? [
-                { glyph: "Space", label: "to toggle" },
-                { glyph: "⏎", label: "to continue", primary: true },
-              ]
-            : [{ glyph: "Space", label: "to toggle" }]
-        }
-      />
+      <Box paddingLeft={3}>
+        <ActionBar
+          items={
+            checked.size > 0
+              ? [
+                  { glyph: "Space", label: "to toggle" },
+                  { glyph: "⏎", label: "to continue", primary: true },
+                ]
+              : [{ glyph: "Space", label: "to toggle" }]
+          }
+        />
+      </Box>
     </Box>
   );
 }
@@ -311,7 +313,9 @@ function ApiKeyScreen({
         onSubmit={() => dispatch({ type: "submit-key" })}
       />
       <Text> </Text>
-      <ActionBar items={[{ glyph: "⏎", label: "to continue", primary: true }]} />
+      <Box paddingLeft={3}>
+        <ActionBar items={[{ glyph: "⏎", label: "to continue", primary: true }]} />
+      </Box>
     </Box>
   );
 }
@@ -358,12 +362,14 @@ function ModelPickerScreen({
         visibleOptionCount={Math.min(MAX_VISIBLE_OPTIONS, models.length)}
       />
       <Text> </Text>
-      <ActionBar
-        items={[
-          { glyph: "↑↓", label: "to move" },
-          { glyph: "⏎", label: "to continue", primary: true },
-        ]}
-      />
+      <Box paddingLeft={3}>
+        <ActionBar
+          items={[
+            { glyph: "↑↓", label: "to move" },
+            { glyph: "⏎", label: "to continue", primary: true },
+          ]}
+        />
+      </Box>
     </Box>
   );
 }
@@ -379,12 +385,14 @@ function DisclaimerScreen({ dispatch }: { dispatch: React.Dispatch<ProviderWizar
         own terms — bring your own subscription and credentials.
       </Text>
       <Text> </Text>
-      <ActionBar
-        items={[
-          { glyph: "⏎", label: "to accept", primary: true },
-          { glyph: "Esc", label: "to skip this provider" },
-        ]}
-      />
+      <Box paddingLeft={3}>
+        <ActionBar
+          items={[
+            { glyph: "⏎", label: "to accept", primary: true },
+            { glyph: "Esc", label: "to skip this provider" },
+          ]}
+        />
+      </Box>
     </Box>
   );
 }
@@ -424,12 +432,14 @@ function DefaultPickerScreen({
       <Text> </Text>
       <Select options={options} onChange={setSelected} />
       <Text> </Text>
-      <ActionBar
-        items={[
-          { glyph: "↑↓", label: "to move" },
-          { glyph: "⏎", label: "to select", primary: true },
-        ]}
-      />
+      <Box paddingLeft={3}>
+        <ActionBar
+          items={[
+            { glyph: "↑↓", label: "to move" },
+            { glyph: "⏎", label: "to select", primary: true },
+          ]}
+        />
+      </Box>
     </Box>
   );
 }

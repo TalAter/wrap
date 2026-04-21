@@ -62,12 +62,14 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
           </Text>
         ))}
         <Text> </Text>
-        <ActionBar
-          items={[
-            { glyph: "↑↓", label: "to move" },
-            { glyph: "⏎", label: "to select", primary: true },
-          ]}
-        />
+        <Box paddingLeft={3}>
+          <ActionBar
+            items={[
+              { glyph: "↑↓", label: "to move" },
+              { glyph: "⏎", label: "to select", primary: true },
+            ]}
+          />
+        </Box>
       </Box>
     </Dialog>
   );
