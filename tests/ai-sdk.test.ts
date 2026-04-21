@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
-import { buildWireRequest, resolveApiKey } from "../src/llm/providers/ai-sdk.ts";
+import { buildModel, buildWireRequest, resolveApiKey } from "../src/llm/providers/ai-sdk.ts";
 
 describe("resolveApiKey", () => {
   const savedEnv: Record<string, string | undefined> = {};
@@ -128,5 +128,73 @@ describe("OpenAI strict schema round-trip", () => {
     };
     const result = CommandResponseSchema.safeParse(response);
     expect(result.success).toBe(true);
+  });
+});
+
+// Asserts on the AI SDK's internal `.provider` tag (e.g. `openai.responses`
+// vs `openrouter.chat`) — intentionally brittle so accidental regressions
+// back to the Responses API against OpenAI-compat endpoints fail loudly.
+describe("buildModel routing", () => {
+  function info(m: ReturnType<typeof buildModel>): { provider: string; modelId: string } {
+    if (typeof m === "string") throw new Error("expected LanguageModel object");
+    return { provider: m.provider, modelId: m.modelId };
+  }
+
+  test("anthropic → anthropic.messages", () => {
+    const m = info(buildModel({ name: "anthropic", model: "claude-sonnet-4-6", apiKey: "x" }));
+    expect(m.provider).toBe("anthropic.messages");
+    expect(m.modelId).toBe("claude-sonnet-4-6");
+  });
+
+  test("openai → openai.responses (keeps Responses API)", () => {
+    const m = info(buildModel({ name: "openai", model: "gpt-5", apiKey: "x" }));
+    expect(m.provider).toBe("openai.responses");
+  });
+
+  test("openrouter → openrouter.chat (Chat Completions, not Responses)", () => {
+    const m = info(
+      buildModel({
+        name: "openrouter",
+        model: "anthropic/claude-sonnet-4.6",
+        apiKey: "x",
+        baseURL: "https://openrouter.ai/api/v1",
+      }),
+    );
+    expect(m.provider).toBe("openrouter.chat");
+  });
+
+  test("groq → groq.chat", () => {
+    const m = info(
+      buildModel({
+        name: "groq",
+        model: "llama-3.1-70b",
+        apiKey: "x",
+        baseURL: "https://api.groq.com/openai/v1",
+      }),
+    );
+    expect(m.provider).toBe("groq.chat");
+  });
+
+  test("ollama → ollama.chat with placeholder key", () => {
+    const m = info(
+      buildModel({ name: "ollama", model: "llama3", baseURL: "http://localhost:11434/v1" }),
+    );
+    expect(m.provider).toBe("ollama.chat");
+  });
+
+  test("unknown openai-compat provider → name.chat", () => {
+    const m = info(
+      buildModel({
+        name: "custom",
+        model: "some-model",
+        apiKey: "x",
+        baseURL: "https://api.example.com/v1",
+      }),
+    );
+    expect(m.provider).toBe("custom.chat");
+  });
+
+  test("throws when model missing", () => {
+    expect(() => buildModel({ name: "openai" })).toThrow(/has no model/);
   });
 });

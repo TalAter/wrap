@@ -1,5 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
 import { type ZodType, z } from "zod";
 import { notifications } from "../../core/notify.ts";
@@ -64,28 +65,41 @@ function captureFromResult(
 }
 
 /**
- * Build a `LanguageModel` for the given resolved provider. The dispatch on
- * `name` lives in `initProvider`; this file handles the SDK details for
- * anthropic / openai / openai-compat (ollama + unknown providers).
+ * `openai-compat` speaks Chat Completions (via `@ai-sdk/openai-compatible`)
+ * rather than the Responses API — OpenAI's Responses validator rejects
+ * multi-turn shapes against non-OpenAI backends (openrouter, groq, …).
  */
-function buildModel(resolved: ResolvedProvider, isOpenAICompat: boolean): LanguageModel {
-  const { model } = resolved;
-  // resolveProvider guarantees non-CLI providers have a model; assert loudly
-  // rather than silently passing `undefined` to the SDK factory.
-  if (!model) throw new Error(`LLM error: provider "${resolved.name}" has no model.`);
-  if (isOpenAICompat) {
-    // @ai-sdk/openai requires an API key even for local endpoints that don't need one.
-    // When a custom baseURL is set and no key is provided, use a placeholder so local
-    // models (Ollama, LM Studio, etc.) work without the user having to set a dummy key.
-    return createOpenAI({
-      apiKey: resolveApiKey(resolved.apiKey) ?? (resolved.baseURL ? "nokey" : undefined),
-      baseURL: resolved.baseURL,
-    })(model);
+export function buildModel(resolved: ResolvedProvider): LanguageModel {
+  const { model, name } = resolved;
+  if (!model) throw new Error(`LLM error: provider "${name}" has no model.`);
+  const reg = getRegistration(name);
+  switch (reg.kind) {
+    case "anthropic":
+      return createAnthropic({
+        apiKey: resolveApiKey(resolved.apiKey),
+        baseURL: resolved.baseURL,
+      })(model);
+    case "openai":
+      return createOpenAI({
+        apiKey: resolveApiKey(resolved.apiKey),
+        baseURL: resolved.baseURL,
+      })(model);
+    case "openai-compat": {
+      if (!resolved.baseURL) {
+        throw new Error(`LLM error: provider "${name}" requires baseURL.`);
+      }
+      // Local endpoints (Ollama, LM Studio) skip auth; SDK still needs a
+      // Bearer header, so inject a placeholder when no key is configured.
+      return createOpenAICompatible({
+        name,
+        apiKey: resolveApiKey(resolved.apiKey) ?? "nokey",
+        baseURL: resolved.baseURL,
+        supportsStructuredOutputs: reg.supportsStructuredOutputs,
+      })(model);
+    }
+    case "claude-code":
+      throw new Error(`LLM error: "${name}" is a CLI provider, not an AI SDK model.`);
   }
-  return createAnthropic({
-    apiKey: resolveApiKey(resolved.apiKey),
-    baseURL: resolved.baseURL,
-  })(model);
 }
 
 /**
@@ -120,17 +134,15 @@ function addAllToRequired(node: Record<string, unknown>): void {
 }
 
 export function aiSdkProvider(resolved: ResolvedProvider): Provider {
-  // Anthropic uses its own SDK; everything else (openai, ollama, unknown
-  // OpenAI-compat providers) flows through the OpenAI SDK factory and needs
-  // strict-schema mode for structured output.
-  const isOpenAICompat = getRegistration(resolved.name).kind === "openai-compat";
-  const model = buildModel(resolved, isOpenAICompat);
+  const reg = getRegistration(resolved.name);
+  const strictSchema = reg.supportsStructuredOutputs === true;
+  const model = buildModel(resolved);
   const resolvedKey = resolveApiKey(resolved.apiKey);
 
   return {
     runPrompt: async (input, schema?) => {
       if (schema) {
-        const outputSchema = isOpenAICompat ? toOpenAIStrictSchema(schema) : schema;
+        const outputSchema = strictSchema ? toOpenAIStrictSchema(schema) : schema;
         const result = await generateText({
           model,
           system: input.system,

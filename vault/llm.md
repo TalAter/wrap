@@ -2,7 +2,7 @@
 name: llm
 description: Provider interface, taxonomy, prompt scaffold, structured output, round retry
 Source: src/llm/
-Last-synced: c54a1a5
+Last-synced: 819c596
 ---
 
 # LLM
@@ -20,17 +20,20 @@ Schema-awareness stays outside providers; they don't know about Wrap's command-r
 
 ## Provider taxonomy
 
-| Name          | Allowed fields                                | `kind`          | Dispatches to                          |
-|---------------|-----------------------------------------------|-----------------|----------------------------------------|
-| `anthropic`   | `apiKey?`, `baseURL?`, `model`                | `anthropic`     | AI SDK anthropic factory               |
-| `openai`      | `apiKey?`, `baseURL?`, `model`                | `openai-compat` | AI SDK openai factory                  |
-| `ollama`      | `baseURL` *(required)*, `model`               | `openai-compat` | AI SDK openai factory (placeholder key)|
-| `claude-code` | `model`                                       | `claude-code`   | `claude` CLI subprocess                |
-| *any other*   | `baseURL`, `apiKey`, `model` (all required)   | `openai-compat` | AI SDK openai factory                  |
+| Name          | Allowed fields                                | `kind`          | Dispatches to                              |
+|---------------|-----------------------------------------------|-----------------|--------------------------------------------|
+| `anthropic`   | `apiKey?`, `baseURL?`, `model`                | `anthropic`     | `@ai-sdk/anthropic`                        |
+| `openai`      | `apiKey?`, `baseURL?`, `model`                | `openai`        | `@ai-sdk/openai` (Responses API)           |
+| `openrouter`  | `baseURL` *(required)*, `apiKey`, `model`     | `openai-compat` | `@ai-sdk/openai-compatible`                |
+| `groq`        | `baseURL` *(required)*, `apiKey`, `model`     | `openai-compat` | `@ai-sdk/openai-compatible`                |
+| `mistral`     | `baseURL` *(required)*, `apiKey`, `model`     | `openai-compat` | `@ai-sdk/openai-compatible`                |
+| `ollama`      | `baseURL` *(required)*, `model`               | `openai-compat` | `@ai-sdk/openai-compatible` (placeholder key) |
+| `claude-code` | `model`                                       | `claude-code`   | `claude` CLI subprocess                    |
+| *any other*   | `baseURL`, `apiKey`, `model` (all required)   | `openai-compat` | `@ai-sdk/openai-compatible`                |
 
-The registry at `src/llm/providers/registry.ts` is the single source of truth. `API_PROVIDERS` and `CLI_PROVIDERS` each carry runtime metadata (`kind`, optional `validate`, `modelOptional`) and wizard metadata (`displayName`, `apiKeyUrl`, recommended-model regex). `getRegistration(name)` falls through both maps. `kind` selects the SDK family.
+The registry at `src/llm/providers/registry.ts` is the single source of truth. `API_PROVIDERS` and `CLI_PROVIDERS` each carry runtime metadata (`kind`, optional `validate`, `modelOptional`, `supportsStructuredOutputs`) and wizard metadata (`displayName`, `apiKeyUrl`, recommended-model regex). `getRegistration(name)` falls through both maps. `kind` selects the SDK family — one kind, one factory. `openai-compat` is deliberately separate from `openai`: the Responses API validator rejects multi-turn shapes against non-OpenAI backends (openrouter, groq, …), so those speak Chat Completions via `@ai-sdk/openai-compatible`.
 
-Unknown provider names default to `openai-compat` so users can point Wrap at groq / together / fireworks without code changes. The user-facing name **is** the discriminant — there is no `type` field.
+Unknown provider names default to `openai-compat` so users can point Wrap at together / fireworks / any OpenAI-compat endpoint without code changes. The user-facing name **is** the discriminant — there is no `type` field.
 
 ## Prompt scaffold
 
@@ -79,15 +82,15 @@ The AI SDK path calls `generateText` with `Output.object({ schema })`. Two gotch
 
 ### OpenAI strict schema
 
-OpenAI's strict mode requires every property to appear in `required`. Wrap's Zod schema uses `.nullable().optional()` for optional fields, which generates `anyOf: [type, null]` — but the keys still are not listed in `required`. `toOpenAIStrictSchema` walks the JSON schema tree (`properties`, `items`, `anyOf` / `oneOf` / `allOf`) and injects every property key into `required`. Applied to `openai-compat` only; the Anthropic factory passes the Zod schema straight through.
+OpenAI's strict `json_schema` mode requires every property to appear in `required`. Wrap's Zod schema uses `.nullable().optional()` for optional fields, which generates `anyOf: [type, null]` — but the keys still are not listed in `required`. `toOpenAIStrictSchema` walks the JSON schema tree (`properties`, `items`, `anyOf` / `oneOf` / `allOf`) and injects every property key into `required`. Gated by `supportsStructuredOutputs` in the registry — currently true for `openai`, `groq`, `mistral`. Non-strict providers (openrouter, ollama, unknown) pass the schema through; the SDK falls back to JSON mode and Zod validates the response.
 
 ### Local-endpoint placeholder key
 
-`@ai-sdk/openai` demands an API key even when `baseURL` points at a local model server (Ollama, LM Studio). When `baseURL` is set and no key is configured, Wrap injects the literal `"nokey"` so local models work without a dummy env var.
+`@ai-sdk/openai-compatible` demands an API key even when `baseURL` points at a local model server (Ollama, LM Studio). When no key is configured, Wrap injects the literal `"nokey"` so local models work without a dummy env var.
 
 ## Provider implementations
 
-- **AI SDK provider** (`src/llm/providers/ai-sdk.ts`) — dispatches on `kind` to `createAnthropic` or `createOpenAI`, then `generateText` with `Output.object({ schema })`.
+- **AI SDK provider** (`src/llm/providers/ai-sdk.ts`) — dispatches on `kind` + `name` to `createAnthropic`, `createOpenAI`, or `createOpenAICompatible`, then `generateText` with `Output.object({ schema })`.
 - **Claude Code provider** (`src/llm/providers/claude-code.ts`) — spawns the `claude` CLI. Passes `--system-prompt` directly; flattens the messages array into a single `-p` string (`User: ...\n\nAssistant: ...`) because the CLI has no multi-turn input format. With a schema, passes `--json-schema` and strips code fences from the response. Runs in `tmpdir()` to avoid leaking the user's cwd; `--no-session-persistence` prevents disk state.
 - **Test provider** (`src/llm/providers/test.ts`) — deterministic mock selected by env presence, not config. `WRAP_TEST_RESPONSE` serves one canned response for every call; `WRAP_TEST_RESPONSES` is a JSON array consumed in order. Responses starting with `ERROR:` throw. With a schema, responses are JSON-parsed and validated. Config is not consulted at all — tests do not need a providers block.
 - **Dispatch** (`src/llm/index.ts`) — `initProvider(resolved)` takes a `ResolvedProvider`, special-cases the `test` sentinel, and otherwise switches on `getRegistration(name).kind`.

@@ -94,7 +94,7 @@ describe("providerNeedsApiKey", () => {
 describe("getRegistration", () => {
   test("returns the API provider kind", () => {
     expect(getRegistration("anthropic").kind).toBe("anthropic");
-    expect(getRegistration("openai").kind).toBe("openai-compat");
+    expect(getRegistration("openai").kind).toBe("openai");
     expect(getRegistration("ollama").kind).toBe("openai-compat");
   });
 
@@ -104,6 +104,18 @@ describe("getRegistration", () => {
 
   test("defaults unknown names to openai-compat", () => {
     expect(getRegistration("somebody").kind).toBe("openai-compat");
+  });
+
+  test("supportsStructuredOutputs is true for strict-capable providers", () => {
+    expect(getRegistration("openai").supportsStructuredOutputs).toBe(true);
+    expect(getRegistration("groq").supportsStructuredOutputs).toBe(true);
+    expect(getRegistration("mistral").supportsStructuredOutputs).toBe(true);
+  });
+
+  test("supportsStructuredOutputs is false/undefined for non-strict providers", () => {
+    expect(getRegistration("openrouter").supportsStructuredOutputs).toBeFalsy();
+    expect(getRegistration("ollama").supportsStructuredOutputs).toBeFalsy();
+    expect(getRegistration("somebody").supportsStructuredOutputs).toBeFalsy();
   });
 });
 

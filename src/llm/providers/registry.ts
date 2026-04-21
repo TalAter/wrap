@@ -13,13 +13,15 @@ import type { ProviderEntry } from "../../config/config.ts";
  * binary is installed. Co-locating wizard metadata with runtime metadata
  * keeps "add a provider" a single-file change.
  *
- * `kind` distinguishes the runtime SDK family:
- *  - `anthropic`     → AI SDK Anthropic factory
- *  - `openai-compat` → AI SDK OpenAI factory (also covers ollama and any
- *                     unknown OpenAI-compatible endpoint)
+ * `kind` distinguishes the runtime SDK family — one kind = one factory:
+ *  - `anthropic`     → `@ai-sdk/anthropic`
+ *  - `openai`        → `@ai-sdk/openai` (Responses API against api.openai.com)
+ *  - `openai-compat` → `@ai-sdk/openai-compatible` (Chat Completions; covers
+ *                     openrouter, groq, mistral, ollama, and any unknown
+ *                     user-defined OpenAI-compatible endpoint)
  *  - `claude-code`   → `claude` CLI subprocess
  */
-export type ProviderKind = "anthropic" | "openai-compat" | "claude-code";
+export type ProviderKind = "anthropic" | "openai" | "openai-compat" | "claude-code";
 
 export type ProviderRegistration = {
   kind: ProviderKind;
@@ -30,12 +32,21 @@ export type ProviderRegistration = {
    * default model. AI-SDK providers always require a model.
    */
   modelOptional?: boolean;
+  /**
+   * True when the provider honors OpenAI-style strict `json_schema` response
+   * format. Gates the `toOpenAIStrictSchema` transform (which requires every
+   * property in `required`) and is passed to `createOpenAICompatible` so the
+   * SDK emits `response_format.strict: true`.
+   */
+  supportsStructuredOutputs?: boolean;
 };
 
 export type ApiProvider = {
   displayName: string;
   kind: ProviderKind;
   validate?: (entry: ProviderEntry) => string | null;
+  /** See `ProviderRegistration.supportsStructuredOutputs`. */
+  supportsStructuredOutputs?: boolean;
   /** URL where the user gets an API key. Shown on the wizard's API-key screen. */
   apiKeyUrl?: string;
   /** Placeholder text shown in the API-key TextInput. */
@@ -91,7 +102,8 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
   },
   openai: {
     displayName: "OpenAI",
-    kind: "openai-compat",
+    kind: "openai",
+    supportsStructuredOutputs: true,
     apiKeyUrl: "https://platform.openai.com/api-keys",
     apiKeyPlaceholder: "sk-proj-",
     recommendedModelRegex: /^gpt-5(\.\d+)?$/,
@@ -117,6 +129,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
   groq: {
     displayName: "Groq",
     kind: "openai-compat",
+    supportsStructuredOutputs: true,
     apiKeyUrl: "https://console.groq.com/keys",
     apiKeyPlaceholder: "gsk_",
     validate: requiresBaseURL("groq"),
@@ -125,6 +138,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
   mistral: {
     displayName: "Mistral",
     kind: "openai-compat",
+    supportsStructuredOutputs: true,
     apiKeyUrl: "https://console.mistral.ai/api-keys",
     validate: requiresBaseURL("mistral"),
     nerdIcon: "\uef16", // nf-fa-wind
@@ -172,7 +186,12 @@ export function providerNeedsApiKey(name: string): boolean {
  */
 export function getRegistration(name: string): ProviderRegistration {
   const api = API_PROVIDERS[name];
-  if (api) return { kind: api.kind, validate: api.validate };
+  if (api)
+    return {
+      kind: api.kind,
+      validate: api.validate,
+      supportsStructuredOutputs: api.supportsStructuredOutputs,
+    };
   const cli = CLI_PROVIDERS[name];
   if (cli) return { kind: cli.kind, modelOptional: true };
   return { kind: "openai-compat" };
