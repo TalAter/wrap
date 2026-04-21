@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
-import { resolveApiKey } from "../src/llm/providers/ai-sdk.ts";
+import { buildWireRequest, resolveApiKey } from "../src/llm/providers/ai-sdk.ts";
 
 describe("resolveApiKey", () => {
   const savedEnv: Record<string, string | undefined> = {};
@@ -41,6 +41,40 @@ describe("resolveApiKey", () => {
 
   test("returns literal string as-is", () => {
     expect(resolveApiKey("sk-literal-key")).toBe("sk-literal-key");
+  });
+});
+
+describe("buildWireRequest", () => {
+  test("strips system and messages, keeps SDK-added delta", () => {
+    const raw = {
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
+      system: [{ text: "You are wrap", cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: "hi" }],
+      tool_choice: { type: "tool", name: "response" },
+      tools: [{ name: "response", input_schema: {} }],
+    };
+    const wire = buildWireRequest(raw);
+    expect(wire).toBeDefined();
+    if (!wire) throw new Error("wire missing");
+    expect(wire.kind).toBe("http");
+    if (wire.kind !== "http") throw new Error("kind");
+    const body = wire.body as Record<string, unknown>;
+    expect(body.model).toBe("claude-sonnet-4-6");
+    expect(body.max_tokens).toBe(8192);
+    expect(body.tools).toBeDefined();
+    expect("system" in body).toBe(false);
+    expect("messages" in body).toBe(false);
+  });
+
+  test("returns undefined for absent body", () => {
+    expect(buildWireRequest(undefined)).toBeUndefined();
+    expect(buildWireRequest(null)).toBeUndefined();
+  });
+
+  test("returns undefined for non-object body", () => {
+    expect(buildWireRequest("some string")).toBeUndefined();
+    expect(buildWireRequest(42)).toBeUndefined();
   });
 });
 

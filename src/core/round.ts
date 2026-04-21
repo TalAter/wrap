@@ -1,11 +1,13 @@
 import { NoObjectGeneratedError } from "ai";
 import type { CommandResponse } from "../command-response.schema.ts";
+import { getConfig } from "../config/store.ts";
 import { formatTempDirSection } from "../fs/temp.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import { runCommandPrompt } from "../llm/index.ts";
 import type { PromptInput, Provider } from "../llm/types.ts";
-import type { Attempt, Round } from "../logging/entry.ts";
+import type { Attempt, Round, WireCapture } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
+import { subscribe } from "./notify.ts";
 import { StructuredOutputError } from "./parse-response.ts";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
 import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
@@ -94,15 +96,28 @@ async function callOne(
 ): Promise<CommandResponse | undefined> {
   const attempt: Attempt = {};
   round.attempts.push(attempt);
+
+  const logTraces = getConfig().logTraces;
+
+  let captured: WireCapture | undefined;
+  const unsub = subscribe((n) => {
+    if (n.kind === "llm-wire") captured = n.wire;
+  });
+
   const t0 = performance.now();
   try {
     const response = (await runCommandPrompt(provider, input)) as CommandResponse;
     attempt.llm_ms = Math.round(performance.now() - t0);
     attempt.parsed = response;
+    applyCapture(attempt, captured, logTraces, input);
     return response;
   } catch (e) {
     attempt.llm_ms = Math.round(performance.now() - t0);
+    applyCapture(attempt, captured, logTraces, input);
     if (isStructuredOutputError(e)) {
+      // Prefer the raw text from the error (what the model actually emitted).
+      // The wire capture's raw_response may have been populated from a
+      // successful emit before the SDK raised NoObjectGeneratedError.
       attempt.raw_response = extractFailedText(e);
       attempt.error = {
         kind: "parse",
@@ -113,7 +128,31 @@ async function callOne(
     const msg = e instanceof Error ? e.message : String(e);
     attempt.error = { kind: "provider", message: msg };
     throw e;
+  } finally {
+    unsub();
   }
+}
+
+/**
+ * Merge the captured wire bundle into the attempt, respecting the logTraces
+ * gate. When `logTraces` is false: strip `request`, `request_wire`, and
+ * `response_wire`. `raw_response` stays under its original rule — always on
+ * parse failure (written by the caller after this), never on success.
+ */
+function applyCapture(
+  attempt: Attempt,
+  captured: WireCapture | undefined,
+  logTraces: boolean,
+  input: PromptInput,
+): void {
+  if (captured?.wire_capture_error !== undefined) {
+    attempt.wire_capture_error = captured.wire_capture_error;
+  }
+  if (!logTraces) return;
+  attempt.request = input;
+  if (captured?.request_wire) attempt.request_wire = captured.request_wire;
+  if (captured?.response_wire) attempt.response_wire = captured.response_wire;
+  if (captured?.raw_response !== undefined) attempt.raw_response = captured.raw_response;
 }
 
 function sumAttemptMs(round: Round): number {

@@ -453,3 +453,41 @@ describe("logging integration", () => {
     expect(entry.memory).toEqual({ "/": [{ fact: "test" }] });
   });
 });
+
+describe("log traces — default off", () => {
+  test("successful round omits request/request_wire/response_wire", async () => {
+    const result = await wrapMock("list files", {
+      type: "command",
+      content: "echo hi",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    const attempt = entry.rounds[0].attempts.at(-1);
+    expect("request" in attempt).toBe(false);
+    expect("request_wire" in attempt).toBe(false);
+    expect("response_wire" in attempt).toBe(false);
+    // raw_response still omitted on successful parse
+    expect("raw_response" in attempt).toBe(false);
+  });
+});
+
+describe("log traces — enabled", () => {
+  test("successful round captures request + wire + raw_response", async () => {
+    const result = await wrapMock(
+      "list files",
+      { type: "command", content: "echo hi", risk_level: "low" },
+      { logTraces: true },
+    );
+    const entry = readLog(result.wrapHome);
+    const attempt = entry.rounds[0].attempts.at(-1);
+    expect(attempt.request).toBeDefined();
+    expect(attempt.request.system).toBeDefined();
+    expect(Array.isArray(attempt.request.messages)).toBe(true);
+    expect(attempt.request_wire).toBeDefined();
+    expect(attempt.request_wire.kind).toBe("test");
+    expect(attempt.response_wire).toBeDefined();
+    expect(attempt.response_wire.kind).toBe("test");
+    // raw_response becomes always-on when logTraces is on
+    expect(typeof attempt.raw_response).toBe("string");
+  });
+});

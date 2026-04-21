@@ -1,3 +1,4 @@
+import { notifications } from "../../core/notify.ts";
 import type { Provider, ResolvedProvider } from "../types.ts";
 
 /**
@@ -23,6 +24,10 @@ export function testProvider(): Provider {
       if (responsesJson) {
         const responses = JSON.parse(responsesJson);
         if (callIndex >= responses.length) {
+          notifications.emit({
+            kind: "llm-wire",
+            wire: { request_wire: { kind: "test" }, response_wire: { kind: "test" } },
+          });
           throw new Error(
             `Test provider: no response for call ${callIndex} (only ${responses.length} responses provided)`,
           );
@@ -33,6 +38,16 @@ export function testProvider(): Provider {
         const lastMessage = input.messages[input.messages.length - 1];
         raw = process.env.WRAP_TEST_RESPONSE ?? lastMessage?.content ?? "";
       }
+      // Emit stubs so the log shape stays uniform across providers. Tests
+      // assert on presence of kind: "test".
+      notifications.emit({
+        kind: "llm-wire",
+        wire: {
+          request_wire: { kind: "test" },
+          response_wire: { kind: "test" },
+          raw_response: raw,
+        },
+      });
       if (raw.startsWith("ERROR:")) throw new Error(raw.slice(6));
       if (!schema) return raw;
       return schema.parse(JSON.parse(raw));

@@ -2,8 +2,55 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
 import { type ZodType, z } from "zod";
+import { notifications } from "../../core/notify.ts";
+import type { WireCapture, WireRequest } from "../../logging/entry.ts";
 import type { Provider, ResolvedProvider } from "../types.ts";
 import { getRegistration } from "./registry.ts";
+
+/**
+ * Strip `system` and `messages` from the SDK's raw request body — those
+ * duplicate `attempt.request` (the PromptInput wrap built). What remains is
+ * the SDK-added delta: `model`, `max_tokens`, `tools`, `tool_choice`,
+ * `response_format`, etc. Returns `undefined` when the body is absent or
+ * not an object so the caller can surface a wire_capture_error.
+ *
+ * Trade-off: `cache_control` markers live on the system blocks, which are
+ * stripped here. Cache debugging falls back to `response_wire.usage`.
+ */
+export function buildWireRequest(raw: unknown): WireRequest | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const { system: _s, messages: _m, ...rest } = raw as Record<string, unknown>;
+  return { kind: "http", body: rest };
+}
+
+/**
+ * Pull a `WireCapture` bundle off a `generateText` result. Any thrown error
+ * becomes `wire_capture_error` on the capture so the invocation keeps
+ * running — logging invariants must never crash the invocation.
+ */
+function captureFromResult(result: unknown, raw_response: string | undefined): WireCapture {
+  try {
+    const r = result as {
+      request?: { body?: unknown };
+      response?: { body?: unknown };
+      usage?: unknown;
+      finishReason?: string;
+    };
+    const requestWire = buildWireRequest(r.request?.body);
+    return {
+      request_wire: requestWire,
+      response_wire: {
+        kind: "http",
+        body: r.response?.body,
+        usage: r.usage,
+        finishReason: r.finishReason,
+      },
+      raw_response,
+    };
+  } catch (e) {
+    return { wire_capture_error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 /**
  * Build a `LanguageModel` for the given resolved provider. The dispatch on
@@ -78,6 +125,8 @@ export function aiSdkProvider(resolved: ResolvedProvider): Provider {
           messages: input.messages,
           output: Output.object({ schema: outputSchema }),
         });
+        const rawResponse = safeStringify(result.output);
+        notifications.emit({ kind: "llm-wire", wire: captureFromResult(result, rawResponse) });
         if (result.output === undefined) {
           throw new Error("LLM returned no structured output.");
         }
@@ -88,9 +137,19 @@ export function aiSdkProvider(resolved: ResolvedProvider): Provider {
         system: input.system,
         messages: input.messages,
       });
+      notifications.emit({ kind: "llm-wire", wire: captureFromResult(result, result.text) });
       return result.text;
     },
   };
+}
+
+function safeStringify(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
 }
 
 export function resolveApiKey(value: string | undefined): string | undefined {

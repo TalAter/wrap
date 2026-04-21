@@ -1,5 +1,6 @@
 import { tmpdir } from "node:os";
 import { z } from "zod";
+import { notifications } from "../../core/notify.ts";
 import {
   INVALID_JSON_MSG,
   INVALID_RESPONSE_MSG,
@@ -37,11 +38,21 @@ export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
         args.push("--json-schema", JSON.stringify(z.toJSONSchema(schema)));
       }
       args.push("-p");
-      const { stdout, stderr, exit_code } = await spawnAndRead(
-        args,
-        flattenMessages(input.messages),
-        { cwd: tmpdir() },
-      );
+      const stdin = flattenMessages(input.messages);
+      const { stdout, stderr, exit_code } = await spawnAndRead(args, stdin, { cwd: tmpdir() });
+      notifications.emit({
+        kind: "llm-wire",
+        wire: {
+          request_wire: { kind: "subprocess", argv: args, stdin },
+          response_wire: {
+            kind: "subprocess",
+            stdout,
+            exit_code,
+            ...(stderr ? { stderr } : {}),
+          },
+          raw_response: stdout,
+        },
+      });
       if (exit_code !== 0) {
         throw new Error(stderr.trim() || `${args[0]} failed`);
       }
