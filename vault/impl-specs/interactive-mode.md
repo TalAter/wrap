@@ -37,9 +37,9 @@ Compose lives inside `runSession`: when the initial `prompt` is empty AND `proce
 
 ## State
 
-The existing tags rename symmetrically; two new `-interactive` tags sit alongside. Pre-step (landed before this feature): rename `composing` → `composing-followup`, `processing` → `processing-followup` across `src/session/state.ts`, `src/session/reducer.ts`, `src/session/session.ts`, `src/tui/response-dialog.tsx`. See §Pre-step renames.
+Pre-step renames landed in commit a15630c (`composing` → `composing-followup`, `processing` → `processing-followup`, `_HINT_ITEMS` → `_ACTIONS`). See §Pre-step renames for the full list — historical reference, nothing to re-apply.
 
-New event `submit-interactive { text: string }`. Distinct from `submit-followup` because the coordinator handles them differently: `submit-interactive` bootstraps the very first user turn from empty transcript; `submit-followup` appends to an existing transcript.
+New event `submit-interactive { text: string }`. Add to the `AppEvent` union in `src/session/state.ts` alongside `submit-edit` / `submit-followup` / `draft-change`. Distinct from `submit-followup` because the coordinator handles them differently: `submit-interactive` bootstraps the very first user turn from empty transcript; `submit-followup` appends to an existing transcript.
 
 New tag `composing-interactive`:
 
@@ -60,6 +60,22 @@ New tag `processing-interactive` (mirror of `processing-followup` for the first 
 - Add to `isDialogTag()`.
 
 Coordinator post-transition hook on entering `processing-interactive`: push a `user` transcript turn carrying `draft` as its content (see `src/core/transcript.ts` for turn shape), reset `loopState.budgetRemaining = maxRounds`, call `startPumpLoop({ isInitialLoop: true, followupText: undefined })` (session.ts:217). Mirrors how `processing-followup` bootstraps follow-up turns (session.ts:146,178). The Round.attempts[] refactor (e925b2d) is internal to runner — doesn't change this bootstrap path.
+
+### Transient tag `editor-handoff` (terminal-owning editors only)
+
+The GUI editor path keeps the reducer unaware — it's a dialog-local `useEffect` (see §Editor handoff). The terminal-owning path can't: unmounting Ink is part of the sequence, so a component inside Ink can't orchestrate its own unmount coherently. Needs a reducer-level transient tag so the session coordinator owns the lifecycle, mirroring the `executing-step` pattern at session.ts:149.
+
+New tag `editor-handoff`:
+
+- Shape: `{ tag: "editor-handoff"; origin: "composing-interactive" | "composing-followup" | "editing"; draft: string; response?: CommandResponse; round?: Round; outputSlot?: string }`. `response` / `round` / `outputSlot` carry through so returning to `composing-followup` or `editing` can restore the dialog state.
+- New event `enter-editor { draft: string }` (dispatched by the Ctrl-G binding in all three origin dialogs). Reducer transitions `<origin>` → `editor-handoff` with the current draft + origin captured.
+- New event `editor-done { text: string | null }` (dispatched by the coordinator after the spawn completes). `text: string` → buffer replaced; `text: null` → buffer kept (editor exited non-zero or wrote empty file per §Editor handoff exit handling). Reducer transitions `editor-handoff` → back to `<origin>` with `draft` updated (or preserved on null).
+- `key-esc` → no-op during `editor-handoff` (the editor owns the TTY; Esc goes to the editor, not Wrap).
+- NOT in `isDialogTag()` — the dialog is unmounted during terminal-owning handoff.
+
+Coordinator post-transition hook on entering `editor-handoff` with a terminal-owning editor: run the 5-step sequence from §Editor handoff (unmount Ink → drop raw mode → pop kitty → spawn + await → remount on reducer transition back). On child exit, dispatch `editor-done` with the temp-file contents (or null per exit-code rules).
+
+GUI editors bypass `editor-handoff` entirely — Ctrl-G in the dialog runs the local `useEffect` spawn, calls `dispatch({ type: "draft-change", text })` on completion, and never touches the transient tag. Reducer-unaware as spec'd.
 
 ---
 
@@ -183,7 +199,7 @@ What we still own:
 
 Drop modifyOtherKeys. Ink's `parseKeypress` does not match the `CSI 27;m;code~` shape (`fnKeyRe` skips it), so enabling `\x1b[>4;2m` would produce no usable events. The Ctrl+J and `\`+Enter fallbacks cover terminals without kitty.
 
-**Exit-guard teardown.** `ensureExitGuard()` in `src/core/spinner.ts` is currently file-private and registers a single teardown for the cursor-show sequence. Generalize it (export `registerExitTeardown(bytes)` or similar) so multiple subscribers can register pop bytes; compose registers `\x1b[<u` there. Teardown runs on SIGINT / crash before Ink's restore so a killed Wrap never leaves the terminal in kitty mode.
+**Exit-guard teardown.** `ensureExitGuard()` in `src/core/spinner.ts` is currently file-private and registers a single teardown for the cursor-show sequence. Generalize to a subscriber registry — export `registerExitTeardown(bytes: string): () => void` (returns an unregister fn). The existing cursor-show teardown becomes the first registered subscriber, called from spinner.ts on its own module init so behavior is unchanged. Compose mount registers `\x1b[<u` and unregisters on unmount. Teardown runs on SIGINT / crash before Ink's restore so a killed Wrap never leaves the terminal in kitty mode.
 
 tmux: silent. Without `extended-keys on` kitty doesn't propagate through, but Ctrl+J / `\`+Enter / paste cover the case without any flag.
 
@@ -204,10 +220,15 @@ One random pick on compose mount, rendered static. No rotation, no fade. Hidden 
 
 **Scope:** Ctrl-G wires into three dialog states in v1 — `composing-interactive`, `composing-followup`, and `editing`. All three use the same `src/core/editor.ts` module, the same `editingExternal` TextInput prop, and the same terminal-owning / GUI dispatch. Per-site wiring is one `useKeyBindings` entry + one local `useEffect` that runs the editor spawn. Hint bars (`INTERACTIVE_COMPOSE_ACTIONS`, `FOLLOWUP_COMPOSE_ACTIONS`, `EDIT_COMMAND_ACTIONS`) each gain a `ctrl+G` item, hidden when `resolveEditor()` returns null.
 
-New module `src/core/editor.ts`. Exports `resolveEditor()` and a single `EDITORS` record:
+New module `src/core/editor.ts`. Exports `resolveEditor(): Resolved | null` and a single `EDITORS` record:
 
 ```ts
 type EditorMeta = { displayName: string; waitFlag?: string; gui?: boolean };
+type Resolved = {
+  path: string;           // absolute path from Bun.which / $VISUAL / $EDITOR
+  key: string;            // basename without .exe suffix; used to look up EDITORS
+  meta: EditorMeta;       // { displayName: basename, gui: false } for unknown editors
+};
 const EDITORS: Record<string, EditorMeta>;
 // GUI — detach by default, need wait flag to block
 // code:            { displayName: "VS Code",          waitFlag: "-w",     gui: true }
@@ -245,17 +266,17 @@ GUI editors without a known wait flag (e.g. `notepad++`, `gedit`) are omitted fr
 
 Temp file via `ensureTempDir()` at `$WRAP_TEMP_DIR/prompt.md`. Write buffer → spawn (`Bun.spawn`, stdio `inherit`, `await proc.exited`) → on exit read file, trim trailing `\n`, delete temp file → update buffer.
 
-Terminal-owning editors: the editor inherits stdio and needs the TTY in line mode, not raw mode. Ordering:
+Terminal-owning editors: the editor inherits stdio and needs the TTY in line mode, not raw mode. Orchestration lives in the session coordinator (`src/session/session.ts`), triggered by the reducer transition to `editor-handoff` (see §State → Transient tag `editor-handoff`). The dialog-local `useEffect` path used for GUI editors can't own this because Ink itself must unmount. Ordering inside the coordinator's post-transition hook:
 
 1. Unmount Ink.
 2. Call `process.stdin.setRawMode(false)` explicitly.
 3. Write `\x1b[<u` to pop kitty disambiguate mode (see §Keyboard protocol). Bracketed paste is popped by `usePaste`'s own cleanup via Ink's unmount in step 1; do not also write `\x1b[?2004l`. modifyOtherKeys is not in use.
 4. `Bun.spawn` the editor with stdio `inherit`; `await proc.exited`.
-5. Remount Ink. Ink re-enters raw mode and re-applies the protocol modes as part of compose mount.
+5. Read temp file per the exit-code rules below; dispatch `editor-done { text }`. Reducer transitions `editor-handoff` → origin tag with updated draft. Coordinator remounts Ink on that transition (Ink re-enters raw mode and re-applies the protocol modes as part of compose mount).
 
 Step 2 is load-bearing. Ink's unmount does not always clear raw mode — the flag remains latched on `process.stdin`, and the child editor inherits a raw-mode TTY. Symptom: `vim` / `nano` receive no character-at-a-time input (or wedged escape sequences), display is broken until the user force-exits. Explicitly dropping raw mode after unmount guarantees the editor sees a normal line-discipline TTY. The re-enable on step 5 is handled by Ink itself on mount — do not call `setRawMode(true)` manually or it races Ink.
 
-GUI editors (`gui: true`): keep Ink mounted. The compose dialog owns the editor lifecycle via a local `useEffect` — no new reducer event:
+GUI editors (`gui: true`): keep Ink mounted, bypass `editor-handoff` entirely. Ctrl-G checks `resolveEditor().meta.gui` before dispatching: if true, skip the reducer and run the dialog-local `useEffect` path below; if false (terminal-owning or unknown), dispatch `enter-editor` and let the coordinator take over. The dialog renders `editingExternal={true}` during the GUI spawn so the user sees the "Save and close..." frame:
 
 1. On Ctrl-G: write buffer to temp file; set local `editorOpen = true`; TextInput renders with `editingExternal={true}`.
 2. `await Bun.spawn(...).exited`.
@@ -374,14 +395,16 @@ Rationale: `EDIT_COMMAND` disambiguates from general text editing; `FOLLOWUP_COM
 
 ## Implementation slices
 
-1. **State tag renames + cancel→0:** apply the §Pre-step renames. Rewire `cancel` outcome to exit 0. Reducer tests stay green (rename only).
+Pre-step renames already landed in commit a15630c — do not re-apply.
+
+1. **Cancel → exit 0.** Change `finaliseOutcome` in `src/session/session.ts`: `cancel` returns 0 (was 1). Update any tests asserting exit 1 on cancel. `exhausted` / `blocked` / `error` keep returning 1.
 2. **Cursor line helpers:** add `upLine`, `downLine`, `row`, `col` to `Cursor`. Unit-test against multiline strings.
-3. **TextInput `multiline` prop + `editingExternal`:** discriminated-union prop; Enter behavior branched via `useKeyBindings` entries (`{ key: "j", ctrl: true }`, shift+return, backslash-return); `\n` rejected on insert when single-line. Soft-wrap render + cursor visual. Paste via Ink's `usePaste` — sanitize + `clampBufferSize` on the emitted string. New TextInput tests for: Shift+Enter inserts `\n`, Ctrl+J inserts `\n`, backslash-Enter conversion, paste `\n` preserved/stripped, plain Enter submits in both modes, `editingExternal` disables input + renders label. Existing tests stay green.
-4. **Trigger + new tags:** main.ts reorder; add `composing-interactive` + `processing-interactive` to state union, reducer, `isDialogTag`. New event `submit-interactive`. Coordinator hook on entering `processing-interactive`: push initial user turn from `draft`, start pump loop via `startPumpLoop` (session.ts:217), reset `loopState.budgetRemaining`. Add `INTERACTIVE_COMPOSE_ACTIONS` constant; ResponseDialog renders TextInput with `multiline` using a new state-keyed render block alongside the existing `composing-followup` / `processing-followup` branch at response-dialog.tsx:355. Reducer-level unit tests for both new tags' transitions.
-5. **Kitty enable/disable + exit-guard generalization:** write `\x1b[>1u` on compose mount (after stdin drain — load-bearing order), `\x1b[<u` on unmount; generalize `ensureExitGuard` in `src/core/spinner.ts` to accept multiple teardown-byte subscribers; register `\x1b[<u` there. No custom parser — Ink 7's `parseKeypress` + `usePaste` cover everything. No modifyOtherKeys.
+3. **TextInput `multiline` prop + `editingExternal`:** discriminated-union prop; Enter behavior branched via `useKeyBindings` entries (`{ key: "j", ctrl: true }`, shift+return, backslash-return, `input === "\n"` fallback for non-kitty Ctrl+J); `\n` rejected on insert when single-line. Soft-wrap render + cursor visual. Paste via Ink's `usePaste` — sanitize + `clampBufferSize` on the emitted string. New TextInput tests for: Shift+Enter inserts `\n`, Ctrl+J inserts `\n` (both kitty and non-kitty paths), backslash-Enter conversion, paste `\n` preserved/stripped, plain Enter submits in both modes, `editingExternal` disables input + renders label. Existing tests stay green.
+4. **Trigger + new tags:** main.ts reorder; add `composing-interactive` + `processing-interactive` + `editor-handoff` to state union, reducer, `isDialogTag` (editor-handoff stays OUT of `isDialogTag`). New events `submit-interactive` + `enter-editor` + `editor-done` on `AppEvent`. Coordinator hook on entering `processing-interactive`: push initial user turn from `draft`, start pump loop via `startPumpLoop` (session.ts:217), reset `loopState.budgetRemaining`. Add `INTERACTIVE_COMPOSE_ACTIONS` constant; ResponseDialog renders TextInput with `multiline` using a new state-keyed render block alongside the existing `composing-followup` / `processing-followup` branch at response-dialog.tsx:355. Reducer-level unit tests for the new tags' transitions (including `editor-handoff` round-trip from each origin).
+5. **Kitty enable/disable + exit-guard generalization:** generalize `ensureExitGuard` in `src/core/spinner.ts` to a `registerExitTeardown(bytes)` subscriber registry; the existing cursor-show teardown becomes the first subscriber (registered from spinner.ts at module init). Compose mount drains stdin (load-bearing ORDER — drain first) then writes `\x1b[>1u` and registers `\x1b[<u` with the exit-guard; unmount unregisters and writes the pop. No custom parser — Ink 7's `parseKeypress` + `usePaste` cover everything. No modifyOtherKeys.
 6. **Placeholder:** sample set; static random pick on mount; hide on keystroke or paste-start.
-7. **Editor handoff:** `src/core/editor.ts` (`resolveEditor` with module-level cache, `EDITORS`); Ctrl-G via `useKeyBindings` wired into all three call sites (`composing-interactive`, `composing-followup`, `editing`); add `ctrl+G` item to each of `INTERACTIVE_COMPOSE_ACTIONS`, `FOLLOWUP_COMPOSE_ACTIONS`, `EDIT_COMMAND_ACTIONS` (hidden when `resolveEditor()` returns null); temp file via `ensureTempDir` (`src/fs/temp.ts`); terminal-owning unmount path; GUI `editingExternal` path.
-8. **Follow-up TextInput swap:** flip `multiline: true` on the existing follow-up TextInput call site. State tag unchanged (already renamed in pre-step).
+7. **Editor handoff:** `src/core/editor.ts` (`resolveEditor(): Resolved | null` with module-level cache, `EDITORS` record). Ctrl-G bindings via `useKeyBindings` wired into all three origin dialogs (`composing-interactive`, `composing-followup`, `editing`). Ctrl-G branches on `resolveEditor().meta.gui`: GUI → dialog-local `useEffect` spawns editor + sets local `editorOpen` + TextInput renders `editingExternal={true}` + on exit dispatches `draft-change`; terminal-owning → dispatch `enter-editor { draft }`, reducer routes to `editor-handoff`, session coordinator (session.ts) runs the 5-step path (unmount Ink → `setRawMode(false)` → write `\x1b[<u` → `Bun.spawn` → await → dispatch `editor-done { text }` → reducer transitions back to origin → coordinator remounts Ink on that transition). Temp file read per exit-code rules. Add `ctrl+G` item to each of `INTERACTIVE_COMPOSE_ACTIONS`, `FOLLOWUP_COMPOSE_ACTIONS`, `EDIT_COMMAND_ACTIONS` (hidden when `resolveEditor()` returns null). Temp file via `ensureTempDir` (`src/fs/temp.ts`) at `$WRAP_TEMP_DIR/prompt.md`.
+8. **Follow-up TextInput swap:** flip `multiline: true` on the existing follow-up TextInput call site. State tag unchanged.
 9. **Discoverability + logging:** Examples block in `--help`; `input_source` on `LogEntry`; `--verbose` prompt-trace echo on teardown.
 
-TDD per project rule. Unit-test `clampBufferSize` (UTF-8 boundary, below-cap passthrough, above-cap truncation). Unit-test the backslash-Enter + Ctrl+J + Shift+Enter paths through TextInput's `useKeyBindings` bindings using `ink-testing-library`. Integration-test the `main.ts` branch with a mock TTY — if no mock-TTY harness exists today, build one in slice 4 (smallest touch: a `StdinSource`-like seam parallel to `src/core/piped-input.ts` for the TTY path).
+TDD per project rule. Unit-test `clampBufferSize` (UTF-8 boundary, below-cap passthrough, above-cap truncation). Unit-test the backslash-Enter + Ctrl+J (both paths) + Shift+Enter paths through TextInput's `useKeyBindings` bindings using `ink-testing-library`. Reducer-test `editor-handoff` round-trip from each origin (draft update + draft preserve on null). Integration-test the `main.ts` trigger branch with a mock TTY — if no mock-TTY harness exists today, build one in slice 4 (smallest touch: a `StdinSource`-like seam parallel to `src/core/piped-input.ts` for the TTY path).
