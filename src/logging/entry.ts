@@ -10,6 +10,36 @@ function redactProvider(provider: ResolvedProvider): ResolvedProvider {
 }
 
 /**
+ * Defensive scan — replace every occurrence of `apiKey` inside any string
+ * field of `body` (an object/array payload) with its redacted form. Meant
+ * to catch the theoretical case where a provider serializes the key into
+ * the request body. The primary redaction already happens at the
+ * ResolvedProvider layer; this is belt-and-braces.
+ *
+ * Skips when `apiKey` is short enough that substring matching would be
+ * unsafe (< 8 chars — common noise). Returns the input unchanged if
+ * `body` is null/undefined.
+ */
+export function scrubApiKey<T>(body: T, apiKey: string | undefined): T {
+  if (body == null) return body;
+  if (!apiKey || apiKey.length < 8) return body;
+  const replacement = apiKey.length >= 4 ? `...${apiKey.slice(-4)}` : "...";
+  const walk = (node: unknown): unknown => {
+    if (typeof node === "string") {
+      return node.includes(apiKey) ? node.split(apiKey).join(replacement) : node;
+    }
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(node)) out[k] = walk(v);
+      return out;
+    }
+    return node;
+  };
+  return walk(body) as T;
+}
+
+/**
  * Wire-level capture of a single LLM physical call. Only populated when
  * `logTraces` is enabled. Each shape is a discriminated union keyed on the
  * transport the provider uses.

@@ -7,6 +7,7 @@ import {
   StructuredOutputError,
   stripFences,
 } from "../../core/parse-response.ts";
+import { scrubApiKey } from "../../logging/entry.ts";
 import type { ConversationMessage, Provider, ResolvedProvider } from "../types.ts";
 import { spawnAndRead } from "../utils.ts";
 
@@ -40,17 +41,22 @@ export function claudeCodeProvider(resolved: ResolvedProvider): Provider {
       args.push("-p");
       const stdin = flattenMessages(input.messages);
       const { stdout, stderr, exit_code } = await spawnAndRead(args, stdin, { cwd: tmpdir() });
+      const apiKey = resolved.apiKey;
       notifications.emit({
         kind: "llm-wire",
         wire: {
-          request_wire: { kind: "subprocess", argv: args, stdin },
+          request_wire: {
+            kind: "subprocess",
+            argv: scrubApiKey(args, apiKey),
+            stdin: scrubApiKey(stdin, apiKey),
+          },
           response_wire: {
             kind: "subprocess",
-            stdout,
+            stdout: scrubApiKey(stdout, apiKey),
             exit_code,
-            ...(stderr ? { stderr } : {}),
+            ...(stderr ? { stderr: scrubApiKey(stderr, apiKey) } : {}),
           },
-          raw_response: stdout,
+          raw_response: scrubApiKey(stdout, apiKey),
         },
       });
       if (exit_code !== 0) {

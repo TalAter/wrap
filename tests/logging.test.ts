@@ -3,7 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
-import { addRound, createLogEntry, type Round, serializeEntry } from "../src/logging/entry.ts";
+import {
+  addRound,
+  createLogEntry,
+  type Round,
+  scrubApiKey,
+  serializeEntry,
+} from "../src/logging/entry.ts";
 import { appendLogEntry } from "../src/logging/writer.ts";
 import { wrap, wrapMock } from "./helpers.ts";
 
@@ -451,6 +457,33 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.memory).toEqual({ "/": [{ fact: "test" }] });
+  });
+});
+
+describe("scrubApiKey", () => {
+  test("replaces the key with ...XXXX inside nested strings", () => {
+    const secret = "sk-ant-api03-SECRETSENTINEL-1234";
+    const body = {
+      headers: { authorization: `Bearer ${secret}` },
+      nested: [{ leak: secret }],
+      unrelated: "hello",
+    };
+    const scrubbed = scrubApiKey(body, secret);
+    const json = JSON.stringify(scrubbed);
+    expect(json.includes(secret)).toBe(false);
+    expect(json).toContain("...1234");
+    expect(scrubbed.unrelated).toBe("hello");
+  });
+
+  test("returns input unchanged when apiKey is undefined", () => {
+    const body = { keep: "me" };
+    expect(scrubApiKey(body, undefined)).toBe(body);
+  });
+
+  test("skips short keys to avoid accidental matches on common noise", () => {
+    const body = { msg: "a short key ab here" };
+    // 2-char key "ab" is under the 8-char threshold; leave it alone.
+    expect(scrubApiKey(body, "ab")).toBe(body);
   });
 });
 

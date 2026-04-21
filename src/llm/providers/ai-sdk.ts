@@ -3,7 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
 import { type ZodType, z } from "zod";
 import { notifications } from "../../core/notify.ts";
-import type { WireCapture, WireRequest } from "../../logging/entry.ts";
+import { scrubApiKey, type WireCapture, type WireRequest } from "../../logging/entry.ts";
 import type { Provider, ResolvedProvider } from "../types.ts";
 import { getRegistration } from "./registry.ts";
 
@@ -28,7 +28,11 @@ export function buildWireRequest(raw: unknown): WireRequest | undefined {
  * becomes `wire_capture_error` on the capture so the invocation keeps
  * running — logging invariants must never crash the invocation.
  */
-function captureFromResult(result: unknown, raw_response: string | undefined): WireCapture {
+function captureFromResult(
+  result: unknown,
+  raw_response: string | undefined,
+  apiKey: string | undefined,
+): WireCapture {
   try {
     const r = result as {
       request?: { body?: unknown };
@@ -36,12 +40,16 @@ function captureFromResult(result: unknown, raw_response: string | undefined): W
       usage?: unknown;
       finishReason?: string;
     };
-    const requestWire = buildWireRequest(r.request?.body);
+    const rawRequestWire = buildWireRequest(r.request?.body);
+    const requestWire =
+      rawRequestWire && rawRequestWire.kind === "http"
+        ? { kind: "http" as const, body: scrubApiKey(rawRequestWire.body, apiKey) }
+        : rawRequestWire;
     return {
       request_wire: requestWire,
       response_wire: {
         kind: "http",
-        body: r.response?.body,
+        body: scrubApiKey(r.response?.body, apiKey),
         usage: r.usage,
         finishReason: r.finishReason,
       },
@@ -114,6 +122,7 @@ export function aiSdkProvider(resolved: ResolvedProvider): Provider {
   // strict-schema mode for structured output.
   const isOpenAICompat = getRegistration(resolved.name).kind === "openai-compat";
   const model = buildModel(resolved, isOpenAICompat);
+  const resolvedKey = resolveApiKey(resolved.apiKey);
 
   return {
     runPrompt: async (input, schema?) => {
@@ -126,7 +135,10 @@ export function aiSdkProvider(resolved: ResolvedProvider): Provider {
           output: Output.object({ schema: outputSchema }),
         });
         const rawResponse = safeStringify(result.output);
-        notifications.emit({ kind: "llm-wire", wire: captureFromResult(result, rawResponse) });
+        notifications.emit({
+          kind: "llm-wire",
+          wire: captureFromResult(result, rawResponse, resolvedKey),
+        });
         if (result.output === undefined) {
           throw new Error("LLM returned no structured output.");
         }
@@ -137,7 +149,10 @@ export function aiSdkProvider(resolved: ResolvedProvider): Provider {
         system: input.system,
         messages: input.messages,
       });
-      notifications.emit({ kind: "llm-wire", wire: captureFromResult(result, result.text) });
+      notifications.emit({
+        kind: "llm-wire",
+        wire: captureFromResult(result, result.text, resolvedKey),
+      });
       return result.text;
     },
   };
