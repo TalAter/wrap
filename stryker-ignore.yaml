@@ -10,3 +10,9 @@
   mutated: '/^```\w*\s*\n([\s\S]*)\n```/'
   reason: equivalent on realistic inputs — input is pre-trimmed so closing fence is at end; only diverges on contrived non-whitespace trailing content
   added: 2026-04-21
+- file: src/core/parse-response.ts
+  mutator: Regex
+  original: '/^```\w*\s*\n([\s\S]*)\n```$/'
+  mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
+  reason: equivalent on realistic LLM output — \s* vs \S* only diverges when fence info-line has trailing whitespace before newline, which LLMs don't produce
+  added: 2026-04-21
