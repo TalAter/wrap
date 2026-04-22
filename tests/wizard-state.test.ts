@@ -217,6 +217,34 @@ describe("reduce — picking-model", () => {
       model: "llama3.2",
     });
   });
+
+  test("openrouter submit-model writes baseURL into the entry", () => {
+    const data: ModelsDevData = {
+      openrouter: {
+        id: "openrouter",
+        models: {
+          "some/model": {
+            id: "some/model",
+            tool_call: true,
+            modalities: { input: ["text"], output: ["text"] },
+            release_date: "2026-01-01",
+          },
+        },
+      },
+    };
+    let s = initProviderWizardState();
+    s = reduce(s, { type: "toggle-provider", name: "openrouter" });
+    s = reduce(s, { type: "submit-providers" });
+    s = reduce(s, { type: "models-fetched", data });
+    s = reduce(s, { type: "key-change", draft: "sk-or-v1-abc" });
+    s = reduce(s, { type: "submit-key" });
+    s = reduce(s, { type: "submit-model" });
+    expect(s.builtEntries.openrouter).toEqual({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: "sk-or-v1-abc",
+      model: "some/model",
+    });
+  });
 });
 
 describe("reduce — multi-provider loop and default picker", () => {
