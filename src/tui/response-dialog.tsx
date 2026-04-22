@@ -2,6 +2,7 @@ import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
 import { useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
 import { getConfig } from "../config/store.ts";
+import { resolveEditor, spawnEditor } from "../core/editor.ts";
 import {
   registerExitTeardown,
   SPINNER_FRAMES,
@@ -45,20 +46,36 @@ const CONFIRMING_BAR_ITEMS: readonly ActionItem[] = CONFIRMING_ACTIONS.map((a) =
   primary: a.primary,
 }));
 
-const EDIT_COMMAND_ACTIONS: readonly ActionItem[] = [
+function editAction(editor: ReturnType<typeof resolveEditor>): ActionItem | null {
+  if (!editor) return null;
+  return { glyph: "ctrl+G", label: `edit in ${editor.meta.displayName}` };
+}
+
+const EDIT_COMMAND_BASE_ACTIONS: readonly ActionItem[] = [
   { glyph: "⏎", label: "to run", primary: true },
   { glyph: "Esc", label: "to discard changes" },
 ];
-const FOLLOWUP_COMPOSE_ACTIONS: readonly ActionItem[] = [
+const FOLLOWUP_COMPOSE_BASE_ACTIONS: readonly ActionItem[] = [
   { glyph: "⏎", label: "to send", primary: true },
   { glyph: "Esc", label: "to cancel" },
 ];
 const PROCESSING_ACTIONS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort" }];
 const EXECUTING_STEP_ACTIONS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort step" }];
-const INTERACTIVE_COMPOSE_ACTIONS: readonly ActionItem[] = [
+const INTERACTIVE_COMPOSE_BASE_ACTIONS: readonly ActionItem[] = [
   { glyph: "⏎", label: "send", primary: true },
   { glyph: "Esc", label: "cancel" },
 ];
+
+function appendEditorAction(
+  base: readonly ActionItem[],
+  editor: ReturnType<typeof resolveEditor>,
+): readonly ActionItem[] {
+  const edit = editAction(editor);
+  if (!edit) return base;
+  // Insert ctrl+G just before the final Esc so send/run stay first, edit-in-
+  // $EDITOR comes next, Esc-cancel stays last.
+  return [...base.slice(0, -1), edit, base[base.length - 1] as ActionItem];
+}
 
 const INTERACTIVE_PLACEHOLDERS = [
   "list all markdown files here",
@@ -258,6 +275,21 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   const isInteractive =
     state.tag === "composing-interactive" || state.tag === "processing-interactive";
 
+  const resolvedEditor = resolveEditor();
+
+  const EDIT_COMMAND_ACTIONS_RESOLVED = appendEditorAction(
+    EDIT_COMMAND_BASE_ACTIONS,
+    resolvedEditor,
+  );
+  const FOLLOWUP_COMPOSE_ACTIONS_RESOLVED = appendEditorAction(
+    FOLLOWUP_COMPOSE_BASE_ACTIONS,
+    resolvedEditor,
+  );
+  const INTERACTIVE_COMPOSE_ACTIONS_RESOLVED = appendEditorAction(
+    INTERACTIVE_COMPOSE_BASE_ACTIONS,
+    resolvedEditor,
+  );
+
   // Truncation banner lives under the input (per design: not in the border).
   // Parent-local: set when TextInput's onTruncate fires, cleared on next
   // keystroke (any onChange fires → effect resets it).
@@ -313,6 +345,52 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     state.tag === "editing"
       ? ({ kind: "full", text: command } as const)
       : foldCommand(command, maxCommandRows, textWidth);
+
+  // Ctrl-G opens the user's external editor. GUI editors stay dialog-local:
+  // we set `guiSpawn` so the TextInput renders `editingExternal`, run the
+  // spawn in a useEffect below, and dispatch draft-change on return. Terminal-
+  // owning editors dispatch enter-editor, which transitions the reducer to
+  // editor-handoff — Ink unmounts, the coordinator runs the spawn, and
+  // editor-done brings us back to this state with the new draft.
+  const [guiSpawn, setGuiSpawn] = useState<null | { origin: AppState["tag"]; draft: string }>(null);
+  const canOpenEditor =
+    resolvedEditor !== null &&
+    (state.tag === "composing-interactive" ||
+      state.tag === "composing-followup" ||
+      state.tag === "editing");
+  useKeyBindings(
+    [
+      {
+        on: { key: "g", ctrl: true },
+        do: () => {
+          if (!canOpenEditor || !resolvedEditor) return;
+          const currentDraft = "draft" in state ? state.draft : "";
+          if (resolvedEditor.meta.gui) {
+            setGuiSpawn({ origin: state.tag, draft: currentDraft });
+          } else {
+            dispatch({ type: "enter-editor", draft: currentDraft });
+          }
+        },
+      },
+    ],
+    { isActive: canOpenEditor && !guiSpawn },
+  );
+
+  // GUI editor spawn runs in the dialog, reducer-unaware. On completion,
+  // dispatch draft-change (if text returned) and clear the local flag.
+  useEffect(() => {
+    if (!guiSpawn || !resolvedEditor) return;
+    let cancelled = false;
+    void (async () => {
+      const newText = await spawnEditor(resolvedEditor, guiSpawn.draft);
+      if (cancelled) return;
+      if (newText !== null) dispatch({ type: "draft-change", text: newText });
+      setGuiSpawn(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [guiSpawn, resolvedEditor, dispatch]);
 
   // Esc dispatches key-esc in every mode except confirming (which has its
   // own binding list below).
@@ -401,6 +479,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
             value={state.draft}
             multiline
             maxRows={maxRows}
+            editingExternal={guiSpawn !== null && guiSpawn.origin === "composing-interactive"}
             onChange={(t) => dispatch({ type: "draft-change", text: t })}
             onSubmit={(t) => {
               if (t.trim() === "") return;
@@ -425,7 +504,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
           <ActionBar
             items={
               state.tag === "composing-interactive"
-                ? INTERACTIVE_COMPOSE_ACTIONS
+                ? INTERACTIVE_COMPOSE_ACTIONS_RESOLVED
                 : PROCESSING_ACTIONS
             }
           />
@@ -455,6 +534,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       {state.tag === "editing" ? (
         <TextInput
           value={state.draft}
+          editingExternal={guiSpawn !== null && guiSpawn.origin === "editing"}
           onChange={(t) => dispatch({ type: "draft-change", text: t })}
           onSubmit={(t) => {
             if (t.trim() === "") return;
@@ -493,6 +573,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
           {state.tag === "composing-followup" ? (
             <TextInput
               value={state.draft}
+              editingExternal={guiSpawn !== null && guiSpawn.origin === "composing-followup"}
               onChange={(t) => dispatch({ type: "draft-change", text: t })}
               onSubmit={(t) => {
                 if (t.trim() === "") return;
@@ -509,9 +590,9 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       <Text> </Text>
       <Box paddingLeft={3}>
         {state.tag === "editing" ? (
-          <ActionBar items={EDIT_COMMAND_ACTIONS} />
+          <ActionBar items={EDIT_COMMAND_ACTIONS_RESOLVED} />
         ) : state.tag === "composing-followup" ? (
-          <ActionBar items={FOLLOWUP_COMPOSE_ACTIONS} />
+          <ActionBar items={FOLLOWUP_COMPOSE_ACTIONS_RESOLVED} />
         ) : state.tag === "processing-followup" ? (
           <ActionBar items={PROCESSING_ACTIONS} />
         ) : state.tag === "executing-step" ? (

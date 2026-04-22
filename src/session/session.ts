@@ -1,4 +1,5 @@
 import { getConfig } from "../config/store.ts";
+import { resolveEditor, spawnEditor } from "../core/editor.ts";
 import { notifications } from "../core/notify.ts";
 import { chrome } from "../core/output.ts";
 import {
@@ -177,12 +178,29 @@ export async function runSession(
       startPumpLoop({ isInitialLoop: true, followupText: undefined });
     }
     if (entered && state.tag === "editor-handoff") {
-      // Terminal-owning editor handoff. Real spawn logic lives in slice 9's
-      // editor module; until then this stub immediately dispatches
-      // editor-done{text: null} so the user returns to the origin dialog
-      // without a hang. GUI editors never reach this tag — their spawn is
-      // dialog-local.
-      dispatch({ type: "editor-done", text: null });
+      // Terminal-owning editor handoff. GUI editors bypass this tag entirely
+      // (dialog-local spawn). Here Ink has already unmounted because the
+      // reducer tag is not in `isDialogTag`. We explicitly drop raw mode —
+      // Ink's unmount doesn't always clear it, and a raw-mode TTY in the
+      // editor child produces wedged input. Kitty disambiguate mode is
+      // popped by the compose useEffect cleanup; we don't also pop it here.
+      const handoffDraft = state.draft;
+      void (async () => {
+        try {
+          if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
+            process.stdin.setRawMode(false);
+          }
+          const resolved = resolveEditor();
+          if (!resolved) {
+            dispatch({ type: "editor-done", text: null });
+            return;
+          }
+          const newText = await spawnEditor(resolved, handoffDraft);
+          dispatch({ type: "editor-done", text: newText });
+        } catch {
+          dispatch({ type: "editor-done", text: null });
+        }
+      })();
     }
     if (entered && state.tag === "executing-step") {
       // submit-step-confirm hook: the user just confirmed a non-final
