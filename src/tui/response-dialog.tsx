@@ -1,5 +1,5 @@
 import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
 import { getConfig } from "../config/store.ts";
 import {
@@ -59,6 +59,22 @@ const INTERACTIVE_COMPOSE_ACTIONS: readonly ActionItem[] = [
   { glyph: "⏎", label: "send", primary: true },
   { glyph: "Esc", label: "cancel" },
 ];
+
+const INTERACTIVE_PLACEHOLDERS = [
+  "list all markdown files here",
+  "delete all .DS_Store files in this project",
+  "add .env to git ignore",
+] as const;
+
+function pickPlaceholder(previous?: string): string {
+  // Different pick each time the buffer empties. Seed from Math.random but
+  // avoid repeating the previous placeholder if possible.
+  const pool = previous
+    ? INTERACTIVE_PLACEHOLDERS.filter((p) => p !== previous)
+    : INTERACTIVE_PLACEHOLDERS;
+  const idx = Math.floor(Math.random() * pool.length);
+  return pool[idx] ?? INTERACTIVE_PLACEHOLDERS[0];
+}
 
 /** Border status shown while a follow-up call is in flight before any chrome event arrives. */
 export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
@@ -250,6 +266,18 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     setTruncatedBanner(false);
   }, [draft]);
 
+  // Interactive-compose placeholder — one random pick on mount, and a fresh
+  // pick every time the buffer goes from non-empty back to empty.
+  const [placeholderText, setPlaceholderText] = useState<string>(() => pickPlaceholder());
+  const prevDraftEmptyRef = useRef(draft === "");
+  useEffect(() => {
+    const nowEmpty = draft === "";
+    if (nowEmpty && !prevDraftEmptyRef.current) {
+      setPlaceholderText((prev) => pickPlaceholder(prev));
+    }
+    prevDraftEmptyRef.current = nowEmpty;
+  }, [draft]);
+
   // Width + height calculation — caller owns this since it knows what will render.
   const { columns: termCols, rows: termRows } = useWindowSize();
   const showFollowupInput =
@@ -379,7 +407,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
               dispatch({ type: "submit-interactive", text: t });
             }}
             onTruncate={() => setTruncatedBanner(true)}
-            placeholder="what do you want Wrap to do?"
+            placeholder={placeholderText}
           />
         ) : (
           <TextInput value={state.tag === "processing-interactive" ? state.draft : ""} readOnly />
