@@ -40,3 +40,9 @@
   mutated: 'response.risk_level !== ""'
   reason: risk_level is an enum of {low,medium,high} — it can never equal "", so !== "" is always true; on the med/high responses that actually reach isNonFinalConfirm this is equivalent to the original !== "low"
   added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'if (autoExec && r.response.final !== false)'
+  mutated: 'if (autoExec && true)'
+  reason: defensive; runLoop never emits loop-final with {final:false, risk:low} or yolo+non-final (both inline-executed), so on every producible input the final-check is redundant with the autoExec gate
+  added: 2026-04-22
