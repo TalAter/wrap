@@ -57,7 +57,6 @@ describe("resolveSettings — precedence", () => {
     const result = resolveSettings(mods(), {}, { logTraces: true });
     expect(result.logTraces).toBe(true);
   });
-
 });
 
 describe("resolveSettings — boolean env coercion", () => {
