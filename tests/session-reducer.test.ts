@@ -520,6 +520,12 @@ describe("reduce — purity and no-op behavior", () => {
     expect(next).toBe(state);
   });
 
+  test("unrelated event in executing-step returns state by reference", () => {
+    const state = makeExecutingStep();
+    const next = reduce(state, { type: "draft-change", text: "x" });
+    expect(next).toBe(state);
+  });
+
   test("notification kind that the dialog ignores returns state by reference", () => {
     const state = makeConfirming();
     const next = reduce(state, {
