@@ -460,6 +460,17 @@ describe("reduce — executing-step", () => {
     }
   });
 
+  test("loop-final exhausted from executing-step → exiting{exhausted}", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "exhausted" },
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("exhausted");
+  });
+
   test("key-esc from executing-step → confirming (keeps prior state)", () => {
     const state = makeExecutingStep({ response: nonFinalMed, outputSlot: "so far" });
     const next = reduce(state, { type: "key-esc" });
