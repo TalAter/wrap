@@ -101,6 +101,133 @@ describe("TextInput — editable", () => {
   });
 });
 
+describe("TextInput — multiline", () => {
+  test("plain Enter submits in multiline mode too", async () => {
+    let submitted: string | undefined;
+    const { stdin } = render(
+      <TextInput
+        value="abc"
+        multiline
+        onChange={() => {}}
+        onSubmit={(v) => {
+          submitted = v;
+        }}
+      />,
+    );
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(submitted).toBe("abc");
+  });
+
+  test("empty-buffer Enter is a no-op", async () => {
+    let submitted = false;
+    const { stdin } = render(
+      <TextInput
+        value=""
+        multiline
+        onChange={() => {}}
+        onSubmit={() => {
+          submitted = true;
+        }}
+      />,
+    );
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(submitted).toBe(false);
+  });
+
+  test("backslash-Enter inserts newline (strips trailing backslash)", async () => {
+    let captured: string | undefined;
+    const { stdin } = render(
+      <TextInput
+        value={"foo\\"}
+        multiline
+        onChange={(v) => {
+          captured = v;
+        }}
+        onSubmit={() => {}}
+      />,
+    );
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(captured).toBe("foo\n");
+  });
+
+  test("Ctrl+J inserts newline", async () => {
+    let captured: string | undefined;
+    const { stdin } = render(
+      <TextInput
+        value="ab"
+        multiline
+        onChange={(v) => {
+          captured = v;
+        }}
+        onSubmit={() => {}}
+      />,
+    );
+    // Ctrl+J without kitty: raw 0x0A byte; Ink reports input === "\n", key.return === false.
+    stdin.write("\n");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(captured).toBe("ab\n");
+  });
+
+  test("single-line mode: \\n from paste is stripped on insert", async () => {
+    // Paste-like burst of characters including a newline. Single-line mode
+    // must drop the \n and keep the rest.
+    // We simulate by directly triggering the path via a string write.
+    // ink-testing-library's stdin.write forwards to Ink's input parser; writing
+    // a multi-char string appears as one input event.
+    let captured: string | undefined;
+    const { stdin } = render(
+      <TextInput
+        value=""
+        onChange={(v) => {
+          captured = v;
+        }}
+        onSubmit={() => {}}
+      />,
+    );
+    stdin.write("hi\nthere");
+    await new Promise((r) => setTimeout(r, 30));
+    // Single-line: newline stripped, rest inserted.
+    expect(captured).toContain("hi");
+    expect(captured).toContain("there");
+    expect(captured).not.toContain("\n");
+  });
+
+  test("editingExternal renders a label and swallows input", async () => {
+    let changed = false;
+    const { stdin, lastFrame } = render(
+      <TextInput
+        value="buffer text"
+        multiline
+        editingExternal
+        onChange={() => {
+          changed = true;
+        }}
+        onSubmit={() => {}}
+      />,
+    );
+    const text = stripAnsi(lastFrame() ?? "");
+    expect(text).toContain("Save and close editor");
+    expect(text).not.toContain("buffer text");
+    stdin.write("x");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(changed).toBe(false);
+  });
+
+  test("multiline value with \\n renders on multiple rows", () => {
+    const { lastFrame } = render(
+      <TextInput value={"line1\nline2"} multiline onChange={() => {}} onSubmit={() => {}} />,
+    );
+    const text = stripAnsi(lastFrame() ?? "");
+    const rows = (lastFrame() ?? "").split("\n").length;
+    expect(rows).toBeGreaterThanOrEqual(2);
+    expect(text).toContain("line1");
+    expect(text).toContain("line2");
+  });
+});
+
 describe("TextInput — readOnly", () => {
   test("renders the value", () => {
     const { lastFrame } = render(<TextInput value="frozen text" readOnly />);

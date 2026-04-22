@@ -1,6 +1,7 @@
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, usePaste } from "ink";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { getTheme, themeHex } from "../core/theme.ts";
+import { clampBufferSize } from "./clamp-buffer.ts";
 import { Cursor } from "./cursor.ts";
 
 export function InputFrame({ children }: { children: ReactNode }) {
@@ -12,22 +13,32 @@ export function InputFrame({ children }: { children: ReactNode }) {
   );
 }
 
-export type TextInputProps =
-  | {
-      readOnly?: false;
-      value: string;
-      onChange: (value: string) => void;
-      onSubmit: (value: string) => void;
-      placeholder?: string;
-      /** Render each character as `•`. Cursor state keeps the real text. */
-      masked?: boolean;
-    }
-  | {
-      readOnly: true;
-      value: string;
-    };
+type BaseEditable = {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (value: string) => void;
+  placeholder?: string;
+};
 
-type EditableProps = Extract<TextInputProps, { readOnly?: false }>;
+export type TextInputProps =
+  | { readOnly: true; value: string; editingExternal?: never }
+  | (BaseEditable & {
+      readOnly?: false;
+      editingExternal?: boolean;
+      multiline?: false;
+      /** Render each character as `•`. Cursor state keeps the real text. Single-line only. */
+      masked?: boolean;
+    })
+  | (BaseEditable & {
+      readOnly?: false;
+      editingExternal?: boolean;
+      multiline: true;
+      /** Fires when a paste or editor-return had to be trimmed to fit the 256KB cap. */
+      onTruncate?: () => void;
+    });
+
+type SingleLineEditableProps = BaseEditable & { multiline?: false; masked?: boolean };
+type MultilineEditableProps = BaseEditable & { multiline: true; onTruncate?: () => void };
 
 type KeyHandler = (c: Cursor) => Cursor;
 
@@ -47,7 +58,26 @@ function mask(text: string): string {
   return "•".repeat(text.length);
 }
 
-function EditableTextInput({ value, onChange, onSubmit, placeholder, masked }: EditableProps) {
+function stripNewlines(s: string): string {
+  return s.replace(/[\r\n]/g, "");
+}
+
+/**
+ * Sanitize a pasted string: collapse CRLF → LF, drop other control bytes
+ * (keeps tab, LF). One regex, one allocation.
+ */
+function sanitizePaste(s: string): string {
+  return s.replace(/\r\n|[\x00-\x08\x0B-\x1F\x7F]/g, (m) => (m === "\r\n" ? "\n" : ""));
+}
+
+function EditableTextInput(props: (SingleLineEditableProps | MultilineEditableProps) & {
+  editingExternal?: boolean;
+}) {
+  const { value, onChange, onSubmit, placeholder } = props;
+  const multiline = props.multiline === true;
+  const masked = !multiline && (props as SingleLineEditableProps).masked === true;
+  const editingExternal = props.editingExternal === true;
+
   const [cursor, setCursor] = useState(() => new Cursor(value, value.length));
   const killRef = useRef<string | undefined>(undefined);
 
@@ -58,61 +88,138 @@ function EditableTextInput({ value, onChange, onSubmit, placeholder, masked }: E
   const apply = (next: Cursor) => {
     if (next.killed !== undefined) killRef.current = next.killed;
     setCursor(next);
-    // Movement keys (arrows, home/end, word jumps) return a new Cursor with
-    // unchanged text — skip onChange so the parent doesn't re-render for nothing.
     if (next.text !== cursor.text) onChange(next.text);
   };
 
-  useInput((input, key) => {
-    if (key.return) {
-      onSubmit(cursor.text);
-      return;
-    }
-    if (key.backspace && key.meta) {
-      apply(cursor.deleteWord());
-      return;
-    }
-    if (key.delete) {
-      apply(cursor.delete());
-      return;
-    }
-    if (key.backspace) {
-      apply(cursor.backspace());
-      return;
-    }
-    if (key.leftArrow) {
-      apply(key.meta ? cursor.wordLeft() : cursor.left());
-      return;
-    }
-    if (key.rightArrow) {
-      apply(key.meta ? cursor.wordRight() : cursor.right());
-      return;
-    }
-    if (key.ctrl) {
-      const handler = input === "y" ? () => cursor.yank(killRef.current) : ctrlKeys.get(input);
-      if (handler) apply(handler(cursor));
-      return;
-    }
-    if (key.meta) {
-      const handler = metaKeys.get(input);
-      if (handler) apply(handler(cursor));
-      return;
-    }
-    if (input) {
-      apply(cursor.insert(input));
-    }
-  });
+  usePaste(
+    (raw) => {
+      const cleaned = multiline ? sanitizePaste(raw) : stripNewlines(raw);
+      const combined = cursor.text.slice(0, cursor.offset) + cleaned + cursor.text.slice(cursor.offset);
+      const clamped = clampBufferSize(combined);
+      if (multiline && clamped.truncated) {
+        (props as MultilineEditableProps).onTruncate?.();
+      }
+      const newOffset = Math.min(cursor.offset + cleaned.length, clamped.value.length);
+      apply(new Cursor(clamped.value, newOffset));
+    },
+    { isActive: !editingExternal },
+  );
 
-  const showPlaceholder = value === "" && Boolean(placeholder);
+  useInput(
+    (input, key) => {
+      if (key.return) {
+        // Shift+Enter in multiline → newline (kitty CSI-u).
+        if (multiline && key.shift) {
+          apply(cursor.insert("\n"));
+          return;
+        }
+        // Backslash-Enter in multiline → strip trailing "\" then insert \n.
+        if (multiline && cursor.text.endsWith("\\") && cursor.offset === cursor.text.length) {
+          const stripped = cursor.text.slice(0, -1);
+          apply(new Cursor(`${stripped}\n`, stripped.length + 1));
+          return;
+        }
+        // Plain Enter: submit. Empty-buffer Enter in multiline is a no-op.
+        if (multiline && cursor.text.length === 0) return;
+        onSubmit(cursor.text);
+        return;
+      }
+      // Ctrl+J without kitty: arrives as `\n` with `key.return === false`.
+      if (multiline && !key.return && input === "\n") {
+        apply(cursor.insert("\n"));
+        return;
+      }
+      if (key.backspace && key.meta) {
+        apply(cursor.deleteWord());
+        return;
+      }
+      if (key.delete) {
+        apply(cursor.delete());
+        return;
+      }
+      if (key.backspace) {
+        apply(cursor.backspace());
+        return;
+      }
+      if (key.leftArrow) {
+        apply(key.meta ? cursor.wordLeft() : cursor.left());
+        return;
+      }
+      if (key.rightArrow) {
+        apply(key.meta ? cursor.wordRight() : cursor.right());
+        return;
+      }
+      if (multiline && key.upArrow) {
+        apply(cursor.upLine());
+        return;
+      }
+      if (multiline && key.downArrow) {
+        apply(cursor.downLine());
+        return;
+      }
+      if (key.ctrl) {
+        if (multiline && input === "j") {
+          apply(cursor.insert("\n"));
+          return;
+        }
+        const handler = input === "y" ? () => cursor.yank(killRef.current) : ctrlKeys.get(input);
+        if (handler) apply(handler(cursor));
+        return;
+      }
+      if (key.meta) {
+        const handler = metaKeys.get(input);
+        if (handler) apply(handler(cursor));
+        return;
+      }
+      if (input) {
+        // Multi-char bursts that contain \n need special handling. In multiline
+        // mode, let \n through the normal insert path (paste handler usually
+        // handles this, but bracketed paste isn't guaranteed from every source).
+        // In single-line mode, strip \n from the incoming string.
+        const toInsert = multiline ? input : stripNewlines(input);
+        if (toInsert.length === 0) return;
+        const inserted = cursor.insert(toInsert);
+        if (multiline) {
+          const clamped = clampBufferSize(inserted.text);
+          if (clamped.truncated) {
+            (props as MultilineEditableProps).onTruncate?.();
+            const newOffset = Math.min(inserted.offset, clamped.value.length);
+            apply(new Cursor(clamped.value, newOffset));
+            return;
+          }
+        }
+        apply(inserted);
+      }
+    },
+    { isActive: !editingExternal },
+  );
+
+  if (editingExternal) {
+    return (
+      <InputFrame>
+        <Text color={themeHex(getTheme().text.muted)}>
+          {" "}
+          Save and close editor to continue...
+        </Text>
+      </InputFrame>
+    );
+  }
+
+  const showPlaceholder = cursor.text === "" && Boolean(placeholder);
+  const renderedBefore = masked ? mask(cursor.beforeCursor) : cursor.beforeCursor;
+  const renderedCursor = masked
+    ? cursor.charAtCursor === " "
+      ? " "
+      : "•"
+    : cursor.charAtCursor;
+  const renderedAfter = masked ? mask(cursor.afterCursor) : cursor.afterCursor;
 
   return (
     <InputFrame>
       <Text color={themeHex(getTheme().text.primary)}>
-        {masked ? mask(cursor.beforeCursor) : cursor.beforeCursor}
-        <Text inverse>
-          {masked ? (cursor.charAtCursor === " " ? " " : "•") : cursor.charAtCursor}
-        </Text>
-        {masked ? mask(cursor.afterCursor) : cursor.afterCursor}
+        {renderedBefore}
+        <Text inverse>{renderedCursor}</Text>
+        {renderedAfter}
         {showPlaceholder ? (
           <Text color={themeHex(getTheme().text.muted)}>{placeholder}</Text>
         ) : null}
