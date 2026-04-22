@@ -275,6 +275,44 @@ describe("runLoop", () => {
     expect(transcript.length).toBe(1);
   });
 
+  test("orphan-turn race: abort during step exec returns aborted, no step turn pushed", async () => {
+    const ctrl = new AbortController();
+    const { provider } = makeProvider([
+      {
+        type: "command",
+        final: false,
+        content: "true",
+        risk_level: "low",
+        explanation: "ok",
+      } as CommandResponse,
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+    const gen = runLoop(
+      provider,
+      transcript,
+      scaffold,
+      state,
+      makeOptions({ signal: ctrl.signal }),
+    );
+    const events: LoopEvent[] = [];
+    let final: LoopReturn | undefined;
+    while (true) {
+      const { value, done } = await gen.next();
+      if (done) {
+        final = value;
+        break;
+      }
+      events.push(value);
+      // Abort once the runner has committed to running the step — the
+      // post-exec check at runner.ts must observe the aborted signal and
+      // return without pushing a step turn.
+      if (value.type === "step-running") ctrl.abort();
+    }
+    expect(final?.type).toBe("aborted");
+    expect(transcript.map((t) => t.kind)).toEqual(["user"]);
+  });
+
   test("round-complete is yielded BEFORE the runRound throw propagates", async () => {
     // Simulate a provider that throws after the test provider's first call.
     let calls = 0;

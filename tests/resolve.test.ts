@@ -157,6 +157,13 @@ describe("resolveSettings — structural fields pass through", () => {
     expect(result.providers).toEqual(fileConfig.providers);
     expect(result.defaultProvider).toBe("anthropic");
   });
+
+  test("defaultProvider stays absent when nothing supplies a value", () => {
+    // SETTINGS.defaultProvider has no default; if no CLI/env/file provides
+    // one, the resolver must not leave an own `undefined` property behind.
+    const result = resolveSettings(mods(), {}, {});
+    expect("defaultProvider" in result).toBe(false);
+  });
 });
 
 describe("resolveSettings — noAnimation aggregates env-wide signals", () => {
@@ -167,6 +174,16 @@ describe("resolveSettings — noAnimation aggregates env-wide signals", () => {
 
   test("CI=false does not force noAnimation (shells inherit CI=false outside CI)", () => {
     for (const val of ["false", "0", "no", "off", ""]) {
+      const result = resolveSettings(mods(), { CI: val }, {});
+      expect(result.noAnimation, `CI=${JSON.stringify(val)}`).toBe(false);
+    }
+  });
+
+  test("CI with surrounding whitespace is still treated as falsy", () => {
+    // Inherited CI vars can arrive with stray whitespace or a trailing
+    // newline (e.g. from `export CI=$(some-cmd)`). Trim first so those
+    // variants don't silently flip noAnimation on.
+    for (const val of [" false ", "0\n", "\tno", " off "]) {
       const result = resolveSettings(mods(), { CI: val }, {});
       expect(result.noAnimation, `CI=${JSON.stringify(val)}`).toBe(false);
     }

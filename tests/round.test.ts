@@ -290,6 +290,51 @@ describe("runRound", () => {
     expect(round.attempts.at(-1)?.parsed?.type).toBe("command");
   });
 
+  test("json-retry appends a user turn carrying the retry instruction", async () => {
+    let calls = 0;
+    let retryInput: { messages: { role: string; content: string }[] } | undefined;
+    const provider: Provider = {
+      runPrompt: async (input) => {
+        calls += 1;
+        if (calls === 1) throw new Error("invalid JSON: oops");
+        retryInput = input;
+        return { type: "command", content: "ls", risk_level: "low" } as CommandResponse;
+      },
+    };
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    const msgs = retryInput?.messages ?? [];
+    const last = msgs[msgs.length - 1];
+    expect(last?.role).toBe("user");
+    expect(last?.content).toBe(promptConstants.jsonRetryInstruction);
+  });
+
+  test("throws RoundError carrying the parse error message when json-retry also fails", async () => {
+    const provider: Provider = {
+      runPrompt: async () => {
+        throw new Error("invalid JSON: still broken");
+      },
+    };
+    let thrown: unknown;
+    try {
+      await runRound(provider, makeTranscript(), scaffold, {
+        isLastRound: false,
+        model: "test",
+        showSpinner: false,
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(RoundError);
+    if (thrown instanceof RoundError) {
+      expect(thrown.round.attempts).toHaveLength(2);
+      expect(thrown.message).toContain("invalid JSON: still broken");
+    }
+  });
+
   test("retries once on a structured-output parse failure", async () => {
     let calls = 0;
     const provider: Provider = {

@@ -116,6 +116,12 @@ describe("probeTools", () => {
     expect(probeTools()).not.toBeNull();
   });
 
+  test("unavailable excludes tools that are installed", () => {
+    // `bun` is guaranteed present — the test runs under bun.
+    const result = probe();
+    expect(result.unavailable).not.toContain("bun");
+  });
+
   test("extraTools are included in results", () => {
     // "thistooldoesnotexist" won't be installed anywhere
     const result = probeTools(["thistooldoesnotexist"]);

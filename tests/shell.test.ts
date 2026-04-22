@@ -56,6 +56,20 @@ describe("executeShellCommand (capture mode)", () => {
     expect(typeof result.shell).toBe("string");
     expect(result.shell.length).toBeGreaterThan(0);
   });
+
+  test("falls back to 'sh' when SHELL env var is unset", async () => {
+    const saved = process.env.SHELL;
+    delete process.env.SHELL;
+    try {
+      const result = await executeShellCommand("echo sh-fallback-ok", { mode: "capture" });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("sh-fallback-ok");
+      expect(result.shell).toBe("sh");
+    } finally {
+      if (saved === undefined) delete process.env.SHELL;
+      else process.env.SHELL = saved;
+    }
+  });
 });
 
 describe("chooseChildStdin", () => {

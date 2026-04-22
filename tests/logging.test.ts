@@ -485,6 +485,28 @@ describe("scrubApiKey", () => {
     // 2-char key "ab" is under the 8-char threshold; leave it alone.
     expect(scrubApiKey(body, "ab")).toBe(body);
   });
+
+  test("redacts an exactly-8-char key (boundary)", () => {
+    const secret = "SeKret!8";
+    const body = { leak: `auth ${secret} tail` };
+    const scrubbed = scrubApiKey(body, secret);
+    expect(JSON.stringify(scrubbed)).not.toContain(secret);
+  });
+
+  test("preserves arrays as arrays (not coerced to objects)", () => {
+    const secret = "sk-secret-12345678";
+    const body = { arr: [secret, "ok"] };
+    const scrubbed = scrubApiKey(body, secret);
+    expect(Array.isArray(scrubbed.arr)).toBe(true);
+  });
+
+  test("preserves primitive values (numbers, booleans)", () => {
+    const secret = "sk-secret-12345678";
+    const body = { n: 42, b: true };
+    const scrubbed = scrubApiKey(body, secret);
+    expect(scrubbed.n).toBe(42);
+    expect(scrubbed.b).toBe(true);
+  });
 });
 
 describe("log traces — default off", () => {
