@@ -6,7 +6,7 @@
   },
   "mutate": ["src/command-response.schema.ts"],
   "coverageAnalysis": "off",
-  "reporters": ["html", "clear-text", "progress"],
+  "reporters": ["html", "json", "clear-text", "progress"],
   "timeoutMS": 15000,
   "concurrency": 4,
   "tempDirName": ".stryker-tmp",
