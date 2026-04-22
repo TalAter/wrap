@@ -573,12 +573,15 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
           {state.tag === "composing-followup" ? (
             <TextInput
               value={state.draft}
+              multiline
+              maxRows={Math.max(3, termRows - chromeRows)}
               editingExternal={guiSpawn !== null && guiSpawn.origin === "composing-followup"}
               onChange={(t) => dispatch({ type: "draft-change", text: t })}
               onSubmit={(t) => {
                 if (t.trim() === "") return;
                 dispatch({ type: "submit-followup", text: t });
               }}
+              onTruncate={() => setTruncatedBanner(true)}
               placeholder="actually..."
             />
           ) : (
