@@ -29,9 +29,29 @@ Keep Stryker mutation testing honest without accumulating noise tests. Survivors
 ## Workflow
 
 1. **Prune.** Load `stryker-ignore.yaml`. Drop entries where `added + 10 days < today`. If you pruned anything, commit: `stryker-ignore: prune stale entries`.
-2. **Run mutate.** `bun run mutate`. Prefer `reports/mutation/mutation.json` if present; otherwise parse the text output. Each survivor: `[Survived] <Mutator>`, file:line, `- original`, `+ mutated`.
-3. **Filter.** Drop survivors whose `(file, mutator, original, mutated)` matches a post-prune ignore entry.
-4. **For each remaining survivor** — decide **fix** or **ignore**:
+2. **Pick mutate set.** List `src/**/*.ts` files touched in the last 26 hours:
+   ```
+   git log --since='26 hours ago' --name-only --pretty=format: -- 'src/*.ts' 'src/**/*.ts' | sort -u | grep -v '\.test\.'
+   ```
+   Then drop any file matching the **exclude list** below. If the resulting set is empty, exit cleanly — no survivors, no commits, note "no eligible src changes in last 26h" in the final response.
+
+   **Exclude list** (low mutation signal — never mutate these):
+   - `src/index.ts` — one-line entry trampoline
+   - `**/*.tsx` — Ink render components; tests are snapshot-ish, low behavioral signal
+   - `src/tui/welcome-animation-frames.ts` — pure data (thousands of frames)
+   - `src/llm/providers/test.ts` — fake stub provider
+   - `src/llm/providers/claude-code.ts` — thin external-SDK wrapper, no dedicated test
+   - anything non-`.ts` (JSON, schemas, constants)
+
+   Everything else is fair game when touched, including `src/main.ts`, `src/tui/*.ts` logic files (cursor, border, key-bindings, risk-presets), and `src/wizard/*.ts` logic files (state, models-filter, write-config).
+
+3. **Run mutate with override.** Pass the resulting list as a comma-separated `--mutate` arg so the config file is NOT modified:
+   ```
+   bunx stryker run --mutate "<file1>,<file2>,..."
+   ```
+   Do not edit `stryker.config.json`. Do not commit any config change. Prefer `reports/mutation/mutation.json` if present; otherwise parse the text output. Each survivor: `[Survived] <Mutator>`, file:line, `- original`, `+ mutated`.
+4. **Filter.** Drop survivors whose `(file, mutator, original, mutated)` matches a post-prune ignore entry.
+5. **For each remaining survivor** — decide **fix** or **ignore**:
    - **Ignore when:** equivalent mutant (no observable behavior change), unreachable code, cosmetic (e.g. `.name` never read), or the mutated behavior only differs on inputs no real caller produces.
    - **Fix when:** the mutation changes behavior a user or caller would notice, and you can write a tight test that catches it without binding implementation detail.
    **If fix:** run Fix stage, Review stage, Judge stage (below).
@@ -40,8 +60,8 @@ Keep Stryker mutation testing honest without accumulating noise tests. Survivors
 
    **If the correct fix is a source change:** do not attempt it. Add the survivor to the final-response escalation list and move to the next survivor. Do not add an ignore entry — the survivor should re-surface next run until a human resolves it.
 
-5. **Push.** `git push origin main`.
-6. **Final response.** Summarize what happened and list any escalations (see Final response).
+6. **Push.** `git push origin main`.
+7. **Final response.** Summarize what happened and list any escalations (see Final response).
 
 ## Fix stage
 
@@ -132,6 +152,7 @@ TEST FILE (<PATH>):
 ## Stop conditions
 
 Exit cleanly, no commits, if:
+- No eligible src files touched in the last 26 hours.
 - No survivors after filtering.
 
 Do NOT commit and surface the case in your final response (see Final response below) if:
