@@ -22,3 +22,9 @@
   mutated: 'case "exiting":'
   reason: reducer is never called with an exiting-tagged state; the coordinator's `exited` guard short-circuits dispatch before reduce runs
   added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'case "exiting":'
+  mutated: 'case "":'
+  reason: reducer is never called with an exiting-tagged state; mutating the case label affects only a branch that runtime never reaches
+  added: 2026-04-22
