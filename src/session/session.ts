@@ -173,10 +173,9 @@ export async function runSession(
     if (entered && state.tag === "processing-interactive") {
       // submit-interactive just landed on an empty transcript. Reassemble
       // the scaffold with the real draft so `initialUserText` carries the
-      // proper context + user request framing, seed the transcript, and
-      // drive the first LLM round as the "initial" loop (spinner is the
-      // bottom-border spinner rendered by the dialog, not the chrome
-      // spinner; `showSpinner:true` affects what pumpLoop suppresses).
+      // proper context + user request framing, then seed the transcript and
+      // pump. The chrome spinner is suppressed automatically because
+      // startPumpLoop reads isDialogTag(state.tag) — dialog is mounted.
       scaffold = buildScaffold(state.draft);
       transcript.push({ kind: "user", text: scaffold.initialUserText });
       entry.prompt = state.draft;
@@ -287,6 +286,14 @@ export async function runSession(
   function startPumpLoop(opts: { isInitialLoop: boolean; followupText: string | undefined }): void {
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
+    // The chrome spinner and the dialog's bottom-border spinner report the
+    // same thing; only one should run at a time or they flicker against each
+    // other. If a dialog is mounted for the current state, the dialog owns
+    // the spinner. `isDialogTag(state.tag)` is the single source of truth —
+    // read at pump-start so it's correct for initial thinking (no dialog),
+    // processing-followup/interactive (dialog up), and executing-step (dialog
+    // up). No per-call-site override needed.
+    const showSpinner = !isDialogTag(state.tag);
     void pumpLoop({
       provider,
       transcript,
@@ -295,6 +302,7 @@ export async function runSession(
       baseLoopOptions,
       signal: ctrl.signal,
       isInitialLoop: opts.isInitialLoop,
+      showSpinner,
       followupText: opts.followupText,
       onRound: (round) => addRound(entry, round),
       dispatch,
@@ -345,6 +353,10 @@ type PumpLoopArgs = {
   baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner">;
   signal: AbortSignal;
   isInitialLoop: boolean;
+  /** Whether to show the chrome (bottom-of-screen) spinner for this pump.
+   *  False whenever a dialog is mounted — the dialog's bottom-border
+   *  spinner already reports progress and the two would flicker. */
+  showSpinner: boolean;
   /** Stamped on the first `round-complete` only — even if it's a probe
    *  and the command lands several rounds later. Lets the log reconstruct
    *  which user message kicked off which sequence. Undefined for the
@@ -359,7 +371,7 @@ type PumpLoopArgs = {
  * `dispatch` (`loop-final` / `loop-error` / `block`).
  */
 async function pumpLoop(args: PumpLoopArgs): Promise<void> {
-  const { signal, isInitialLoop, followupText, onRound, dispatch } = args;
+  const { signal, isInitialLoop, showSpinner, followupText, onRound, dispatch } = args;
   let firstRoundComplete = true;
 
   function handleLoopEvent(event: LoopEvent): void {
@@ -388,7 +400,7 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
     const generator = runLoop(args.provider, args.transcript, args.scaffold, args.loopState, {
       ...args.baseLoopOptions,
       signal,
-      showSpinner: isInitialLoop,
+      showSpinner,
     });
     let final: LoopReturn | undefined;
     while (true) {

@@ -329,9 +329,22 @@ function reduceProcessingInteractive(
   if (event.type === "loop-final") {
     const r = event.result;
     if (r.type === "command") {
-      // Dialog is already mounted — even low-risk routes through confirming,
-      // mirroring processing-followup. The user is interactively composing,
-      // they expect to see the command before it runs.
+      // Interactive submit is the user's first turn — it behaves like the
+      // initial argv path: low-risk final commands auto-exec, med/high
+      // route to confirming. Yolo joins the auto-exec branch at any risk.
+      const autoExec = r.response.risk_level === "low" || getConfig().yolo;
+      if (autoExec && r.response.final !== false) {
+        return {
+          tag: "exiting",
+          outcome: {
+            kind: "run",
+            command: r.response.content,
+            response: r.response,
+            round: r.round,
+            source: "model",
+          },
+        };
+      }
       return { tag: "confirming", response: r.response, round: r.round };
     }
     if (r.type === "answer") {

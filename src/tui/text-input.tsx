@@ -208,7 +208,9 @@ function EditableTextInput(
   if (editingExternal) {
     return (
       <InputFrame>
-        <Text color={themeHex(getTheme().text.muted)}> Save and close editor to continue...</Text>
+        <Box width="100%" justifyContent="center">
+          <Text color={themeHex(getTheme().text.muted)}>Save and close editor to continue...</Text>
+        </Box>
       </InputFrame>
     );
   }

@@ -538,8 +538,22 @@ describe("reduce — processing-interactive", () => {
     if (next.tag === "processing-interactive") expect(next.status).toBe("thinking…");
   });
 
-  test("loop-final command (any risk) → confirming (dialog already mounted)", () => {
+  test("loop-final command low-risk → auto-exec (mirrors thinking path)", () => {
     const resp = makeResponse({ risk_level: "low", content: "echo ok" });
+    const round = makeRound(resp);
+    const next = reduce(makeProcessingInteractive(), {
+      type: "loop-final",
+      result: { type: "command", response: resp, round },
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag === "exiting" && next.outcome.kind === "run") {
+      expect(next.outcome.command).toBe("echo ok");
+      expect(next.outcome.source).toBe("model");
+    }
+  });
+
+  test("loop-final command medium-risk → confirming (dialog already mounted)", () => {
+    const resp = makeResponse({ risk_level: "medium", content: "rm -rf /tmp/x" });
     const round = makeRound(resp);
     const next = reduce(makeProcessingInteractive(), {
       type: "loop-final",
