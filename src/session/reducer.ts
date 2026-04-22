@@ -26,6 +26,12 @@ export function reduce(state: AppState, event: AppEvent): AppState {
       return reduceComposing(state, event);
     case "processing-followup":
       return reduceProcessing(state, event);
+    case "composing-interactive":
+      return reduceComposingInteractive(state, event);
+    case "processing-interactive":
+      return reduceProcessingInteractive(state, event);
+    case "editor-handoff":
+      return reduceEditorHandoff(state, event);
     case "executing-step":
       return reduceExecutingStep(state, event);
     case "exiting":
@@ -183,6 +189,16 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
   if (event.type === "draft-change") {
     return { ...state, draft: event.text };
   }
+  if (event.type === "enter-editor") {
+    return {
+      tag: "editor-handoff",
+      origin: "editing",
+      draft: event.draft,
+      response: state.response,
+      round: state.round,
+      outputSlot: state.outputSlot,
+    };
+  }
   return state;
 }
 
@@ -208,6 +224,16 @@ function reduceComposing(
       round: state.round,
       draft: event.text,
       status: undefined,
+      outputSlot: state.outputSlot,
+    };
+  }
+  if (event.type === "enter-editor") {
+    return {
+      tag: "editor-handoff",
+      origin: "composing-followup",
+      draft: event.draft,
+      response: state.response,
+      round: state.round,
       outputSlot: state.outputSlot,
     };
   }
@@ -264,6 +290,102 @@ function reduceProcessing(
       tag: "exiting",
       outcome: { kind: "error", message: event.error.message },
     };
+  }
+  return state;
+}
+
+function reduceComposingInteractive(
+  state: AppState & { tag: "composing-interactive" },
+  event: AppEvent,
+): AppState {
+  if (event.type === "key-esc") {
+    return { tag: "exiting", outcome: { kind: "cancel" } };
+  }
+  if (event.type === "draft-change") {
+    return { ...state, draft: event.text };
+  }
+  if (event.type === "submit-interactive") {
+    return { tag: "processing-interactive", draft: event.text, status: undefined };
+  }
+  if (event.type === "enter-editor") {
+    return { tag: "editor-handoff", origin: "composing-interactive", draft: event.draft };
+  }
+  return state;
+}
+
+function reduceProcessingInteractive(
+  state: AppState & { tag: "processing-interactive" },
+  event: AppEvent,
+): AppState {
+  if (event.type === "key-esc") {
+    return { tag: "composing-interactive", draft: state.draft };
+  }
+  if (event.type === "notification") {
+    if (event.notification.kind === "chrome") {
+      return { ...state, status: event.notification.text };
+    }
+    return state;
+  }
+  if (event.type === "loop-final") {
+    const r = event.result;
+    if (r.type === "command") {
+      // Dialog is already mounted — even low-risk routes through confirming,
+      // mirroring processing-followup. The user is interactively composing,
+      // they expect to see the command before it runs.
+      return { tag: "confirming", response: r.response, round: r.round };
+    }
+    if (r.type === "answer") {
+      return { tag: "exiting", outcome: { kind: "answer", content: r.content } };
+    }
+    if (r.type === "exhausted") {
+      return { tag: "exiting", outcome: { kind: "exhausted" } };
+    }
+    // r.type === "aborted" — late arrival after Esc already moved us back
+    // to composing-interactive. Drop.
+    return state;
+  }
+  if (event.type === "loop-error") {
+    return {
+      tag: "exiting",
+      outcome: { kind: "error", message: event.error.message },
+    };
+  }
+  return state;
+}
+
+/**
+ * Transient state while a terminal-owning external editor holds the TTY.
+ * `key-esc` is a no-op (the editor owns Esc). `editor-done` returns to the
+ * origin dialog with the new or preserved draft.
+ */
+function reduceEditorHandoff(
+  state: AppState & { tag: "editor-handoff" },
+  event: AppEvent,
+): AppState {
+  if (event.type === "editor-done") {
+    const newDraft = event.text ?? state.draft;
+    switch (state.origin) {
+      case "composing-interactive":
+        return { tag: "composing-interactive", draft: newDraft };
+      case "composing-followup":
+        if (!state.response || !state.round) return state;
+        return {
+          tag: "composing-followup",
+          response: state.response,
+          round: state.round,
+          draft: newDraft,
+          outputSlot: state.outputSlot,
+        };
+      case "editing":
+        if (!state.response || !state.round) return state;
+        return {
+          tag: "editing",
+          response: state.response,
+          round: state.round,
+          draft: newDraft,
+          outputSlot: state.outputSlot,
+        };
+    }
   }
   return state;
 }

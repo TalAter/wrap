@@ -5,13 +5,18 @@ import type { Round } from "../logging/entry.ts";
 
 /** All states the session can be in. The dialog is mounted iff `tag` is one
  *  of the dialog tags (confirming, editing, composing-followup, processing-followup,
- *  executing-step). */
+ *  composing-interactive, processing-interactive, executing-step).
+ *  `editor-handoff` is transient: the dialog is unmounted for terminal-owning
+ *  editors so the child process can own the TTY. */
 export type AppState =
   | ThinkingState
   | ConfirmingState
   | EditingState
   | ComposingState
   | ProcessingState
+  | ComposingInteractiveState
+  | ProcessingInteractiveState
+  | EditorHandoffState
   | ExecutingStepState
   | ExitingState;
 
@@ -73,6 +78,51 @@ export type ProcessingState = {
   draft: string;
   /** Latest chrome line, shown in the bottom border. */
   status?: string;
+  outputSlot?: string;
+};
+
+/**
+ * User typing the very first prompt into the interactive composer (triggered
+ * when `w` is invoked with no args on a TTY). Distinct from
+ * `composing-followup` because the transcript is empty — there is no
+ * preceding command response to preserve.
+ */
+export type ComposingInteractiveState = {
+  tag: "composing-interactive";
+  /** Live compose buffer. Preserved into processing-interactive and back on Esc. */
+  draft: string;
+};
+
+/**
+ * First LLM round in flight after `submit-interactive`. Mirror of
+ * `processing-followup` but for the bootstrap case — the coordinator
+ * pushes `draft` as the first user turn when this state is entered.
+ */
+export type ProcessingInteractiveState = {
+  tag: "processing-interactive";
+  /** The submitted prompt; preserved so Esc → composing-interactive keeps it. */
+  draft: string;
+  /** Latest chrome line, shown in the bottom border. */
+  status?: string;
+};
+
+/**
+ * Transient state while a terminal-owning external editor holds the TTY.
+ * The dialog is unmounted; the coordinator owns the spawn lifecycle and
+ * dispatches `editor-done` when the child exits. On return the reducer
+ * restores the origin state with the new draft (or preserved draft on null).
+ * GUI editors bypass this state — their spawn is dialog-local.
+ */
+export type EditorHandoffState = {
+  tag: "editor-handoff";
+  /** The dialog state to restore once the editor exits. */
+  origin: "composing-interactive" | "composing-followup" | "editing";
+  /** Buffer the user had when Ctrl-G was pressed. Preserved verbatim if the
+   *  editor exits non-zero or writes nothing. */
+  draft: string;
+  /** Threaded for origins that carry a response/round (composing-followup, editing). */
+  response?: CommandResponse;
+  round?: Round;
   outputSlot?: string;
 };
 
@@ -146,15 +196,29 @@ export type AppEvent =
   | { type: "key-esc" }
   | { type: "submit-edit"; text: string }
   | { type: "submit-followup"; text: string }
-  | { type: "draft-change"; text: string };
+  | { type: "submit-interactive"; text: string }
+  | { type: "draft-change"; text: string }
+  /** Dispatched from any of the three origin dialogs (composing-interactive,
+   *  composing-followup, editing) when the user hits Ctrl-G on a
+   *  terminal-owning editor. Reducer transitions to `editor-handoff`; the
+   *  coordinator runs the spawn and dispatches `editor-done` on exit. */
+  | { type: "enter-editor"; draft: string }
+  /** Dispatched by the coordinator after the editor child exits. `text: string`
+   *  replaces the buffer; `text: null` preserves it (editor exited non-zero or
+   *  wrote an empty file). */
+  | { type: "editor-done"; text: string | null };
 
-/** True if the session state should have a dialog mounted. */
+/** True if the session state should have a dialog mounted.
+ *  `editor-handoff` is deliberately excluded — terminal-owning editors
+ *  require Ink to be unmounted so the child owns the TTY. */
 export function isDialogTag(tag: AppState["tag"]): boolean {
   return (
     tag === "confirming" ||
     tag === "editing" ||
     tag === "composing-followup" ||
     tag === "processing-followup" ||
+    tag === "composing-interactive" ||
+    tag === "processing-interactive" ||
     tag === "executing-step"
   );
 }

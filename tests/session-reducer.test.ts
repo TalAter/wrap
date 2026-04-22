@@ -3,10 +3,13 @@ import { reduce } from "../src/session/reducer.ts";
 import type { AppState } from "../src/session/state.ts";
 import {
   makeComposing,
+  makeComposingInteractive,
   makeConfirming,
   makeEditing,
+  makeEditorHandoff,
   makeExecutingStep,
   makeProcessing,
+  makeProcessingInteractive,
   makeResponse,
   makeRound,
 } from "./helpers/state-fixtures.ts";
@@ -481,6 +484,181 @@ describe("reduce — executing-step", () => {
       result: { type: "command", response: finalLow, round: makeRound(finalLow) },
     });
     expect(next.tag).toBe("confirming");
+  });
+});
+
+describe("reduce — composing-interactive", () => {
+  test("draft-change updates draft", () => {
+    const next = reduce(makeComposingInteractive(), { type: "draft-change", text: "hi" });
+    expect(next.tag).toBe("composing-interactive");
+    if (next.tag === "composing-interactive") expect(next.draft).toBe("hi");
+  });
+
+  test("submit-interactive → processing-interactive preserving draft", () => {
+    const next = reduce(makeComposingInteractive({ draft: "find ts files" }), {
+      type: "submit-interactive",
+      text: "find ts files",
+    });
+    expect(next.tag).toBe("processing-interactive");
+    if (next.tag === "processing-interactive") expect(next.draft).toBe("find ts files");
+  });
+
+  test("key-esc → exiting{cancel}", () => {
+    const next = reduce(makeComposingInteractive(), { type: "key-esc" });
+    expect(next.tag).toBe("exiting");
+    if (next.tag === "exiting") expect(next.outcome.kind).toBe("cancel");
+  });
+
+  test("enter-editor → editor-handoff with origin=composing-interactive", () => {
+    const next = reduce(makeComposingInteractive({ draft: "list files" }), {
+      type: "enter-editor",
+      draft: "list files",
+    });
+    expect(next.tag).toBe("editor-handoff");
+    if (next.tag === "editor-handoff") {
+      expect(next.origin).toBe("composing-interactive");
+      expect(next.draft).toBe("list files");
+    }
+  });
+});
+
+describe("reduce — processing-interactive", () => {
+  test("key-esc → composing-interactive preserving draft", () => {
+    const next = reduce(makeProcessingInteractive({ draft: "hello" }), { type: "key-esc" });
+    expect(next.tag).toBe("composing-interactive");
+    if (next.tag === "composing-interactive") expect(next.draft).toBe("hello");
+  });
+
+  test("notification chrome → status update", () => {
+    const next = reduce(makeProcessingInteractive(), {
+      type: "notification",
+      notification: { kind: "chrome", text: "thinking…" },
+    });
+    expect(next.tag).toBe("processing-interactive");
+    if (next.tag === "processing-interactive") expect(next.status).toBe("thinking…");
+  });
+
+  test("loop-final command (any risk) → confirming (dialog already mounted)", () => {
+    const resp = makeResponse({ risk_level: "low", content: "echo ok" });
+    const round = makeRound(resp);
+    const next = reduce(makeProcessingInteractive(), {
+      type: "loop-final",
+      result: { type: "command", response: resp, round },
+    });
+    expect(next.tag).toBe("confirming");
+    if (next.tag === "confirming") expect(next.response).toBe(resp);
+  });
+
+  test("loop-final answer → exiting{answer}", () => {
+    const next = reduce(makeProcessingInteractive(), {
+      type: "loop-final",
+      result: { type: "answer", content: "the answer" },
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag === "exiting") expect(next.outcome.kind).toBe("answer");
+  });
+
+  test("loop-error → exiting{error}", () => {
+    const next = reduce(makeProcessingInteractive(), {
+      type: "loop-error",
+      error: new Error("boom"),
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag === "exiting" && next.outcome.kind === "error") {
+      expect(next.outcome.message).toBe("boom");
+    }
+  });
+
+  test("loop-final exhausted → exiting{exhausted}", () => {
+    const next = reduce(makeProcessingInteractive(), {
+      type: "loop-final",
+      result: { type: "exhausted" },
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag === "exiting") expect(next.outcome.kind).toBe("exhausted");
+  });
+});
+
+describe("reduce — editor-handoff round-trip", () => {
+  test("origin=composing-interactive + editor-done{text} → composing-interactive with new draft", () => {
+    const state = makeEditorHandoff({ origin: "composing-interactive", draft: "old" });
+    const next = reduce(state, { type: "editor-done", text: "new draft" });
+    expect(next.tag).toBe("composing-interactive");
+    if (next.tag === "composing-interactive") expect(next.draft).toBe("new draft");
+  });
+
+  test("origin=composing-interactive + editor-done{text:null} → composing-interactive preserving draft", () => {
+    const state = makeEditorHandoff({ origin: "composing-interactive", draft: "kept" });
+    const next = reduce(state, { type: "editor-done", text: null });
+    expect(next.tag).toBe("composing-interactive");
+    if (next.tag === "composing-interactive") expect(next.draft).toBe("kept");
+  });
+
+  test("origin=composing-followup + editor-done{text} restores composing-followup with response+round", () => {
+    const response = makeResponse();
+    const round = makeRound(response);
+    const state = makeEditorHandoff({
+      origin: "composing-followup",
+      draft: "old",
+      response,
+      round,
+      outputSlot: "out",
+    });
+    const next = reduce(state, { type: "editor-done", text: "refined" });
+    expect(next.tag).toBe("composing-followup");
+    if (next.tag === "composing-followup") {
+      expect(next.draft).toBe("refined");
+      expect(next.response).toBe(response);
+      expect(next.round).toBe(round);
+      expect(next.outputSlot).toBe("out");
+    }
+  });
+
+  test("origin=editing + editor-done{text} restores editing with new draft", () => {
+    const response = makeResponse();
+    const round = makeRound(response);
+    const state = makeEditorHandoff({
+      origin: "editing",
+      draft: "rm -rf",
+      response,
+      round,
+    });
+    const next = reduce(state, { type: "editor-done", text: "safer command" });
+    expect(next.tag).toBe("editing");
+    if (next.tag === "editing") {
+      expect(next.draft).toBe("safer command");
+      expect(next.response).toBe(response);
+    }
+  });
+
+  test("key-esc is a no-op (editor owns TTY)", () => {
+    const state = makeEditorHandoff({ origin: "composing-interactive", draft: "x" });
+    const next = reduce(state, { type: "key-esc" });
+    expect(next).toBe(state);
+  });
+});
+
+describe("reduce — enter-editor from every origin", () => {
+  test("composing-followup → editor-handoff origin=composing-followup", () => {
+    const state = makeComposing({ draft: "be safer" });
+    const next = reduce(state, { type: "enter-editor", draft: "be safer" });
+    expect(next.tag).toBe("editor-handoff");
+    if (next.tag === "editor-handoff") {
+      expect(next.origin).toBe("composing-followup");
+      expect(next.response).toBe(state.response);
+      expect(next.round).toBe(state.round);
+    }
+  });
+
+  test("editing → editor-handoff origin=editing", () => {
+    const state = makeEditing({ draft: "rm -rf /tmp/x" });
+    const next = reduce(state, { type: "enter-editor", draft: "rm -rf /tmp/x" });
+    expect(next.tag).toBe("editor-handoff");
+    if (next.tag === "editor-handoff") {
+      expect(next.origin).toBe("editing");
+      expect(next.draft).toBe("rm -rf /tmp/x");
+      expect(next.response).toBe(state.response);
+    }
   });
 });
 
