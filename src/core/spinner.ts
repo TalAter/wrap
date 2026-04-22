@@ -10,22 +10,26 @@ export const SPINNER_INTERVAL = 80; // ms
 /** Default label for the chrome spinner shown around LLM calls. */
 export const SPINNER_TEXT = "thinking...";
 
-// One-time crash guard: if the process exits while a spinner is running
-// (Ctrl-C, uncaught throw, anything that bypasses the stop() finally), the
-// terminal is left with `HIDE_CURSOR` still in effect — invisible cursor
-// until the user runs `tput cnorm`. We register process listeners on first
-// spinner start that unconditionally write `SHOW_CURSOR` on the way out.
-let exitGuardInstalled = false;
-function ensureExitGuard(): void {
-  if (exitGuardInstalled) return;
-  exitGuardInstalled = true;
+// Subscriber registry for "run this on process exit" teardowns. Use cases:
+// - Cursor-show (SHOW_CURSOR) when a spinner is still running.
+// - Kitty disambiguate-mode pop (\x1b[<u) when compose is still mounted.
+// Any code path that flips a terminal mode and would orphan it on abnormal
+// exit registers its restoration here. Listeners are installed once, on
+// first registration, and each teardown bytes string is written verbatim.
+const teardownBytes = new Set<string>();
+let listenersInstalled = false;
+
+function installListeners(): void {
+  if (listenersInstalled) return;
+  listenersInstalled = true;
   const restore = () => {
-    if (process.stderr.isTTY) process.stderr.write(SHOW_CURSOR);
+    if (!process.stderr.isTTY) return;
+    for (const bytes of teardownBytes) process.stderr.write(bytes);
   };
   process.on("exit", restore);
-  // Signals don't fire `exit` until the default handler runs, and the default
-  // handler exits with the signal's conventional code. Re-emit the signal
-  // after restoring the cursor so the user's shell sees the right exit code.
+  // Signals don't fire `exit` until the default handler runs — which exits
+  // with the signal's conventional code. Re-emit after restoring so the
+  // user's shell sees the right exit code.
   process.on("SIGINT", () => {
     restore();
     process.exit(130);
@@ -36,9 +40,38 @@ function ensureExitGuard(): void {
   });
 }
 
-/** Reset the exit-guard install flag — for tests only. */
+/**
+ * Register a sequence of bytes to write to stderr on process exit. Returns
+ * an unregister fn. Safe to call before any spinner or dialog work. Listeners
+ * on the process are installed lazily on the first call.
+ */
+export function registerExitTeardown(bytes: string): () => void {
+  installListeners();
+  teardownBytes.add(bytes);
+  return () => {
+    teardownBytes.delete(bytes);
+  };
+}
+
+// Cursor-show teardown is registered at module init so the spinner's
+// existing crash guarantee ("terminal's cursor comes back even on SIGINT")
+// continues to hold without a first-spinner-install race.
+let cursorTeardownUnregister: (() => void) | null = null;
+function ensureCursorTeardown(): void {
+  if (cursorTeardownUnregister) return;
+  cursorTeardownUnregister = registerExitTeardown(SHOW_CURSOR);
+}
+
+/** Reset the exit-guard install flag + clear registrations — for tests only. */
 export function resetExitGuard(): void {
-  exitGuardInstalled = false;
+  listenersInstalled = false;
+  teardownBytes.clear();
+  cursorTeardownUnregister = null;
+}
+
+/** Test-only alias that also resets the cursor teardown singleton. */
+export function _resetExitTeardownRegistryForTests(): void {
+  resetExitGuard();
 }
 
 /**
@@ -74,7 +107,7 @@ export function startChromeSpinner(text: string): () => void {
     };
   }
 
-  ensureExitGuard();
+  ensureCursorTeardown();
 
   // Precompute the full per-frame string once. `text` is fixed for the
   // lifetime of the spinner, so the per-tick render is one array lookup

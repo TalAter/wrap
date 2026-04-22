@@ -2,7 +2,11 @@ import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
 import { useEffect, useState } from "react";
 import stringWidth from "string-width";
 import { getConfig } from "../config/store.ts";
-import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
+import {
+  registerExitTeardown,
+  SPINNER_FRAMES,
+  SPINNER_INTERVAL,
+} from "../core/spinner.ts";
 import type { ThemeTokens } from "../core/theme.ts";
 import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
@@ -175,6 +179,28 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   // never sees a stale highlight when re-entering.
   useEffect(() => {
     if (state.tag !== "confirming") setSelectedIndex(0);
+  }, [state.tag]);
+
+  // Kitty disambiguate mode: enable while we're composing so Shift+Enter /
+  // Ctrl+letter combos report through useInput with proper modifier bits.
+  // Drain ORDER: drain stdin first (below), then write the enable byte —
+  // otherwise an in-flight paste's CSI bytes could be eaten by the drain,
+  // or a keystroke pressed pre-mount could race the first render. The
+  // disable byte writes on unmount; registerExitTeardown ensures the mode
+  // is popped even if the process dies before unmount.
+  useEffect(() => {
+    if (state.tag !== "composing-interactive" && state.tag !== "composing-followup") {
+      return;
+    }
+    if (!process.stderr.isTTY) return;
+    const KITTY_ENABLE = "\x1b[>1u";
+    const KITTY_DISABLE = "\x1b[<u";
+    const unregister = registerExitTeardown(KITTY_DISABLE);
+    process.stderr.write(KITTY_ENABLE);
+    return () => {
+      process.stderr.write(KITTY_DISABLE);
+      unregister();
+    };
   }, [state.tag]);
 
   // Drain any buffered stdin on first mount and on every transition. The
