@@ -35,9 +35,15 @@ export type TextInputProps =
       multiline: true;
       /** Fires when a paste or editor-return had to be trimmed to fit the 256KB cap. */
       onTruncate?: () => void;
-      /** Max visible logical rows. When the buffer has more lines, the view
-       *  scrolls to keep the cursor in view. Unset → grow without clipping. */
+      /** Max visible VISUAL rows (after hard-wrapping each logical line to
+       *  `wrapWidth`). When content exceeds this, the view scrolls to keep
+       *  the cursor visible. Unset → grow without clipping. */
       maxRows?: number;
+      /** Column width at which to hard-wrap long logical lines so one 80KB
+       *  paste becomes many visual rows instead of one Ink-wrapped blob. Omit
+       *  to fall back to logical-line windowing (the view may still overflow
+       *  if a logical line is very long). */
+      wrapWidth?: number;
     });
 
 type SingleLineEditableProps = BaseEditable & { multiline?: false; masked?: boolean };
@@ -45,6 +51,7 @@ type MultilineEditableProps = BaseEditable & {
   multiline: true;
   onTruncate?: () => void;
   maxRows?: number;
+  wrapWidth?: number;
 };
 
 type KeyHandler = (c: Cursor) => Cursor;
@@ -209,7 +216,9 @@ function EditableTextInput(
     return (
       <InputFrame>
         <Box width="100%" justifyContent="center">
-          <Text color={themeHex(getTheme().text.muted)}>... Save and close editor to continue ...</Text>
+          <Text color={themeHex(getTheme().text.muted)}>
+            ... Save and close editor to continue ...
+          </Text>
         </Box>
       </InputFrame>
     );
@@ -217,33 +226,65 @@ function EditableTextInput(
 
   const showPlaceholder = cursor.text === "" && Boolean(placeholder);
   const maxRows = multiline ? (props as MultilineEditableProps).maxRows : undefined;
+  const wrapWidth = multiline ? (props as MultilineEditableProps).wrapWidth : undefined;
 
-  // Windowed render for multiline+maxRows: keep cursor row inside the visible
-  // slice. Long soft-wrapped lines may still visually exceed the slice — that
-  // lives with the caller's chrome budget, but the cursor row is guaranteed
-  // to be inside.
+  // Windowed render for multiline+maxRows. When `wrapWidth` is provided we
+  // hard-wrap each logical line at that width so a single huge paste becomes
+  // many visual rows we can slice — otherwise a 50KB single-line paste stays
+  // one logical row that Ink soft-wraps past the terminal height, and the
+  // dialog blows out past both screen edges. Without wrapWidth we fall back
+  // to logical-line windowing (the old behavior).
   if (multiline && maxRows !== undefined) {
-    const lines = cursor.text.split("\n");
-    const cursorRow = cursor.row;
-    // Slide the window just enough to keep cursorRow visible. No persistent
-    // scroll position — deriving from cursor keeps state out of sync issues
-    // (value prop changes resync cursor, which resyncs scrollTop for free).
-    const top = Math.max(0, Math.min(lines.length - maxRows, cursorRow - maxRows + 1));
-    const clampedTop = Math.max(0, Math.min(top, cursorRow));
-    const visibleLines = lines.slice(clampedTop, clampedTop + maxRows);
-    const localRow = cursorRow - clampedTop;
-    const localCol = cursor.col;
-    // Flatten visible lines to a string so we can slice at the cursor offset.
-    let offset = 0;
-    for (let i = 0; i < localRow; i++) offset += (visibleLines[i]?.length ?? 0) + 1;
-    offset += Math.min(localCol, visibleLines[localRow]?.length ?? 0);
-    const flat = visibleLines.join("\n");
-    const before = flat.slice(0, offset);
-    const at = flat.charAt(offset) || " ";
-    const after = flat.slice(offset + 1);
+    const logicalLines = cursor.text.split("\n");
+    // Build visual rows: each row is a text slice paired with its start
+    // offset in the underlying buffer so we can map the cursor back in.
+    type VisualRow = { text: string; startOffset: number; len: number };
+    const visualRows: VisualRow[] = [];
+    let offsetWalk = 0;
+    for (const line of logicalLines) {
+      if (line.length === 0) {
+        visualRows.push({ text: "", startOffset: offsetWalk, len: 0 });
+      } else if (!wrapWidth || line.length <= wrapWidth) {
+        visualRows.push({ text: line, startOffset: offsetWalk, len: line.length });
+      } else {
+        for (let i = 0; i < line.length; i += wrapWidth) {
+          const chunk = line.slice(i, i + wrapWidth);
+          visualRows.push({ text: chunk, startOffset: offsetWalk + i, len: chunk.length });
+        }
+      }
+      offsetWalk += line.length + 1; // +1 for the "\n" separator
+    }
+    // Locate the cursor's visual row via binary-ish linear scan — fine here,
+    // visualRows is at most a few thousand entries (capped by 256KB / wrap).
+    let cursorVisualRow = visualRows.length - 1;
+    for (let i = 0; i < visualRows.length; i++) {
+      const row = visualRows[i] as VisualRow;
+      const nextStart = visualRows[i + 1]?.startOffset ?? Infinity;
+      if (cursor.offset >= row.startOffset && cursor.offset < nextStart) {
+        cursorVisualRow = i;
+        break;
+      }
+    }
+    const top = Math.max(
+      0,
+      Math.min(Math.max(0, visualRows.length - maxRows), cursorVisualRow - maxRows + 1),
+    );
+    const clampedTop = Math.max(0, Math.min(top, cursorVisualRow));
+    const visible = visualRows.slice(clampedTop, clampedTop + maxRows);
+    const localRow = cursorVisualRow - clampedTop;
+    const visRow = visible[localRow];
+    const localCol = visRow ? Math.min(cursor.offset - visRow.startOffset, visRow.len) : 0;
+    // Flatten visible rows and compute the cursor's position in the flat.
+    const flat = visible.map((v) => v.text).join("\n");
+    let flatOffset = 0;
+    for (let i = 0; i < localRow; i++) flatOffset += (visible[i]?.len ?? 0) + 1;
+    flatOffset += localCol;
+    const before = flat.slice(0, flatOffset);
+    const at = flat.charAt(flatOffset) || " ";
+    const after = flat.slice(flatOffset + 1);
     return (
       <InputFrame>
-        <Text color={themeHex(getTheme().text.primary)}>
+        <Text color={themeHex(getTheme().text.primary)} wrap="truncate-end">
           {before}
           <Text inverse>{at}</Text>
           {after}

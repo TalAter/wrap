@@ -216,6 +216,31 @@ describe("TextInput — multiline", () => {
     expect(changed).toBe(false);
   });
 
+  test("wrapWidth hard-wraps a long single line so visible rows stay within maxRows", () => {
+    // A pasted 2000-char single line with no newlines — the classic overflow case.
+    // wrapWidth=20, maxRows=3 → output must not exceed 3 visual rows of width 20.
+    const text = "a".repeat(2000);
+    const { lastFrame } = render(
+      <TextInput
+        value={text}
+        multiline
+        maxRows={3}
+        wrapWidth={20}
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />,
+    );
+    const out = stripAnsi(lastFrame() ?? "");
+    const lines = out.split("\n");
+    // Exactly 3 rendered content rows, each at most 22 chars (paddingX=1 * 2 + wrapWidth).
+    // The InputFrame adds side padding, so the row itself is wrapWidth+2 chars max.
+    const contentLines = lines.filter((l) => l.trim().length > 0);
+    expect(contentLines.length).toBeLessThanOrEqual(3);
+    for (const line of contentLines) {
+      expect(line.length).toBeLessThanOrEqual(24); // wrapWidth + paddingX*2 + slack
+    }
+  });
+
   test("maxRows clips logical lines below the cursor to stay within budget", () => {
     const text = ["l1", "l2", "l3", "l4", "l5", "l6"].join("\n");
     const { lastFrame } = render(

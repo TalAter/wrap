@@ -163,10 +163,10 @@ export async function spawnEditor(
     // GUI editors don't need (or want) the parent's TTY — inheriting it
     // keeps Bun waiting on the subprocess fds even after the user cancels.
     // Terminal-owning editors MUST inherit so the user can actually use them.
-    const stdio: ["inherit" | "ignore", "inherit" | "ignore", "inherit" | "ignore"] =
-      resolved.meta.gui
-        ? ["ignore", "ignore", "ignore"]
-        : ["inherit", "inherit", "inherit"];
+    const stdio: ["inherit" | "ignore", "inherit" | "ignore", "inherit" | "ignore"] = resolved.meta
+      .gui
+      ? ["ignore", "ignore", "ignore"]
+      : ["inherit", "inherit", "inherit"];
     proc = Bun.spawn(argv, { stdio });
 
     if (signal) {

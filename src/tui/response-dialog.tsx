@@ -463,6 +463,12 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     // We cap maxRows below termRows - chromeRows so the dialog fits the screen.
     const interactiveChromeRows = 7 + (truncatedBanner ? 1 : 0);
     const maxRows = Math.max(3, termRows - interactiveChromeRows);
+    const interactiveInnerWidth = dialogInnerWidth(termCols, MIN_INNER_WIDTH);
+    // InputFrame adds paddingX={1} on both sides; the TextInput's body has
+    // (innerWidth - 2) cells to work with. Hard-wrapping at that width turns
+    // paste-bombs into manageable visual rows instead of letting Ink wrap
+    // them into a multi-thousand-row blob that blows past the screen.
+    const interactiveWrapWidth = Math.max(1, interactiveInnerWidth - 2);
     const composeTheme = theme;
     return (
       <Dialog
@@ -479,6 +485,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
             value={state.draft}
             multiline
             maxRows={maxRows}
+            wrapWidth={interactiveWrapWidth}
             editingExternal={guiSpawn !== null && guiSpawn.origin === "composing-interactive"}
             onChange={(t) => dispatch({ type: "draft-change", text: t })}
             onSubmit={(t) => {
@@ -575,6 +582,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
               value={state.draft}
               multiline
               maxRows={Math.max(3, termRows - chromeRows)}
+              wrapWidth={Math.max(1, textWidth)}
               editingExternal={guiSpawn !== null && guiSpawn.origin === "composing-followup"}
               onChange={(t) => dispatch({ type: "draft-change", text: t })}
               onSubmit={(t) => {
