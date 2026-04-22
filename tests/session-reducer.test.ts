@@ -471,6 +471,19 @@ describe("reduce — executing-step", () => {
     expect(next.outcome.kind).toBe("exhausted");
   });
 
+  test("loop-error from executing-step → exiting{error}", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-error",
+      error: new Error("boom"),
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("error");
+    if (next.outcome.kind !== "error") throw new Error("unreachable");
+    expect(next.outcome.message).toBe("boom");
+  });
+
   test("key-esc from executing-step → confirming (keeps prior state)", () => {
     const state = makeExecutingStep({ response: nonFinalMed, outputSlot: "so far" });
     const next = reduce(state, { type: "key-esc" });
