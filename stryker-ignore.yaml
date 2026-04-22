@@ -52,3 +52,9 @@
   mutated: 'event.type === "" && event.notification.kind === "step-output"'
   reason: defensive branch in reduceConfirming — notifications never reach the reducer while state.tag is "confirming" because the notification-router's isDialogLive returns true only for processing-followup/executing-step
   added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'event.type === "notification" && event.notification.kind === "step-output"'
+  mutated: 'event.type === "notification" && event.notification.kind === ""'
+  reason: same as the paired mutation on this line — the surrounding branch is unreachable in reduceConfirming because the router never dispatches notification events while the dialog tag is "confirming"
+  added: 2026-04-22
