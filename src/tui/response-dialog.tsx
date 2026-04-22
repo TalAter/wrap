@@ -51,6 +51,10 @@ const FOLLOWUP_COMPOSE_ACTIONS: readonly ActionItem[] = [
 ];
 const PROCESSING_ACTIONS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort" }];
 const EXECUTING_STEP_ACTIONS: readonly ActionItem[] = [{ glyph: "Esc", label: "to abort step" }];
+const INTERACTIVE_COMPOSE_ACTIONS: readonly ActionItem[] = [
+  { glyph: "⏎", label: "send", primary: true },
+  { glyph: "Esc", label: "cancel" },
+];
 
 /** Border status shown while a follow-up call is in flight before any chrome event arrives. */
 export const FOLLOWUP_FALLBACK_STATUS = "Reticulating splines...";
@@ -204,8 +208,21 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   const explanation = dialogResponse?.explanation ?? undefined;
   const plan = dialogResponse?.plan ?? undefined;
   const draft = "draft" in state ? state.draft : "";
-  const status = state.tag === "processing-followup" ? state.status : undefined;
+  const status =
+    state.tag === "processing-followup" || state.tag === "processing-interactive"
+      ? state.status
+      : undefined;
   const outputSlot = "outputSlot" in state ? state.outputSlot : undefined;
+  const isInteractive =
+    state.tag === "composing-interactive" || state.tag === "processing-interactive";
+
+  // Truncation banner lives under the input (per design: not in the border).
+  // Parent-local: set when TextInput's onTruncate fires, cleared on next
+  // keystroke (any onChange fires → effect resets it).
+  const [truncatedBanner, setTruncatedBanner] = useState(false);
+  useEffect(() => {
+    setTruncatedBanner(false);
+  }, [draft]);
 
   // Width + height calculation — caller owns this since it knows what will render.
   const { columns: termCols, rows: termRows } = useWindowSize();
@@ -250,6 +267,8 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       state.tag === "editing" ||
       state.tag === "composing-followup" ||
       state.tag === "processing-followup" ||
+      state.tag === "composing-interactive" ||
+      state.tag === "processing-interactive" ||
       state.tag === "executing-step",
   });
 
@@ -285,7 +304,10 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
 
   const noAnimation = getConfig().noAnimation;
   const spinnerActive =
-    !noAnimation && (state.tag === "processing-followup" || state.tag === "executing-step");
+    !noAnimation &&
+    (state.tag === "processing-followup" ||
+      state.tag === "processing-interactive" ||
+      state.tag === "executing-step");
   const { frame: spinnerIndex } = useAnimation({
     interval: SPINNER_INTERVAL,
     isActive: spinnerActive,
@@ -295,13 +317,68 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     : null;
   const prefix = spinnerFrame ? `${spinnerFrame} ` : "";
   const bottomStatus =
-    state.tag === "processing-followup"
+    state.tag === "processing-followup" || state.tag === "processing-interactive"
       ? `${prefix}${status ?? FOLLOWUP_FALLBACK_STATUS}`
       : state.tag === "executing-step"
         ? `${prefix}${EXECUTING_STEP_STATUS}`
         : undefined;
 
   const preset = getRiskPreset(riskLevel);
+
+  if (isInteractive) {
+    const lowPreset = getRiskPreset("low");
+    // Chrome rows: 2 borders + 2 padding + 2 blank spacers + 1 action bar.
+    // We cap maxRows below termRows - chromeRows so the dialog fits the screen.
+    const interactiveChromeRows = 7 + (truncatedBanner ? 1 : 0);
+    const maxRows = Math.max(3, termRows - interactiveChromeRows);
+    const composeTheme = theme;
+    return (
+      <Dialog
+        gradientStops={lowPreset.stops}
+        top={{
+          segs: [{ ...composeTheme.badge.riskLow, label: "compose", bold: true }],
+          align: "left",
+        }}
+        bottomStatus={bottomStatus}
+        naturalContentWidth={MIN_INNER_WIDTH}
+      >
+        {state.tag === "composing-interactive" ? (
+          <TextInput
+            value={state.draft}
+            multiline
+            maxRows={maxRows}
+            onChange={(t) => dispatch({ type: "draft-change", text: t })}
+            onSubmit={(t) => {
+              if (t.trim() === "") return;
+              dispatch({ type: "submit-interactive", text: t });
+            }}
+            onTruncate={() => setTruncatedBanner(true)}
+            placeholder="what do you want Wrap to do?"
+          />
+        ) : (
+          <TextInput value={state.tag === "processing-interactive" ? state.draft : ""} readOnly />
+        )}
+        {truncatedBanner && (
+          <Box paddingLeft={1}>
+            <Text color={themeHex(composeTheme.text.muted)}>
+              paste truncated — for large input, pipe with cat file | w
+            </Text>
+          </Box>
+        )}
+        <Text> </Text>
+        <Text> </Text>
+        <Box paddingLeft={3}>
+          <ActionBar
+            items={
+              state.tag === "composing-interactive"
+                ? INTERACTIVE_COMPOSE_ACTIONS
+                : PROCESSING_ACTIONS
+            }
+          />
+        </Box>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog

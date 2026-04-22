@@ -35,10 +35,17 @@ export type TextInputProps =
       multiline: true;
       /** Fires when a paste or editor-return had to be trimmed to fit the 256KB cap. */
       onTruncate?: () => void;
+      /** Max visible logical rows. When the buffer has more lines, the view
+       *  scrolls to keep the cursor in view. Unset → grow without clipping. */
+      maxRows?: number;
     });
 
 type SingleLineEditableProps = BaseEditable & { multiline?: false; masked?: boolean };
-type MultilineEditableProps = BaseEditable & { multiline: true; onTruncate?: () => void };
+type MultilineEditableProps = BaseEditable & {
+  multiline: true;
+  onTruncate?: () => void;
+  maxRows?: number;
+};
 
 type KeyHandler = (c: Cursor) => Cursor;
 
@@ -206,6 +213,45 @@ function EditableTextInput(props: (SingleLineEditableProps | MultilineEditablePr
   }
 
   const showPlaceholder = cursor.text === "" && Boolean(placeholder);
+  const maxRows = multiline ? (props as MultilineEditableProps).maxRows : undefined;
+
+  // Windowed render for multiline+maxRows: keep cursor row inside the visible
+  // slice. Long soft-wrapped lines may still visually exceed the slice — that
+  // lives with the caller's chrome budget, but the cursor row is guaranteed
+  // to be inside.
+  if (multiline && maxRows !== undefined) {
+    const lines = cursor.text.split("\n");
+    const cursorRow = cursor.row;
+    // Slide the window just enough to keep cursorRow visible. No persistent
+    // scroll position — deriving from cursor keeps state out of sync issues
+    // (value prop changes resync cursor, which resyncs scrollTop for free).
+    const top = Math.max(0, Math.min(lines.length - maxRows, cursorRow - maxRows + 1));
+    const clampedTop = Math.max(0, Math.min(top, cursorRow));
+    const visibleLines = lines.slice(clampedTop, clampedTop + maxRows);
+    const localRow = cursorRow - clampedTop;
+    const localCol = cursor.col;
+    // Flatten visible lines to a string so we can slice at the cursor offset.
+    let offset = 0;
+    for (let i = 0; i < localRow; i++) offset += (visibleLines[i]?.length ?? 0) + 1;
+    offset += Math.min(localCol, visibleLines[localRow]?.length ?? 0);
+    const flat = visibleLines.join("\n");
+    const before = flat.slice(0, offset);
+    const at = flat.charAt(offset) || " ";
+    const after = flat.slice(offset + 1);
+    return (
+      <InputFrame>
+        <Text color={themeHex(getTheme().text.primary)}>
+          {before}
+          <Text inverse>{at}</Text>
+          {after}
+          {showPlaceholder ? (
+            <Text color={themeHex(getTheme().text.muted)}>{placeholder}</Text>
+          ) : null}
+        </Text>
+      </InputFrame>
+    );
+  }
+
   const renderedBefore = masked ? mask(cursor.beforeCursor) : cursor.beforeCursor;
   const renderedCursor = masked
     ? cursor.charAtCursor === " "

@@ -69,21 +69,31 @@ export async function runSession(
     promptHash: PROMPT_HASH,
   });
 
-  const scaffold = assemblePromptScaffold({
-    prompt,
-    cwd: options.cwd,
-    memory,
-    tools: options.tools,
-    cwdFiles: options.cwdFiles,
-    attachedInputPath: options.attachedInputPath,
-    attachedInputSize: options.attachedInputSize,
-    attachedInputPreview: options.attachedInputPreview,
-    attachedInputTruncated: options.attachedInputTruncated,
-    piped: !process.stdout.isTTY,
-  });
+  const buildScaffold = (p: string) =>
+    assemblePromptScaffold({
+      prompt: p,
+      cwd: options.cwd,
+      memory,
+      tools: options.tools,
+      cwdFiles: options.cwdFiles,
+      attachedInputPath: options.attachedInputPath,
+      attachedInputSize: options.attachedInputSize,
+      attachedInputPreview: options.attachedInputPreview,
+      attachedInputTruncated: options.attachedInputTruncated,
+      piped: !process.stdout.isTTY,
+    });
+
+  // Interactive mode: no args + TTY means the user has not typed a prompt yet.
+  // The dialog's `composing-interactive` state is the entry point; the
+  // transcript stays empty until submit so we don't send an unqualified
+  // context blurb to the LLM.
+  const isInteractiveBootstrap = prompt === "" && process.stdin.isTTY === true;
+  let scaffold = buildScaffold(prompt);
 
   const transcript: Transcript = [];
-  transcript.push({ kind: "user", text: scaffold.initialUserText });
+  if (!isInteractiveBootstrap) {
+    transcript.push({ kind: "user", text: scaffold.initialUserText });
+  }
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const model = formatProvider(options.resolvedProvider);
   const baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner"> = {
@@ -103,12 +113,17 @@ export async function runSession(
       })
     : null;
 
-  let state: AppState = { tag: "thinking" };
+  let state: AppState = isInteractiveBootstrap
+    ? { tag: "composing-interactive", draft: "" }
+    : { tag: "thinking" };
   let mountInProgress = false;
   let currentLoopAbort: AbortController | null = null;
 
   const router = createNotificationRouter({
-    isDialogLive: () => state.tag === "processing-followup" || state.tag === "executing-step",
+    isDialogLive: () =>
+      state.tag === "processing-followup" ||
+      state.tag === "processing-interactive" ||
+      state.tag === "executing-step",
     onDialogNotification: (n) => dispatch({ type: "notification", notification: n }),
   });
 
@@ -122,7 +137,9 @@ export async function runSession(
     // cancelled even if its result was about to land.
     if (
       event.type === "key-esc" &&
-      (state.tag === "processing-followup" || state.tag === "executing-step")
+      (state.tag === "processing-followup" ||
+        state.tag === "processing-interactive" ||
+        state.tag === "executing-step")
     ) {
       currentLoopAbort?.abort();
     }
@@ -145,6 +162,27 @@ export async function runSession(
       transcript.push({ kind: "user", text: followupText });
       loopState.budgetRemaining = maxRounds;
       startPumpLoop({ isInitialLoop: false, followupText });
+    }
+    if (entered && state.tag === "processing-interactive") {
+      // submit-interactive just landed on an empty transcript. Reassemble
+      // the scaffold with the real draft so `initialUserText` carries the
+      // proper context + user request framing, seed the transcript, and
+      // drive the first LLM round as the "initial" loop (spinner is the
+      // bottom-border spinner rendered by the dialog, not the chrome
+      // spinner; `showSpinner:true` affects what pumpLoop suppresses).
+      scaffold = buildScaffold(state.draft);
+      transcript.push({ kind: "user", text: scaffold.initialUserText });
+      entry.prompt = state.draft;
+      loopState.budgetRemaining = maxRounds;
+      startPumpLoop({ isInitialLoop: true, followupText: undefined });
+    }
+    if (entered && state.tag === "editor-handoff") {
+      // Terminal-owning editor handoff. Real spawn logic lives in slice 9's
+      // editor module; until then this stub immediately dispatches
+      // editor-done{text: null} so the user returns to the origin dialog
+      // without a hang. GUI editors never reach this tag — their spawn is
+      // dialog-local.
+      dispatch({ type: "editor-done", text: null });
     }
     if (entered && state.tag === "executing-step") {
       // submit-step-confirm hook: the user just confirmed a non-final
@@ -235,7 +273,15 @@ export async function runSession(
 
   let exitCode = 1;
   try {
-    startPumpLoop({ isInitialLoop: true, followupText: undefined });
+    // Interactive bootstrap skips the initial pump — the user hasn't typed
+    // a prompt yet. submit-interactive kicks off the loop via the post-
+    // transition hook on entering `processing-interactive`.
+    if (!isInteractiveBootstrap) {
+      startPumpLoop({ isInitialLoop: true, followupText: undefined });
+    } else {
+      // Mount the compose dialog immediately so the user can start typing.
+      void syncDialog();
+    }
     const outcome = await exitDeferred.promise;
     // Unmount before exec so the alt screen is gone when the inherited
     // stdio command writes. The listener stays subscribed so verbose/chrome

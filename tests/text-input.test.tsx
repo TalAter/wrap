@@ -216,6 +216,21 @@ describe("TextInput — multiline", () => {
     expect(changed).toBe(false);
   });
 
+  test("maxRows clips logical lines below the cursor to stay within budget", () => {
+    const text = ["l1", "l2", "l3", "l4", "l5", "l6"].join("\n");
+    const { lastFrame } = render(
+      <TextInput value={text} multiline maxRows={3} onChange={() => {}} onSubmit={() => {}} />,
+    );
+    const out = stripAnsi(lastFrame() ?? "");
+    // Cursor initializes at text end → last 3 rows should be visible, first 3 hidden.
+    expect(out).toContain("l4");
+    expect(out).toContain("l5");
+    expect(out).toContain("l6");
+    expect(out).not.toContain("l1");
+    expect(out).not.toContain("l2");
+    expect(out).not.toContain("l3");
+  });
+
   test("multiline value with \\n renders on multiple rows", () => {
     const { lastFrame } = render(
       <TextInput value={"line1\nline2"} multiline onChange={() => {}} onSubmit={() => {}} />,
