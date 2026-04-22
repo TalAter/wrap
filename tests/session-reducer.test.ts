@@ -411,6 +411,15 @@ describe("reduce — executing-step", () => {
     }
   });
 
+  test("chrome notification while executing-step returns state by reference", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "chrome", text: "Probing the database" },
+    });
+    expect(next).toBe(state);
+  });
+
   test("step-output notification while processing updates outputSlot", () => {
     const state = makeProcessing();
     const next = reduce(state, {
