@@ -24,9 +24,13 @@ export function tmpHome(): string {
 
 export async function wrap(input?: string, env?: Record<string, string>, stdin?: string) {
   const args = input ? input.split(" ") : [];
-  // Always isolate from the real ~/.wrap/ config
+  // Always isolate from the real ~/.wrap/ config. WRAP_TEMP_DIR must not
+  // leak from the test process — other tests (shell.test.ts,
+  // fs-temp.test.ts) lazily create one via ensureTempDir, and if we inherit
+  // it every subprocess points at the same (possibly removed) dir.
+  const { WRAP_TEMP_DIR: _drop, ...parentEnv } = process.env;
   const isolatedEnv = {
-    ...process.env,
+    ...parentEnv,
     WRAP_HOME: tmpHome(),
     ...env,
   };

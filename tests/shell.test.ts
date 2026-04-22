@@ -5,12 +5,17 @@ import { chooseChildStdin, executeShellCommand } from "../src/core/shell.ts";
 // warnings to stderr when invoked with -i from a non-TTY, which would
 // pollute stderr capture assertions.
 const originalShell = process.env.SHELL;
+const originalTempDir = process.env.WRAP_TEMP_DIR;
 beforeAll(() => {
   process.env.SHELL = "/bin/sh";
 });
 afterAll(() => {
   if (originalShell === undefined) delete process.env.SHELL;
   else process.env.SHELL = originalShell;
+  // executeShellCommand lazily creates WRAP_TEMP_DIR; restore so it doesn't
+  // leak into subprocesses spawned by other test files.
+  if (originalTempDir === undefined) delete process.env.WRAP_TEMP_DIR;
+  else process.env.WRAP_TEMP_DIR = originalTempDir;
 });
 
 describe("executeShellCommand (capture mode)", () => {
