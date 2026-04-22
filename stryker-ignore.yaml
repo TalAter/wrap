@@ -28,3 +28,9 @@
   mutated: 'case "":'
   reason: reducer is never called with an exiting-tagged state; mutating the case label affects only a branch that runtime never reaches
   added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'response.final === false && response.risk_level !== "low"'
+  mutated: 'response.final === false && true'
+  reason: isNonFinalConfirm is only reached when response.final === false; runLoop never emits loop-final with {final:false, risk:low} (inline-executed), so the risk_level check only runs against med/high — for which !== "low" is already true
+  added: 2026-04-22
