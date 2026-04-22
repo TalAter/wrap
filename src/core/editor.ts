@@ -131,16 +131,22 @@ export function _resetEditorCacheForTests(): void {
  * anything went wrong. The caller decides what to do with null (keep
  * current buffer is the rule across all call sites).
  *
- * GUI editors are spawned with stdio: "ignore" so they can't read from or
- * hold the parent's TTY. Terminal-owning editors inherit the parent TTY —
- * that's the whole point, and the coordinator has already unmounted Ink +
- * dropped raw mode before we get here.
+ * Stdio: "inherit" across the board. GUI editors like `code -w` implement
+ * their "wait for file close" signal by reading stdin and exiting when it
+ * closes — piping stdin to /dev/null (the "ignore" option) makes them read
+ * EOF immediately and return, which looks like a flash of the "Save and
+ * close editor..." message followed by nothing. Terminal-owning editors
+ * (vim, nano) need inherit for obvious reasons, and the coordinator has
+ * already unmounted Ink + dropped raw mode before we get here.
  *
- * `signal` lets the caller abort the wait. On abort, the subprocess is
- * unref'd (Bun) so it can outlive this process without keeping Node alive,
- * and we resolve null without touching the buffer. For a GUI editor the
- * user started from Ctrl-G, the editor window stays open — rude to kill
- * it, it might have other work.
+ * `signal` lets the caller abort the wait. On abort, we call proc.unref()
+ * so Bun's event loop stops counting the subprocess as a live ref — the
+ * GUI editor keeps running (user may have unsaved work) but Node exits
+ * cleanly instead of hanging until the editor closes.
+ *
+ * Each spawn uses a fresh temp filename so a stale VS Code buffer from a
+ * previous spawn can't be hit (VS Code sometimes reuses its open-file
+ * state when the path matches, which confuses the -w wait).
  *
  * Exit-code policy:
  *   0 + non-empty file → replace buffer.
@@ -153,21 +159,14 @@ export async function spawnEditor(
   signal?: AbortSignal,
 ): Promise<string | null> {
   const tempDir = ensureTempDir();
-  const filePath = join(tempDir, "prompt.md");
+  const filePath = join(tempDir, `prompt-${crypto.randomUUID()}.md`);
   let proc: ReturnType<typeof Bun.spawn> | undefined;
   try {
     writeFileSync(filePath, draft, "utf-8");
     const argv = resolved.meta.waitFlag
       ? [resolved.path, resolved.meta.waitFlag, filePath]
       : [resolved.path, filePath];
-    // GUI editors don't need (or want) the parent's TTY — inheriting it
-    // keeps Bun waiting on the subprocess fds even after the user cancels.
-    // Terminal-owning editors MUST inherit so the user can actually use them.
-    const stdio: ["inherit" | "ignore", "inherit" | "ignore", "inherit" | "ignore"] = resolved.meta
-      .gui
-      ? ["ignore", "ignore", "ignore"]
-      : ["inherit", "inherit", "inherit"];
-    proc = Bun.spawn(argv, { stdio });
+    proc = Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"] });
 
     if (signal) {
       if (signal.aborted) {
