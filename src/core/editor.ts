@@ -1,4 +1,4 @@
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { ensureTempDir } from "../fs/temp.ts";
 
@@ -148,6 +148,16 @@ export function _resetEditorCacheForTests(): void {
  * previous spawn can't be hit (VS Code sometimes reuses its open-file
  * state when the path matches, which confuses the -w wait).
  *
+ * Temp files are NOT unlinked per-spawn. `code -w` exits once the file
+ * tab closes, but VS Code may still have async re-read or "recent files"
+ * machinery touching the path afterwards; racing the unlink against that
+ * makes VS Code occasionally report "The editor could not be opened
+ * because the file was not found." and leaves its `code -w` CLI in a
+ * bad state that rejects every subsequent spawn with exit 1 — which
+ * surfaces to the user as the Ctrl-G flash. Let $WRAP_TEMP_DIR accumulate
+ * the per-spawn files and rely on the OS tmpdir cleanup (or a future
+ * invocation-end sweep) to collect them.
+ *
  * Exit-code policy:
  *   0 + non-empty file → replace buffer.
  *   0 + empty file     → keep buffer (return null).
@@ -195,11 +205,5 @@ export async function spawnEditor(
     return trimmed.length === 0 ? null : trimmed;
   } catch {
     return null;
-  } finally {
-    try {
-      unlinkSync(filePath);
-    } catch {
-      // Already deleted or never created; either way, no cleanup work left.
-    }
   }
 }

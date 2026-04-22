@@ -392,17 +392,26 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     };
   }, [guiSpawn, resolvedEditor, dispatch]);
 
-  // Esc dispatches key-esc in every mode except confirming (which has its
-  // own binding list below).
-  useKeyBindings([{ on: "escape", do: () => dispatch({ type: "key-esc" }) }], {
-    isActive:
-      state.tag === "editing" ||
-      state.tag === "composing-followup" ||
-      state.tag === "processing-followup" ||
-      state.tag === "composing-interactive" ||
-      state.tag === "processing-interactive" ||
-      state.tag === "executing-step",
-  });
+  // Esc (and Ctrl-C) dispatch key-esc in every mode except confirming —
+  // confirming has its own binding list below. Ctrl-C is a conventional
+  // "abort whatever's in front of me" in a terminal; we deliberately don't
+  // show it in the action bar because it's a universal escape hatch, not
+  // a mode-specific action.
+  useKeyBindings(
+    [
+      { on: "escape", do: () => dispatch({ type: "key-esc" }) },
+      { on: { key: "c", ctrl: true }, do: () => dispatch({ type: "key-esc" }) },
+    ],
+    {
+      isActive:
+        state.tag === "editing" ||
+        state.tag === "composing-followup" ||
+        state.tag === "processing-followup" ||
+        state.tag === "composing-interactive" ||
+        state.tag === "processing-interactive" ||
+        state.tag === "executing-step",
+    },
+  );
 
   // Confirming-mode key handling. Hotkeys derive from `label[0]` so renaming
   // a label re-routes its hotkey automatically. `cancel` also accepts `q` and
