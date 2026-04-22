@@ -148,3 +148,45 @@
   mutated: 'apiKey.length > 4'
   reason: unreachable — this line only runs after `apiKey.length < 8` returned; the ternary arms are equivalent for all reachable lengths (>= 8), where both branches yield the `...XXXX` form.
   added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/^claude-sonnet-\d-\d+$/'
+  reason: equivalent on realistic Anthropic model names — Anthropic's scheme uses single-digit major/minor versions (`claude-sonnet-4-6`), so `\d` and `\d+` match the same set. Divergence only on hypothetical multi-digit majors.
+  added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/claude-sonnet-\d+-\d+$/'
+  reason: equivalent on realistic input — the regex is applied to models.dev model ids which always begin with the model family. No prefix before `claude-sonnet-` occurs in practice, so dropping the `^` anchor changes nothing.
+  added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/^claude-sonnet-\d+-\d$/'
+  reason: equivalent on realistic inputs — Anthropic sonnet versions are single-digit minors; `\d` and `\d+` match identically. Only diverges on hypothetical multi-digit minors.
+  added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '""'
+  reason: cosmetic nerdIcon glyph shown only in the wizard when nerdFonts is enabled. No runtime behavior depends on the exact codepoint; binding it in a test would be brittle.
+  added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"sk-or-v1-"'
+  mutated: '""'
+  reason: cosmetic — apiKeyPlaceholder is a TextInput hint shown in the wizard. No validation or runtime behavior reads it.
+  added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"gsk_"'
+  mutated: '""'
+  reason: cosmetic — apiKeyPlaceholder is a TextInput hint shown in the wizard. No validation or runtime behavior reads it.
+  added: 2026-04-22
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '""'
+  reason: cosmetic nerdIcon glyph shown only in the wizard when nerdFonts is enabled. No runtime behavior depends on the exact codepoint.
+  added: 2026-04-22
