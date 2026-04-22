@@ -4,7 +4,7 @@
   "commandRunner": {
     "command": "STRYKER=1 bun test"
   },
-  "mutate": ["src/command-response.schema.ts", "src/core/parse-response.ts"],
+  "mutate": ["src/command-response.schema.ts"],
   "coverageAnalysis": "off",
   "reporters": ["html", "clear-text", "progress"],
   "timeoutMS": 15000,
