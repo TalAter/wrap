@@ -46,3 +46,9 @@
   mutated: 'if (autoExec && true)'
   reason: defensive; runLoop never emits loop-final with {final:false, risk:low} or yolo+non-final (both inline-executed), so on every producible input the final-check is redundant with the autoExec gate
   added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'event.type === "notification" && event.notification.kind === "step-output"'
+  mutated: 'event.type === "" && event.notification.kind === "step-output"'
+  reason: defensive branch in reduceConfirming — notifications never reach the reducer while state.tag is "confirming" because the notification-router's isDialogLive returns true only for processing-followup/executing-step
+  added: 2026-04-22
