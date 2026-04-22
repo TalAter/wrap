@@ -16,3 +16,9 @@
   mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
   reason: equivalent on realistic LLM output — \s* vs \S* only diverges when fence info-line has trailing whitespace before newline, which LLMs don't produce
   added: 2026-04-21
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'case "exiting": return state;'
+  mutated: 'case "exiting":'
+  reason: reducer is never called with an exiting-tagged state; the coordinator's `exited` guard short-circuits dispatch before reduce runs
+  added: 2026-04-22
