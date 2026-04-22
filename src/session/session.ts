@@ -345,7 +345,7 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   }
 }
 
-async function finaliseOutcome(outcome: SessionOutcome, entry: LogEntry): Promise<number> {
+export async function finaliseOutcome(outcome: SessionOutcome, entry: LogEntry): Promise<number> {
   switch (outcome.kind) {
     case "answer":
       console.log(outcome.content);
@@ -360,7 +360,7 @@ async function finaliseOutcome(outcome: SessionOutcome, entry: LogEntry): Promis
       return 1;
     case "cancel":
       entry.outcome = "cancelled";
-      return 1;
+      return 0;
     case "error":
       // Throw rather than return — main.ts catches and renders via chrome.
       // The throw runs AFTER the finally writes the log, so the failure

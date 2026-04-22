@@ -116,7 +116,7 @@ export type SessionOutcome =
     }
   /** A reply/answer was returned (initial or via follow-up). Print to stdout. */
   | { kind: "answer"; content: string }
-  /** User cancelled. Exit code 1. */
+  /** User cancelled. Exit code 0 — user-initiated abort is graceful. */
   | { kind: "cancel" }
   /** No TTY, can't show the dialog. Exit code 1 with a chrome line explaining. */
   | { kind: "blocked"; command: string }
