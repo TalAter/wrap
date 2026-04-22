@@ -312,6 +312,34 @@ describe("runRound", () => {
     expect(last?.content).toBe(promptConstants.jsonRetryInstruction);
   });
 
+  test("applyCapture survives a provider error before any llm-wire notification with logTraces on", async () => {
+    // With logTraces=true, applyCapture runs past the early-return and
+    // dereferences the WireCapture the subscribe-callback should have
+    // populated. When the provider throws before publishing llm-wire,
+    // `captured` is still undefined — the optional chains must guard it
+    // rather than TypeError out.
+    seedTestConfig({ logTraces: true });
+    const provider: Provider = {
+      runPrompt: async () => {
+        throw new Error("connection refused");
+      },
+    };
+    let thrown: unknown;
+    try {
+      await runRound(provider, makeTranscript(), scaffold, {
+        isLastRound: false,
+        model: "test",
+        showSpinner: false,
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(RoundError);
+    if (thrown instanceof RoundError) {
+      expect(thrown.message).toContain("connection refused");
+    }
+  });
+
   test("throws RoundError carrying the parse error message when json-retry also fails", async () => {
     const provider: Provider = {
       runPrompt: async () => {

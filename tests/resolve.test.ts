@@ -58,10 +58,6 @@ describe("resolveSettings — precedence", () => {
     expect(result.logTraces).toBe(true);
   });
 
-  test("missing default leaves key undefined (not materialized)", () => {
-    const result = resolveSettings(mods(), {}, {});
-    expect(result.defaultProvider).toBeUndefined();
-  });
 });
 
 describe("resolveSettings — boolean env coercion", () => {

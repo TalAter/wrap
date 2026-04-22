@@ -117,7 +117,6 @@ describe("probeTools", () => {
   });
 
   test("unavailable excludes tools that are installed", () => {
-    // `bun` is guaranteed present — the test runs under bun.
     const result = probe();
     expect(result.unavailable).not.toContain("bun");
   });

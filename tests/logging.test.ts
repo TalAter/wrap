@@ -501,9 +501,8 @@ describe("scrubApiKey", () => {
   });
 
   test("preserves primitive values (numbers, booleans)", () => {
-    const secret = "sk-secret-12345678";
     const body = { n: 42, b: true };
-    const scrubbed = scrubApiKey(body, secret);
+    const scrubbed = scrubApiKey(body, "sk-secret-12345678");
     expect(scrubbed.n).toBe(42);
     expect(scrubbed.b).toBe(true);
   });

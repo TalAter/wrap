@@ -295,7 +295,6 @@ describe("runLoop", () => {
       state,
       makeOptions({ signal: ctrl.signal }),
     );
-    const events: LoopEvent[] = [];
     let final: LoopReturn | undefined;
     while (true) {
       const { value, done } = await gen.next();
@@ -303,10 +302,6 @@ describe("runLoop", () => {
         final = value;
         break;
       }
-      events.push(value);
-      // Abort once the runner has committed to running the step — the
-      // post-exec check at runner.ts must observe the aborted signal and
-      // return without pushing a step turn.
       if (value.type === "step-running") ctrl.abort();
     }
     expect(final?.type).toBe("aborted");
