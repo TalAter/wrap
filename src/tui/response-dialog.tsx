@@ -375,17 +375,20 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
 
   // GUI editor spawn runs in the dialog, reducer-unaware. On completion,
   // dispatch draft-change (if text returned) and clear the local flag.
+  // The AbortController ensures that if the dialog unmounts (user cancelled
+  // the session while the editor was still open), spawnEditor unref's the
+  // subprocess so Node can exit without waiting for the editor to close.
   useEffect(() => {
     if (!guiSpawn || !resolvedEditor) return;
-    let cancelled = false;
+    const ctrl = new AbortController();
     void (async () => {
-      const newText = await spawnEditor(resolvedEditor, guiSpawn.draft);
-      if (cancelled) return;
+      const newText = await spawnEditor(resolvedEditor, guiSpawn.draft, ctrl.signal);
+      if (ctrl.signal.aborted) return;
       if (newText !== null) dispatch({ type: "draft-change", text: newText });
       setGuiSpawn(null);
     })();
     return () => {
-      cancelled = true;
+      ctrl.abort();
     };
   }, [guiSpawn, resolvedEditor, dispatch]);
 

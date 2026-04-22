@@ -209,7 +209,7 @@ function EditableTextInput(
     return (
       <InputFrame>
         <Box width="100%" justifyContent="center">
-          <Text color={themeHex(getTheme().text.muted)}>Save and close editor to continue...</Text>
+          <Text color={themeHex(getTheme().text.muted)}>... Save and close editor to continue ...</Text>
         </Box>
       </InputFrame>
     );

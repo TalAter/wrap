@@ -131,23 +131,65 @@ export function _resetEditorCacheForTests(): void {
  * anything went wrong. The caller decides what to do with null (keep
  * current buffer is the rule across all call sites).
  *
+ * GUI editors are spawned with stdio: "ignore" so they can't read from or
+ * hold the parent's TTY. Terminal-owning editors inherit the parent TTY —
+ * that's the whole point, and the coordinator has already unmounted Ink +
+ * dropped raw mode before we get here.
+ *
+ * `signal` lets the caller abort the wait. On abort, the subprocess is
+ * unref'd (Bun) so it can outlive this process without keeping Node alive,
+ * and we resolve null without touching the buffer. For a GUI editor the
+ * user started from Ctrl-G, the editor window stays open — rude to kill
+ * it, it might have other work.
+ *
  * Exit-code policy:
  *   0 + non-empty file → replace buffer.
  *   0 + empty file     → keep buffer (return null).
  *   non-zero           → keep buffer (return null).
  */
-export async function spawnEditor(resolved: ResolvedEditor, draft: string): Promise<string | null> {
+export async function spawnEditor(
+  resolved: ResolvedEditor,
+  draft: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   const tempDir = ensureTempDir();
   const filePath = join(tempDir, "prompt.md");
+  let proc: ReturnType<typeof Bun.spawn> | undefined;
   try {
     writeFileSync(filePath, draft, "utf-8");
     const argv = resolved.meta.waitFlag
       ? [resolved.path, resolved.meta.waitFlag, filePath]
       : [resolved.path, filePath];
-    const proc = Bun.spawn(argv, {
-      stdio: ["inherit", "inherit", "inherit"],
-    });
-    const exitCode = await proc.exited;
+    // GUI editors don't need (or want) the parent's TTY — inheriting it
+    // keeps Bun waiting on the subprocess fds even after the user cancels.
+    // Terminal-owning editors MUST inherit so the user can actually use them.
+    const stdio: ["inherit" | "ignore", "inherit" | "ignore", "inherit" | "ignore"] =
+      resolved.meta.gui
+        ? ["ignore", "ignore", "ignore"]
+        : ["inherit", "inherit", "inherit"];
+    proc = Bun.spawn(argv, { stdio });
+
+    if (signal) {
+      if (signal.aborted) {
+        proc.unref();
+        return null;
+      }
+      const exitPromise: Promise<"exited"> = proc.exited.then(() => "exited");
+      const abortPromise = new Promise<"aborted">((resolve) => {
+        signal.addEventListener("abort", () => resolve("aborted"), { once: true });
+      });
+      const outcome = await Promise.race([exitPromise, abortPromise]);
+      if (outcome === "aborted") {
+        // Release Bun's grip on the subprocess; node event loop can drain
+        // even if the editor is still open (user will close it themselves).
+        proc.unref();
+        return null;
+      }
+    } else {
+      await proc.exited;
+    }
+
+    const exitCode = proc.exitCode;
     if (exitCode !== 0) return null;
     const raw = readFileSync(filePath, "utf-8");
     const trimmed = raw.replace(/\n$/, "");
