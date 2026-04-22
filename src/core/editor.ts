@@ -1,7 +1,7 @@
-import { closeSync, fsyncSync, openSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { getWrapHome } from "../fs/home.ts";
 import { chrome } from "./output.ts";
-import { ensureTempDir } from "../fs/temp.ts";
 
 export type EditorMeta = {
   displayName: string;
@@ -126,29 +126,46 @@ export function _resetEditorCacheForTests(): void {
 }
 
 /**
- * Spawn the resolved editor on a temp file seeded with `draft`. Awaits exit,
+ * Read a file with a brief retry on ENOENT. VS Code (and other editors) do
+ * atomic saves by renaming a temp file over the target — there's a short
+ * window where the path doesn't resolve. A few retries at small intervals
+ * cover that window without blocking meaningfully on the common case.
+ */
+function readFileWithRetry(filePath: string, maxAttempts = 5, delayMs = 20): string {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return readFileSync(filePath, "utf-8");
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" || attempt === maxAttempts - 1) throw e;
+      Bun.sleepSync(delayMs);
+    }
+  }
+  // Unreachable — the loop either returns or throws.
+  throw new Error("readFileWithRetry: unreachable");
+}
+
+/**
+ * Spawn the resolved editor on a buffer file seeded with `draft`. Awaits exit,
  * reads the file, returns the new buffer text (trailing "\n" trimmed) or
  * null when the editor exited non-zero / wrote nothing / anything went
  * wrong. The caller decides what to do with null (keep current buffer is
  * the rule across all call sites).
  *
- * Stable temp path `$WRAP_TEMP_DIR/prompt.md`. `writeFileSync` + `fsyncSync`
- * before spawn so VS Code can never see the file half-written or missing
- * when its `code -w` CLI forwards the open to the main process. The file
- * is re-written on every spawn (overwriting the previous draft), not
- * unlinked — the previous "unlink after close" variant raced with VS
- * Code's async post-open bookkeeping and occasionally produced "The
- * editor could not be opened because the file was not found."
+ * Buffer path is `$WRAP_HOME/cache/compose.md` — deliberately NOT in
+ * $WRAP_TEMP_DIR (/tmp on most systems) because macOS's /private/var/folders
+ * has quirky file-watcher behavior that made VS Code report our freshly-
+ * written temp file as "deleted" mid-edit, and because stable home-dir
+ * paths avoid the read-after-atomic-rename race editors trigger on save.
+ * We still retry readFileSync on ENOENT to cover that window anyway.
  *
- * `signal` lets the caller abort the wait. On abort, we call proc.unref()
- * so Bun's event loop stops counting the subprocess as a live ref — the
- * GUI editor keeps running (user may have unsaved work) but Node exits
- * cleanly instead of hanging until the editor closes.
+ * `signal` lets the caller abort the wait. On abort, proc.unref() releases
+ * Bun's grip on the subprocess — GUI editors keep running, Node exits
+ * cleanly.
  *
  * Stdio: "inherit" across the board. GUI editors need their real stdio
- * for `-w` signaling (VS Code's CLI uses a wait-marker file but still
- * prints status to stderr in some flows); terminal-owning editors need
- * inherit for obvious reasons.
+ * for `-w` wait signaling; terminal-owning editors need it for obvious
+ * reasons.
  *
  * Exit-code policy:
  *   0 + non-empty file → replace buffer.
@@ -160,25 +177,12 @@ export async function spawnEditor(
   draft: string,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  const tempDir = ensureTempDir();
-  const filePath = join(tempDir, "prompt.md");
+  const cacheDir = join(getWrapHome(), "cache");
+  const filePath = join(cacheDir, "compose.md");
   let proc: ReturnType<typeof Bun.spawn> | undefined;
   try {
+    mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, draft, "utf-8");
-    // fsync to make sure the contents + metadata are on disk before any
-    // other process opens the path. Cheap insurance against the VS Code
-    // "file not found" flake.
-    try {
-      const fd = openSync(filePath, "r");
-      try {
-        fsyncSync(fd);
-      } finally {
-        closeSync(fd);
-      }
-    } catch {
-      // fsync is best-effort; if it fails we still proceed and let the
-      // spawn surface any real error.
-    }
 
     const argv = resolved.meta.waitFlag
       ? [resolved.path, resolved.meta.waitFlag, filePath]
@@ -208,7 +212,7 @@ export async function spawnEditor(
       chrome(`${resolved.meta.displayName} exited with code ${exitCode} — keeping current draft`);
       return null;
     }
-    const raw = readFileSync(filePath, "utf-8");
+    const raw = readFileWithRetry(filePath);
     const trimmed = raw.replace(/\n$/, "");
     return trimmed.length === 0 ? null : trimmed;
   } catch (e) {
