@@ -484,6 +484,15 @@ describe("reduce — executing-step", () => {
     expect(next.outcome.message).toBe("boom");
   });
 
+  test("loop-final aborted from executing-step → state by reference (defensive no-op)", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "aborted" },
+    });
+    expect(next).toBe(state);
+  });
+
   test("key-esc from executing-step → confirming (keeps prior state)", () => {
     const state = makeExecutingStep({ response: nonFinalMed, outputSlot: "so far" });
     const next = reduce(state, { type: "key-esc" });
