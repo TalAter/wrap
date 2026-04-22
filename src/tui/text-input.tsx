@@ -279,9 +279,15 @@ function EditableTextInput(
     let flatOffset = 0;
     for (let i = 0; i < localRow; i++) flatOffset += (visible[i]?.len ?? 0) + 1;
     flatOffset += localCol;
+    const rawAt = flat.charAt(flatOffset);
+    // An inverse-rendered "\n" produces no visible cell, so the cursor
+    // disappears on empty lines (and at the end of any line where the
+    // buffer runs right into a newline). Substitute a space and keep the
+    // newline in `after` so the line structure below the cursor survives.
+    const cursorOnNewline = rawAt === "\n";
     const before = flat.slice(0, flatOffset);
-    const at = flat.charAt(flatOffset) || " ";
-    const after = flat.slice(flatOffset + 1);
+    const at = rawAt === "" || cursorOnNewline ? " " : rawAt;
+    const after = cursorOnNewline ? flat.slice(flatOffset) : flat.slice(flatOffset + 1);
     return (
       <InputFrame>
         <Text color={themeHex(getTheme().text.primary)} wrap="truncate-end">
