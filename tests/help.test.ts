@@ -58,6 +58,13 @@ describe("renderPlain", () => {
     expect(result).toContain("Do baz");
   });
 
+  test("includes the Examples section (plain mode)", () => {
+    const result = renderPlain(testCmds, testOpts);
+    expect(result).toContain("Examples:");
+    expect(result).toContain("wrap copy the contents of my .env file");
+    expect(result).toContain("launch interactive mode");
+  });
+
   test("includes command and option descriptions", () => {
     const result = renderPlain(testCmds, testOpts);
     expect(result).toContain("Do foo");

@@ -41,11 +41,23 @@ function formatFlags(flags: CLIFlag[], colorize?: (text: string) => string): str
   });
 }
 
+const EXAMPLES_PLAIN: string[] = [
+  "Examples:",
+  "  wrap copy the contents of my .env file to clipboard, mask any IP addresses",
+  "      wrap writes the shell command for your request and runs it after",
+  "      you confirm",
+  "  wrap",
+  "      launch interactive mode — compose a multiline prompt in a friendly",
+  "      editor",
+];
+
 export function renderPlain(commands: CLIFlag[], options: CLIFlag[]): string {
   const lines = [
     "wrap - natural language shell commands",
     "",
     "Usage: w <prompt>         Run a natural language query",
+    "",
+    ...EXAMPLES_PLAIN,
     "",
     "Commands:",
     ...formatFlags(commands),
@@ -74,6 +86,14 @@ export function renderStyled(
     `  ${dim("natural language shell commands")}`,
     "",
     `  ${bold("Usage:")} w <prompt>`,
+    "",
+    `  ${bold("Examples:")}`,
+    `    ${colorizeFlag("wrap copy the contents of my .env file to clipboard, mask any IP addresses")}`,
+    `        ${dim("wrap writes the shell command for your request and runs it after")}`,
+    `        ${dim("you confirm")}`,
+    `    ${colorizeFlag("wrap")}`,
+    `        ${dim("launch interactive mode — compose a multiline prompt in a friendly")}`,
+    `        ${dim("editor")}`,
     "",
     `  ${bold("Commands:")}`,
     ...formatFlags(commands, colorizeFlag),

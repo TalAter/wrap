@@ -151,6 +151,10 @@ export type LogEntry = {
   prompt_hash: string;
   rounds: Round[];
   outcome: "success" | "error" | "blocked" | "cancelled" | "max_rounds";
+  /** How the prompt arrived: argv (default), pipe (stdin), or tui (the
+   *  interactive composer). Absent entries predate this field and should be
+   *  treated as "argv" by consumers. */
+  input_source?: "argv" | "pipe" | "tui";
 };
 
 export function createLogEntry(params: {
@@ -162,6 +166,7 @@ export function createLogEntry(params: {
   memory?: Memory;
   provider: ResolvedProvider;
   promptHash: string;
+  inputSource?: "argv" | "pipe" | "tui";
 }): LogEntry {
   const entry: LogEntry = {
     id: crypto.randomUUID(),
@@ -193,6 +198,7 @@ export function createLogEntry(params: {
   if (params.memory && Object.keys(params.memory).length > 0) {
     entry.memory = params.memory;
   }
+  if (params.inputSource !== undefined) entry.input_source = params.inputSource;
   return entry;
 }
 

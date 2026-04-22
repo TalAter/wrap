@@ -40,6 +40,11 @@ export type SessionOptions = {
   attachedInputPreview?: string;
   /** True when the preview was shortened from the full content. */
   attachedInputTruncated?: boolean;
+  /** How the prompt arrived — main.ts decides, session records.
+   *  Not overridden when the interactive composer kicks off from within
+   *  the session, so callers that want "tui" for interactive bootstrap
+   *  must pass it explicitly. */
+  inputSource?: "argv" | "pipe" | "tui";
 };
 
 /**
@@ -68,6 +73,7 @@ export async function runSession(
     memory,
     provider: options.resolvedProvider,
     promptHash: PROMPT_HASH,
+    inputSource: options.inputSource,
   });
 
   const buildScaffold = (p: string) =>
@@ -174,6 +180,14 @@ export async function runSession(
       scaffold = buildScaffold(state.draft);
       transcript.push({ kind: "user", text: scaffold.initialUserText });
       entry.prompt = state.draft;
+      entry.input_source = "tui";
+      // --verbose buffers lines through the notification bus while the dialog
+      // is up and flushes on teardown, so this prompt echo lands in scrollback
+      // after the invocation finishes — users get to see exactly what they
+      // submitted without the live dialog competing for attention.
+      if (config.verbose) {
+        for (const line of state.draft.split("\n")) verbose(`prompt: ${line}`);
+      }
       loopState.budgetRemaining = maxRounds;
       startPumpLoop({ isInitialLoop: true, followupText: undefined });
     }

@@ -123,6 +123,12 @@ export async function main() {
       verbose(`CWD: ${countCwdFiles(cwdFiles)} files listed`);
     }
 
+    // The interactive composer will override this to "tui" on submit;
+    // "argv" is the default whenever a prompt actually came through argv,
+    // "pipe" covers the prompt-less pipe case.
+    const inputSource: "argv" | "pipe" | "tui" =
+      input.type === "prompt" ? "argv" : attachedInputBytes ? "pipe" : "argv";
+
     process.exitCode = await runSession(prompt, provider, {
       memory,
       cwd,
@@ -133,6 +139,7 @@ export async function main() {
       attachedInputSize,
       attachedInputPreview,
       attachedInputTruncated,
+      inputSource,
     });
   } catch (e) {
     chrome(e instanceof Error ? e.message : String(e));
