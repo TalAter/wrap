@@ -34,7 +34,7 @@ export function chooseChildStdin(deps?: {
   isTTY?: boolean | undefined;
   tryOpenTty?: () => number;
 }): "inherit" | "ignore" | number {
-  const isTTY = deps?.isTTY ?? process.stdin.isTTY;
+  const isTTY = deps ? deps.isTTY : process.stdin.isTTY;
   if (isTTY) return "inherit";
   const open = deps?.tryOpenTty ?? (() => openSync("/dev/tty", "r"));
   try {

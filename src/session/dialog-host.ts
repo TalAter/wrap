@@ -28,7 +28,7 @@ export function chooseDialogStdin(deps?: {
   isTTY?: boolean | undefined;
   tryOpenTty?: () => number;
 }): { stream: NodeJS.ReadStream; fd: number | null } {
-  const isTTY = deps?.isTTY ?? process.stdin.isTTY;
+  const isTTY = deps ? deps.isTTY : process.stdin.isTTY;
   if (isTTY) return { stream: process.stdin, fd: null };
   const open = deps?.tryOpenTty ?? (() => openSync("/dev/tty", "r"));
   try {
