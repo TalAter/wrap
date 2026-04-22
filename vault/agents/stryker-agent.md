@@ -28,6 +28,7 @@ Keep Stryker mutation testing honest without accumulating noise tests. Survivors
 
 ## Workflow
 
+0. **Setup.** If `node_modules/` is missing or any import fails (`Cannot find package …`), run `bun install` once before doing anything else. Cold checkouts need this.
 1. **Prune.** Load `stryker-ignore.yaml`. Drop entries where `added + 10 days < today`. If you pruned anything, commit: `stryker-ignore: prune stale entries`.
 2. **Pick mutate set.** List `src/**/*.ts` files touched in the last 26 hours:
    ```
@@ -47,9 +48,9 @@ Keep Stryker mutation testing honest without accumulating noise tests. Survivors
 
 3. **Run mutate with override.** Pass the resulting list as a comma-separated `--mutate` arg so the config file is NOT modified:
    ```
-   bunx stryker run --mutate "<file1>,<file2>,..."
+   bun run mutate -- --mutate "<file1>,<file2>,..."
    ```
-   Do not edit `stryker.config.json`. Do not commit any config change. Prefer `reports/mutation/mutation.json` if present; otherwise parse the text output. Each survivor: `[Survived] <Mutator>`, file:line, `- original`, `+ mutated`.
+   Stryker can run for **over an hour** on a non-trivial mutate set. The Bash tool's max timeout (10 min) is not enough — run it with `run_in_background: true` and poll/wait via Monitor or repeated background-output reads. Do NOT use `bunx stryker run` directly; the project script (`bun run mutate`) is the source of truth and forwards `--` args through. Do not edit `stryker.config.json`. Do not commit any config change. Prefer `reports/mutation/mutation.json` if present; otherwise parse the text output. Each survivor: `[Survived] <Mutator>`, file:line, `- original`, `+ mutated`.
 4. **Filter.** Drop survivors whose `(file, mutator, original, mutated)` matches a post-prune ignore entry.
 5. **For each remaining survivor** — decide **fix** or **ignore**:
    - **Ignore when:** equivalent mutant (no observable behavior change), unreachable code, cosmetic (e.g. `.name` never read), or the mutated behavior only differs on inputs no real caller produces.
@@ -180,7 +181,7 @@ End your run with a plain-text summary. Structure:
 - ...
 
 ## Needs human intervention
-<If any. For each case: what happened, what you tried, what's blocked. Empty section if nothing to escalate.>
+<If any. For each case: what happened, what you tried, what's blocked, **suggested fix** (one line — the most likely concrete change a human would make to unblock). Empty section if nothing to escalate.>
 ```
 
 This summary is the output a human reads in the routine run UI. Be specific and complete — it's the only feedback loop right now.
