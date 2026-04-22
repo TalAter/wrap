@@ -16,12 +16,16 @@ describe("CommandResponseSchema key order", () => {
 });
 
 describe("schemaText mirror", () => {
-  test("prompt.optimized.json schemaText matches schema source between markers", () => {
-    const schemaPath = join(import.meta.dir, "..", "src", "command-response.schema.ts");
-    const source = readFileSync(schemaPath, "utf8");
-    const match = source.match(/\/\/ SCHEMA_START\n([\s\S]*?)\n\/\/ SCHEMA_END/);
-    expect(match).not.toBeNull();
-    const sourceSchema = (match?.[1] ?? "").trim();
-    expect(promptOptimized.schemaText.trim()).toBe(sourceSchema);
-  });
+  // Stryker reprints source via AST roundtrip, breaking this text-mirror check in sandbox.
+  test.skipIf(!!process.env.STRYKER)(
+    "prompt.optimized.json schemaText matches schema source between markers",
+    () => {
+      const schemaPath = join(import.meta.dir, "..", "src", "command-response.schema.ts");
+      const source = readFileSync(schemaPath, "utf8");
+      const match = source.match(/\/\/ SCHEMA_START\n([\s\S]*?)\n\/\/ SCHEMA_END/);
+      expect(match).not.toBeNull();
+      const sourceSchema = (match?.[1] ?? "").trim();
+      expect(promptOptimized.schemaText.trim()).toBe(sourceSchema);
+    },
+  );
 });

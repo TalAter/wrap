@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "command",
   "commandRunner": {
-    "command": "bun test tests/command-response.schema.test.ts tests/parse-response.test.ts"
+    "command": "STRYKER=1 bun test"
   },
   "mutate": ["src/command-response.schema.ts", "src/core/parse-response.ts"],
   "coverageAnalysis": "off",
