@@ -88,6 +88,43 @@ export class Cursor {
     return this.insert(text);
   }
 
+  // -- Line navigation (logical lines split on "\n") --
+
+  get row(): number {
+    let n = 0;
+    for (let i = 0; i < this.offset; i++) if (this.text.charCodeAt(i) === 10) n++;
+    return n;
+  }
+
+  get col(): number {
+    const prevNl = this.text.lastIndexOf("\n", this.offset - 1);
+    return this.offset - prevNl - 1;
+  }
+
+  upLine(): Cursor {
+    const prevNl = this.text.lastIndexOf("\n", this.offset - 1);
+    if (prevNl < 0) return this;
+    const col = this.offset - prevNl - 1;
+    const prevPrevNl = this.text.lastIndexOf("\n", prevNl - 1);
+    const prevLineStart = prevPrevNl + 1;
+    const prevLineLen = prevNl - prevLineStart;
+    const snappedCol = Math.min(col, prevLineLen);
+    return new Cursor(this.text, prevLineStart + snappedCol);
+  }
+
+  downLine(): Cursor {
+    const nextNl = this.text.indexOf("\n", this.offset);
+    if (nextNl < 0) return this;
+    const prevNl = this.text.lastIndexOf("\n", this.offset - 1);
+    const col = this.offset - prevNl - 1;
+    const nextLineStart = nextNl + 1;
+    const afterNext = this.text.indexOf("\n", nextLineStart);
+    const nextLineEnd = afterNext < 0 ? this.text.length : afterNext;
+    const nextLineLen = nextLineEnd - nextLineStart;
+    const snappedCol = Math.min(col, nextLineLen);
+    return new Cursor(this.text, nextLineStart + snappedCol);
+  }
+
   // -- Rendering helpers --
 
   get beforeCursor(): string {

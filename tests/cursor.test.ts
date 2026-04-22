@@ -286,6 +286,103 @@ describe("Cursor — charAtCursor", () => {
   });
 });
 
+describe("Cursor — row/col", () => {
+  test("row is 0 on first line", () => {
+    expect(new Cursor("hello", 3).row).toBe(0);
+  });
+
+  test("col is offset within first line", () => {
+    expect(new Cursor("hello", 3).col).toBe(3);
+  });
+
+  test("row increments across newlines", () => {
+    expect(new Cursor("a\nb\nc", 4).row).toBe(2);
+  });
+
+  test("col resets at start of next line", () => {
+    const c = new Cursor("abc\ndef", 4);
+    expect(c.row).toBe(1);
+    expect(c.col).toBe(0);
+  });
+
+  test("col counts from preceding newline", () => {
+    const c = new Cursor("abc\ndef", 6);
+    expect(c.col).toBe(2);
+  });
+
+  test("row/col at end of text after trailing newline", () => {
+    const c = new Cursor("abc\n", 4);
+    expect(c.row).toBe(1);
+    expect(c.col).toBe(0);
+  });
+
+  test("empty text → row 0 col 0", () => {
+    const c = new Cursor("", 0);
+    expect(c.row).toBe(0);
+    expect(c.col).toBe(0);
+  });
+});
+
+describe("Cursor — upLine / downLine", () => {
+  test("upLine moves to previous logical line, snapping column", () => {
+    const c = new Cursor("hello\nworld", 9); // on "r" in world (col 3)
+    const up = c.upLine();
+    expect(up.row).toBe(0);
+    expect(up.col).toBe(3);
+  });
+
+  test("downLine moves to next logical line, snapping column", () => {
+    const c = new Cursor("hello\nworld", 2); // col 2 line 0
+    const down = c.downLine();
+    expect(down.row).toBe(1);
+    expect(down.col).toBe(2);
+  });
+
+  test("upLine on first line stays put", () => {
+    const c = new Cursor("hello", 3);
+    expect(c.upLine().offset).toBe(3);
+  });
+
+  test("downLine on last line stays put", () => {
+    const c = new Cursor("hello", 3);
+    expect(c.downLine().offset).toBe(3);
+  });
+
+  test("upLine snaps column to shorter line length", () => {
+    const c = new Cursor("ab\nlonger line", 10); // col 7 on line 1
+    const up = c.upLine();
+    expect(up.row).toBe(0);
+    expect(up.col).toBe(2); // snapped to end of "ab"
+  });
+
+  test("downLine snaps column to shorter line length", () => {
+    const c = new Cursor("longer\nab", 4); // col 4 on line 0
+    const down = c.downLine();
+    expect(down.row).toBe(1);
+    expect(down.col).toBe(2);
+  });
+
+  test("upLine / downLine across multiple lines", () => {
+    const text = "first\nsecond\nthird";
+    const c = new Cursor(text, 14); // "third" offset 13, so 14 → col 1
+    const up = c.upLine();
+    expect(up.row).toBe(1);
+    expect(up.col).toBe(1);
+    const up2 = up.upLine();
+    expect(up2.row).toBe(0);
+    expect(up2.col).toBe(1);
+    const back = up2.downLine().downLine();
+    expect(back.offset).toBe(14);
+  });
+
+  test("upLine from empty line keeps col 0", () => {
+    const c = new Cursor("abc\n", 4); // second line empty
+    const up = c.upLine();
+    expect(up.row).toBe(0);
+    expect(up.col).toBe(0);
+  });
+});
+
 describe("Cursor — rendering helpers", () => {
   test("beforeCursor returns text before offset", () => {
     const c = new Cursor("hello", 3);
