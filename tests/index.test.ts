@@ -493,7 +493,7 @@ describe("piped input", () => {
       {
         type: "command",
         content:
-          "stat -f '%z' $WRAP_TEMP_DIR/input 2>/dev/null || stat -c '%s' $WRAP_TEMP_DIR/input",
+          "stat -c '%s' $WRAP_TEMP_DIR/input 2>/dev/null || stat -f '%z' $WRAP_TEMP_DIR/input",
         risk_level: "low",
       },
       undefined,
@@ -508,9 +508,9 @@ describe("piped input", () => {
       "read mode",
       {
         type: "command",
-        // macOS `stat -f %Lp` and GNU `stat -c %a` both print the octal mode.
+        // GNU `stat -c %a` and macOS `stat -f %Lp` both print the octal mode.
         content:
-          "stat -f '%Lp' $WRAP_TEMP_DIR/input 2>/dev/null || stat -c '%a' $WRAP_TEMP_DIR/input",
+          "stat -c '%a' $WRAP_TEMP_DIR/input 2>/dev/null || stat -f '%Lp' $WRAP_TEMP_DIR/input",
         risk_level: "low",
       },
       undefined,
