@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { chrome } from "./output.ts";
 import { ensureTempDir } from "../fs/temp.ts";
 
 export type EditorMeta = {
@@ -126,37 +127,28 @@ export function _resetEditorCacheForTests(): void {
 
 /**
  * Spawn the resolved editor on a temp file seeded with `draft`. Awaits exit,
- * reads the file, unlinks it, returns the new buffer text (trailing "\n"
- * trimmed) or null when the editor exited non-zero / wrote nothing /
- * anything went wrong. The caller decides what to do with null (keep
- * current buffer is the rule across all call sites).
+ * reads the file, returns the new buffer text (trailing "\n" trimmed) or
+ * null when the editor exited non-zero / wrote nothing / anything went
+ * wrong. The caller decides what to do with null (keep current buffer is
+ * the rule across all call sites).
  *
- * Stdio: "inherit" across the board. GUI editors like `code -w` implement
- * their "wait for file close" signal by reading stdin and exiting when it
- * closes — piping stdin to /dev/null (the "ignore" option) makes them read
- * EOF immediately and return, which looks like a flash of the "Save and
- * close editor..." message followed by nothing. Terminal-owning editors
- * (vim, nano) need inherit for obvious reasons, and the coordinator has
- * already unmounted Ink + dropped raw mode before we get here.
+ * Stable temp path `$WRAP_TEMP_DIR/prompt.md`. `writeFileSync` + `fsyncSync`
+ * before spawn so VS Code can never see the file half-written or missing
+ * when its `code -w` CLI forwards the open to the main process. The file
+ * is re-written on every spawn (overwriting the previous draft), not
+ * unlinked — the previous "unlink after close" variant raced with VS
+ * Code's async post-open bookkeeping and occasionally produced "The
+ * editor could not be opened because the file was not found."
  *
  * `signal` lets the caller abort the wait. On abort, we call proc.unref()
  * so Bun's event loop stops counting the subprocess as a live ref — the
  * GUI editor keeps running (user may have unsaved work) but Node exits
  * cleanly instead of hanging until the editor closes.
  *
- * Each spawn uses a fresh temp filename so a stale VS Code buffer from a
- * previous spawn can't be hit (VS Code sometimes reuses its open-file
- * state when the path matches, which confuses the -w wait).
- *
- * Temp files are NOT unlinked per-spawn. `code -w` exits once the file
- * tab closes, but VS Code may still have async re-read or "recent files"
- * machinery touching the path afterwards; racing the unlink against that
- * makes VS Code occasionally report "The editor could not be opened
- * because the file was not found." and leaves its `code -w` CLI in a
- * bad state that rejects every subsequent spawn with exit 1 — which
- * surfaces to the user as the Ctrl-G flash. Let $WRAP_TEMP_DIR accumulate
- * the per-spawn files and rely on the OS tmpdir cleanup (or a future
- * invocation-end sweep) to collect them.
+ * Stdio: "inherit" across the board. GUI editors need their real stdio
+ * for `-w` signaling (VS Code's CLI uses a wait-marker file but still
+ * prints status to stderr in some flows); terminal-owning editors need
+ * inherit for obvious reasons.
  *
  * Exit-code policy:
  *   0 + non-empty file → replace buffer.
@@ -169,10 +161,25 @@ export async function spawnEditor(
   signal?: AbortSignal,
 ): Promise<string | null> {
   const tempDir = ensureTempDir();
-  const filePath = join(tempDir, `prompt-${crypto.randomUUID()}.md`);
+  const filePath = join(tempDir, "prompt.md");
   let proc: ReturnType<typeof Bun.spawn> | undefined;
   try {
     writeFileSync(filePath, draft, "utf-8");
+    // fsync to make sure the contents + metadata are on disk before any
+    // other process opens the path. Cheap insurance against the VS Code
+    // "file not found" flake.
+    try {
+      const fd = openSync(filePath, "r");
+      try {
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+    } catch {
+      // fsync is best-effort; if it fails we still proceed and let the
+      // spawn surface any real error.
+    }
+
     const argv = resolved.meta.waitFlag
       ? [resolved.path, resolved.meta.waitFlag, filePath]
       : [resolved.path, filePath];
@@ -189,8 +196,6 @@ export async function spawnEditor(
       });
       const outcome = await Promise.race([exitPromise, abortPromise]);
       if (outcome === "aborted") {
-        // Release Bun's grip on the subprocess; node event loop can drain
-        // even if the editor is still open (user will close it themselves).
         proc.unref();
         return null;
       }
@@ -199,11 +204,15 @@ export async function spawnEditor(
     }
 
     const exitCode = proc.exitCode;
-    if (exitCode !== 0) return null;
+    if (exitCode !== 0) {
+      chrome(`${resolved.meta.displayName} exited with code ${exitCode} — keeping current draft`);
+      return null;
+    }
     const raw = readFileSync(filePath, "utf-8");
     const trimmed = raw.replace(/\n$/, "");
     return trimmed.length === 0 ? null : trimmed;
-  } catch {
+  } catch (e) {
+    chrome(`Editor error: ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }
