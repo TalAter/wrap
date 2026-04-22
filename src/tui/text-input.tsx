@@ -74,12 +74,15 @@ function stripNewlines(s: string): string {
  * (keeps tab, LF). One regex, one allocation.
  */
 function sanitizePaste(s: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the whole point is to filter control chars
   return s.replace(/\r\n|[\x00-\x08\x0B-\x1F\x7F]/g, (m) => (m === "\r\n" ? "\n" : ""));
 }
 
-function EditableTextInput(props: (SingleLineEditableProps | MultilineEditableProps) & {
-  editingExternal?: boolean;
-}) {
+function EditableTextInput(
+  props: (SingleLineEditableProps | MultilineEditableProps) & {
+    editingExternal?: boolean;
+  },
+) {
   const { value, onChange, onSubmit, placeholder } = props;
   const multiline = props.multiline === true;
   const masked = !multiline && (props as SingleLineEditableProps).masked === true;
@@ -101,7 +104,8 @@ function EditableTextInput(props: (SingleLineEditableProps | MultilineEditablePr
   usePaste(
     (raw) => {
       const cleaned = multiline ? sanitizePaste(raw) : stripNewlines(raw);
-      const combined = cursor.text.slice(0, cursor.offset) + cleaned + cursor.text.slice(cursor.offset);
+      const combined =
+        cursor.text.slice(0, cursor.offset) + cleaned + cursor.text.slice(cursor.offset);
       const clamped = clampBufferSize(combined);
       if (multiline && clamped.truncated) {
         (props as MultilineEditableProps).onTruncate?.();
@@ -204,10 +208,7 @@ function EditableTextInput(props: (SingleLineEditableProps | MultilineEditablePr
   if (editingExternal) {
     return (
       <InputFrame>
-        <Text color={themeHex(getTheme().text.muted)}>
-          {" "}
-          Save and close editor to continue...
-        </Text>
+        <Text color={themeHex(getTheme().text.muted)}> Save and close editor to continue...</Text>
       </InputFrame>
     );
   }
@@ -253,11 +254,7 @@ function EditableTextInput(props: (SingleLineEditableProps | MultilineEditablePr
   }
 
   const renderedBefore = masked ? mask(cursor.beforeCursor) : cursor.beforeCursor;
-  const renderedCursor = masked
-    ? cursor.charAtCursor === " "
-      ? " "
-      : "•"
-    : cursor.charAtCursor;
+  const renderedCursor = masked ? (cursor.charAtCursor === " " ? " " : "•") : cursor.charAtCursor;
   const renderedAfter = masked ? mask(cursor.afterCursor) : cursor.afterCursor;
 
   return (

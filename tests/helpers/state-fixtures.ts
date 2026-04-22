@@ -91,9 +91,7 @@ export function makeProcessingInteractive(
   };
 }
 
-export function makeEditorHandoff(
-  overrides: Partial<EditorHandoffState> = {},
-): EditorHandoffState {
+export function makeEditorHandoff(overrides: Partial<EditorHandoffState> = {}): EditorHandoffState {
   return {
     tag: "editor-handoff",
     origin: overrides.origin ?? "composing-interactive",

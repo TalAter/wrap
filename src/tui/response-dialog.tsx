@@ -3,11 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
 import { getConfig } from "../config/store.ts";
 import { resolveEditor, spawnEditor } from "../core/editor.ts";
-import {
-  registerExitTeardown,
-  SPINNER_FRAMES,
-  SPINNER_INTERVAL,
-} from "../core/spinner.ts";
+import { registerExitTeardown, SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import type { ThemeTokens } from "../core/theme.ts";
 import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
@@ -294,6 +290,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   // Parent-local: set when TextInput's onTruncate fires, cleared on next
   // keystroke (any onChange fires → effect resets it).
   const [truncatedBanner, setTruncatedBanner] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: draft is the keystroke signal that clears the banner
   useEffect(() => {
     setTruncatedBanner(false);
   }, [draft]);

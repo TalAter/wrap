@@ -160,8 +160,8 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 ### Observability
 - [[logging]] — JSONL logs
 
-### Planned
-- [[interactive-mode]] — free-text prompt area when `w` has no args
+### UX
+- [[interactive-mode]] — free-text compose when `w` has no args on a TTY
 
 ### Canon
 - [[showcase]] — examples of Wrap working well

@@ -136,10 +136,7 @@ export function _resetEditorCacheForTests(): void {
  *   0 + empty file     → keep buffer (return null).
  *   non-zero           → keep buffer (return null).
  */
-export async function spawnEditor(
-  resolved: ResolvedEditor,
-  draft: string,
-): Promise<string | null> {
+export async function spawnEditor(resolved: ResolvedEditor, draft: string): Promise<string | null> {
   const tempDir = ensureTempDir();
   const filePath = join(tempDir, "prompt.md");
   try {

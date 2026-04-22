@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
   _resetEditorCacheForTests,
-  editorKey,
   EDITORS,
+  editorKey,
   resolveEditor,
 } from "../src/core/editor.ts";
 
@@ -105,9 +105,7 @@ describe("resolveEditor", () => {
 
   test("VS Code absolute path in $EDITOR is recognized as GUI", () => {
     const which = (cmd: string) =>
-      cmd === "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
-        ? cmd
-        : null;
+      cmd === "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" ? cmd : null;
     const r = resolveEditor({
       envVisual: "",
       envEditor: "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",

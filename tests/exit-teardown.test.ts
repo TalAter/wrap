@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { SHOW_CURSOR } from "../src/core/ansi.ts";
-import {
-  _resetExitTeardownRegistryForTests,
-  registerExitTeardown,
-} from "../src/core/spinner.ts";
+import { _resetExitTeardownRegistryForTests, registerExitTeardown } from "../src/core/spinner.ts";
 
 let originalOn: typeof process.on;
 let originalWrite: typeof process.stderr.write;
