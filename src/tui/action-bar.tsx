@@ -88,7 +88,7 @@ export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps)
           );
         }
 
-        const glyphColor = item.primary ? highlight : secondary;
+        const glyphColor = item.primary ? highlightBright : secondary;
         return (
           <Text key={`${item.glyph}:${item.label}`}>
             {dividerNode}

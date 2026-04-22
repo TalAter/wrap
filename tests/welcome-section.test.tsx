@@ -29,13 +29,15 @@ function makeCallbacks() {
 const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
 describe("WelcomeSection", () => {
-  test("renders welcome copy", async () => {
+  test("renders wrap logo and welcome copy", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(<WelcomeSection {...cb} />);
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("Welcome to Wrap");
+    expect(text).toContain("██████╗");
+    expect(text).toContain("a cli with taste");
     expect(text).toContain("one-time setup");
+    expect(text).toContain("45 seconds");
   });
 
   test("omits the setup wizard badge", async () => {

@@ -1,4 +1,7 @@
 import { Box, Text, useWindowSize } from "ink";
+import type { Color } from "../core/ansi.ts";
+import { LOGO } from "../core/logo.ts";
+import { getTheme, LIGHT_THEME, themeHex } from "../core/theme.ts";
 import { ActionBar } from "./action-bar.tsx";
 import { DIALOG_CHROME_HEIGHT, DIALOG_CHROME_WIDTH, Dialog } from "./dialog.tsx";
 import { useKeyBindings } from "./key-bindings.ts";
@@ -26,32 +29,64 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
     { on: "return", do: onDone },
   ]);
 
+  const theme = getTheme();
+  const highlight = themeHex(theme.interactive.highlight);
+  const success = themeHex(theme.select.selected);
+  const isLight = theme === LIGHT_THEME;
+  // Top of logo dimmer (~70%) → bottom solid; gradient implies light source above.
+  const logoRowColor = (i: number): string => {
+    const t = LOGO.length > 1 ? i / (LOGO.length - 1) : 1;
+    const v = isLight ? Math.round(77 * (1 - t)) : Math.round(179 + 76 * t);
+    return themeHex([v, v, v] as Color);
+  };
+
   const textBlock = (
     <Box flexDirection="column">
-      <Text bold>Welcome to Wrap!</Text>
+      {LOGO.map((line, i) => (
+        <Text key={line} bold color={logoRowColor(i)}>
+          {line}
+        </Text>
+      ))}
+      <Text>
+        a cli with{" "}
+        <Text color={highlight} bold>
+          taste
+        </Text>{" "}
+        (yours)
+      </Text>
+      <Text> </Text>
       <Text> </Text>
       <Text>Quick one-time setup — pick your AI provider and a couple of preferences.</Text>
       <Text> </Text>
-      <Text>Takes ~45 seconds.</Text>
+      <Text> </Text>
+      <Text>
+        ⏱︎ Takes <Text color={success}>~45 seconds.</Text>
+      </Text>
+      <Text> </Text>
     </Box>
   );
 
   const keyHints = (
-    <Box paddingLeft={3}>
-      <ActionBar
-        items={[
-          { glyph: "⏎", label: "to continue", primary: true },
-          { glyph: "Esc", label: "to cancel" },
-        ]}
-      />
-    </Box>
+    <ActionBar
+      items={[
+        { glyph: "⏎", label: "to continue", primary: true },
+        { glyph: "Esc", label: "to cancel" },
+      ]}
+    />
   );
+
+  const PAD_LEFT = 3;
 
   return (
     <Dialog gradientStops={getWizardStops()} naturalContentWidth={contentWidth}>
       {showAnimation ? (
         <Box flexDirection="row" height={CANVAS_HEIGHT}>
-          <Box flexDirection="column" width={WIZARD_CONTENT_WIDTH} height={CANVAS_HEIGHT}>
+          <Box
+            flexDirection="column"
+            width={WIZARD_CONTENT_WIDTH}
+            height={CANVAS_HEIGHT}
+            paddingLeft={PAD_LEFT}
+          >
             <Box flexGrow={1} flexDirection="column" justifyContent="center">
               {textBlock}
             </Box>
@@ -61,7 +96,7 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
           <WelcomeAnimation />
         </Box>
       ) : (
-        <Box flexDirection="column" width={WIZARD_CONTENT_WIDTH}>
+        <Box flexDirection="column" width={WIZARD_CONTENT_WIDTH} paddingLeft={PAD_LEFT}>
           {textBlock}
           <Text> </Text>
           {keyHints}

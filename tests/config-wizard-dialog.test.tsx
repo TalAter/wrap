@@ -94,7 +94,7 @@ describe("ConfigWizardDialog", () => {
     const { lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await wait();
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("Welcome to Wrap");
+    expect(text).toContain("a cli with taste");
   });
 
   test("Enter on welcome advances to nerd icons", async () => {

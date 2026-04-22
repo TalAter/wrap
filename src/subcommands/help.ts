@@ -1,4 +1,5 @@
 import { bold, dim, fgCode, gradient, gradientCells, SHOW_CURSOR } from "../core/ansi.ts";
+import { LOGO, LOGO_WIDTH } from "../core/logo.ts";
 import {
   type ColorLevel,
   chrome,
@@ -20,16 +21,9 @@ const SPECTRUM: [number, number, number][] = [
   [51, 102, 255],
   [204, 51, 255],
 ];
-
-const LOGO = [
-  "  █   █  █▀▀▄  ▄▀▀▄  █▀▀▄",
-  "  █ █ █  █▄▄▀  █▄▄█  █▄▄▀",
-  "  ▀▀ ▀▀  ▀  ▀  ▀  ▀  ▀   ",
-];
-
-const LOGO_WIDTH = (LOGO[0] as string).length;
-// 2-space prefix + dashes to match logo width
-const BAR = `  ${"─".repeat(LOGO_WIDTH - 2)}`;
+const INDENT = "  ";
+const INDENTED_LOGO = LOGO.map((l) => `${INDENT}${l}`);
+const BAR = `${INDENT}${"─".repeat(LOGO_WIDTH)}`;
 
 function formatFlags(flags: CLIFlag[], colorize?: (text: string) => string): string[] {
   return flags.map((c) => {
@@ -80,7 +74,7 @@ export function renderStyled(
   const lines: string[] = [
     "",
     gradient(BAR, SPECTRUM, undefined, undefined, level),
-    ...LOGO.map((l) => gradient(l, SPECTRUM, undefined, undefined, level)),
+    ...INDENTED_LOGO.map((l) => gradient(l, SPECTRUM, undefined, undefined, level)),
     gradient(BAR, SPECTRUM, undefined, undefined, level),
     "",
     `  ${dim("natural language shell commands")}`,
@@ -105,7 +99,7 @@ export function renderStyled(
   return `${lines.join("\n")}\n`;
 }
 
-const ART_LINES = [BAR, ...LOGO, BAR];
+const ART_LINES = [BAR, ...INDENTED_LOGO, BAR];
 const FRAMES = 16;
 const FRAME_DELAY = 60;
 const SHINE_RADIUS = 4;
