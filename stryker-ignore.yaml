@@ -34,3 +34,9 @@
   mutated: 'response.final === false && true'
   reason: isNonFinalConfirm is only reached when response.final === false; runLoop never emits loop-final with {final:false, risk:low} (inline-executed), so the risk_level check only runs against med/high — for which !== "low" is already true
   added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'response.risk_level !== "low"'
+  mutated: 'response.risk_level !== ""'
+  reason: risk_level is an enum of {low,medium,high} — it can never equal "", so !== "" is always true; on the med/high responses that actually reach isNonFinalConfirm this is equivalent to the original !== "low"
+  added: 2026-04-22
