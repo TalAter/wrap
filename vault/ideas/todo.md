@@ -6,8 +6,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## Core Query Loop
 
-- [ ] User-edited commands skip auto-fix (architecture supports this, not yet wired)
-- [ ] `truncateToLine()` utility — line-aware truncation for LLM context. Replace naive `slice()` in captured-output truncation (`runner.ts`) and piped input truncation (`format-context.ts`). Pure function in `src/core/truncate.ts`.
 - [ ] Verbose `Context: {N} memory facts, {T} tools, {F} CWD files` line before the first LLM call.
 
 ## Input & Invocation
@@ -26,9 +24,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 - [ ] Trust boundary fence in user message assembly
 - [ ] Split command explanation into short description + separate risk analysis (why it's flagged, what could go wrong)
 - [ ] Show context indicators in dialog — attached input, prior step output, etc. (user has no visibility into what informed the command)
-- [ ] Dialog styling — border, syntax-highlighted command, risk indicator
-- [ ] `[C]opy` option — copy command to clipboard
-- [ ] Responsive action bar — shrink/abbreviate action buttons when dialog is narrow to avoid sprawling layout
+- [ ] `[C]opy` option — copy command to clipboard (reducer action exists as stub no-op in `src/session/reducer.ts`; needs real clipboard write)
 - [ ] Arrow key shortcuts in dialog — Up enters edit mode, Down exits (same as Esc)
 - [ ] Shell history injection — append generated command with inline comment to shell history
 
@@ -40,6 +36,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 ## Error Handling & Auto-Fix
 
 - [ ] Auto-fix scoped to infrastructure-level failures only (command not found, syntax errors, wrong flags)
+- [ ] Skip auto-fix when `SessionOutcome.run.source === "user_override"` — user's edit is intent, don't bounce their failed command back to LLM
 - [ ] Command not found → LLM decides: memory update (system tool) vs path suggestion (local script)
 - [ ] Feed infrastructure errors back to LLM for corrected command
 - [ ] LLM classifies errors as fixable vs informational
@@ -48,12 +45,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 ## LLM Integration
 
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
-- [ ] Make `Provider` self-describing with a `label` field. Today the `Provider` interface in `src/llm/types.ts` only has `runPrompt`; the display label lives separately on `ResolvedProvider` and is computed via `formatProvider(resolved)`. Code that holds a `Provider` and wants to display the model has to be passed the resolved provider too — denormalized and awkward. Add `label: string` to the `Provider` interface, set it in each provider factory (`aiSdkProvider`, `claudeCodeProvider`, `testProvider`) from `formatProvider(resolved)`, and update test fixtures to set `label: "test / test"`. After this lands, drop the `model` field from `LoopOptions` / `RunRoundOptions` and read `provider.label` directly inside `runRound` and `runLoop`.
 - [ ] Add Google (Gemini) support. Bundle `@ai-sdk/google`, add a `kind: "google"` branch in `src/llm/providers/registry.ts` + factory wiring in `src/llm/providers/ai-sdk.ts`, and uncomment the `google` entry in `API_PROVIDERS` in `src/llm/providers/registry.ts`. Google's OpenAI-compat endpoint has gaps in structured-output support, so going through the dedicated SDK is required rather than optional.
-
-## Memory System
-
-- [ ] Lazy probing — on-demand discovery via agent loop non-final step commands (gets smarter over time)
 
 ## Logging (see [[logging]])
 
@@ -78,7 +70,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## Output & UI
 
-- [ ] Extract shared `KeyHints` component — `wizard-chrome.tsx` and `response-dialog.tsx` have near-identical implementations (indent + optional theme-prop threading differ). Deduplicate into `src/tui/key-hints.tsx` with configurable indent.
 - [ ] Visual identity — distinctive color scheme, emoji prefix, characterful messages
 - [ ] Answer rendering — colorful terminal markdown (syntax-highlighted code, bold/italic, lists). Blocked on TUI library.
 - [ ] TUI components — radio buttons, checkboxes, free text input, editable fields
@@ -88,7 +79,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 - [ ] `--config` / `--init` flags — ship the wizard's re-run mode with preselect-from-current-config semantics so unchecking a provider removes it. See [[config]]. `--init` is an alias at first; eventually grows into a broader first-run orchestrator (config + alias setup + anything else).
 - [ ] `--memory` — view/manage memory
-- [ ] `--forget` — delete Wrap's memory and exit (with confirmation prompt)
 
 ## Eval System
 
@@ -112,5 +102,4 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 - [ ] `--print` flag — generate command and print to stdout without executing. Implies force-cmd. Composability primitive for scripting, clipboard, shell widgets. Build alongside mode system (needs same input-parsing infra). Name `--print` not `--dry-run` (non-final steps still execute).
 - [ ] Attached input: `--full` flag to send the complete content to the LLM without truncation (affects prompt preview only; the on-disk input file is always full).
 - [ ] Attached input verbose lines — `Input file: {path} ({size})`, `Preview truncated: ...`. Empty pipes emit nothing.
-- [ ] Interactive mode — `w` with no args opens a free-text prompt area (see [[interactive-mode]]). Blocked on TUI lib.
 - [ ] Contextual prompt sections — inject domain-specific context when CWD signals are present (e.g. if CWD listing contains `package.json`, include a brief section about Node project conventions like `<runner> run <script>` vs built-in subcommands). Keeps the base prompt general while giving the LLM targeted hints when they'd help most. Could also cover Makefile, Cargo.toml, pyproject.toml, etc.
