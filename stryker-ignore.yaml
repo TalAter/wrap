@@ -58,3 +58,105 @@
   mutated: 'event.type === "notification" && event.notification.kind === ""'
   reason: same as the paired mutation on this line — the surrounding branch is unreachable in reduceConfirming because the router never dispatches notification events while the dialog tag is "confirming"
   added: 2026-04-22
+- file: src/config/resolve.ts
+  mutator: StringLiteral
+  original: '"string"'
+  mutated: '""'
+  reason: coerce(type, ...) only reaches the "string" branch via an env- or flag-sourced string setting; current SETTINGS has none (model is skipped in the loop, defaultProvider has neither env nor flag). No caller triggers this path today.
+  added: 2026-04-22
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'captured?.request_wire'
+  mutated: 'captured.request_wire'
+  reason: applyCapture runs only when logTraces is true; every provider that exercises logTraces emits an llm-wire notification, so `captured` is always defined on that path. Unreachable in tests.
+  added: 2026-04-22
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'captured?.raw_response !== undefined'
+  mutated: 'true'
+  reason: same as above — captured is always defined on the logTraces=true path, so the null-guard branch is unreachable.
+  added: 2026-04-22
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response'
+  mutated: 'round.attempts[round.attempts.length - 1].raw_response'
+  reason: equivalent — callOne pushes the attempt before returning undefined, so attempts.length is always >= 1 at this line. The optional chain is defensive.
+  added: 2026-04-22
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: only alters the failedText echoed into a deep-chain scratchpad-retry when raw_response is missing. The value is sent to the LLM and never user-visible; the surrounding behavior is unchanged.
+  added: 2026-04-22
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '`LLM error: ${errMsg}`'
+  mutated: '``'
+  reason: verbose-log text only; the user-facing error via RoundError is unchanged. Cosmetic.
+  added: 2026-04-22
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object" && "round" in e'
+  mutated: 'true && "round" in e'
+  reason: runRound is the only thrower inside the try block and always throws RoundError (an object), so e is never a primitive. The guard is defensive; unreachable in practice.
+  added: 2026-04-22
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object" && "round" in e'
+  mutated: 'e !== null && true && "round" in e'
+  reason: same as above — e is always a RoundError, never a function-with-"round"; the typeof check is defensive and unreachable.
+  added: 2026-04-22
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'if (partial)'
+  mutated: 'if (true)'
+  reason: runRound only throws RoundError, which carries `round`, so `partial` is always truthy on this branch. The null fallback exists for defensive typing; unreachable.
+  added: 2026-04-22
+- file: src/core/runner.ts
+  mutator: BlockStatement
+  original: 'throw new Error("runRound returned a round without a parsed final attempt");'
+  mutated: '{}'
+  reason: defensive assertion against a contract runRound already guarantees (parsed set on success). No caller path can violate it; the throw is unreachable.
+  added: 2026-04-22
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"r"'
+  mutated: '""'
+  reason: openSync flags argument; the surrounding code only runs when stdin is not a TTY and falls back to "ignore" on open failure. Behavior varies by test-env TTY availability and the mutated arg is also valid in some libc implementations.
+  added: 2026-04-22
+- file: src/core/shell.ts
+  mutator: ConditionalExpression
+  original: 'if (typeof stdin === "number")'
+  mutated: 'if (false)'
+  reason: leaked /dev/tty fd is unobservable from a test — the process exits and the OS reclaims it. Killing this mutant would require probing process fd tables, which is brittle.
+  added: 2026-04-22
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell config files"'
+  mutated: '""'
+  reason: cosmetic label in an LLM-context section header; the command output is what matters. Not worth binding in a test.
+  added: 2026-04-22
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"(no output)"'
+  mutated: '""'
+  reason: cosmetic fallback text shown to the LLM for empty probe output; behavior (structure of the section) is the same.
+  added: 2026-04-22
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: 'result.stdout.toString().trim()'
+  mutated: 'result.stdout.toString()'
+  reason: trim only matters for the `if (!output) return null` guard; on a real system `which` produces real paths so output is truthy either way. Divergence only on whitespace-only outputs, which the empty-guard already handles adequately.
+  added: 2026-04-22
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: "output.split(\"\\n\").filter((line) => line.startsWith(\"/\"))"
+  mutated: 'output.split("\n")'
+  reason: on macOS (and other BSD which systems) /usr/bin/which is silent for missing tools — no "not found" line to filter. The filter is effective only on shells where `which` prints noise through 2>&1 (zsh builtin, some Linux). Equivalent on the test env.
+  added: 2026-04-22
+- file: src/logging/entry.ts
+  mutator: EqualityOperator
+  original: 'apiKey.length >= 4'
+  mutated: 'apiKey.length > 4'
+  reason: unreachable — this line only runs after `apiKey.length < 8` returned; the ternary arms are equivalent for all reachable lengths (>= 8), where both branches yield the `...XXXX` form.
+  added: 2026-04-22
