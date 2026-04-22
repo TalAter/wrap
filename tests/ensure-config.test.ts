@@ -14,16 +14,18 @@ describe("ensureConfig", () => {
         defaultProvider: "anthropic",
       }),
     );
-    const config = await ensureConfig({ WRAP_HOME: home });
+    const { config, justCreated } = await ensureConfig({ WRAP_HOME: home });
     expect(config.providers?.anthropic?.model).toBe("claude-haiku-4-5");
     expect(config.defaultProvider).toBe("anthropic");
+    expect(justCreated).toBe(false);
   });
 
   test("returns existing config even if it has no providers (user's problem)", async () => {
     const home = tmpHome();
     writeFileSync(join(home, "config.jsonc"), "{}");
-    const config = await ensureConfig({ WRAP_HOME: home });
+    const { config, justCreated } = await ensureConfig({ WRAP_HOME: home });
     expect(config).toEqual({});
+    expect(justCreated).toBe(false);
   });
 
   test("launches wizard when config.jsonc is missing and writes config + schema on done", async () => {
@@ -33,7 +35,7 @@ describe("ensureConfig", () => {
       defaultProvider: "anthropic",
     };
 
-    const config = await ensureConfig({
+    const { config, justCreated } = await ensureConfig({
       WRAP_HOME: home,
       _testWizardResult: fakeResult,
     });
@@ -41,6 +43,7 @@ describe("ensureConfig", () => {
     expect(config.providers?.anthropic?.apiKey).toBe("sk-new");
     expect(config.providers?.anthropic?.model).toBe("claude-sonnet-4-6");
     expect(config.defaultProvider).toBe("anthropic");
+    expect(justCreated).toBe(true);
 
     // Verify config.jsonc was written
     const raw = readFileSync(join(home, "config.jsonc"), "utf8");
@@ -81,7 +84,7 @@ describe("ensureConfig", () => {
       defaultProvider: "anthropic",
     });
     try {
-      const config = await ensureConfig({ WRAP_HOME: home });
+      const { config } = await ensureConfig({ WRAP_HOME: home });
       expect(config.providers?.anthropic?.apiKey).toBe("env-key");
       expect(config.defaultProvider).toBe("anthropic");
     } finally {

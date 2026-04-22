@@ -54,7 +54,15 @@ export type EnsureConfigOptions = {
  * interactive wizard, write the result, and return the fresh config.
  * On user cancel, exits with code 0.
  */
-export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Config> {
+export type EnsureConfigResult = {
+  config: Config;
+  /** True when the wizard just ran and wrote a fresh config. Callers that would
+   *  otherwise auto-launch a prompt-less session (interactive mode) should
+   *  instead print a completion message and exit. */
+  justCreated: boolean;
+};
+
+export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<EnsureConfigResult> {
   const env = opts.WRAP_HOME ? { ...process.env, WRAP_HOME: opts.WRAP_HOME } : process.env;
   const home = getWrapHome(env);
 
@@ -63,7 +71,7 @@ export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Conf
   // Skip wizard when config exists on disk or was injected via WRAP_CONFIG.
   const existing = readWrapFile(CONFIG_FILENAME, home);
   if (existing !== null || env.WRAP_CONFIG) {
-    return loadConfig(envOverrides);
+    return { config: loadConfig(envOverrides), justCreated: false };
   }
 
   let result: WizardResult | null;
@@ -84,5 +92,5 @@ export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Conf
   writeWizardConfig(result, home);
   writeSchema(home);
   chrome("Configuration saved", "🧠");
-  return loadConfig(envOverrides);
+  return { config: loadConfig(envOverrides), justCreated: true };
 }

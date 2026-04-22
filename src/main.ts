@@ -49,14 +49,23 @@ export async function main() {
 
     const attachedInputBytes = await readAttachedInput();
 
-    if (input.type === "none" && !attachedInputBytes) {
+    // --help when we have nothing to work with: no args, no pipe, no TTY
+    // (scripts / cron). `none + TTY` falls through to the interactive
+    // composer; `none + pipe` falls through to runSession with prompt="".
+    if (input.type === "none" && !attachedInputBytes && !process.stdin.isTTY) {
       await dispatch("--help", []);
       return;
     }
 
     const prompt = input.type === "prompt" ? input.prompt : "";
 
-    const fileConfig = await ensureConfig();
+    const { config: fileConfig, justCreated } = await ensureConfig();
+    if (justCreated && input.type === "none" && !attachedInputBytes) {
+      // Fresh config + no real request to run: don't auto-launch compose,
+      // just tell the user they're ready and exit cleanly.
+      chrome("✓ wrap configured — run w again to start wrapping");
+      return;
+    }
     const base = resolveSettings(modifiers, process.env, fileConfig);
     setConfig(applyModelOverride(base, modifiers, process.env));
 

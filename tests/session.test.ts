@@ -125,6 +125,7 @@ describe("runSession — error path", () => {
   });
 });
 
+
 describe("runSession — no TTY for medium command", () => {
   // Global `stderr` already captures writes; just toggle isTTY for these.
   const origIsTTY = process.stderr.isTTY;
