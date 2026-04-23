@@ -69,8 +69,8 @@ export const DARK_THEME: ThemeTokens = {
   interactive: {
     cursor: [102, 153, 255],
     selection: [26, 42, 77],
-    highlight: [245, 200, 100],
-    highlightBright: [255, 220, 120],
+    highlight: [245, 186, 74],
+    highlightBright: [245, 186, 74],
   },
   select: {
     selected: [120, 230, 160],
