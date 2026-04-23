@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import { useEffect, useState } from "react";
-import { getTheme, type ThemeTokens } from "../core/theme.ts";
+import { getTheme } from "../core/theme.ts";
 import { interpolateGradient } from "./gradient.ts";
 import {
   type AnimationFrame,
@@ -26,12 +26,6 @@ export function nextStep(index: number, frames: readonly AnimationFrame[]): Step
   return { nextIndex: index + 1, delayMs };
 }
 
-// Palette anchored to canvas rows, not the brain's per-frame bounds — rows
-// keep the same color across all frames so the brain doesn't shimmer as it grows.
-export function brainRowColor(y: number, theme: ThemeTokens): string {
-  return interpolateGradient(y, CANVAS_HEIGHT, theme.gradient.welcomeBrain);
-}
-
 export function WelcomeAnimation() {
   const [frameIndex, setFrameIndex] = useState(0);
 
@@ -42,15 +36,17 @@ export function WelcomeAnimation() {
     return () => clearTimeout(id);
   }, [frameIndex]);
 
-  const theme = getTheme();
+  const stops = getTheme().gradient.welcomeBrain;
   const frame = FRAMES[frameIndex] ?? FRAMES[0];
   if (!frame) return null;
 
+  // Palette anchored to canvas rows, not the brain's per-frame bounds — rows
+  // keep the same color across all frames so the brain doesn't shimmer as it grows.
   return (
     <Box flexDirection="column" width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
       {frame.content.map((row, y) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: stable per-frame layout
-        <Text key={y} color={brainRowColor(y, theme)}>
+        <Text key={y} color={interpolateGradient(y, CANVAS_HEIGHT, stops)}>
           {row}
         </Text>
       ))}
