@@ -100,6 +100,15 @@ describe("formatContext", () => {
     expect(result.indexOf("second")).toBeLessThan(result.indexOf("third"));
   });
 
+  test("facts rendered one per line under the header", () => {
+    const result = formatContext(
+      makeParams({
+        memory: { "/": [{ fact: "alpha" }, { fact: "beta" }, { fact: "gamma" }] },
+      }),
+    );
+    expect(result).toContain("## System facts\n- alpha\n- beta\n- gamma");
+  });
+
   test("empty memory produces no facts sections", () => {
     const result = formatContext(makeParams({ memory: {} }));
     expect(result).not.toContain("System facts");
@@ -118,6 +127,15 @@ describe("formatContext", () => {
     expect(result).toContain("## Detected tools");
     expect(result).toContain("/usr/bin/git");
     expect(result).toContain("/usr/bin/curl");
+  });
+
+  test("available tools rendered one per line", () => {
+    const result = formatContext(
+      makeParams({
+        tools: { available: ["/usr/bin/git", "/usr/bin/curl", "/usr/bin/jq"], unavailable: [] },
+      }),
+    );
+    expect(result).toContain("## Detected tools\n/usr/bin/git\n/usr/bin/curl\n/usr/bin/jq");
   });
 
   test("unavailable tools section included when unavailable tools provided", () => {
@@ -271,6 +289,19 @@ describe("formatContext", () => {
       expect(result).toContain("## Attached input");
       expect(result).toContain("Path: /tmp/wrap-scratch-abc/input (16B)");
       expect(result).toContain("some log content");
+    });
+
+    test("attached input has a blank line between path and preview", () => {
+      const result = formatContext(
+        makeParams({
+          attachedInputPath: "/tmp/wrap-scratch-abc/input",
+          attachedInputSize: 16,
+          attachedInputPreview: "some log content",
+        }),
+      );
+      expect(result).toContain(
+        "## Attached input\nPath: /tmp/wrap-scratch-abc/input (16B)\n\nsome log content",
+      );
     });
 
     test("attached input is the first section (before memory facts)", () => {
