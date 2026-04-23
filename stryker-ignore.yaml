@@ -208,3 +208,9 @@
   mutated: '"Stryker was here!"'
   reason: unreachable false branch of the attachedInputSize !== undefined ternary — never evaluated given caller contract.
   added: 2026-04-22
+- file: src/llm/format-context.ts
+  mutator: StringLiteral
+  original: 'lines.push("")'
+  mutated: 'lines.push("Stryker was here!")'
+  reason: cosmetic — changes the blank separator line between path/size and preview in the attached-input section. LLM tolerates the whitespace layout; a stray text line on the separator does not change observable behavior. Judge REJECTed a fix attempt for this mutant.
+  added: 2026-04-22
