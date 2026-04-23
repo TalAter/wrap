@@ -317,4 +317,12 @@ describe("--completion subcommand end-to-end", () => {
   test("completionCmd is exported and registered with shells completer", () => {
     expect(completionCmd.completion).toBe("shells");
   });
+
+  test("unsupported shell writes error to stderr, empty stdout, non-zero exit", async () => {
+    const result = await wrap("--completion bogusshell");
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Unsupported shell");
+    expect(result.stderr).toContain("bogusshell");
+    expect(result.exitCode).not.toBe(0);
+  });
 });
