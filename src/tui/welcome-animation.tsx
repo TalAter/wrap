@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import { useEffect, useState } from "react";
 import { getTheme, type ThemeTokens } from "../core/theme.ts";
-import { interpolateGradient } from "./border.ts";
+import { interpolateGradient } from "./gradient.ts";
 import {
   type AnimationFrame,
   CANVAS_HEIGHT,

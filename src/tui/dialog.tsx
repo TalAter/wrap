@@ -6,11 +6,10 @@ import {
   type BorderSegment,
   bottomBorderSegments,
   fitTop,
-  gradientRow,
-  interpolateGradient,
   type TopBadge,
   topBorderSegments,
 } from "./border.ts";
+import { gradientRow, interpolateGradient } from "./gradient.ts";
 import { pillWidth } from "./pill.tsx";
 
 const DIALOG_MARGIN = 4;

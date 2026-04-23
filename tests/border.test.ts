@@ -3,7 +3,6 @@ import stringWidth from "string-width";
 import {
   bottomBorderSegments,
   fitTop,
-  interpolateGradient,
   type TopBadge,
   topBorderSegments,
 } from "../src/tui/border.ts";
@@ -45,37 +44,6 @@ function renderTop(
   const prepared = fitTop(top, width - 2, nerd);
   return topBorderSegments(width, stops, prepared);
 }
-
-describe("interpolateGradient", () => {
-  test("returns hex color string starting with #", () => {
-    const color = interpolateGradient(0, 10, preset("medium").stops);
-    expect(color).toMatch(/^#[0-9a-f]{6}$/);
-  });
-
-  test("first color matches start of medium palette", () => {
-    expect(interpolateGradient(0, 10, preset("medium").stops)).toBe("#ff64c8");
-  });
-
-  test("last color matches end of palette (dim)", () => {
-    expect(interpolateGradient(9, 10, preset("medium").stops)).toBe("#3c3c64");
-  });
-
-  test("first color matches start of high palette", () => {
-    expect(interpolateGradient(0, 10, preset("high").stops)).toBe("#ff3c50");
-  });
-
-  test("first color matches start of low palette", () => {
-    expect(interpolateGradient(0, 10, preset("low").stops)).toBe("#50dcc8");
-  });
-
-  test("low palette ends at the same dim color as the others", () => {
-    expect(interpolateGradient(9, 10, preset("low").stops)).toBe("#3c3c64");
-  });
-
-  test("single element returns first stop", () => {
-    expect(interpolateGradient(0, 1, preset("medium").stops)).toMatch(/^#[0-9a-f]{6}$/);
-  });
-});
 
 describe("topBorderSegments with risk pill", () => {
   test("contains risk label for medium", () => {
