@@ -155,8 +155,8 @@ export const LIGHT_THEME: ThemeTokens = {
       [170, 170, 195],
     ],
     welcomeLogo: [
-      [168, 127, 201],
-      [88, 104, 148],
+      [160, 121, 191],
+      [79, 94, 133],
     ],
     welcomeBrain: [
       [211, 76, 243],
