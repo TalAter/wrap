@@ -52,7 +52,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 - [ ] Round retry capture — nest first-attempt `raw_response`/`parse_error`/`llm_ms` inside `Round.retry` (design agreed, needs test provider changes)
 - [ ] Wire `tools_available`/`tools_unavailable` to invocation-level log fields, `watchlist_additions` to round fields
 - [ ] `expires` field + retention pruning (future)
-- [ ] Document in help/README that logs contain full LLM exchanges
 
 ## Thread System
 
@@ -66,7 +65,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 - [ ] Alias setup in wizard — scan available single-letter commands, detect shell, write glob-protected aliases to shell rc file
 - [ ] Full first-run flow: config wizard → alias setup → ready
-- [ ] Auto-generate `src/config/config.schema.json` from SETTINGS so the two can't drift — until then, adding a persistent setting means editing both.
 
 ## Output & UI
 

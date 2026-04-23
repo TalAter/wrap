@@ -239,7 +239,6 @@ Claude Code (running on host) uses your normal session — no extra key needed f
 
 ## Prerequisites
 
-- **Blocker**: `w --yolo` mode. Currently in development in a separate worktree. Runner can't go live until yolo lands.
 - Host machine has:
   - Docker running
   - `gh` CLI authenticated on host machine
