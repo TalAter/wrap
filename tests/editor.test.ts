@@ -216,20 +216,31 @@ describe("spawnEditor", () => {
   });
 
   test("pre-aborted signal → returns null without waiting", async () => {
-    const editor = makeFakeEditor(`#!/bin/sh\nsleep 10\n`);
+    const editor = makeFakeEditor(`#!/bin/sh\nsleep 1\n`);
     const ctrl = new AbortController();
     ctrl.abort();
     const start = Date.now();
     const r = await spawnEditor(terminalMeta(editor), "seed", ctrl.signal);
     expect(r).toBeNull();
-    expect(Date.now() - start).toBeLessThan(2000);
+    expect(Date.now() - start).toBeLessThan(500);
   });
 
-  test("abort during wait → returns null", async () => {
-    const editor = makeFakeEditor(`#!/bin/sh\nsleep 5\n`);
+  test("abort during wait → returns null quickly (not after editor exits)", async () => {
+    // Editor writes non-null content then sleeps. If abort is missed, the
+    // editor exits normally and spawnEditor returns that content — so the
+    // toBeNull assertion fails rather than passing for the wrong reason.
+    const editor = makeFakeEditor(`#!/bin/sh\nprintf 'unexpected' > "$1"\nsleep 2\n`);
     const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 30);
+    setTimeout(() => ctrl.abort(), 50);
+    const start = Date.now();
     const r = await spawnEditor(terminalMeta(editor), "seed", ctrl.signal);
+    expect(r).toBeNull();
+    expect(Date.now() - start).toBeLessThan(1500);
+  });
+
+  test("file contains only a newline after trim → returns null (empty boundary)", async () => {
+    const editor = makeFakeEditor(`#!/bin/sh\nprintf '\\n' > "$1"\n`);
+    const r = await spawnEditor(terminalMeta(editor), "seed");
     expect(r).toBeNull();
   });
 
