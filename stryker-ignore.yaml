@@ -214,3 +214,45 @@
   mutated: 'lines.push("Stryker was here!")'
   reason: cosmetic — changes the blank separator line between path/size and preview in the attached-input section. LLM tolerates the whitespace layout; a stray text line on the separator does not change observable behavior. Judge REJECTed a fix attempt for this mutant.
   added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (isCliProvider(provider)) return {};'
+  mutated: 'if (false) return {};'
+  reason: unreachable — buildEntry is never called with a CLI provider. accept-disclaimer sets `[provider]: {}` directly without buildEntry; submit-key/submit-model are only reachable from entering-key/picking-model screens which CLI providers never enter.
+  added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (baseURL) entry.baseURL = baseURL;'
+  mutated: 'if (true) entry.baseURL = baseURL;'
+  reason: equivalent at serialization boundary — when baseURL is undefined, mutant sets `entry.baseURL = undefined`; JSON.stringify (used by write-config) drops undefined keys, so the on-disk entry is identical. Test-level differences rely on toStrictEqual semantics, not real behavior.
+  added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (fields.apiKey) entry.apiKey = fields.apiKey;'
+  mutated: 'if (true) entry.apiKey = fields.apiKey;'
+  reason: equivalent at serialization boundary — when fields.apiKey is undefined, mutant adds `apiKey: undefined`; JSON.stringify drops it. Observable only via Object.keys inspection.
+  added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (fields.model) entry.model = fields.model;'
+  mutated: 'if (true) entry.model = fields.model;'
+  reason: equivalent at serialization boundary — when fields.model is undefined, mutant adds `model: undefined`; JSON.stringify drops it. Observable only via Object.keys inspection.
+  added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (fields.model) entry.model = fields.model;'
+  mutated: 'if (false) entry.model = fields.model;'
+  reason: dead branch — both buildEntry call sites pass `{}` or `{ apiKey: trimmed }`; fields.model is never set, so the assignment never fires. Mutant equivalent.
+  added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (screen.tag !== "entering-key") return state;'
+  mutated: 'if (false) return state;'
+  reason: defensive guard in "key-change" case. The only dispatcher (config-wizard-dialog.tsx ApiKeyScreen) is rendered only when screen.tag === "entering-key", so key-change is never dispatched from another screen. Unreachable in practice.
+  added: 2026-04-22
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'if (screen.tag !== "entering-key") return state;'
+  mutated: 'if (false) return state;'
+  reason: defensive guard in "submit-key" case. The only dispatcher (config-wizard-dialog.tsx ApiKeyScreen) is rendered only when screen.tag === "entering-key", so submit-key is never dispatched from another screen. Unreachable in practice.
+  added: 2026-04-22
