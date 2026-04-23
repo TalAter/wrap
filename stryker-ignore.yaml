@@ -406,3 +406,27 @@
   mutated: 'if (true) writeNotificationToStderr(n)'
   reason: defensive guard against shift()'s T|undefined return type; the enclosing `while (buffered.length > 0)` ensures shift always yields a Notification object (always truthy), so `if (n)` vs `if (true)` is equivalent at runtime.
   added: 2026-04-23
+- file: src/core/notify.ts
+  mutator: ConditionalExpression
+  original: 'case "step-output":'
+  mutated: 'case "step-output":'
+  reason: writeNotificationToStderr's step-output and llm-wire cases are bare `return;` no-ops. Removing the case label makes the value fall through the switch with no default, which also writes nothing — observably identical. The cases exist only to document intent and satisfy exhaustiveness.
+  added: 2026-04-23
+- file: src/core/notify.ts
+  mutator: StringLiteral
+  original: 'case "step-output":'
+  mutated: 'case "":'
+  reason: same as above — changing the case label means "step-output" no longer matches any case and falls out of the switch. Both paths produce no stderr output, so equivalent at runtime.
+  added: 2026-04-23
+- file: src/core/notify.ts
+  mutator: ConditionalExpression
+  original: 'case "llm-wire":'
+  mutated: 'case "llm-wire":'
+  reason: llm-wire case body is `return;` with nothing after it in the switch. Removing the label makes llm-wire fall out of the switch, which also writes nothing. Equivalent — the case exists for exhaustiveness and JSDoc anchoring.
+  added: 2026-04-23
+- file: src/core/notify.ts
+  mutator: StringLiteral
+  original: 'case "llm-wire":'
+  mutated: 'case "":'
+  reason: same as above — mutating the label makes llm-wire fall out of the switch; there's no default and nothing after, so no write happens either way. Equivalent.
+  added: 2026-04-23
