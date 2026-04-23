@@ -60,14 +60,23 @@ describe("--log", () => {
     expect(result.stderr).toContain("No log entries yet.");
   });
 
-  test("skips corrupt lines with warning", async () => {
+  test("corrupt-line warning uses singular form for 1", async () => {
     const wrapHome = tmpHome();
     const lines = [entry("a"), "not-json", entry("c")];
     seedLog(wrapHome, lines);
     const result = await wrap("--log", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(`${[entry("a"), entry("c")].join("\n")}\n`);
-    expect(result.stderr).toContain("skipped 1 corrupt");
+    expect(result.stderr).toContain("skipped 1 corrupt log entry");
+  });
+
+  test("corrupt-line warning uses plural form for >1", async () => {
+    const wrapHome = tmpHome();
+    const lines = [entry("a"), "not-json-1", "not-json-2", entry("c")];
+    seedLog(wrapHome, lines);
+    const result = await wrap("--log", { WRAP_HOME: wrapHome });
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("skipped 2 corrupt log entries");
   });
 
   test("N counts raw lines including corrupt ones", async () => {
