@@ -28,10 +28,14 @@ export async function wrap(input?: string, env?: Record<string, string>, stdin?:
   // leak from the test process — other tests (shell.test.ts,
   // fs-temp.test.ts) lazily create one via ensureTempDir, and if we inherit
   // it every subprocess points at the same (possibly removed) dir.
+  // TMPDIR is scoped to a fresh per-call dir so `w --forget`'s system-wide
+  // `wrap-scratch-*` sweep can't reach into sibling tests' live scratch dirs
+  // and wipe them mid-run. Caller can override via `env.TMPDIR`.
   const { WRAP_TEMP_DIR: _drop, ...parentEnv } = process.env;
   const isolatedEnv = {
     ...parentEnv,
     WRAP_HOME: tmpHome(),
+    TMPDIR: mkdtempSync(join(tmpdir(), "wrap-test-tmp-")),
     ...env,
   };
   const proc = Bun.spawn(["bun", "run", "src/index.ts", ...args], {

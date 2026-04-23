@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tmpHome, wrap } from "./helpers.ts";
@@ -100,20 +100,15 @@ describe("w --forget (WRAP_HOME override)", () => {
 
 describe("w --forget (scratch dirs)", () => {
   test("removes wrap-scratch-* dirs under tmpdir", async () => {
-    // Pre-create a scratch dir with the expected prefix in the default tmpdir.
-    const scratch = join(tmpdir(), `wrap-scratch-test-${process.pid}-${Date.now()}`);
+    // Pin TMPDIR so the subprocess's tmpdir() sees exactly this scratch dir,
+    // and can't reach sibling tests' scratch dirs in the real OS tmpdir.
+    const isoTmp = mkdtempSync(join(tmpdir(), "wrap-forget-scratch-"));
+    const scratch = join(isoTmp, `wrap-scratch-test-${process.pid}-${Date.now()}`);
     mkdirSync(scratch);
     writeFileSync(join(scratch, "f"), "x");
-    try {
-      const wrapHome = tmpHome();
-      const r = await wrap("--yolo --forget", { WRAP_HOME: wrapHome });
-      expect(r.exitCode).toBe(0);
-      expect(existsSync(scratch)).toBe(false);
-    } finally {
-      // Safety net if the test failed to clean up.
-      if (existsSync(scratch)) {
-        // best-effort
-      }
-    }
+    const wrapHome = tmpHome();
+    const r = await wrap("--yolo --forget", { WRAP_HOME: wrapHome, TMPDIR: isoTmp });
+    expect(r.exitCode).toBe(0);
+    expect(existsSync(scratch)).toBe(false);
   });
 });
