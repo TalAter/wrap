@@ -322,3 +322,45 @@
   mutated: 'if (!regex || false) return models;'
   reason: equivalent mutant — on empty models the short-circuit returns []; without the short-circuit findIndex returns -1, models[-1] is undefined, pick is falsy, the next line returns models ([]). Same observable result.
   added: 2026-04-23
+- file: src/core/attached-input.ts
+  mutator: BlockStatement
+  original: 'get isTTY() { return process.stdin.isTTY; }'
+  mutated: 'get isTTY() {}'
+  reason: default stdin getter only used when readAttachedInput is called with no argument. All tests and in-tree callers inject an explicit StdinSource, so this path is only reachable in production at the bin entrypoint — not exercisable in the unit-test harness.
+  added: 2026-04-23
+- file: src/core/attached-input.ts
+  mutator: ConditionalExpression
+  original: 'if (bytes.byteLength === 0) return undefined;'
+  mutated: 'if (false) return undefined;'
+  reason: equivalent — on empty bytes the loop in isAsciiWhitespace does not execute and returns true, so the next check (line 30) returns undefined anyway. Zero-byte input takes the whitespace path instead of the zero-byte path; same observable result.
+  added: 2026-04-23
+- file: src/core/input.ts
+  mutator: EqualityOperator
+  original: 'if (eqIdx > 0) { throw new Error(... does not take a value.) }'
+  mutated: 'if (eqIdx >= 0) { throw ... }'
+  reason: unreachable — eqIdx === 0 means arg starts with "=", so flagName = arg.slice(0,0) = "", flagToSpec.get("") is undefined, the loop breaks at the preceding `if (spec === undefined) break`. This branch is never entered with eqIdx === 0.
+  added: 2026-04-23
+- file: src/discovery/cwd-files.ts
+  mutator: ConditionalExpression
+  original: 'if (names.length === 0) return undefined;'
+  mutated: 'if (false) return undefined;'
+  reason: equivalent — on empty names the subsequent Promise.all returns [], entries.filter returns [], and the next check `if (entries.length === 0) return undefined` returns undefined anyway. The short-circuit is a defensive optimization, not a behavioral branch.
+  added: 2026-04-23
+- file: src/discovery/cwd-files.ts
+  mutator: ConditionalExpression
+  original: 'results.filter((e): e is Entry => e !== null)'
+  mutated: 'results.filter((e): e is Entry => true)'
+  reason: only differs when some lstat call returns null (permission-denied or race between readdir and lstat). Triggering a partial lstat failure reliably in a unit test requires engineering FS state that is fragile and platform-specific; the null filter is defensive coverage for a real but rare failure mode.
+  added: 2026-04-23
+- file: src/discovery/cwd-files.ts
+  mutator: EqualityOperator
+  original: 'if (total <= OLDEST_COUNT + NEWEST_COUNT) { selected = entries; }'
+  mutated: 'if (total < OLDEST_COUNT + NEWEST_COUNT) { selected = entries; }'
+  reason: equivalent at total === 50. Mutant else-branch computes oldest = entries.slice(0,20) and newest = entries.slice(20), which concatenate to the same 50 entries in the same order; the subsequent `if (total > 50)` gate prevents the splice/summary from running. Final output identical.
+  added: 2026-04-23
+- file: src/discovery/watchlist.ts
+  mutator: ConditionalExpression
+  original: 'if (!Array.isArray(parsed)) return [];'
+  mutated: 'if (false) return [];'
+  reason: equivalent — on non-array parsed values, calling parsed.filter throws TypeError (no such method on objects/primitives), which the outer try/catch converts into return []. Same observable result as the short-circuit.
+  added: 2026-04-23
