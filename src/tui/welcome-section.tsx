@@ -1,8 +1,8 @@
 import { Box, Text, useWindowSize } from "ink";
-import type { Color } from "../core/ansi.ts";
 import { LOGO } from "../core/logo.ts";
-import { getTheme, LIGHT_THEME, themeHex } from "../core/theme.ts";
+import { getTheme, themeHex } from "../core/theme.ts";
 import { ActionBar } from "./action-bar.tsx";
+import { interpolateGradient } from "./border.ts";
 import { DIALOG_CHROME_HEIGHT, DIALOG_CHROME_WIDTH, Dialog } from "./dialog.tsx";
 import { useKeyBindings } from "./key-bindings.ts";
 import { WelcomeAnimation } from "./welcome-animation.tsx";
@@ -32,13 +32,8 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
   const theme = getTheme();
   const highlight = themeHex(theme.interactive.highlight);
   const success = themeHex(theme.select.selected);
-  const isLight = theme === LIGHT_THEME;
-  // Top of logo dimmer (~70%) → bottom solid; gradient implies light source above.
-  const logoRowColor = (i: number): string => {
-    const t = LOGO.length > 1 ? i / (LOGO.length - 1) : 1;
-    const v = isLight ? Math.round(77 * (1 - t)) : Math.round(179 + 76 * t);
-    return themeHex([v, v, v] as Color);
-  };
+  const logoRowColor = (i: number): string =>
+    interpolateGradient(i, LOGO.length, theme.gradient.welcomeLogo);
 
   const textBlock = (
     <Box flexDirection="column">

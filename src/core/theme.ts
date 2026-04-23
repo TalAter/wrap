@@ -41,6 +41,8 @@ export type ThemeTokens = {
   };
   gradient: {
     wizard: [Color, Color];
+    welcomeLogo: [Color, Color];
+    welcomeBrain: [Color, Color];
     riskLow: [Color, Color];
     riskMedium: [Color, Color];
     riskHigh: [Color, Color];
@@ -88,6 +90,14 @@ export const DARK_THEME: ThemeTokens = {
       [120, 180, 255],
       [60, 60, 100],
     ],
+    welcomeLogo: [
+      [179, 179, 179],
+      [255, 255, 255],
+    ],
+    welcomeBrain: [
+      [211, 76, 243],
+      [29, 227, 235],
+    ],
     riskLow: [
       [80, 220, 200],
       [60, 60, 100],
@@ -123,8 +133,8 @@ export const LIGHT_THEME: ThemeTokens = {
   interactive: {
     cursor: [30, 75, 195],
     selection: [210, 220, 245],
-    highlight: [150, 100, 0],
-    highlightBright: [160, 120, 20],
+    highlight: [255, 165, 50],
+    highlightBright: [255, 165, 50],
   },
   select: {
     selected: [15, 125, 55],
@@ -143,6 +153,14 @@ export const LIGHT_THEME: ThemeTokens = {
     wizard: [
       [25, 90, 190],
       [170, 170, 195],
+    ],
+    welcomeLogo: [
+      [128, 66, 109],
+      [22, 34, 66],
+    ],
+    welcomeBrain: [
+      [211, 76, 243],
+      [29, 227, 235],
     ],
     riskLow: [
       [15, 150, 130],

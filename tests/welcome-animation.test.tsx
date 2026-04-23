@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { nextStep, WelcomeAnimation } from "../src/tui/welcome-animation.tsx";
-import { FRAMES } from "../src/tui/welcome-animation-frames.ts";
+import { DARK_THEME, themeHex } from "../src/core/theme.ts";
+import { brainRowColor, nextStep, WelcomeAnimation } from "../src/tui/welcome-animation.tsx";
+import { CANVAS_HEIGHT, FRAMES } from "../src/tui/welcome-animation-frames.ts";
 
 const firstFrameData = FRAMES[0];
 if (!firstFrameData) throw new Error("FRAMES is empty");
@@ -48,5 +49,38 @@ describe("WelcomeAnimation (render smoke)", () => {
     const { lastFrame } = render(<WelcomeAnimation />);
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain(firstFrameRow);
+  });
+});
+
+describe("brainRowColor (per-row gradient)", () => {
+  // colorLevel() reads FORCE_COLOR per-call (no module-level cache), so the
+  // save/restore here actually scopes the override to this block. Below
+  // truecolor, interpolateGradient collapses to text.primary and the
+  // endpoint asserts would compare equal to the fallback, not the stops.
+  let savedForceColor: string | undefined;
+  beforeAll(() => {
+    savedForceColor = process.env.FORCE_COLOR;
+    process.env.FORCE_COLOR = "3";
+  });
+  afterAll(() => {
+    if (savedForceColor === undefined) delete process.env.FORCE_COLOR;
+    else process.env.FORCE_COLOR = savedForceColor;
+  });
+
+  test("row 0 equals the theme gradient start", () => {
+    const [start] = DARK_THEME.gradient.welcomeBrain;
+    expect(brainRowColor(0, DARK_THEME)).toBe(themeHex(start));
+  });
+
+  test("last row equals the theme gradient end", () => {
+    const [, end] = DARK_THEME.gradient.welcomeBrain;
+    expect(brainRowColor(CANVAS_HEIGHT - 1, DARK_THEME)).toBe(themeHex(end));
+  });
+
+  test("interior row differs from both endpoints", () => {
+    const [start, end] = DARK_THEME.gradient.welcomeBrain;
+    const mid = brainRowColor(Math.floor(CANVAS_HEIGHT / 2), DARK_THEME);
+    expect(mid).not.toBe(themeHex(start));
+    expect(mid).not.toBe(themeHex(end));
   });
 });

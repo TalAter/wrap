@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
-import { useEffect, useMemo, useState } from "react";
-import type { Color } from "../core/ansi.ts";
-import { getTheme, LIGHT_THEME, themeHex } from "../core/theme.ts";
+import { useEffect, useState } from "react";
+import { getTheme, type ThemeTokens } from "../core/theme.ts";
+import { interpolateGradient } from "./border.ts";
 import {
   type AnimationFrame,
   CANVAS_HEIGHT,
@@ -11,23 +11,6 @@ import {
 
 const START_HOLD_MS = 1000;
 const FRAME_DURATION_SCALE = 1.5;
-
-type PaletteKey = "c0" | "c1" | "c2" | "c3";
-
-const PALETTES: Record<"dark" | "light", Record<PaletteKey, Color>> = {
-  dark: {
-    c0: [254, 184, 130],
-    c1: [179, 109, 59],
-    c2: [193, 137, 116],
-    c3: [160, 82, 45],
-  },
-  light: {
-    c0: [150, 30, 20],
-    c1: [150, 30, 20],
-    c2: [150, 30, 20],
-    c3: [150, 30, 20],
-  },
-};
 
 type Step = {
   nextIndex: number;
@@ -43,6 +26,12 @@ export function nextStep(index: number, frames: readonly AnimationFrame[]): Step
   return { nextIndex: index + 1, delayMs };
 }
 
+// Palette anchored to canvas rows, not the brain's per-frame bounds — rows
+// keep the same color across all frames so the brain doesn't shimmer as it grows.
+export function brainRowColor(y: number, theme: ThemeTokens): string {
+  return interpolateGradient(y, CANVAS_HEIGHT, theme.gradient.welcomeBrain);
+}
+
 export function WelcomeAnimation() {
   const [frameIndex, setFrameIndex] = useState(0);
 
@@ -53,38 +42,17 @@ export function WelcomeAnimation() {
     return () => clearTimeout(id);
   }, [frameIndex]);
 
-  const palette = useMemo<Record<PaletteKey, string>>(() => {
-    const src = getTheme() === LIGHT_THEME ? PALETTES.light : PALETTES.dark;
-    return {
-      c0: themeHex(src.c0),
-      c1: themeHex(src.c1),
-      c2: themeHex(src.c2),
-      c3: themeHex(src.c3),
-    };
-  }, []);
+  const theme = getTheme();
   const frame = FRAMES[frameIndex] ?? FRAMES[0];
-  const rows = useMemo(() => frame?.content.map((r) => [...r]) ?? [], [frame]);
   if (!frame) return null;
 
   return (
     <Box flexDirection="column" width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
-      {rows.map((row, y) => (
+      {frame.content.map((row, y) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: stable per-frame layout
-        <Box key={y}>
-          {row.map((char, x) => {
-            const key = `${x},${y}`;
-            const fgKey = frame.fgColors[key] as "c0" | "c1" | "c2" | "c3" | undefined;
-            const bgKey = frame.bgColors[key] as "c0" | "c1" | "c2" | "c3" | undefined;
-            const fg = fgKey ? palette[fgKey] : undefined;
-            const bg = bgKey ? palette[bgKey] : undefined;
-            return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: stable per-frame layout
-              <Text key={x} color={fg} backgroundColor={bg}>
-                {char}
-              </Text>
-            );
-          })}
-        </Box>
+        <Text key={y} color={brainRowColor(y, theme)}>
+          {row}
+        </Text>
       ))}
     </Box>
   );
