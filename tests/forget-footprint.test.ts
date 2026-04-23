@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -90,6 +90,22 @@ describe("logsFootprint", () => {
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(2);
   });
+
+  test("single entry without trailing newline counts as 1", () => {
+    mkdirSync(join(home, "logs"));
+    // Single char is needed to kill the endsWith("\n") → endsWith("") mutant:
+    // longer content slices to a non-empty string that splits to the same count.
+    writeFileSync(join(home, "logs", "wrap.jsonl"), "x");
+    const fp = logsFootprint(home);
+    if (fp.state !== "ok") throw new Error();
+    expect(fp.count).toBe(1);
+  });
+
+  test("file containing only a newline → empty", () => {
+    mkdirSync(join(home, "logs"));
+    writeFileSync(join(home, "logs", "wrap.jsonl"), "\n");
+    expect(logsFootprint(home)).toEqual({ state: "empty" });
+  });
 });
 
 describe("cacheFootprint", () => {
@@ -109,6 +125,11 @@ describe("cacheFootprint", () => {
 
   test("empty cache dir → empty", () => {
     mkdirSync(join(home, "cache"));
+    expect(cacheFootprint(home)).toEqual({ state: "empty" });
+  });
+
+  test("sibling files outside cache/ are ignored", () => {
+    writeFileSync(join(home, "memory.json"), "xxxxx");
     expect(cacheFootprint(home)).toEqual({ state: "empty" });
   });
 
@@ -158,6 +179,20 @@ describe("scratchFootprint", () => {
     writeFileSync(join(base, "wrap-other", "f"), "zzz");
     expect(scratchFootprint(base)).toEqual({ state: "empty" });
   });
+
+  test("nonexistent tmpBase → empty", () => {
+    expect(scratchFootprint(join(base, "does-not-exist"))).toEqual({ state: "empty" });
+  });
+
+  test("regular file matching prefix is ignored", () => {
+    writeFileSync(join(base, "wrap-scratch-file"), "zzzz");
+    expect(scratchFootprint(base)).toEqual({ state: "empty" });
+  });
+
+  test("broken symlink matching prefix is ignored", () => {
+    symlinkSync(join(base, "does-not-exist"), join(base, "wrap-scratch-broken"));
+    expect(scratchFootprint(base)).toEqual({ state: "empty" });
+  });
 });
 
 describe("formatFootprint", () => {
@@ -183,6 +218,10 @@ describe("formatFootprint", () => {
 
   test("ok state — singular unit", () => {
     expect(formatFootprint("files", { state: "ok", count: 1, bytes: 100 })).toBe("(1 file, 100B)");
+  });
+
+  test("ok state — entries singular", () => {
+    expect(formatFootprint("entries", { state: "ok", count: 1, bytes: 10 })).toBe("(1 entry, 10B)");
   });
 
   test("ok state — dirs plural", () => {
