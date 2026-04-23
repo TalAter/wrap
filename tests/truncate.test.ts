@@ -61,5 +61,7 @@ describe("truncateMiddle", () => {
     const result = truncateMiddle("hello", 0);
     // Should still return something reasonable
     expect(result).toContain("…truncated");
+    // When head consumes all content, tail is empty — result ends at the indicator.
+    expect(result.endsWith("]\n")).toBe(true);
   });
 });

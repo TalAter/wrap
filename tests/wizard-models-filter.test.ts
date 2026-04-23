@@ -104,6 +104,46 @@ describe("filterAndSortModels", () => {
     expect(filterAndSortModels(empty, "foo")).toEqual([]);
   });
 
+  test("drops model with undefined modalities without throwing", () => {
+    const data: ModelsDevData = {
+      test: {
+        id: "test",
+        models: {
+          "no-modalities": {
+            id: "no-modalities",
+            tool_call: true,
+            release_date: "2026-01-01",
+          },
+        },
+      },
+    };
+    expect(() => filterAndSortModels(data, "test")).not.toThrow();
+    expect(filterAndSortModels(data, "test")).toEqual([]);
+  });
+
+  test("sorts model with undefined release_date after dated models", () => {
+    const data: ModelsDevData = {
+      test: {
+        id: "test",
+        models: {
+          dated: {
+            id: "dated",
+            tool_call: true,
+            modalities: { input: ["text"], output: ["text"] },
+            release_date: "2026-04-01",
+          },
+          undated: {
+            id: "undated",
+            tool_call: true,
+            modalities: { input: ["text"], output: ["text"] },
+          },
+        },
+      },
+    };
+    const result = filterAndSortModels(data, "test");
+    expect(result.map((m) => m.id)).toEqual(["dated", "undated"]);
+  });
+
   test("drops models with tool_call undefined (missing from wire)", () => {
     const data: ModelsDevData = {
       test: {

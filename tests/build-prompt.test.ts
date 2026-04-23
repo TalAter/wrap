@@ -53,6 +53,14 @@ describe("buildPromptScaffold — system message", () => {
     expect(result.system).not.toContain("Respond with JSON:");
   });
 
+  test("omits attached-input block when attachedInputInstruction is undefined", () => {
+    const result = buildPromptScaffold(config, "", "test");
+    // If the conditional was bypassed, `undefined` would be pushed into
+    // systemParts and coerced to "" by `join`, producing a 3+ newline run
+    // between the surrounding sections.
+    expect(result.system).not.toMatch(/\n\n\n/);
+  });
+
   test("system parts joined by double newlines", () => {
     const result = buildPromptScaffold(config, "", "test");
     expect(result.system).toContain("You are a CLI tool.\n\nLater facts override earlier ones.");
@@ -112,7 +120,7 @@ describe("buildPromptScaffold — initial user text", () => {
 
   test("context and user request separated by double newline", () => {
     const result = buildPromptScaffold(config, "context here", "query here");
-    expect(result.initialUserText).toContain("context here\n\n## User's request\nquery here");
+    expect(result.initialUserText).toBe("context here\n\n## User's request\nquery here");
   });
 
   test("empty context still includes user request", () => {
