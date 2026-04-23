@@ -38,6 +38,16 @@ describe("readAttachedInput", () => {
     expect(result).toBeUndefined();
   });
 
+  test("treats VT/FF/CR bytes as ASCII whitespace", async () => {
+    // 0x0b vertical tab, 0x0c form feed, 0x0d carriage return.
+    const bytes = new Uint8Array([0x0b, 0x0c, 0x0d]);
+    const result = await readAttachedInput({
+      isTTY: undefined,
+      read: () => Promise.resolve(bytes),
+    });
+    expect(result).toBeUndefined();
+  });
+
   test("reads when isTTY is false (not just undefined)", async () => {
     const bytes = encoder.encode("content");
     const result = await readAttachedInput({
@@ -100,6 +110,12 @@ describe("buildAttachedInputPreview", () => {
   test("empty input yields empty preview", () => {
     const result = buildAttachedInputPreview(new Uint8Array(0), 200);
     expect(result.preview).toBe("");
+    expect(result.truncated).toBe(false);
+  });
+
+  test("does not flag truncated when decoded length equals maxChars exactly", () => {
+    const result = buildAttachedInputPreview(encoder.encode("hello"), 5);
+    expect(result.preview).toBe("hello");
     expect(result.truncated).toBe(false);
   });
 });

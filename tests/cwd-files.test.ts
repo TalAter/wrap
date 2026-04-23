@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listCwdFiles } from "../src/discovery/cwd-files.ts";
+import { countCwdFiles, listCwdFiles } from "../src/discovery/cwd-files.ts";
 
 describe("listCwdFiles", () => {
   let tmpDir: string;
@@ -134,5 +134,23 @@ describe("listCwdFiles", () => {
 
     // Count line
     expect(lines[51]).toBe("(showing 50 of 51 entries)");
+  });
+});
+
+describe("countCwdFiles", () => {
+  test("counts plain file lines", () => {
+    expect(countCwdFiles("foo.txt\nbar/\nbaz.md")).toBe(3);
+  });
+
+  test("excludes omission and summary marker lines", () => {
+    const listing = [
+      "old-1.txt",
+      "old-2.txt",
+      "... (40 entries omitted) ...",
+      "new-1.txt",
+      "new-2.txt",
+      "(showing 50 of 90 entries)",
+    ].join("\n");
+    expect(countCwdFiles(listing)).toBe(4);
   });
 });

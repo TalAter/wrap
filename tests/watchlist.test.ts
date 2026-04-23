@@ -72,6 +72,21 @@ describe("loadWatchlist", () => {
     writeFileSync(join(dir, "tool-watchlist.json"), '{"tool": "sips"}');
     expect(loadWatchlist(dir)).toEqual([]);
   });
+
+  test("rejects malformed array entries (null, non-object, wrong field types)", () => {
+    const dir = tmp();
+    const mixed = [
+      null,
+      "string-entry",
+      42,
+      { tool: 42, added: "2026-04-23" },
+      { tool: "git", added: 20260423 },
+      { tool: "git", added: "2026-04-23" },
+      { tool: "rm -rf /", added: "2026-04-23" },
+    ];
+    writeFileSync(join(dir, "tool-watchlist.json"), JSON.stringify(mixed));
+    expect(loadWatchlist(dir)).toEqual([{ tool: "git", added: "2026-04-23" }]);
+  });
 });
 
 describe("addToWatchlist", () => {
