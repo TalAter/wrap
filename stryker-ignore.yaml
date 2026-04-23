@@ -376,3 +376,15 @@
   mutated: 'memBytes >= 0'
   reason: equivalent — memBytes is a file size (always >= 0), and when it is 0 loadMemory returns {} so countFacts yields 0; same result as the original guard.
   added: 2026-04-23
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'cn <= 0.04045'
+  mutated: 'cn < 0.04045'
+  reason: equivalent — srgbToLinear boundary. Integer r in [0,255] means cn = r/255, which never equals 0.04045 exactly (would require r=10.31475). The sRGB piecewise branches are also defined to meet continuously at cn=0.04045, so the equality case is both unreachable and mathematically identical.
+  added: 2026-04-23
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'level > 0 && level < 3'
+  mutated: 'level >= 0 && level < 3'
+  reason: equivalent in gradientCells — differs only at level=0, where the earlier `if (level <= 0)` guard short-circuits every iteration to `cells[i] = ch` before the `solid` branch is reached. Mutated value of solid is never observed.
+  added: 2026-04-23
