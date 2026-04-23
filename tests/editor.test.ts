@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   _resetEditorCacheForTests,
   EDITORS,
@@ -242,6 +242,21 @@ describe("spawnEditor", () => {
     const editor = makeFakeEditor(`#!/bin/sh\nprintf '\\n' > "$1"\n`);
     const r = await spawnEditor(terminalMeta(editor), "seed");
     expect(r).toBeNull();
+  });
+
+  test("only trailing newline is stripped; internal newlines preserved", async () => {
+    // /\n$/ vs /\n/: multi-line output exposes the end-anchor.
+    const editor = makeFakeEditor(`#!/bin/sh\nprintf 'line1\\nline2\\n' > "$1"\n`);
+    const r = await spawnEditor(terminalMeta(editor), "seed");
+    expect(r).toBe("line1\nline2");
+  });
+
+  test("repeated spawnEditor calls succeed (cacheDir mkdir is recursive / idempotent)", async () => {
+    const editor = makeFakeEditor(`#!/bin/sh\nprintf 'edit' > "$1"\n`);
+    const r1 = await spawnEditor(terminalMeta(editor), "a");
+    const r2 = await spawnEditor(terminalMeta(editor), "b");
+    expect(r1).toBe("edit");
+    expect(r2).toBe("edit");
   });
 
   test("seed draft is written to compose.md before editor runs", async () => {
