@@ -55,7 +55,7 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
       <Text> </Text>
       <Text> </Text>
       <Text>
-        ⏱︎ Takes <Text color={success}>~45 seconds.</Text>
+        ◷ Takes <Text color={success}>~45 seconds.</Text>
       </Text>
       <Text> </Text>
     </Box>
