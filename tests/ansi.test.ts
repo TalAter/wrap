@@ -7,6 +7,7 @@ import {
   gradient,
   gradientCells,
   interpolate,
+  quantizeColor,
   stripAnsi,
 } from "../src/core/ansi.ts";
 
@@ -201,6 +202,47 @@ describe("gradientCells", () => {
     // col 0 is far outside radius 2 around pos 5
     expect(withShine[0]).toBe(without[0]);
     expect(withShine[9]).toBe(without[9]);
+  });
+});
+
+describe("quantizeColor", () => {
+  // Exact ANSI16 palette colors round-trip through level=1:
+  // nearest16 picks the matching code, code16ToRgb maps back. Removing any
+  // one palette entry (or neutering the code lookup) shifts the result.
+  const palette: Array<[[number, number, number], number]> = [
+    [[0, 170, 0], 32],
+    [[170, 85, 0], 33],
+    [[0, 170, 170], 36],
+    [[170, 170, 170], 37],
+    [[255, 255, 85], 93],
+  ];
+  for (const [rgb, code] of palette) {
+    test(`level 1 round-trips ANSI16 entry ${rgb.join(",")}`, () => {
+      expect(fgCode(rgb[0], rgb[1], rgb[2], 1)).toBe(`${ESC}${code}m`);
+      expect(quantizeColor(rgb, 1)).toEqual(rgb);
+    });
+  }
+
+  test("level 1 snaps pure red to ANSI16 red (not black)", () => {
+    // Nearest in the xterm palette is [170,0,0] (code 31), not [0,0,0].
+    expect(quantizeColor([255, 0, 0], 1)).toEqual([170, 0, 0]);
+  });
+
+  test("level 2 round-trips grayscale ramp boundary idx 232", () => {
+    // to256(8,8,8) === 232; idx256ToRgb(232) must take the grayscale branch.
+    expect(quantizeColor([8, 8, 8], 2)).toEqual([8, 8, 8]);
+  });
+});
+
+describe("fgCode level 2 cube encoding", () => {
+  test("non-grayscale color picks the exact 6×6×6 cube slot", () => {
+    // ri=1 (95), gi=1 (95), bi=2 (135) → 16 + 36 + 6 + 2 = 60.
+    expect(fgCode(100, 50, 150, 2)).toBe(`${ESC}38;5;60m`);
+  });
+
+  test("grayscale r=248 lands on the top of the 24-step ramp (255)", () => {
+    // Boundary: r > 248 returns 231 (cube white); r === 248 stays on the ramp.
+    expect(fgCode(248, 248, 248, 2)).toBe(`${ESC}38;5;255m`);
   });
 });
 
