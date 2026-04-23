@@ -414,6 +414,15 @@ describe("reduce — executing-step", () => {
     }
   });
 
+  test("chrome notification while executing-step returns state by reference", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "chrome", text: "Probing the database" },
+    });
+    expect(next).toBe(state);
+  });
+
   test("step-output notification while processing updates outputSlot", () => {
     const state = makeProcessing();
     const next = reduce(state, {
@@ -452,6 +461,39 @@ describe("reduce — executing-step", () => {
     if (next.tag === "exiting") {
       expect(next.outcome.kind).toBe("answer");
     }
+  });
+
+  test("loop-final exhausted from executing-step → exiting{exhausted}", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "exhausted" },
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("exhausted");
+  });
+
+  test("loop-error from executing-step → exiting{error}", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-error",
+      error: new Error("boom"),
+    });
+    expect(next.tag).toBe("exiting");
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("error");
+    if (next.outcome.kind !== "error") throw new Error("unreachable");
+    expect(next.outcome.message).toBe("boom");
+  });
+
+  test("loop-final aborted from executing-step → state by reference (defensive no-op)", () => {
+    const state = makeExecutingStep({ response: nonFinalMed });
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "aborted" },
+    });
+    expect(next).toBe(state);
   });
 
   test("key-esc from executing-step → confirming (keeps prior state)", () => {
@@ -694,6 +736,18 @@ describe("reduce — purity and no-op behavior", () => {
   test("unrelated event in thinking returns state by reference", () => {
     const state: AppState = { tag: "thinking" };
     const next = reduce(state, { type: "key-esc" });
+    expect(next).toBe(state);
+  });
+
+  test("unrelated event in processing returns state by reference", () => {
+    const state = makeProcessing();
+    const next = reduce(state, { type: "draft-change", text: "x" });
+    expect(next).toBe(state);
+  });
+
+  test("unrelated event in executing-step returns state by reference", () => {
+    const state = makeExecutingStep();
+    const next = reduce(state, { type: "draft-change", text: "x" });
     expect(next).toBe(state);
   });
 

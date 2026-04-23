@@ -16,3 +16,45 @@
   mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
   reason: equivalent on realistic LLM output — \s* vs \S* only diverges when fence info-line has trailing whitespace before newline, which LLMs don't produce
   added: 2026-04-21
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'case "exiting": return state;'
+  mutated: 'case "exiting":'
+  reason: reducer is never called with an exiting-tagged state; the coordinator's `exited` guard short-circuits dispatch before reduce runs
+  added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'case "exiting":'
+  mutated: 'case "":'
+  reason: reducer is never called with an exiting-tagged state; mutating the case label affects only a branch that runtime never reaches
+  added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'response.final === false && response.risk_level !== "low"'
+  mutated: 'response.final === false && true'
+  reason: isNonFinalConfirm is only reached when response.final === false; runLoop never emits loop-final with {final:false, risk:low} (inline-executed), so the risk_level check only runs against med/high — for which !== "low" is already true
+  added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'response.risk_level !== "low"'
+  mutated: 'response.risk_level !== ""'
+  reason: risk_level is an enum of {low,medium,high} — it can never equal "", so !== "" is always true; on the med/high responses that actually reach isNonFinalConfirm this is equivalent to the original !== "low"
+  added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'if (autoExec && r.response.final !== false)'
+  mutated: 'if (autoExec && true)'
+  reason: defensive; runLoop never emits loop-final with {final:false, risk:low} or yolo+non-final (both inline-executed), so on every producible input the final-check is redundant with the autoExec gate
+  added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'event.type === "notification" && event.notification.kind === "step-output"'
+  mutated: 'event.type === "" && event.notification.kind === "step-output"'
+  reason: defensive branch in reduceConfirming — notifications never reach the reducer while state.tag is "confirming" because the notification-router's isDialogLive returns true only for processing-followup/executing-step
+  added: 2026-04-22
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: 'event.type === "notification" && event.notification.kind === "step-output"'
+  mutated: 'event.type === "notification" && event.notification.kind === ""'
+  reason: same as the paired mutation on this line — the surrounding branch is unreachable in reduceConfirming because the router never dispatches notification events while the dialog tag is "confirming"
+  added: 2026-04-22
