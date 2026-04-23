@@ -57,3 +57,4 @@ PRIVATE.md
 
 # Context docs (generated, not source of truth)
 specs/context/
+.claude/scheduled_tasks.lock
