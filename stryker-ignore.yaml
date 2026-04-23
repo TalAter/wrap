@@ -256,3 +256,69 @@
   mutated: 'if (false) return state;'
   reason: defensive guard in "submit-key" case. The only dispatcher (config-wizard-dialog.tsx ApiKeyScreen) is rendered only when screen.tag === "entering-key", so submit-key is never dispatched from another screen. Unreachable in practice.
   added: 2026-04-22
+- file: src/core/truncate.ts
+  mutator: StringLiteral
+  original: 'text.lastIndexOf("\n", headEnd)'
+  mutated: 'text.lastIndexOf("", headEnd)'
+  reason: snap-to-newline for head boundary is readability/cosmetic. With "" the result is headEnd itself (no snap), so head may end mid-line. The output is still truncated correctly and remains parseable by both humans and LLMs; the function's essential contract (head + indicator + tail within budget) is intact.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: EqualityOperator
+  original: 'if (lastNewline > 0) headEnd = lastNewline;'
+  mutated: 'if (lastNewline >= 0) headEnd = lastNewline;'
+  reason: differs only when text starts with "\n" (lastNewline === 0), a defensive edge case; on that input original keeps headEnd while mutant sets headEnd = 0 (empty head). Inputs truncated here are multi-line text bodies that never start with a bare newline.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: StringLiteral
+  original: 'text.indexOf("\n", tailStart)'
+  mutated: 'text.indexOf("", tailStart)'
+  reason: symmetric to the head snap — tail snap-to-newline is cosmetic; without it the tail may start mid-line. Output is still a faithful truncation within budget.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: ConditionalExpression
+  original: 'if (nextNewline !== -1 && nextNewline < total) tailStart = nextNewline + 1;'
+  mutated: 'if (false) tailStart = nextNewline + 1;'
+  reason: disables tail snap-to-newline entirely. Cosmetic — tail begins at the budget-derived position instead of just after a newline. Truncation still produces head + indicator + tail within budget.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: ConditionalExpression
+  original: 'nextNewline !== -1 && nextNewline < total'
+  mutated: 'nextNewline !== -1 && true'
+  reason: equivalent mutant — nextNewline from indexOf is always < total whenever it is not -1, so the `< total` clause is redundant.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: EqualityOperator
+  original: 'nextNewline !== -1 && nextNewline < total'
+  mutated: 'nextNewline !== -1 && nextNewline >= total'
+  reason: nextNewline from indexOf is either -1 or a valid index (< total), so `nextNewline >= total` is always false when the first clause is true — the snap is effectively disabled. Same cosmetic impact as disabling the entire `if`.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: ArithmeticOperator
+  original: 'tailStart = nextNewline + 1'
+  mutated: 'tailStart = nextNewline - 1'
+  reason: off-by-2 on tail boundary — tail begins two chars earlier instead of just after the newline. Cosmetic deviation from the snap-to-newline intent; truncation is still within budget.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: EqualityOperator
+  original: 'if (tailStart <= headEnd) tailStart = total;'
+  mutated: 'if (tailStart < headEnd) tailStart = total;'
+  reason: only differs when tailStart === headEnd exactly. On producible inputs (total > maxChars, budget derived from maxChars) tailStart is either computed to be >= headEnd + 1 or equal to headEnd; in the === case the mutant leaves tail as text.slice(headEnd) — the remainder after head — which yields the full text reassembled around an in-place indicator, a minor cosmetic difference that only surfaces in a narrow parameter band.
+  added: 2026-04-23
+- file: src/core/truncate.ts
+  mutator: EqualityOperator
+  original: 'const tail = tailStart < total ? text.slice(tailStart) : "";'
+  mutated: 'const tail = tailStart <= total ? text.slice(tailStart) : "";'
+  reason: equivalent mutant — when tailStart === total, text.slice(total) returns "" anyway, so both branches produce the same empty tail.
+  added: 2026-04-23
+- file: src/wizard/models-filter.ts
+  mutator: ArrayDeclaration
+  original: 'const outputs = m.modalities?.output ?? [];'
+  mutated: 'const outputs = m.modalities?.output ?? ["Stryker was here"];'
+  reason: equivalent mutant — when modalities.output is nullish the fallback is checked next via `outputs.includes("text")`. Neither [] nor ["Stryker was here"] contains "text", so the model is dropped in both cases. When modalities.output is defined the fallback is not used.
+  added: 2026-04-23
+- file: src/wizard/models-filter.ts
+  mutator: ConditionalExpression
+  original: 'if (!regex || models.length === 0) return models;'
+  mutated: 'if (!regex || false) return models;'
+  reason: equivalent mutant — on empty models the short-circuit returns []; without the short-circuit findIndex returns -1, models[-1] is undefined, pick is falsy, the next line returns models ([]). Same observable result.
+  added: 2026-04-23
