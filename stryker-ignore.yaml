@@ -190,3 +190,21 @@
   mutated: '""'
   reason: cosmetic nerdIcon glyph shown only in the wizard when nerdFonts is enabled. No runtime behavior depends on the exact codepoint.
   added: 2026-04-22
+- file: src/llm/format-context.ts
+  mutator: ConditionalExpression
+  original: 'attachedInputPath !== undefined'
+  mutated: 'true'
+  reason: unreachable given caller contract — main.ts and logging/entry.ts set attachedInputPath/Size/Preview together or not at all. When preview is defined, path is always defined too. Inner guard is defensive only.
+  added: 2026-04-22
+- file: src/llm/format-context.ts
+  mutator: ConditionalExpression
+  original: 'attachedInputSize !== undefined'
+  mutated: 'true'
+  reason: unreachable given caller contract — attachedInputSize is always set alongside path/preview in main.ts. Ternary false branch never taken in practice.
+  added: 2026-04-22
+- file: src/llm/format-context.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: unreachable false branch of the attachedInputSize !== undefined ternary — never evaluated given caller contract.
+  added: 2026-04-22
