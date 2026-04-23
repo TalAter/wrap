@@ -364,3 +364,15 @@
   mutated: 'if (false) return [];'
   reason: equivalent — on non-array parsed values, calling parsed.filter throws TypeError (no such method on objects/primitives), which the outer try/catch converts into return []. Same observable result as the short-circuit.
   added: 2026-04-23
+- file: src/subcommands/forget-footprint.ts
+  mutator: ConditionalExpression
+  original: 'if (memBytes > 0) {'
+  mutated: 'if (true) {'
+  reason: equivalent — loadMemory returns {} when memory.json is missing, so countFacts yields 0 either way; the guard is an optimization, not a behavior switch.
+  added: 2026-04-23
+- file: src/subcommands/forget-footprint.ts
+  mutator: EqualityOperator
+  original: 'memBytes > 0'
+  mutated: 'memBytes >= 0'
+  reason: equivalent — memBytes is a file size (always >= 0), and when it is 0 loadMemory returns {} so countFacts yields 0; same result as the original guard.
+  added: 2026-04-23
