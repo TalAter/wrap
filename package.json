@@ -2,7 +2,7 @@
   "name": "wrap",
   "type": "module",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.1",
   "scripts": {
     "start": "bun run src/index.ts",
     "build:watch": "watchexec -w src bun run build.ts",
