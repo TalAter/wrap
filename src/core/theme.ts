@@ -42,7 +42,7 @@ export type ThemeTokens = {
   gradient: {
     wizard: [Color, Color];
     welcomeLogo: [Color, Color];
-    welcomeBrain: [Color, Color];
+    welcomeBrain: readonly Color[];
     riskLow: [Color, Color];
     riskMedium: [Color, Color];
     riskHigh: [Color, Color];

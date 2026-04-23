@@ -77,7 +77,7 @@ function lerpOklab(a: Oklab, b: Oklab, t: number): Oklab {
   return [flerp(a[0], b[0], t), flerp(a[1], b[1], t), flerp(a[2], b[2], t)];
 }
 
-function interpolateOklab(stops: Color[], t: number): Oklab {
+function interpolateOklab(stops: readonly Color[], t: number): Oklab {
   if (stops.length === 1) return rgbToOklab(stops[0] as Color);
   const segments = stops.length - 1;
   const seg = Math.min(Math.floor(t * segments), segments - 1);
@@ -85,7 +85,7 @@ function interpolateOklab(stops: Color[], t: number): Oklab {
   return lerpOklab(rgbToOklab(stops[seg] as Color), rgbToOklab(stops[seg + 1] as Color), segT);
 }
 
-export function interpolate(stops: Color[], t: number): Color {
+export function interpolate(stops: readonly Color[], t: number): Color {
   return oklabToRgb(interpolateOklab(stops, t));
 }
 
@@ -214,7 +214,7 @@ export function fgCode(r: number, g: number, b: number, level = 3): string {
  */
 export function gradientCells(
   text: string,
-  stops: Color[],
+  stops: readonly Color[],
   shinePos?: number,
   shineRadius = 4,
   level = 3,
@@ -258,7 +258,7 @@ export function gradientCells(
 
 export function gradient(
   text: string,
-  stops: Color[],
+  stops: readonly Color[],
   shinePos?: number,
   shineRadius = 4,
   level = 3,
