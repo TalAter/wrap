@@ -658,3 +658,15 @@
   mutated: 'if (false) return fileConfig;'
   reason: equivalent — with the guard removed, loadConfig falls through to `{...fileConfig, ...envConfig}`. When envConfig is undefined, object spread of undefined contributes no keys, so the merged result equals fileConfig. Short-circuit is a performance/clarity optimization, not a behavior branch.
   added: 2026-04-23
+- file: src/subcommands/forget-delete.ts
+  mutator: ConditionalExpression
+  original: 'if (r.removed) result.removed = true;'
+  mutated: 'if (true) result.removed = true;'
+  reason: defensive — every `wrap-scratch-*` entry returned by readdirSync is a directory created via mkdtempSync (ensureTempDir in fs/temp.ts), so rmDir's `existed` is true and r.removed is true whenever this line runs. The guard only differs on unreproducible edge cases (broken symlinks, concurrent removal) where "did we remove something?" is itself ambiguous.
+  added: 2026-04-23
+- file: src/subcommands/forget-delete.ts
+  mutator: BlockStatement
+  original: '} catch { result.errors.push(path); }'
+  mutated: '{}'
+  reason: rmDir outer catch guards against rmSync throwing, but rmSync({recursive:true, force:true}) is effectively non-throwing on permissible paths — `force:true` swallows ENOENT, and recursive walk handles files and dirs uniformly. Reliably triggering a failure requires chmod dance on parents that leaves the fs in a state the test harness cannot clean up cleanly.
+  added: 2026-04-23
