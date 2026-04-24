@@ -90,16 +90,16 @@ Single-creator + matrix-uploaders avoids the race that 4 parallel "create or app
 3. Install Bun (`oven-sh/setup-bun@v2`, pin to a specific Bun version via `bun-version:` input — do not float on `latest`, since the `--compile` self-sign bug is version-specific).
 4. `bun install --frozen-lockfile`.
 5. Build: `BUN_NO_CODESIGN_MACHO_BINARY=1 WRAP_BUILD_TARGET=bun-<arch> bun run scripts/build-release.ts` (workaround Bun self-sign SIGKILL bug, oven-sh/bun#29120). Verify env var name against the pinned Bun version's docs before merging — historical name is `BUN_NO_CODESIGN_MACHO_BINARY`, may have been renamed.
-6. **macOS only:** `codesign --sign - --force ./wrap` (ad-hoc sign).
-7. Strip (per-OS):
+6. Strip (per-OS, **must run before codesign** — strip invalidates Mach-O signatures → SIGKILL at runtime):
    - macOS: `strip -x wrap` (`-x` removes local symbols).
    - Linux: `strip --strip-unneeded wrap` (GNU `strip`).
+7. **macOS only:** `codesign --sign - --force ./wrap` (ad-hoc sign).
 8. `tar -czf wrap-<triple>.tar.gz wrap`.
 9. Upload tarball to the draft release: `gh release upload "$GITHUB_REF_NAME" wrap-<triple>.tar.gz --clobber` (`gh` is preinstalled on all GH-hosted runners; `--clobber` makes the step idempotent on retry within the same release).
 
 ### Tap bump job
 
-Runs `needs: publish-release`. Skips on prerelease tags (any tag containing `-`, e.g. `-rc.1`, `-beta.0`).
+Runs `needs: publish-release` on **macOS** (the formula is `on_macos`-only; `dawidd6` needs the `url` visible to compute checksums). Skips on prerelease tags (any tag containing `-`, e.g. `-rc.1`, `-beta.0`).
 
 ```yaml
 - uses: dawidd6/action-homebrew-bump-formula@v7

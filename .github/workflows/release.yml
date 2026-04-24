@@ -79,10 +79,7 @@ jobs:
           WRAP_BUILD_TARGET: ${{ matrix.bun_target }}
         run: bun run build:release
 
-      - name: Ad-hoc sign (macOS)
-        if: matrix.os == 'macos'
-        run: codesign --sign - --force ./wrap
-
+      # Strip before signing — strip invalidates signatures.
       - name: Strip (macOS)
         if: matrix.os == 'macos'
         run: strip -x wrap
@@ -90,6 +87,10 @@ jobs:
       - name: Strip (Linux)
         if: matrix.os == 'linux'
         run: strip --strip-unneeded wrap
+
+      - name: Ad-hoc sign (macOS)
+        if: matrix.os == 'macos'
+        run: codesign --sign - --force ./wrap
 
       - name: Tar
         env:
@@ -111,7 +112,10 @@ jobs:
   bump-tap:
     needs: publish-release
     if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-24.04
+    # Runs on macOS because the formula is macOS-only (`on_macos do`);
+    # the action needs the `url` visible to compute checksums, which
+    # requires loading the formula on a matching platform.
+    runs-on: macos-15
     steps:
       - uses: dawidd6/action-homebrew-bump-formula@v7
         with:
