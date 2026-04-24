@@ -47,64 +47,15 @@ Bootstrap via `brew tap-new talater/wrap`. Keep generated scaffold:
 
 ### Formula shape
 
-```ruby
-class Wrap < Formula
-  desc "Translate natural language into shell commands"
-  homepage "https://github.com/talater/wrap"
-  version "0.0.1"
-  license "MIT"
+Source of truth: [`talater/homebrew-wrap:Formula/wrap.rb`](https://github.com/talater/homebrew-wrap/blob/main/Formula/wrap.rb). Design notes below.
 
-  on_macos do
-    on_arm do
-      url "https://github.com/talater/wrap/releases/download/v#{version}/wrap-aarch64-apple-darwin.tar.gz"
-      sha256 "REPLACE"
-    end
-    on_intel do
-      url "https://github.com/talater/wrap/releases/download/v#{version}/wrap-x86_64-apple-darwin.tar.gz"
-      sha256 "REPLACE"
-    end
-  end
-
-  livecheck do
-    url :stable
-    strategy :github_latest
-  end
-
-  def install
-    bin.install "wrap"
-    generate_completions_from_executable(
-      bin/"wrap", "--completion",
-      shells: [:bash, :zsh, :fish],
-      shell_parameter_format: :arg,
-    )
-  end
-
-  def caveats
-    <<~EOS
-      Run `wrap` to configure your LLM provider.
-
-      Tip: add `alias w=wrap` to your shell rc for a shorter command.
-    EOS
-  end
-
-  deny_network_access_for :test
-
-  test do
-    ENV["WRAP_HOME"] = testpath/".wrap"
-    assert_match version.to_s, shell_output("#{bin}/wrap --version")
-    assert_match "#compdef wrap", shell_output("#{bin}/wrap --completion zsh")
-    assert_match "_wrap", shell_output("#{bin}/wrap --completion bash")
-    assert_match "complete -c wrap", shell_output("#{bin}/wrap --completion fish")
-  end
-end
-```
-
-Notes:
-- Do not follow the above ruby source code blindly. Use judgement and if you think something is wrong, outdated, or needs changing, let the user know.
 - Target triples use rust-style naming (`aarch64-apple-darwin` / `x86_64-apple-darwin`), matching homebrew-core precedent (zellij, starship).
-- No `bottle do` block. Tarballs already are the binary. Bottles only relevant once formula is source-built in core.
-- No `post_install` — would be rejected for `$HOME` writes (and `deny_network_access_for :postinstall` is therefore moot; only the `:test` directive is included). Wizard handles config on first user invocation.
-- `ENV["WRAP_HOME"] = testpath/".wrap"` is defense-in-depth: the asserted commands (`--version`, `--completion`) short-circuit before `getWrapHome()` is read, so the env var is currently unused. Keep it so the line stays correct if test grows to exercise config-touching paths.
+- No `bottle do` block. Tarballs are the binary; bottles only matter for source-built core formulae.
+- No `post_install` — would be rejected for `$HOME` writes. Wizard handles config on first user invocation.
+- `generate_completions_from_executable` is called with no `shell_parameter_format` — the default passes the bare shell name, which matches our `wrap --completion <shell>` CLI. Do **not** use `:arg`; that produces `--shell=zsh` and our CLI rejects it.
+- `deny_network_access! :test` (not `:for_test` or `deny_network_access_for`). Component order matters to `brew style`: `deny_network_access!` sits before `def install`; `livecheck` sits before `on_macos`.
+- `ENV["WRAP_HOME"] = testpath/".wrap"` is defense-in-depth: asserted commands short-circuit before `getWrapHome()` is read. Keep so growth of the test block stays safe.
+- Placeholder sha256s are the 64-zero string so `brew style` passes; install fails loudly on first attempt until the real sha lands. `dawidd6/action-homebrew-bump-formula` fills them automatically on first auto-bump after v0.0.1 ships.
 
 ---
 
