@@ -844,3 +844,15 @@
   mutated: 'end >= 0'
   reason: equivalent on valid UTF-8 — at end=0 the byte is necessarily a code-point leading byte (non-continuation) since TextEncoder emits valid UTF-8, so the continuation-byte clause fails and the loop exits regardless of whether the boundary is `> 0` or `>= 0`.
   added: 2026-04-23
+- file: src/config/store.ts
+  mutator: ConditionalExpression
+  original: 'if (!store) throw new Error("Config accessed before initialization");'
+  mutated: 'if (false) throw new Error("Config accessed before initialization");'
+  reason: defensive init-order guard (appears identically in both getConfig and updateConfig). main.ts calls setConfig at startup before any config read, and updateConfig is only invoked from the wizard after setConfig has already fired. The `store === null` state is unreachable in practice.
+  added: 2026-04-24
+- file: src/config/store.ts
+  mutator: StringLiteral
+  original: '"Config accessed before initialization"'
+  mutated: '""'
+  reason: dev-facing error message inside the unreachable init-order guard (identical in getConfig and updateConfig). The throw never fires on producible inputs; the string is internal-only and binding it in a test would be brittle.
+  added: 2026-04-24
