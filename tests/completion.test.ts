@@ -30,11 +30,28 @@ describe("generateZshCompletion", () => {
   const script = generateZshCompletion({ commands, options, providers });
 
   test("starts with #compdef directive so zsh auto-loads it", () => {
-    expect(script.startsWith("#compdef w\n")).toBe(true);
+    expect(script.startsWith("#compdef wrap\n")).toBe(true);
   });
 
-  test("defines _w function", () => {
-    expect(script).toContain("_w()");
+  test("defines _wrap function by default", () => {
+    expect(script).toContain("_wrap()");
+  });
+
+  test("parametrizes command name via optional arg", () => {
+    const custom = generateZshCompletion({ commands, options, providers }, "w");
+    expect(custom.startsWith("#compdef w\n")).toBe(true);
+    expect(custom).toContain("_w()");
+    expect(custom).toContain("_w_providers()");
+    expect(custom).toContain(":provider:_w_providers");
+    expect(custom).toContain('_w "$@"');
+  });
+
+  test("parametrized providers helper is scoped to the name", () => {
+    const custom = generateZshCompletion({ commands, options, providers }, "foo");
+    expect(custom).toContain("_foo()");
+    expect(custom).toContain("_foo_providers()");
+    expect(custom).toContain(":provider:_foo_providers");
+    expect(custom).not.toContain("_wrap_providers");
   });
 
   test("includes every command flag and alias from the registry", () => {
@@ -86,7 +103,7 @@ describe("generateZshCompletion", () => {
     const withProviders = options.filter((o) => o.completion === "providers");
     expect(withProviders.length).toBeGreaterThan(0);
     for (const opt of withProviders) {
-      expect(script).toContain(":provider:_w_providers");
+      expect(script).toContain(":provider:_wrap_providers");
       expect(script).toMatch(new RegExp(`${opt.flag}=\\[`));
     }
   });
@@ -103,7 +120,7 @@ describe("generateZshCompletion", () => {
       run: async () => {},
     };
     const result = generateZshCompletion({ commands: [fake], options: [], providers });
-    expect(result).toContain("--foo=[Fake]:provider:_w_providers");
+    expect(result).toContain("--foo=[Fake]:provider:_wrap_providers");
   });
 
   test("--completion exposes the supported-shells list as its value completer", () => {
@@ -152,9 +169,16 @@ describe("generateZshCompletion", () => {
 describe("generateBashCompletion", () => {
   const script = generateBashCompletion({ commands, options, providers });
 
-  test("defines _w function and registers via `complete -F _w w`", () => {
-    expect(script).toContain("_w()");
-    expect(script).toContain("complete -F _w w");
+  test("defines _wrap function and registers via `complete -F _wrap wrap`", () => {
+    expect(script).toContain("_wrap()");
+    expect(script).toContain("complete -F _wrap wrap");
+  });
+
+  test("parametrizes command name", () => {
+    const custom = generateBashCompletion({ commands, options, providers }, "w");
+    expect(custom).toContain("_w()");
+    expect(custom).toContain("complete -F _w w");
+    expect(custom).not.toContain("_wrap");
   });
 
   test("includes every flag and alias in the flag completion word list", () => {
@@ -192,8 +216,14 @@ describe("generateBashCompletion", () => {
 describe("generateFishCompletion", () => {
   const script = generateFishCompletion({ commands, options, providers });
 
-  test("emits `complete -c w` lines", () => {
-    expect(script).toContain("complete -c w");
+  test("emits `complete -c wrap` lines by default", () => {
+    expect(script).toContain("complete -c wrap");
+  });
+
+  test("parametrizes command name", () => {
+    const custom = generateFishCompletion({ commands, options, providers }, "w");
+    expect(custom).toContain("complete -c w");
+    expect(custom).not.toContain("complete -c wrap");
   });
 
   test("uses -l for long flags and -s for short flags", () => {
@@ -261,45 +291,64 @@ describe("generateCompletion dispatcher", () => {
 
 describe("runCompletion", () => {
   test("returns ok for a supported shell", () => {
-    expect(runCompletion(["zsh"])).toBe("ok");
+    expect(runCompletion(["zsh"])).toEqual({ shell: "zsh", name: "wrap" });
   });
 
   test("rejects missing shell arg with install-instructions hint", () => {
     const result = runCompletion([]);
-    expect(result).not.toBe("ok");
-    if (result === "ok") return;
+    expect(result).not.toHaveProperty("shell");
+    if (!("error" in result)) return;
     expect(result.error).toContain("requires a shell name");
-    expect(result.error).toContain("w --help completion");
+    expect(result.error).toContain("wrap --help completion");
   });
 
   test("rejects empty-string shell arg", () => {
     const result = runCompletion([""]);
-    expect(result).not.toBe("ok");
-    if (result === "ok") return;
+    expect(result).not.toHaveProperty("shell");
+    if (!("error" in result)) return;
     expect(result.error).toContain("requires a shell name");
   });
 
   test("rejects too many args", () => {
-    const result = runCompletion(["zsh", "extra"]);
-    expect(result).not.toBe("ok");
-    if (result === "ok") return;
-    expect(result.error).toContain("one argument");
+    const result = runCompletion(["zsh", "w", "extra"]);
+    expect(result).not.toHaveProperty("shell");
+    if (!("error" in result)) return;
+    expect(result.error).toContain("at most two arguments");
+  });
+
+  test("accepts optional name arg", () => {
+    expect(runCompletion(["zsh", "w"])).toEqual({ shell: "zsh", name: "w" });
+    expect(runCompletion(["bash", "myalias"])).toEqual({ shell: "bash", name: "myalias" });
+  });
+
+  test("rejects invalid name that breaks shell function identifiers", () => {
+    const result = runCompletion(["zsh", "bad name"]);
+    expect(result).not.toHaveProperty("shell");
+    if (!("error" in result)) return;
+    expect(result.error).toContain("name");
+  });
+
+  test("rejects empty-string name", () => {
+    const result = runCompletion(["zsh", ""]);
+    expect(result).not.toHaveProperty("shell");
+    if (!("error" in result)) return;
+    expect(result.error).toContain("name");
   });
 
   test("accepts bash and fish", () => {
-    expect(runCompletion(["bash"])).toBe("ok");
-    expect(runCompletion(["fish"])).toBe("ok");
+    expect(runCompletion(["bash"])).toEqual({ shell: "bash", name: "wrap" });
+    expect(runCompletion(["fish"])).toEqual({ shell: "fish", name: "wrap" });
   });
 
   test("rejects unsupported shell with supported list and hint", () => {
     const result = runCompletion(["powershell"]);
-    expect(result).not.toBe("ok");
-    if (result === "ok") return;
+    expect(result).not.toHaveProperty("shell");
+    if (!("error" in result)) return;
     expect(result.error).toContain("powershell");
     expect(result.error).toContain("zsh");
     expect(result.error).toContain("bash");
     expect(result.error).toContain("fish");
-    expect(result.error).toContain("w --help completion");
+    expect(result.error).toContain("wrap --help completion");
   });
 });
 
@@ -310,7 +359,15 @@ describe("--completion subcommand end-to-end", () => {
   test("prints script to stdout with zero exit and no stderr", async () => {
     const result = await wrap("--completion zsh");
     expect(result.exitCode).toBe(0);
+    expect(result.stdout.startsWith("#compdef wrap\n")).toBe(true);
+    expect(result.stderr).toBe("");
+  });
+
+  test("accepts positional name arg to override the registered command", async () => {
+    const result = await wrap("--completion zsh w");
+    expect(result.exitCode).toBe(0);
     expect(result.stdout.startsWith("#compdef w\n")).toBe(true);
+    expect(result.stdout).toContain("_w()");
     expect(result.stderr).toBe("");
   });
 
