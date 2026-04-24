@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chooseDialogStdin } from "../src/session/dialog-host.ts";
+import { chooseDialogStdin, DIALOG_INK_OPTIONS } from "../src/session/dialog-host.ts";
 
 describe("chooseDialogStdin", () => {
   test("returns process.stdin when parent has a TTY", () => {
@@ -43,5 +43,14 @@ describe("chooseDialogStdin", () => {
       },
     });
     expect(opened).toBe(true);
+  });
+});
+
+describe("DIALOG_INK_OPTIONS", () => {
+  // Ink defaults exitOnCtrlC to true, which short-circuits every useInput
+  // listener for Ctrl+C (ink/build/hooks/use-input.js:104). Our key-binding
+  // layer owns Ctrl+C → key-esc, so Ink must not swallow it in raw mode.
+  test("sets exitOnCtrlC: false so our key-binding layer handles Ctrl+C", () => {
+    expect(DIALOG_INK_OPTIONS.exitOnCtrlC).toBe(false);
   });
 });

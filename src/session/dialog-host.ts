@@ -61,6 +61,17 @@ type WizardModule = {
 let responseCached: ResponseModules | null = null;
 let wizardCached: WizardModule | null = null;
 
+// `exitOnCtrlC: false` lets our key-binding layer route Ctrl+C through the
+// session reducer (dispatches key-esc — same path as Esc). Ink's default
+// `true` short-circuits every useInput listener for Ctrl+C in raw mode
+// (ink/build/hooks/use-input.js), so our binding never fires.
+export const DIALOG_INK_OPTIONS = {
+  stdout: process.stderr,
+  patchConsole: false,
+  alternateScreen: true,
+  exitOnCtrlC: false,
+} as const;
+
 /**
  * Lazy-load Ink + React + ResponseDialog. Fired in parallel with the first
  * LLM call so the await before a response dialog mount is free in practice.
@@ -95,10 +106,8 @@ export function mountResponseDialog(props: {
   const app = ink.render(
     react.createElement(TP, null, react.createElement(ResponseDialog, props)),
     {
+      ...DIALOG_INK_OPTIONS,
       stdin,
-      stdout: process.stderr,
-      patchConsole: false,
-      alternateScreen: true,
     },
   );
   return {
@@ -154,12 +163,7 @@ export async function mountConfigWizardDialog(callbacks: {
     };
     const app = ink.render(
       react.createElement(TP, null, react.createElement(ConfigWizardDialog, props)),
-      {
-        stdin,
-        stdout: process.stderr,
-        patchConsole: false,
-        alternateScreen: true,
-      },
+      { ...DIALOG_INK_OPTIONS, stdin },
     );
   });
 }
