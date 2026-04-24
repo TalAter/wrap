@@ -170,17 +170,15 @@ describe("ConfigWizardDialog", () => {
     await wait();
     // Submit key
     stdin.write("\r");
-    await wait();
 
     // Should be on model picker
-    expect(stripAnsi(lastFrame() ?? "")).toContain("model");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("model"));
 
     // Submit (accept default = first model)
     stdin.write("\r");
-    await wait();
 
     // Single provider → auto-default → done
-    expect(cb.result).not.toBeNull();
+    await waitFor(() => expect(cb.result).not.toBeNull());
     expect(cb.result?.defaultProvider).toBe("anthropic");
     expect(cb.result?.entries.anthropic?.apiKey).toBe("sk-ant-test-key");
     expect(cb.result?.entries.anthropic?.model).toBe("claude-sonnet-4-6");

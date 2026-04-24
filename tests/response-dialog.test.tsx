@@ -204,7 +204,9 @@ describe("Dialog — editing", () => {
       </ThemeProvider>,
     );
     stdin.write("\r");
-    await waitFor(() => expect(events).toContainEqual({ type: "submit-edit", text: "echo rm-i-fake" }));
+    await waitFor(() =>
+      expect(events).toContainEqual({ type: "submit-edit", text: "echo rm-i-fake" }),
+    );
   });
 
   test("Enter on editing with blank draft does NOT dispatch submit-edit", async () => {
@@ -258,7 +260,9 @@ describe("Dialog — composing", () => {
       </ThemeProvider>,
     );
     stdin.write("\r");
-    await waitFor(() => expect(events).toContainEqual({ type: "submit-followup", text: "be safer" }));
+    await waitFor(() =>
+      expect(events).toContainEqual({ type: "submit-followup", text: "be safer" }),
+    );
   });
 
   test("Enter on composing with blank draft does NOT dispatch submit-followup", async () => {
