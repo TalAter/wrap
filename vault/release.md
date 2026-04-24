@@ -97,6 +97,10 @@ brew formulae cannot write to `$HOME` during install. The Wrap wizard handles co
 
 Bun's `--compile` has version-specific bugs (notably the self-sign SIGKILL, mitigated with `BUN_NO_CODESIGN_MACHO_BINARY=1`). Floating on `latest` means a Bun release can silently break the binary. Pinning in a file means there's one place to bump. Auto-stamping that file from `Bun.version` inside `release.ts` means CI is guaranteed to use whatever Bun the release author actually tested with — no drift between "the Bun I ran `bun run check` on" and "the Bun CI compiles with."
 
+### Why the formula uses literal version URLs, not interpolation
+
+`url "…/v0.0.1/wrap-<triple>.tar.gz"`, not `url "…/v#{version}/…"`. `brew bump-formula-pr` (which the auto-bump action wraps) does an `inreplace` on the formula file looking for the literal previous URL; with `#{version}` interpolation, the regex never matches the source and the bump fails with `inreplace failed`. Explicit URLs make the file one more place to keep in sync, but the auto-bump takes care of that.
+
 ### Why `bump-tap` runs on macOS
 
 The formula is `on_macos do`-only (no Linux block yet). When `dawidd6/action-homebrew-bump-formula` loads the formula on a Linux runner, the `on_macos` block is skipped, no `url` is visible, and the action errors with `formula requires at least a URL`. Running the job on macOS makes the `on_arm`/`on_intel` URLs load, and the action can compute both sha256s. If we ever add a Linux formula block, the macOS runner still handles everything — the macOS side also evaluates the `on_linux` block just fine, it's just formula Ruby.
