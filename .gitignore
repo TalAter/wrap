@@ -14,8 +14,8 @@ coverage
 *.lcov
 
 # stryker mutation testing
-.stryker-tmp
-reports
+stryker/.stryker-tmp
+stryker/reports
 
 # logs
 logs

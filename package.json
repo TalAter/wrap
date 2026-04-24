@@ -9,7 +9,7 @@
     "build:watch": "watchexec -w src bun run build.ts",
     "build": "bun run build.ts",
     "test": "bun test",
-    "mutate": "stryker run",
+    "mutate": "stryker run stryker/stryker.config.json",
     "lint": "bunx biome check . --write --error-on-warnings && bunx tsc --noEmit",
     "check": "bun run lint && bun test",
     "optimize": "docker build -t wrap-dspy -f eval/dspy/Dockerfile . && docker run --rm -v \"$(pwd)/eval/examples\":/app/eval/examples -v \"$(pwd)/eval/results\":/app/eval/results -v \"$(pwd)/eval/dspy\":/app/eval/dspy -v \"$(pwd)/eval/bridge.ts\":/app/eval/bridge.ts -v \"$(pwd)/src\":/app/src --env-file eval/dspy/.env wrap-dspy && bunx biome format src/prompt.optimized.json --write"

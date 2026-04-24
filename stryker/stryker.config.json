@@ -1,5 +1,5 @@
 {
-  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "$schema": "../node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "command",
   "commandRunner": {
     "command": "STRYKER=1 bun test"
@@ -7,8 +7,10 @@
   "mutate": ["src/command-response.schema.ts"],
   "coverageAnalysis": "off",
   "reporters": ["html", "json", "clear-text", "progress"],
+  "htmlReporter": { "fileName": "stryker/reports/mutation/mutation.html" },
+  "jsonReporter": { "fileName": "stryker/reports/mutation/mutation.json" },
   "timeoutMS": 15000,
   "concurrency": 4,
-  "tempDirName": ".stryker-tmp",
+  "tempDirName": "stryker/.stryker-tmp",
   "cleanTempDir": true
 }
