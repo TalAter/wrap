@@ -2,7 +2,7 @@
 name: release
 description: How to cut a Wrap release — semver bump, tag, watch CI, merge tap bump. Brew distribution design notes.
 Source: scripts/release.ts, .github/workflows/release.yml, scripts/bump-tap.ts
-Last-synced: b6ebba4
+Last-synced: 100eed0
 ---
 
 # Release
@@ -25,6 +25,7 @@ git push origin v0.0.N       # triggers the release workflow
 
 - working tree must be clean
 - current branch must be `main`
+- local `main` must match `origin/main` (fetches first)
 - tag must not already exist
 - `bun run check` (lint + tests) must pass
 - stamps `.bun-version` with the currently-installed `Bun.version` so CI rebuilds on the same Bun you tested with
@@ -80,6 +81,10 @@ homebrew-core has a high bar (popularity, maturity, source-built), ongoing revie
 
 `aarch64-apple-darwin` / `x86_64-apple-darwin` / `aarch64-unknown-linux-gnu` / `x86_64-unknown-linux-gnu` match homebrew-core precedent for Rust binaries. Staying on this convention makes a future core submission a smaller diff and makes the tarball names obvious to anyone who's installed a Rust CLI via brew.
 
+### Why Sigstore build attestations
+
+Each arch tarball is attested via `actions/attest-build-provenance`: a Sigstore signature proving the sha256 was produced by this workflow from a specific commit, logged to the public Rekor transparency log. Verify with `gh attestation verify <tarball> --repo talater/wrap`. Homebrew third-party taps don't auto-verify today, but the [OpenSSF proposal](https://repos.openssf.org/proposals/build-provenance-and-code-signing-for-homebrew.html) to make provenance mandatory is advancing. The cost is ~5 lines of YAML plus `id-token: write` + `attestations: write` permissions; the defence binds each tarball to the commit and workflow that built it, so a tampered binary (compromised release-write token, swapped asset on the Release, CDN-level attack) fails verification — an attacker can't forge an attestation without the workflow's OIDC token.
+
 ### Why ad-hoc codesign, not Developer ID + notarization
 
 macOS refuses to run unsigned binaries from outside the App Store. Ad-hoc signing (`codesign --sign - --force`) satisfies first-run execution without paying the Apple Developer fee or running a notarization flow. The cost: no Gatekeeper quarantine bypass, so a future `curl install.sh | bash` channel will show the "downloaded from internet" dialog. Brew installs are fine because brew sets trusted extended attributes. Upgrade path when a `curl` channel ships: Developer ID + `xcrun notarytool`.
@@ -90,7 +95,7 @@ brew formulae cannot write to `$HOME` during install. The Wrap wizard handles co
 
 ### Why Bun is pinned via `.bun-version` + `release.ts`
 
-Bun's `--compile` has version-specific bugs (notably the self-sign SIGKILL, mitigated with `BUN_NO_CODESIGN_MACHO_BINARY=1`). Floating on `latest` means a Bun release can silently break the binary. Pinning in a file means there's one place to bump; auto-stamping from `Bun.version` inside `release.ts` means CI is guaranteed to use whatever Bun the release author actually tested with — no drift.
+Bun's `--compile` has had version-specific regressions (e.g. a self-sign SIGKILL on macOS, [oven-sh/bun#29120](https://github.com/oven-sh/bun/issues/29120), since fixed in 1.3.13). Floating on `latest` means a Bun release can silently break the binary. Pinning in a file means there's one place to bump; auto-stamping from `Bun.version` inside `release.ts` means CI is guaranteed to use whatever Bun the release author actually tested with — no drift.
 
 ### Why `WRAP_BUILD_TARGET`, not `BUN_BUILD_TARGET`
 
