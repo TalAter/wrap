@@ -430,3 +430,225 @@
   mutated: 'case "":'
   reason: same as above — mutating the label makes llm-wire fall out of the switch; there's no default and nothing after, so no write happens either way. Equivalent.
   added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'lastSep >= 0'
+  mutated: 'true'
+  reason: equivalent — when no separator, lastSep is -1, and path.slice(-1 + 1) = path.slice(0) = path = basename(path). Both branches produce the same string.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: 'try { return Bun.which(cmd); } catch { return null; }'
+  mutated: '{}'
+  reason: defaultWhich's try/catch wraps Bun.which. In Bun, `which` is a stable native binding that does not throw for plain command strings; the catch is defensive against future API changes. All tests inject their own `which` function so this default path is lightly exercised.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: 'return Bun.which(cmd);'
+  mutated: '{}'
+  reason: same as above — try body empty means defaultWhich returns undefined; tests inject their own which so this default path is effectively untested. Bun.which is non-throwing in practice.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: 'return null;'
+  mutated: '{}'
+  reason: catch body in defaultWhich — unreachable because Bun.which does not throw for plain command strings in current Bun versions.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '(deps.envVisual ?? process.env.VISUAL ?? "")'
+  mutated: '(deps.envVisual ?? process.env.VISUAL ?? "Stryker was here!")'
+  reason: the "" fallback is reached only when BOTH deps.envVisual and process.env.VISUAL are nullish. Every resolveEditor test passes an explicit envVisual string, so this branch is unexercised.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '(deps.envEditor ?? process.env.EDITOR ?? "")'
+  mutated: '(deps.envEditor ?? process.env.EDITOR ?? "Stryker was here!")'
+  reason: mirror of the VISUAL fallback above; tests always pass an explicit envEditor so the literal fallback is unreached.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'attempt < maxAttempts'
+  mutated: 'attempt <= maxAttempts'
+  reason: readFileWithRetry's retry loop. In tests, writeFileSync completes before spawnEditor returns and readFileSync always succeeds on the first iteration, so the loop condition upper bound is never reached. ENOENT path is observable only under a real editor's atomic-save race, which unit tests deliberately do not reproduce.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: UpdateOperator
+  original: 'attempt++'
+  mutated: 'attempt--'
+  reason: same as above — readFileSync succeeds first iteration, the update expression never runs a second time, so direction is unobservable. An ENOENT-triggered retry would be the only observable difference and isn't reproduced in unit tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: 'catch (e) { const code = ...; if (...) throw e; Bun.sleepSync(delayMs); }'
+  mutated: '{}'
+  reason: readFileSync never throws in the test harness (file is synchronously written before spawn), so the catch block is unreachable. Emptying it has no observable effect.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'true'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'false'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: LogicalOperator
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'code !== "ENOENT" && attempt === maxAttempts - 1'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT"'
+  mutated: 'false'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'code !== "ENOENT"'
+  mutated: 'code === "ENOENT"'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'attempt === maxAttempts - 1'
+  mutated: 'false'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'attempt === maxAttempts - 1'
+  mutated: 'attempt !== maxAttempts - 1'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ArithmeticOperator
+  original: 'maxAttempts - 1'
+  mutated: 'maxAttempts + 1'
+  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"readFileWithRetry: unreachable"'
+  mutated: '""'
+  reason: the fallback throw is labeled unreachable by design — the for-loop either returns or throws. The string is never surfaced to a user.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: 'join(getWrapHome(), "cache")'
+  mutated: 'join(getWrapHome(), "")'
+  reason: equivalent at spawnEditor-end-to-end level — cacheDir becomes $WRAP_HOME, but mkdirSync operates on dirname(filePath) so still a valid parent, writeFileSync creates the file, and the fake editor round-trips content. Changes only the on-disk directory name, not observable return value.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: 'join(cacheDir, "compose.md")'
+  mutated: 'join(cacheDir, "")'
+  reason: equivalent at spawnEditor-end-to-end level — filePath becomes the cache directory path string, but since the directory does not yet exist the path is treated as a file that gets written, read, and returned. Observable behavior unchanged in the test harness.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: 'writeFileSync(filePath, draft, "utf-8")'
+  mutated: 'writeFileSync(filePath, draft, "")'
+  reason: Bun's writeFileSync accepts an empty-string encoding and silently defaults to utf-8 for plain string `draft`, so the file round-trips identically in both the happy path and the seed-preservation test.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: 'Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"] })'
+  mutated: 'Bun.spawn(argv, {})'
+  reason: tests/preload.ts patches Bun.spawn to rewrite stdio:"inherit" → "ignore"; with no options Bun uses its defaults which also don't pollute the test runner. No assertion in the test suite distinguishes these.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ArrayDeclaration
+  original: '["inherit", "inherit", "inherit"]'
+  mutated: '[]'
+  reason: same as above — stdio is silenced by the test preload regardless of the declared array contents.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: 'if (signal) { ... abort-handling ... } else { await proc.exited; }'
+  mutated: '{}'
+  reason: when `if (signal)` body is empty, the else branch doesn't run either, so spawnEditor falls through to `const exitCode = proc.exitCode` before the process has exited. exitCode is null, `exitCode !== 0` is true, return null — which matches both test assertions (pre-aborted → null, abort during wait → null). Observable return value is unchanged.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'if (signal.aborted)'
+  mutated: 'true'
+  reason: with `true`, pre-aborted branch is always taken for ANY call that passes a signal: proc.unref, return null. Both signal tests assert toBeNull, and the non-signal tests don't pass a signal (this branch is skipped at the outer `if (signal)` guard). No observable test-level difference.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ArrowFunction
+  original: 'proc.exited.then(() => "exited")'
+  mutated: 'proc.exited.then(() => undefined)'
+  reason: the "exited" sentinel is only compared at L202 (`outcome === "aborted"`). Replacing it with undefined still fails that check and falls through to the normal exit-code path, which runs the same read/trim/return logic. No observable difference.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"exited"'
+  mutated: '""'
+  reason: same as above — outcome sentinel is only compared to "aborted"; any non-aborted value falls through to the same exit-code path.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: 'resolve("aborted")'
+  mutated: 'resolve("")'
+  reason: on abort, resolve(anything) unblocks the Promise.race; the subsequent `outcome === "aborted"` check fails, execution falls through to exitCode check where exitCode is null (proc unref'd but still running) → return null. Both test assertions (toBeNull) still pass.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ once: true }'
+  mutated: '{}'
+  reason: once:true prevents a leak if the signal aborts more than once; tests abort at most once per AbortController, so the difference is unobservable at the test level.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BooleanLiteral
+  original: 'once: true'
+  mutated: 'once: false'
+  reason: same as above — tests abort at most once; listener cleanup vs leak is not observable via spawnEditor's return value.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'if (outcome === "aborted")'
+  mutated: 'true'
+  reason: with `true`, every signal-using call takes the aborted branch: proc.unref, return null. Both signal tests expect null, and the exitCode path below would also return null when proc is still running. Test-level equivalent.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'if (outcome === "aborted")'
+  mutated: 'false'
+  reason: with `false`, the aborted branch is never taken; abort tests fall through to exitCode = null → return null, which matches the toBeNull assertion.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'outcome === "aborted"'
+  mutated: 'outcome !== "aborted"'
+  reason: in the exit path (outcome === "exited"), `!==` is true so we take the aborted branch: proc.unref, return null. Exit tests (happy path etc.) don't pass a signal so the `if (signal)` guard skips this entirely. Equivalent at test-observation level.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"aborted"'
+  mutated: '""'
+  reason: the outcome check becomes `outcome === ""`, always false; equivalent to the ConditionalExpression→false case above — falls through to exitCode path, returns null.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: 'if (outcome === "aborted") { proc.unref(); return null; }'
+  mutated: '{}'
+  reason: skipping proc.unref + return null still lands in the exit-code fallback where exitCode is null → return null. Same observable result.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '`${resolved.meta.displayName} exited with code ${exitCode} — keeping current draft`'
+  mutated: '``'
+  reason: cosmetic stderr chrome message when the editor exits non-zero; tests assert only the return value (null) and do not inspect the chrome text.
+  added: 2026-04-23
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '`Editor error: ${e instanceof Error ? e.message : String(e)}`'
+  mutated: '``'
+  reason: cosmetic stderr chrome message in the catch path; tests assert only the return value (null).
+  added: 2026-04-23
