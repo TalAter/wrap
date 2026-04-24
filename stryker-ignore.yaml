@@ -670,3 +670,21 @@
   mutated: '{}'
   reason: rmDir outer catch guards against rmSync throwing, but rmSync({recursive:true, force:true}) is effectively non-throwing on permissible paths — `force:true` swallows ENOENT, and recursive walk handles files and dirs uniformly. Reliably triggering a failure requires chmod dance on parents that leaves the fs in a state the test harness cannot clean up cleanly.
   added: 2026-04-23
+- file: src/fs/temp.ts
+  mutator: ConditionalExpression
+  original: 'if (!dir) return `${header}\n${promptConstants.tempDirEmpty}`;'
+  mutated: 'if (false) return ...;'
+  reason: equivalent — when WRAP_TEMP_DIR is undefined, the mutant falls through to `walk(undefined, "", lines)`; inside walk, `readdirSync(join(undefined, ""))` throws (path.join TypeError), the readdir catch returns, lines stays empty, and formatTempDirSection hits the `lines.length === 0` branch which returns the same empty-state string.
+  added: 2026-04-23
+- file: src/fs/temp.ts
+  mutator: BlockStatement
+  original: 'catch { continue; }'
+  mutated: '{}'
+  reason: dirStats lstatSync catch body. lstatSync describes the link itself (not the target), so it does not throw for broken symlinks — the realistic failure modes (ENOENT from a readdir/lstat race, EACCES) are not reliably reproducible in the unit-test harness without fragile platform-specific chmod setups.
+  added: 2026-04-23
+- file: src/fs/temp.ts
+  mutator: ConditionalExpression
+  original: 'if (info.isSymlink) { files++; bytes += info.size; }'
+  mutated: 'if (false) { ... }'
+  reason: equivalent — `lstat` reports the link itself, so `info.isDirectory` is false for every symlink (link nodes are not directories). The else-if isDir branch is therefore never taken for symlinks; the symlink always falls through to the final else branch which applies the same `files++; bytes += info.size` updates. Observable result identical to the symlink branch.
+  added: 2026-04-23
