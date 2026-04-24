@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chrome, chromeRaw, colorLevel, hasJq, shouldAnimate, supportsColor } from "../src/core/output.ts";
+import {
+  chrome,
+  chromeRaw,
+  colorLevel,
+  hasJq,
+  shouldAnimate,
+  supportsColor,
+} from "../src/core/output.ts";
 import { seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 
