@@ -1,10 +1,7 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { seedTestConfig, waitFor } from "./helpers.ts";
-
-beforeEach(() => seedTestConfig());
-
+import { _setClipboardTestHooks } from "../src/core/clipboard.ts";
 import type { AppEvent } from "../src/session/state.ts";
 import {
   foldCommand,
@@ -14,6 +11,7 @@ import {
   truncateCommand,
 } from "../src/tui/response-dialog.tsx";
 import { ThemeProvider } from "../src/tui/theme-context.tsx";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 import {
   makeComposing,
   makeConfirming,
@@ -22,6 +20,27 @@ import {
   makeProcessing,
   makeResponse,
 } from "./helpers/state-fixtures.ts";
+
+const clipState: { resolved: "pbcopy" | null; copyCalls: string[] } = {
+  resolved: "pbcopy",
+  copyCalls: [],
+};
+
+beforeEach(() => {
+  seedTestConfig();
+  clipState.resolved = "pbcopy";
+  clipState.copyCalls = [];
+  _setClipboardTestHooks({
+    resolve: () => clipState.resolved,
+    copy: (text: string) => {
+      clipState.copyCalls.push(text);
+    },
+  });
+});
+
+afterEach(() => {
+  _setClipboardTestHooks({ resolve: null, copy: null });
+});
 
 function captureDispatch() {
   const events: AppEvent[] = [];
@@ -147,6 +166,101 @@ describe("Dialog — confirming", () => {
     );
     stdin.write("\u001b");
     await waitFor(() => expect(events.some((e) => e.type === "key-esc")).toBe(true));
+  });
+
+  test("renders a Copy action item when a clipboard tool is available", () => {
+    clipState.resolved = "pbcopy";
+    const state = makeConfirming();
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).toContain("Copy");
+  });
+
+  test("omits the Copy action item when no clipboard tool is available", () => {
+    clipState.resolved = null;
+    const state = makeConfirming();
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).not.toContain("Copy");
+  });
+
+  test("pressing c copies state.response.content and flips the label to Copied", async () => {
+    clipState.resolved = "pbcopy";
+    const state = makeConfirming({
+      response: makeResponse({ content: "ls -la" }),
+    });
+    const { dispatch, events } = captureDispatch();
+    const { stdin, lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    stdin.write("c");
+    await waitFor(() => expect(clipState.copyCalls).toEqual(["ls -la"]));
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Copied"));
+    // Copy must NOT dispatch a key-action — the action is dialog-local.
+    expect(events.find((e) => e.type === "key-action" && e.action === "copy")).toBeUndefined();
+  });
+
+  test("reverts Copied back to Copy after the flash window elapses", async () => {
+    clipState.resolved = "pbcopy";
+    const state = makeConfirming();
+    const { dispatch } = captureDispatch();
+    const { stdin, lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    stdin.write("c");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Copied"));
+    await waitFor(
+      () => {
+        const text = stripAnsi(lastFrame() ?? "");
+        expect(text).not.toContain("Copied");
+        expect(text).toContain("Copy");
+      },
+      { timeout: 4000, interval: 50 },
+    );
+  });
+
+  test("re-press while flashed copies again and stays in Copied", async () => {
+    clipState.resolved = "pbcopy";
+    const state = makeConfirming({ response: makeResponse({ content: "ls -la" }) });
+    const { dispatch } = captureDispatch();
+    const { stdin, lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    stdin.write("c");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Copied"));
+    stdin.write("c");
+    await waitFor(() => expect(clipState.copyCalls).toEqual(["ls -la", "ls -la"]));
+    // Still showing Copied after the second press — flash hasn't reverted.
+    expect(stripAnsi(lastFrame() ?? "")).toContain("Copied");
+  });
+
+  test("bare c with no clipboard tool neither copies nor dispatches", async () => {
+    clipState.resolved = null;
+    const state = makeConfirming();
+    const { dispatch, events } = captureDispatch();
+    const { stdin } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    stdin.write("c");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(clipState.copyCalls).toEqual([]);
+    expect(events.find((e) => e.type === "key-action" && e.action === "copy")).toBeUndefined();
   });
 
   test("q is an alias for cancel", async () => {

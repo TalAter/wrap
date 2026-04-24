@@ -2,6 +2,7 @@ import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
 import { useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
 import { getConfig } from "../config/store.ts";
+import { copyToClipboard, resolveClipboardTool } from "../core/clipboard.ts";
 import { resolveEditor, spawnEditor } from "../core/editor.ts";
 import { registerExitTeardown, SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
 import type { ThemeTokens } from "../core/theme.ts";
@@ -22,25 +23,28 @@ type ResponseDialogProps = {
 
 // `id` is the stable handle for dispatch — labels are presentation only.
 // Hotkey is `label[0]` (case-insensitive), and ActionBar renders it underlined.
-const CONFIRMING_ACTIONS = [
+// Copy is appended only when a clipboard tool is available (see appendCopyAction).
+type ConfirmingAction = { id: ActionId; label: string; primary: boolean };
+const CONFIRMING_ACTIONS_BASE = [
   { id: "cancel", label: "No", primary: true },
   { id: "run", label: "Yes", primary: true },
   { id: "edit", label: "Edit", primary: false },
   { id: "followup", label: "Follow-up", primary: false },
-  { id: "copy", label: "Copy", primary: false },
-] as const satisfies ReadonlyArray<{
-  id: ActionId;
-  label: string;
-  primary: boolean;
-}>;
+] as const satisfies ReadonlyArray<ConfirmingAction>;
 const CONFIRMING_BAR_WIDTH = 61;
 const MIN_INNER_WIDTH = CONFIRMING_BAR_WIDTH + 4;
 
-const CONFIRMING_BAR_ITEMS: readonly ActionItem[] = CONFIRMING_ACTIONS.map((a) => ({
-  glyph: (a.label[0] as string).toUpperCase(),
-  label: a.label,
-  primary: a.primary,
-}));
+const COPY_FLASH_MS = 2500;
+
+function appendCopyAction(
+  base: ReadonlyArray<ConfirmingAction>,
+  hasClipboardTool: boolean,
+): ReadonlyArray<ConfirmingAction> {
+  if (!hasClipboardTool) return base;
+  // Trailing space pads the base label so the flip to "Copied" only widens by
+  // one cell (absorbed by naturalContentWidth), not four.
+  return [...base, { id: "copy", label: "Copy ", primary: false }];
+}
 
 function editAction(editor: ReturnType<typeof resolveEditor>): ActionItem | null {
   if (!editor) return null;
@@ -272,6 +276,33 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     state.tag === "composing-interactive" || state.tag === "processing-interactive";
 
   const resolvedEditor = resolveEditor();
+  const clipboardTool = resolveClipboardTool();
+
+  // `flashNonce > 0` ⇒ Copy item renders as `Copied` in success tint.
+  // Incrementing per press guarantees a fresh value — the effect re-runs,
+  // its cleanup clears the prior setTimeout, and a new revert timer starts.
+  // Using Date.now() here would collide inside a single millisecond and skip
+  // the re-press timer reset (React bails on setState equality).
+  const [flashNonce, setFlashNonce] = useState(0);
+  useEffect(() => {
+    if (flashNonce === 0) return;
+    const id = setTimeout(() => setFlashNonce(0), COPY_FLASH_MS);
+    return () => clearTimeout(id);
+  }, [flashNonce]);
+  const isFlashing = flashNonce !== 0;
+
+  const confirmingActions = appendCopyAction(CONFIRMING_ACTIONS_BASE, clipboardTool !== null);
+  const confirmingBarItems: readonly ActionItem[] = confirmingActions.map((a) => {
+    const flashing = a.id === "copy" && isFlashing;
+    const label = flashing ? "Copied" : a.label;
+    const item: ActionItem = {
+      glyph: (label[0] as string).toUpperCase(),
+      label,
+      primary: a.primary,
+    };
+    if (flashing) item.flashColor = themeHex(theme.select.selected);
+    return item;
+  });
 
   const EDIT_COMMAND_ACTIONS_RESOLVED = appendEditorAction(
     EDIT_COMMAND_BASE_ACTIONS,
@@ -417,8 +448,16 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   // a label re-routes its hotkey automatically. `cancel` also accepts `q` and
   // Ctrl+C; these extras are safe next to a bare `c` Copy binding because the
   // matcher blocks bare char triggers when any modifier is held.
-  const dispatchAction = (id: ActionId) => dispatch({ type: "key-action", action: id });
-  const hotkeyBindings: KeyBinding[] = CONFIRMING_ACTIONS.map((item) => {
+  // Copy bypasses the reducer: side effect + local flash, never a key-action.
+  const dispatchAction = (id: ActionId) => {
+    if (id === "copy") {
+      copyToClipboard(command);
+      setFlashNonce((n) => n + 1);
+      return;
+    }
+    dispatch({ type: "key-action", action: id });
+  };
+  const hotkeyBindings: KeyBinding[] = confirmingActions.map((item) => {
     const hotkey = (item.label[0] as string).toLowerCase();
     return {
       on: item.id === "cancel" ? [hotkey, "q", { key: "c", ctrl: true }] : hotkey,
@@ -431,12 +470,12 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
     { on: "left", do: () => setSelectedIndex((i) => Math.max(0, i - 1)) },
     {
       on: "right",
-      do: () => setSelectedIndex((i) => Math.min(CONFIRMING_ACTIONS.length - 1, i + 1)),
+      do: () => setSelectedIndex((i) => Math.min(confirmingActions.length - 1, i + 1)),
     },
     {
       on: "return",
       do: () => {
-        const item = CONFIRMING_ACTIONS[selectedIndex];
+        const item = confirmingActions[selectedIndex];
         if (item) dispatchAction(item.id);
       },
     },
@@ -620,11 +659,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         ) : (
           <Text>
             <Text color={themeHex(theme.text.primary)}>{"Run command? "}</Text>
-            <ActionBar
-              items={CONFIRMING_BAR_ITEMS}
-              focusedIndex={selectedIndex}
-              dividerAfter={[1]}
-            />
+            <ActionBar items={confirmingBarItems} focusedIndex={selectedIndex} dividerAfter={[1]} />
           </Text>
         )}
       </Box>

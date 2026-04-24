@@ -35,7 +35,13 @@ function defaultWhich(cmd: string): string | null {
   }
 }
 
+// Test-only override hooks — Bun's `mock.module` leaks across files in a
+// single `bun test` process, so we expose direct overrides instead.
+let resolveOverride: (() => ClipboardTool | null) | null = null;
+let copyOverride: ((text: string) => void) | null = null;
+
 export function resolveClipboardTool(deps: ResolveDeps = {}): ClipboardTool | null {
+  if (resolveOverride) return resolveOverride();
   if (cached !== undefined) return cached;
   const which = deps.which ?? defaultWhich;
   for (const tool of CLIPBOARD_TOOLS) {
@@ -53,6 +59,15 @@ export function _resetClipboardCacheForTests(): void {
   cached = undefined;
 }
 
+/** Test-only: override the resolver and/or copier without module-mocking. */
+export function _setClipboardTestHooks(opts: {
+  resolve?: (() => ClipboardTool | null) | null;
+  copy?: ((text: string) => void) | null;
+}): void {
+  if (opts.resolve !== undefined) resolveOverride = opts.resolve;
+  if (opts.copy !== undefined) copyOverride = opts.copy;
+}
+
 type CopyDeps = ResolveDeps & { spawn?: typeof Bun.spawn };
 
 /**
@@ -66,6 +81,10 @@ type CopyDeps = ResolveDeps & { spawn?: typeof Bun.spawn };
  * dialog or block process exit.
  */
 export function copyToClipboard(text: string, deps: CopyDeps = {}): void {
+  if (copyOverride) {
+    copyOverride(text);
+    return;
+  }
   try {
     const tool = resolveClipboardTool(deps);
     if (!tool) return;
