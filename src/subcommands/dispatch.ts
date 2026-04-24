@@ -6,10 +6,6 @@ export async function dispatch(flag: string, args: string[]): Promise<void> {
 
   if (!cmd) {
     chrome(`Unknown flag: ${flag}`);
-    // Set exitCode instead of hard-exiting so the event loop can drain —
-    // in particular, the async OSC 11 appearance probe (fire-and-forget
-    // from resolveAppearance) needs to read its /dev/tty reply before we
-    // exit, otherwise the reply leaks into the parent shell.
     process.exitCode = 1;
     return;
   }

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseOsc11Response, queryTerminalBackground } from "../src/core/detect-appearance.ts";
+import {
+  parseOsc11Response,
+  queryTerminalBackground,
+  resolveAppearance,
+} from "../src/core/detect-appearance.ts";
 import { mockStderr } from "./helpers/mock-stderr.ts";
 import { mockStdin } from "./helpers/mock-stdin.ts";
 
@@ -59,5 +63,30 @@ describe("queryTerminalBackground", () => {
       stderr.restore();
     }
     expect(stdin.setRawModeCalled).toBe(false);
+  });
+});
+
+describe("resolveAppearance", () => {
+  // Regression: probe used to be fire-and-forget. On cache-miss it raced
+  // with Ink dialog mount — probe's setRawMode(false) cleanup fired after
+  // Ink claimed stdin, leaving the terminal cooked while Ink thought raw.
+  // Keys echoed to the shell instead of the dialog. Fix: await the probe
+  // so no raw-mode toggling overlaps with any dialog lifecycle.
+  test("awaits probe on cache-miss", async () => {
+    const prevHome = process.env.WRAP_HOME;
+    const prevTheme = process.env.WRAP_THEME;
+    process.env.WRAP_HOME = `/tmp/wrap-test-${Date.now()}-${Math.random()}`;
+    delete process.env.WRAP_THEME;
+    const stderr = mockStderr({ isTTY: false }); // isTTY:false → probe returns null fast
+    try {
+      const result = resolveAppearance(undefined);
+      expect(result).toBeInstanceOf(Promise);
+      expect(await result).toBe("dark");
+    } finally {
+      stderr.restore();
+      if (prevHome === undefined) delete process.env.WRAP_HOME;
+      else process.env.WRAP_HOME = prevHome;
+      if (prevTheme !== undefined) process.env.WRAP_THEME = prevTheme;
+    }
   });
 });

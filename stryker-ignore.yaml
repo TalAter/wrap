@@ -388,15 +388,3 @@
   mutated: 'level >= 0 && level < 3'
   reason: equivalent in gradientCells — differs only at level=0, where the earlier `if (level <= 0)` guard short-circuits every iteration to `cells[i] = ch` before the `solid` branch is reached. Mutated value of solid is never observed.
   added: 2026-04-23
-- file: src/core/detect-appearance.ts
-  mutator: BlockStatement
-  original: '.then((result) => { if (result) cacheAppearance(result); })'
-  mutated: '.then((result) => {})'
-  reason: fire-and-forget cache warmup inside scheduleBackgroundDetection. queryTerminalBackground requires an OSC 11-responsive /dev/tty; in the unit-test harness it always resolves to null (no TTY responder), so `if (result)` is false and cacheAppearance is never called either way. Observable only via a real pty integration, which we deliberately avoid.
-  added: 2026-04-23
-- file: src/core/detect-appearance.ts
-  mutator: ConditionalExpression
-  original: 'if (result) cacheAppearance(result)'
-  mutated: 'if (false) cacheAppearance(result)'
-  reason: same unreachable test-harness path — queryTerminalBackground resolves null in tests, so the truthy branch never fires. Equivalent in the unit-test env.
-  added: 2026-04-23

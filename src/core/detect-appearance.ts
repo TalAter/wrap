@@ -57,7 +57,7 @@ export function cacheAppearance(appearance: Appearance, home?: string): void {
  *
  * Returns null on timeout or if the terminal doesn't respond.
  */
-export async function queryTerminalBackground(timeoutMs = 100): Promise<Appearance | null> {
+export async function queryTerminalBackground(timeoutMs = 50): Promise<Appearance | null> {
   if (!process.stderr.isTTY) return null;
 
   let fd: number;
@@ -118,36 +118,30 @@ export async function queryTerminalBackground(timeoutMs = 100): Promise<Appearan
  * 1. WRAP_THEME env var (instant)
  * 2. Config appearance field — "dark" or "light" (instant)
  * 3. Disk cache if fresh (instant)
- * 4. Default to "dark"
+ * 4. Synchronous OSC 11 probe (up to ~50ms); cache result.
+ * 5. Fallback "dark".
  *
- * Then fire-and-forget async OSC 11 detection to update cache for next run.
+ * The probe is awaited rather than fire-and-forget: its setRawMode toggles
+ * the terminal's termios, which would otherwise race with any Ink dialog
+ * mounting concurrently — cleanup's setRawMode(false) would leave the
+ * terminal cooked while Ink still thought it was raw, and keys would echo
+ * to the shell instead of the dialog.
  */
-export function resolveAppearance(
+export async function resolveAppearance(
   configAppearance: "auto" | "dark" | "light" | undefined,
-): Appearance {
-  // 1. Env var override
+): Promise<Appearance> {
   const envTheme = process.env.WRAP_THEME;
   if (envTheme === "dark" || envTheme === "light") return envTheme;
 
-  // 2. Explicit config
   if (configAppearance === "dark" || configAppearance === "light") return configAppearance;
 
-  // 3. Disk cache
   const cached = getCachedAppearance();
   if (cached) return cached;
 
-  // 4. Default dark, kick off async detection
-  scheduleBackgroundDetection();
+  const detected = await queryTerminalBackground().catch(() => null);
+  if (detected) {
+    cacheAppearance(detected);
+    return detected;
+  }
   return "dark";
-}
-
-/** Fire-and-forget OSC 11 detection; caches result for next run. */
-function scheduleBackgroundDetection(): void {
-  queryTerminalBackground()
-    .then((result) => {
-      if (result) cacheAppearance(result);
-    })
-    .catch(() => {
-      // Detection is best-effort; never crash the process on unexpected stdin errors.
-    });
 }

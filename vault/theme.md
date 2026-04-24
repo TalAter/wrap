@@ -36,9 +36,10 @@ Resolution chain (first hit wins):
 1. `WRAP_THEME` env var (`dark` | `light`)
 2. `config.appearance` when explicit
 3. Disk cache `~/.wrap/cache/appearance.json` (1h TTL)
-4. Default `"dark"` — async OSC 11 query fires for next run
+4. Synchronous OSC 11 probe (50ms timeout); cache result
+5. Default `"dark"` on no response
 
-OSC 11 asks the terminal for background color, computes WCAG luminance, caches result. 100ms timeout, never blocks boot. Supported: Ghostty, iTerm2, kitty, Alacritty, WezTerm, modern Terminal.app.
+OSC 11 asks the terminal for background color, computes WCAG luminance, caches result. The probe is awaited rather than fire-and-forget: its `setRawMode` toggles the terminal's termios, which would otherwise race with any concurrently-mounting Ink dialog — cleanup would drop the terminal out of raw mode while Ink still thought it was raw, and keystrokes would echo to the shell instead of the dialog. Supported: Ghostty, iTerm2, kitty, Alacritty, WezTerm, modern Terminal.app.
 
 Early theme set in `main.ts` runs before `ensureConfig()` so wizard and `--help` see resolved appearance. Second pass after config load picks up explicit `config.appearance`.
 
@@ -57,6 +58,6 @@ Quantizing interpolated colors to 16 or 256 produces chunky banding. Below truec
 - **Authored in truecolor, quantized on output.** One palette, not three.
 - **No cross-theme derivation.** Explicit values prevent cascading surprises.
 - **Two-stop OKLAB gradients.** Simple to author, smooth result.
-- **OSC 11 never blocks boot.** Default dark, detect async, cache for next run.
+- **OSC 11 probe is synchronous (50ms).** Must finish before any Ink dialog mounts — raw-mode cleanup races with Ink's stdin claim on the same tty.
 - **`NO_COLOR` always wins.** No exceptions. `FORCE_COLOR` overrides TTY check but not `NO_COLOR`.
 - **Any inkjs-UI component with hardcoded color needs `extendTheme` treatment.** Select is handled; future components (Badge, Alert, etc.) need the same mapping.

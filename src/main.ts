@@ -33,7 +33,7 @@ export async function main() {
   try {
     // Early theme: WRAP_THEME env + cache work before config is loaded.
     // Covers --help, the wizard, and any other pre-config code path.
-    setTheme(resolveTheme(resolveAppearance(undefined)));
+    setTheme(resolveTheme(await resolveAppearance(undefined)));
 
     const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
 
@@ -70,7 +70,7 @@ export async function main() {
     setConfig(applyModelOverride(base, modifiers, process.env));
 
     // Re-resolve theme now that config.appearance is available.
-    const appearance = resolveAppearance(getConfig().appearance);
+    const appearance = await resolveAppearance(getConfig().appearance);
     setTheme(resolveTheme(appearance));
 
     const resolved = resolveProvider(getConfig());
