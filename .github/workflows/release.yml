@@ -26,12 +26,15 @@ jobs:
             exit 1
           fi
 
+      # Idempotent: re-running the workflow after a partial failure must
+      # not die on "release already exists".
       - name: Create draft release
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --draft \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Release $GITHUB_REF_NAME"
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" \
+                 --draft \
+                 --title "$GITHUB_REF_NAME" \
+                 --notes "Release $GITHUB_REF_NAME"
 
   build:
     needs: create-release
@@ -66,7 +69,7 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
+          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bun-version', 'bun.lock') }}
           restore-keys: bun-${{ runner.os }}-${{ runner.arch }}-
 
       - run: bun install --frozen-lockfile
@@ -122,4 +125,4 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           tap: talater/homebrew-wrap
           formula: wrap
-          tag: ${{ github.ref }}
+          tag: ${{ github.ref_name }}
