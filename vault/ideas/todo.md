@@ -86,7 +86,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 
 ## Build & Distribution
 
-- [ ] Homebrew formula for `wrap`. Use `generate_completions_from_executable(bin/"w", "--completion")` to auto-install zsh/bash/fish completions into Homebrew's managed completion dirs.
+- [ ] Homebrew formula for `wrap`. Use `generate_completions_from_executable(bin/"wrap", "--completion", shell_parameter_format: :arg)` to auto-install zsh/bash/fish completions into Homebrew's managed completion dirs. Tracked in `vault/impl-specs/brew-distribution.md`.
 - [ ] For any packager we ship through, wire up shell completion install. Each channel has its own mechanism (Homebrew's `generate_completions_from_executable`, distro packages staging pre-generated files into `/usr/share/bash-completion/completions/` etc.). Whenever a new distribution channel is added, completion install is part of that work.
 - [ ] Wizard backstop for shell completions.
 - [ ] Manual end-to-end test of shell completions on bash + fish after install. Automated `bash -n` / `fish --no-execute` tests cover syntax only — real UX (tab behavior, provider colon suffix, alias exclusion) needs a human in each shell.

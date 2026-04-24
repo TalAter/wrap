@@ -28,28 +28,13 @@ Out of scope (future, see § Future channels):
 
 ## Prerequisites — code changes in app repo
 
-1. **Parametrize completion generator.** `src/subcommands/completion.ts` currently hardcodes the command name `w` throughout — this is a **behavior change**, not a pure refactor. Touch points (find by function name, not line number, since these will drift):
-   - `generateZshCompletion` — `#compdef w`, `_w_providers()`, `_w()`, `_w "$@"` (the function names are referenced from the file install location, so they must be parametrized too).
-   - `generateBashCompletion` — `_w()`, `complete -F _w w`.
-   - `generateFishCompletion` — `complete -c w` (also passed via `fishCompleteLine`'s third arg).
-   - Module-level `HINT` constant (currently `Run \`w --help completion\` …`).
-   - `completionCmd.usage` (currently `w --completion <shell>`) and `completionCmd.help` (paths and example commands all use `w`).
+> Completion-generator parametrization shipped in commit 31744bd — `wrap --completion <shell> [name]` emits `wrap`-named completions by default, optional positional name overrides (e.g. `wrap --completion zsh w` for shell-alias completions). Brew's `generate_completions_from_executable(... shell_parameter_format: :arg)` passes only the shell name → gets `wrap`-named completions unchanged.
 
-   Add optional positional `<name>` arg after the shell name, default = `wrap`. Thread through `runCompletion` → `generateCompletion` → each generator, into both the registered command name (`#compdef <name>`, `complete -c <name>`) and the function/identifier names (`_<name>`, `_<name>_providers`). Update `runCompletion`'s arg-count check (currently rejects more than one arg) to accept up to two.
-   - `wrap --completion zsh` → emits `#compdef wrap`, `_wrap()`, `_wrap_providers()`.
-   - `wrap --completion zsh w` → emits `#compdef w`, `_w()`, `_w_providers()`.
-
-   Positional (not `--name <cmd>` flag) — keeps the brew formula's `generate_completions_from_executable(... shell_parameter_format: :arg)` working unchanged (it passes only the shell name).
-
-   Help text (`completionCmd.help`) is for the human running `wrap --completion --help`, not for the generator output. Keep examples in help oriented to the binary as installed (`wrap --completion zsh > …/_wrap`); leave the user-installed-as-`w` flow to the wizard's future alias section.
-
-   Short-circuit in `src/main.ts:45-47` already prevents config load on flag dispatch — keep as-is.
-
-2. **Create a newrelease build script.** Add `scripts/build-release.ts` (or similar) for CI cross-compile. Do **not** extend `build.ts` — it's for local dev (`bun run build`); release build is a CI concern with different inputs (target arch). Keep them separate.
+1. **Create a release build script.** Add `scripts/build-release.ts` (or similar) for CI cross-compile. Do **not** extend `build.ts` — it's for local dev (`bun run build`); release build is a CI concern with different inputs (target arch). Keep them separate.
 
    The `react-devtools-core` stub plugin in `build.ts` is required for Ink to compile and must be reused by the release script. Extract it into a shared module (e.g. `scripts/build-config.ts`) imported by both `build.ts` and `build-release.ts`. Release script reads target from arg or `BUN_BUILD_TARGET` env, passes into `Bun.build({ compile: { target, outfile: "wrap" } })`. Output filename stays `wrap` regardless of target.
 
-3. **CI tag/package.json version match step.** Shell check in release workflow before build: `[ "$(jq -r .version package.json)" = "${GITHUB_REF#refs/tags/v}" ]`. `jq` is preinstalled on GH-hosted macOS and Ubuntu runners.
+2. **CI tag/package.json version match step.** Shell check in release workflow before build: `[ "$(jq -r .version package.json)" = "${GITHUB_REF#refs/tags/v}" ]`. `jq` is preinstalled on GH-hosted macOS and Ubuntu runners.
 
 ---
 
@@ -249,8 +234,7 @@ Principle across all channels: wizard owns first-run experience (config + alias)
 Ordering matters: app repo work + first manual release happens **before** the tap is functional, since `dawidd6/action-homebrew-bump-formula` needs an existing formula in the tap to bump. Bootstrap = hand-written v0.0.1 formula → first manual `brew install` works → subsequent releases auto-bump.
 
 App repo (`talater/wrap`):
-- [ ] Parametrize `src/subcommands/completion.ts` — add positional `<name>` arg (after shell), default `wrap`. Update zsh/bash/fish generators to template both the registered command name and the function identifiers (`_<name>`, `_<name>_providers`). Update `HINT`, `completionCmd.usage`, and `completionCmd.help` so they no longer leak `w`.
-- [ ] Test coverage for the new arg in `tests/` — assert `wrap --completion zsh` emits `#compdef wrap`, `wrap --completion zsh foo` emits `#compdef foo`, function names match.
+- [x] Parametrize `src/subcommands/completion.ts` with optional positional `<name>` arg (default `wrap`) — commit 31744bd.
 - [ ] Extract shared build config (`react-devtools-core` plugin etc.) from `build.ts` into `scripts/build-config.ts`. Add `scripts/build-release.ts` that reads target from `BUN_BUILD_TARGET` env (or arg), reuses shared config, calls `Bun.build({ compile: { target, outfile: "wrap" } })`.
 - [ ] `.github/workflows/release.yml` — tag-driven, version-match check, 4-arch matrix, draft release, ad-hoc sign (mac), per-OS strip, tar, upload, publish, tap bump.
 - [ ] `HOMEBREW_TAP_TOKEN` secret added (fine-grained PAT, see § PAT setup).
