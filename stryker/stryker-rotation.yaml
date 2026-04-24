@@ -41,3 +41,4 @@
 - src/fs/cache.ts
 - src/config/ensure.ts
 - src/config/config.ts
+- src/config/settings.ts
