@@ -15,7 +15,7 @@ jobs:
   create-release:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify tag matches package.json version
         run: |
@@ -45,7 +45,7 @@ jobs:
             os: macos
           - triple: x86_64-apple-darwin
             bun_target: bun-darwin-x64
-            runner: macos-13
+            runner: macos-15-intel
             os: macos
           - triple: aarch64-unknown-linux-gnu
             bun_target: bun-linux-arm64
@@ -57,13 +57,13 @@ jobs:
             os: linux
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
@@ -113,7 +113,7 @@ jobs:
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: dawidd6/action-homebrew-bump-formula@v4
+      - uses: dawidd6/action-homebrew-bump-formula@v7
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           tap: talater/homebrew-wrap

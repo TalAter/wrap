@@ -79,7 +79,7 @@ Single-creator + matrix-uploaders avoids the race that 4 parallel "create or app
 | Target | Bun `--target` | Runner |
 |---|---|---|
 | `aarch64-apple-darwin` | `bun-darwin-arm64` | `macos-14` |
-| `x86_64-apple-darwin` | `bun-darwin-x64` | `macos-13` |
+| `x86_64-apple-darwin` | `bun-darwin-x64` | `macos-15-intel` |
 | `aarch64-unknown-linux-gnu` | `bun-linux-arm64` | `ubuntu-24.04-arm` (GH-hosted ARM runner; available on public repos since 2024) |
 | `x86_64-unknown-linux-gnu` | `bun-linux-x64` | `ubuntu-24.04` |
 
@@ -102,7 +102,7 @@ Single-creator + matrix-uploaders avoids the race that 4 parallel "create or app
 Runs `needs: publish-release`. Skips on prerelease tags (any tag containing `-`, e.g. `-rc.1`, `-beta.0`).
 
 ```yaml
-- uses: dawidd6/action-homebrew-bump-formula@v4
+- uses: dawidd6/action-homebrew-bump-formula@v7
   if: ${{ !contains(github.ref, '-') }}
   with:
     token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
