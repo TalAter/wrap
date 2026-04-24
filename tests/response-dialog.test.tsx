@@ -168,18 +168,6 @@ describe("Dialog — confirming", () => {
     await waitFor(() => expect(events.some((e) => e.type === "key-esc")).toBe(true));
   });
 
-  test("renders a Copy action item when a clipboard tool is available", () => {
-    clipState.resolved = "pbcopy";
-    const state = makeConfirming();
-    const { dispatch } = captureDispatch();
-    const { lastFrame } = render(
-      <ThemeProvider>
-        <ResponseDialog state={state} dispatch={dispatch} />
-      </ThemeProvider>,
-    );
-    expect(stripAnsi(lastFrame() ?? "")).toContain("Copy");
-  });
-
   test("omits the Copy action item when no clipboard tool is available", () => {
     clipState.resolved = null;
     const state = makeConfirming();

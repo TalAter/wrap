@@ -88,7 +88,7 @@ export function copyToClipboard(text: string, deps: CopyDeps = {}): void {
   try {
     const tool = resolveClipboardTool(deps);
     if (!tool) return;
-    const payload = text.replace(/\n$/, "");
+    const payload = text.replace(/\n+$/, "");
     const spawn = deps.spawn ?? Bun.spawn;
     const proc = spawn([tool, ...CLIPBOARD_ARGS[tool]], {
       stdin: "pipe",

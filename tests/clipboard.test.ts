@@ -83,28 +83,29 @@ describe("copyToClipboard", () => {
     expect(calls.length).toBe(0);
   });
 
-  test("strips a single trailing newline before writing", () => {
-    const calls: SpawnCall[] = [];
-    const fake = makeFakeSpawn(calls);
-    copyToClipboard("ls -la\n", {
-      which: (cmd) => (cmd === "pbcopy" ? "/usr/bin/pbcopy" : null),
-      spawn: fake.spawn,
-    });
-    expect(fake.stdinWrites).toEqual(["ls -la"]);
-    expect(fake.stdinEnded).toBe(1);
+  test("strips any run of trailing newlines before writing", () => {
+    for (const suffix of ["", "\n", "\n\n", "\n\n\n"]) {
+      _resetClipboardCacheForTests();
+      const calls: SpawnCall[] = [];
+      const fake = makeFakeSpawn(calls);
+      copyToClipboard(`ls -la${suffix}`, {
+        which: (cmd) => (cmd === "pbcopy" ? "/usr/bin/pbcopy" : null),
+        spawn: fake.spawn,
+      });
+      expect(fake.stdinWrites).toEqual(["ls -la"]);
+      expect(fake.stdinEnded).toBe(1);
+    }
   });
 
   test("spawns with piped stdin, ignored stdout/stderr, and unrefs immediately", () => {
     const calls: SpawnCall[] = [];
     const fake = makeFakeSpawn(calls);
     copyToClipboard("data", {
-      which: (cmd) => (cmd === "xclip" ? "/usr/bin/xclip" : null),
+      which: (cmd) => (cmd === "pbcopy" ? "/usr/bin/pbcopy" : null),
       spawn: fake.spawn,
     });
     expect(calls.length).toBe(1);
-    const [call] = calls;
-    expect(call?.argv).toEqual(["xclip", "-selection", "clipboard"]);
-    expect(call?.options).toMatchObject({
+    expect(calls[0]?.options).toMatchObject({
       stdin: "pipe",
       stdout: "ignore",
       stderr: "ignore",

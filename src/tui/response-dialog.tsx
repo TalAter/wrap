@@ -208,10 +208,14 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   // Local presentation state. Pure UI — no application state depends on it.
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Reset action-bar selection on transitions out of confirming so the user
-  // never sees a stale highlight when re-entering.
+  // Reset action-bar selection + Copy flash on transitions out of confirming
+  // so the user never sees a stale highlight or a stale `Copied` badge when
+  // re-entering (e.g. bounce through editing within the 2.5s flash window).
   useEffect(() => {
-    if (state.tag !== "confirming") setSelectedIndex(0);
+    if (state.tag !== "confirming") {
+      setSelectedIndex(0);
+      setFlashNonce(0);
+    }
   }, [state.tag]);
 
   // Kitty disambiguate mode: enable while we're composing so Shift+Enter /
