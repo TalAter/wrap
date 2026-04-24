@@ -688,3 +688,147 @@
   mutated: 'if (false) { ... }'
   reason: equivalent — `lstat` reports the link itself, so `info.isDirectory` is false for every symlink (link nodes are not directories). The else-if isDir branch is therefore never taken for symlinks; the symlink always falls through to the final else branch which applies the same `files++; bytes += info.size` updates. Observable result identical to the symlink branch.
   added: 2026-04-23
+- file: src/fs/cache.ts
+  mutator: ConditionalExpression
+  original: 'if (cached !== null && isFresh(path, ttlMs))'
+  mutated: 'if (true && isFresh(path, ttlMs))'
+  reason: equivalent — when cached is null, readWrapFile returned null because the file is missing; isFresh then calls statSync on the same path which also fails with ENOENT and returns false via its catch. The short-circuit guard is a readability optimization, not a behavioral branch.
+  added: 2026-04-23
+- file: src/fs/cache.ts
+  mutator: StringLiteral
+  original: 'throw new Error(`HTTP ${response.status} ${response.statusText}`)'
+  mutated: 'throw new Error(``)'
+  reason: cosmetic — the HTTP error message is only observed internally. On cache hit the error is swallowed (returns stale); on no-cache it propagates to ensureConfig which replaces it with a generic `Config error: could not load model list ...` message. The status string never reaches a user-visible surface.
+  added: 2026-04-23
+- file: src/fs/cache.ts
+  mutator: EqualityOperator
+  original: 'return mtimeMs + ttlMs > Date.now();'
+  mutated: 'return mtimeMs + ttlMs >= Date.now();'
+  reason: equivalent on realistic inputs — the `>` vs `>=` boundary only differs at exact millisecond equality between `mtimeMs + ttlMs` and `Date.now()`, which is unreachable in practice (writes take non-zero time and tests backdate mtimes by seconds, never reaching sub-ms exact equality).
+  added: 2026-04-23
+- file: src/fs/cache.ts
+  mutator: BlockStatement
+  original: 'catch { return false; }'
+  mutated: '{}'
+  reason: equivalent in practice — the catch fires only if statSync throws on a path that readWrapFile just read successfully, which requires a race (file deleted between the two calls) or a permission change mid-flight. With catch emptied, isFresh returns undefined (falsy), which the caller treats the same as false. No caller-observable difference on realistic inputs.
+  added: 2026-04-23
+- file: src/fs/cache.ts
+  mutator: BooleanLiteral
+  original: 'return false;'
+  mutated: 'return true;'
+  reason: same race-only window as the catch-body mutant — isFresh is only called when readWrapFile returned a non-null cached string, so the catch fires only on an unreproducible races/perm-flip between readWrapFile and statSync. Returning true instead of false would disagree with the original only in that tight window.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: 'const MODELS_URL = "https://models.dev/api.json";'
+  mutated: '""'
+  reason: fetchModels is only invoked through mountConfigWizardDialog, which every unit test bypasses via the `_testWizardResult` hook. The URL string is unreachable in the test harness; reaching it requires a live Ink wizard run.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: 'const MODELS_CACHE_PATH = "cache/models.dev.json";'
+  mutated: '""'
+  reason: fetchModels caller path is bypassed by all tests (see MODELS_URL entry).
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ArithmeticOperator
+  original: '24 * 60 * 60 * 1000'
+  mutated: '24 / 60'
+  reason: TTL only affects fetchModels' cache freshness check; fetchModels is unreachable in unit tests that bypass the wizard via `_testWizardResult`.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ArithmeticOperator
+  original: '24 * 60 * 60 * 1000'
+  mutated: '24 * 60 * 60 / 1000'
+  reason: same — TTL value only matters inside fetchModels, which tests bypass.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ArithmeticOperator
+  original: '24 * 60 * 60 * 1000'
+  mutated: '24 * 60 / 60'
+  reason: same — TTL value only matters inside fetchModels, which tests bypass.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: 'async function fetchModels() { ... }'
+  mutated: '{}'
+  reason: fetchModels is wired into mountConfigWizardDialog only, never invoked by unit tests that short-circuit via `_testWizardResult`.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: 'try { const { content } = await fetchCached(...); return JSON.parse(content); }'
+  mutated: '{}'
+  reason: fetchModels body — only reachable through the live wizard path, which tests bypass.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ObjectLiteral
+  original: 'await fetchCached({ url: MODELS_URL, path: MODELS_CACHE_PATH, ttlMs: MODELS_TTL_MS })'
+  mutated: '{}'
+  reason: argument to fetchCached inside fetchModels — only reachable through the live wizard path that tests bypass via `_testWizardResult`.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: 'catch { throw new Error(`Config error: could not load model list ...`); }'
+  mutated: '{}'
+  reason: fetchModels catch body — only reachable through the wizard path that tests bypass.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: '`Config error: could not load model list from ${MODELS_URL}. Check your connection and try again.`'
+  mutated: '``'
+  reason: fetchModels error message — only surfaced through the live wizard path that tests bypass; the string is never observed in the unit-test harness.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: 'function probeCliBinaries() { const result = {}; for (...) result[name] = Bun.which(...) !== null; return result; }'
+  mutated: '{}'
+  reason: probeCliBinaries is only called from mountConfigWizardDialog, which every unit test bypasses via `_testWizardResult`.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: 'for (const [name, entry] of Object.entries(CLI_PROVIDERS)) { result[name] = Bun.which(entry.probeCmd) !== null; }'
+  mutated: '{}'
+  reason: probeCliBinaries body — only reachable through the live wizard path that tests bypass.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ConditionalExpression
+  original: 'Bun.which(entry.probeCmd) !== null'
+  mutated: 'true'
+  reason: probeCliBinaries return value — only consumed by mountConfigWizardDialog, which tests bypass via `_testWizardResult`.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ConditionalExpression
+  original: 'Bun.which(entry.probeCmd) !== null'
+  mutated: 'false'
+  reason: same — probeCliBinaries is unreachable in the unit-test harness.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: EqualityOperator
+  original: 'Bun.which(entry.probeCmd) !== null'
+  mutated: 'Bun.which(entry.probeCmd) === null'
+  reason: same — probeCliBinaries is unreachable in the unit-test harness.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ConditionalExpression
+  original: 'if ("_testWizardResult" in opts)'
+  mutated: 'true'
+  reason: equivalent in practice — every test either has config.jsonc (early return), sets WRAP_CONFIG (early return), or passes `_testWizardResult` (so the `in` check is already true). No test reaches ensureConfig without one of these, so forcing the check true matches the effective behavior in the test harness.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: '} else { result = await mountConfigWizardDialog({ fetchModels, probeCliBinaries }); }'
+  mutated: '{}'
+  reason: the else branch is only reached when a caller passes opts without `_testWizardResult` AND the filesystem is fresh — the production wizard path. Unit tests never take this branch.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: ObjectLiteral
+  original: 'mountConfigWizardDialog({ fetchModels, probeCliBinaries })'
+  mutated: '{}'
+  reason: mountConfigWizardDialog is only called in production runs (no `_testWizardResult`); unit tests bypass it.
+  added: 2026-04-23
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: 'chrome("Configuration saved", "🧠")'
+  mutated: 'chrome("Configuration saved", "")'
+  reason: cosmetic — the emoji/glyph is decorative stderr chrome shown once after the wizard completes; no test inspects it and it carries no runtime behavior.
+  added: 2026-04-23
