@@ -1,3 +1,5 @@
+import { CLIPBOARD_PASTE_TOOLS, CLIPBOARD_TOOLS } from "../core/clipboard.ts";
+
 export type ProbeCommand = { label: string; command: string };
 
 export type ToolProbeResult = {
@@ -48,12 +50,8 @@ export const PROBED_TOOLS: readonly string[] = [
   "lynx",
   "w3m",
   // Clipboard
-  "pbcopy",
-  "pbpaste",
-  "xclip",
-  "xsel",
-  "wl-copy",
-  "wl-paste",
+  ...CLIPBOARD_TOOLS,
+  ...CLIPBOARD_PASTE_TOOLS,
 ];
 
 /** Run all probe commands and concatenate output as labeled sections. */

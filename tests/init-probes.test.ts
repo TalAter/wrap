@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { CLIPBOARD_PASTE_TOOLS, CLIPBOARD_TOOLS } from "../src/core/clipboard.ts";
 import {
   PROBE_COMMANDS,
   PROBED_TOOLS,
@@ -19,6 +20,14 @@ describe("PROBE_COMMANDS", () => {
     const labels = PROBE_COMMANDS.map((p) => p.label);
     expect(labels).not.toContain("Core tools");
     expect(labels).not.toContain("Package manager");
+  });
+});
+
+describe("PROBED_TOOLS", () => {
+  test("includes every clipboard tool (copy + paste)", () => {
+    for (const tool of [...CLIPBOARD_TOOLS, ...CLIPBOARD_PASTE_TOOLS]) {
+      expect(PROBED_TOOLS).toContain(tool);
+    }
   });
 });
 
