@@ -832,3 +832,39 @@
   mutated: 'chrome("Configuration saved", "")'
   reason: cosmetic — the emoji/glyph is decorative stderr chrome shown once after the wizard completes; no test inspects it and it carries no runtime behavior.
   added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: ConditionalExpression
+  original: 'if (bytes.byteLength <= MAX_BUFFER_BYTES) return { value: text, truncated: false };'
+  mutated: 'if (false) return { value: text, truncated: false };'
+  reason: unreachable conditional on the line-14 short-circuit. Line 14 returns early when text.length <= MAX; we only reach line 16 when text.length > MAX, and since UTF-8 byte length >= UTF-16 code unit count, bytes.byteLength > MAX at that point. The line-16 condition is always false, so skipping it changes nothing. TS flags the early-return as unreachable code when this mutant is applied.
+  added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: EqualityOperator
+  original: 'bytes.byteLength <= MAX_BUFFER_BYTES'
+  mutated: 'bytes.byteLength < MAX_BUFFER_BYTES'
+  reason: equivalent — line 16 is only reached when text.length > MAX; byte length >= code-unit count so bytes.byteLength > MAX here, never == MAX, making the boundary between < and <= unreachable.
+  added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: ObjectLiteral
+  original: 'return { value: text, truncated: false };'
+  mutated: 'return {};'
+  reason: unreachable return. Line 16's early-return is never taken (see sibling entries for line 16); bytes.byteLength > MAX by the time we reach it, so the returned object value is never observed.
+  added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: BooleanLiteral
+  original: 'return { value: text, truncated: false };'
+  mutated: 'return { value: text, truncated: true };'
+  reason: unreachable — line 16's early-return is never taken (bytes.byteLength > MAX whenever we reach it), so the `truncated` literal in that return is never observed.
+  added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: ConditionalExpression
+  original: 'while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;'
+  mutated: 'while (true && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;'
+  reason: equivalent on valid UTF-8 — the backtrack walks over continuation bytes to the nearest code-point leading byte. Since `bytes` comes from TextEncoder, valid UTF-8 guarantees a leading byte within 3 positions, never a run of continuation bytes that spans to index 0. The `end > 0` guard only matters for invalid UTF-8 that TextEncoder cannot produce.
+  added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: EqualityOperator
+  original: 'end > 0'
+  mutated: 'end >= 0'
+  reason: equivalent on valid UTF-8 — at end=0 the byte is necessarily a code-point leading byte (non-continuation) since TextEncoder emits valid UTF-8, so the continuation-byte clause fails and the loop exits regardless of whether the boundary is `> 0` or `>= 0`.
+  added: 2026-04-23
