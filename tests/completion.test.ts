@@ -286,34 +286,38 @@ describe("generateCompletion dispatcher", () => {
 
 describe("runCompletion", () => {
   test("returns ok for a supported shell", () => {
-    expect(runCompletion(["zsh"])).toEqual({ shell: "zsh", name: "wrap" });
+    expect(runCompletion(["zsh"])).toEqual({ ok: true, shell: "zsh", executableName: "wrap" });
   });
 
   test("rejects missing shell arg with install-instructions hint", () => {
     const result = runCompletion([]);
-    expect(result).not.toHaveProperty("shell");
-    if (!("error" in result)) return;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
     expect(result.error).toContain("requires a shell name");
     expect(result.error).toContain("wrap --help completion");
   });
 
   test("rejects empty-string shell arg", () => {
     const result = runCompletion([""]);
-    expect(result).not.toHaveProperty("shell");
-    if (!("error" in result)) return;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
     expect(result.error).toContain("requires a shell name");
   });
 
   test("rejects too many args", () => {
     const result = runCompletion(["zsh", "w", "extra"]);
-    expect(result).not.toHaveProperty("shell");
-    if (!("error" in result)) return;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
     expect(result.error).toContain("at most two arguments");
   });
 
-  test("accepts optional name arg", () => {
-    expect(runCompletion(["zsh", "w"])).toEqual({ shell: "zsh", name: "w" });
-    expect(runCompletion(["bash", "myalias"])).toEqual({ shell: "bash", name: "myalias" });
+  test("accepts optional executable name arg", () => {
+    expect(runCompletion(["zsh", "w"])).toEqual({ ok: true, shell: "zsh", executableName: "w" });
+    expect(runCompletion(["bash", "myalias"])).toEqual({
+      ok: true,
+      shell: "bash",
+      executableName: "myalias",
+    });
   });
 
   test.each([
@@ -324,22 +328,23 @@ describe("runCompletion", () => {
     ["wrap;rm", "shell metacharacter"],
     ["wrap$(pwd)", "command substitution"],
     ["", "empty string"],
-  ])("rejects invalid name %p (%s)", (badName) => {
+  ])("rejects invalid executable name %p (%s)", (badName) => {
     const result = runCompletion(["zsh", badName]);
-    expect(result).not.toHaveProperty("shell");
-    if (!("error" in result)) return;
-    expect(result.error).toContain("name");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("executable name");
+    expect(result.error).toContain("shell function identifier");
   });
 
   test("accepts bash and fish", () => {
-    expect(runCompletion(["bash"])).toEqual({ shell: "bash", name: "wrap" });
-    expect(runCompletion(["fish"])).toEqual({ shell: "fish", name: "wrap" });
+    expect(runCompletion(["bash"])).toEqual({ ok: true, shell: "bash", executableName: "wrap" });
+    expect(runCompletion(["fish"])).toEqual({ ok: true, shell: "fish", executableName: "wrap" });
   });
 
   test("rejects unsupported shell with supported list and hint", () => {
     const result = runCompletion(["powershell"]);
-    expect(result).not.toHaveProperty("shell");
-    if (!("error" in result)) return;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
     expect(result.error).toContain("powershell");
     expect(result.error).toContain("zsh");
     expect(result.error).toContain("bash");
