@@ -42,3 +42,4 @@
 - src/config/ensure.ts
 - src/config/config.ts
 - src/config/settings.ts
+- src/config/store.ts
