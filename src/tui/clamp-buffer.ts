@@ -6,12 +6,9 @@ const encoder = new TextEncoder();
 
 /**
  * Cap `text` at MAX_BUFFER_BYTES UTF-8 bytes, cutting at the last complete
- * code point so truncation never produces mojibake. Short-circuits when the
- * string is clearly under the cap (JS chars are ≥1 byte, so `length ≤ cap`
- * implies byte length ≤ cap).
+ * code point so truncation never produces mojibake.
  */
 export function clampBufferSize(text: string): ClampResult {
-  if (text.length <= MAX_BUFFER_BYTES) return { value: text, truncated: false };
   const bytes = encoder.encode(text);
   if (bytes.byteLength <= MAX_BUFFER_BYTES) return { value: text, truncated: false };
   let end = MAX_BUFFER_BYTES;

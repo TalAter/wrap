@@ -53,4 +53,13 @@ describe("clampBufferSize", () => {
     expect(r.value).toBe(s);
     expect(r.truncated).toBe(false);
   });
+
+  test("length <= cap but byte length > cap: truncates (guards against UTF-16-vs-UTF-8 confusion)", () => {
+    // "é" is 1 UTF-16 code unit but 2 UTF-8 bytes; repeating MAX_BUFFER_BYTES
+    // times yields text.length === MAX but byteLength === 2 * MAX.
+    const s = "é".repeat(MAX_BUFFER_BYTES);
+    const r = clampBufferSize(s);
+    expect(r.truncated).toBe(true);
+    expect(new TextEncoder().encode(r.value).byteLength).toBeLessThanOrEqual(MAX_BUFFER_BYTES);
+  });
 });
