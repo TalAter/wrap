@@ -43,3 +43,4 @@
 - src/config/config.ts
 - src/config/settings.ts
 - src/config/store.ts
+- src/core/output.ts
