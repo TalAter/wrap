@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { type KeyBinding, useKeyBindings } from "../src/tui/key-bindings.ts";
+import { waitFor } from "./helpers.ts";
 
 const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
@@ -16,10 +17,8 @@ describe("useKeyBindings", () => {
     const { stdin } = render(
       <Harness bindings={[{ on: "escape", do: () => fired.push("esc") }]} />,
     );
-    await wait();
     stdin.write("\x1b");
-    await wait();
-    expect(fired).toEqual(["esc"]);
+    await waitFor(() => expect(fired).toEqual(["esc"]));
   });
 
   test("bare NamedKey return fires on enter", async () => {
@@ -27,28 +26,22 @@ describe("useKeyBindings", () => {
     const { stdin } = render(
       <Harness bindings={[{ on: "return", do: () => fired.push("ret") }]} />,
     );
-    await wait();
     stdin.write("\r");
-    await wait();
-    expect(fired).toEqual(["ret"]);
+    await waitFor(() => expect(fired).toEqual(["ret"]));
   });
 
   test("bare single-char trigger fires on matching letter", async () => {
     const fired: string[] = [];
     const { stdin } = render(<Harness bindings={[{ on: "y", do: () => fired.push("y") }]} />);
-    await wait();
     stdin.write("y");
-    await wait();
-    expect(fired).toEqual(["y"]);
+    await waitFor(() => expect(fired).toEqual(["y"]));
   });
 
   test("char match is case-insensitive (shift+y → 'Y' matches 'y')", async () => {
     const fired: string[] = [];
     const { stdin } = render(<Harness bindings={[{ on: "y", do: () => fired.push("y") }]} />);
-    await wait();
     stdin.write("Y");
-    await wait();
-    expect(fired).toEqual(["y"]);
+    await waitFor(() => expect(fired).toEqual(["y"]));
   });
 
   test("bare single-char does NOT fire when ctrl is held", async () => {
@@ -66,10 +59,8 @@ describe("useKeyBindings", () => {
     const { stdin } = render(
       <Harness bindings={[{ on: { key: "c", ctrl: true }, do: () => fired.push("ctrl-c") }]} />,
     );
-    await wait();
     stdin.write("\x03");
-    await wait();
-    expect(fired).toEqual(["ctrl-c"]);
+    await waitFor(() => expect(fired).toEqual(["ctrl-c"]));
   });
 
   test("array trigger fires on any member", async () => {
@@ -77,12 +68,10 @@ describe("useKeyBindings", () => {
     const { stdin } = render(
       <Harness bindings={[{ on: ["n", "escape"], do: () => fired.push("cancel") }]} />,
     );
-    await wait();
     stdin.write("n");
-    await wait();
+    await waitFor(() => expect(fired).toEqual(["cancel"]));
     stdin.write("\x1b");
-    await wait();
-    expect(fired).toEqual(["cancel", "cancel"]);
+    await waitFor(() => expect(fired).toEqual(["cancel", "cancel"]));
   });
 
   test("declaration order: first matching binding fires, rest skip", async () => {
@@ -95,14 +84,12 @@ describe("useKeyBindings", () => {
         ]}
       />,
     );
-    await wait();
     // Plain c → copy only
     stdin.write("c");
-    await wait();
+    await waitFor(() => expect(fired).toEqual(["copy"]));
     // Ctrl+c → cancel only
     stdin.write("\x03");
-    await wait();
-    expect(fired).toEqual(["copy", "cancel"]);
+    await waitFor(() => expect(fired).toEqual(["copy", "cancel"]));
   });
 
   test("isActive: false suppresses all bindings", async () => {
@@ -128,25 +115,18 @@ describe("useKeyBindings", () => {
         ]}
       />,
     );
-    await wait();
     stdin.write("\x1b[D"); // left
-    await wait();
     stdin.write("\x1b[C"); // right
-    await wait();
     stdin.write("\x1b[A"); // up
-    await wait();
     stdin.write("\x1b[B"); // down
-    await wait();
-    expect(fired).toEqual(["l", "r", "u", "d"]);
+    await waitFor(() => expect(fired).toEqual(["l", "r", "u", "d"]));
   });
 
   test("space trigger fires on space char", async () => {
     const fired: string[] = [];
     const { stdin } = render(<Harness bindings={[{ on: "space", do: () => fired.push("sp") }]} />);
-    await wait();
     stdin.write(" ");
-    await wait();
-    expect(fired).toEqual(["sp"]);
+    await waitFor(() => expect(fired).toEqual(["sp"]));
   });
 
   test("object trigger with shift-only modifier does not fire on plain key", async () => {

@@ -5,7 +5,7 @@ import { stripAnsi } from "../src/core/ansi.ts";
 import type { WizardResult } from "../src/session/dialog-host.ts";
 import { ConfigWizardDialog, type WizardCallbacks } from "../src/tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../src/wizard/models-filter.ts";
-import { seedTestConfig } from "./helpers.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 const FIXTURE: ModelsDevData = {
   anthropic: {
@@ -50,21 +50,6 @@ const FIXTURE: ModelsDevData = {
 };
 
 const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
-
-async function waitFor(check: () => void, { timeout = 2000, interval = 10 } = {}) {
-  const start = Date.now();
-  let lastError: unknown;
-  while (Date.now() - start < timeout) {
-    try {
-      check();
-      return;
-    } catch (e) {
-      lastError = e;
-    }
-    await new Promise((r) => setTimeout(r, interval));
-  }
-  throw lastError;
-}
 
 function makeCallbacks(overrides?: Partial<WizardCallbacks>): WizardCallbacks & {
   result: WizardResult | null;

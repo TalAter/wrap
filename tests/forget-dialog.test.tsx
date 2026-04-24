@@ -3,7 +3,7 @@ import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import type { Footprints } from "../src/tui/forget-dialog.tsx";
 import { ForgetDialog } from "../src/tui/forget-dialog.tsx";
-import { seedTestConfig } from "./helpers.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,9 +46,8 @@ describe("ForgetDialog", () => {
     const { lastFrame } = render(
       <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
     );
-    await wait();
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("Memory");
     expect(text).toContain("Logs");
     expect(text).toContain("Cache");
     expect(text).toContain("Temp files");
@@ -72,9 +71,7 @@ describe("ForgetDialog", () => {
         onCancel={cb.onCancel}
       />,
     );
-    await wait();
-    const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("(empty)");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("(empty)"));
   });
 
   test("shows (unreadable) for corrupt memory", async () => {
@@ -89,24 +86,23 @@ describe("ForgetDialog", () => {
         onCancel={cb.onCancel}
       />,
     );
-    await wait();
-    expect(stripAnsi(lastFrame() ?? "")).toContain("(unreadable)");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("(unreadable)"));
   });
 
   test("all four items checked by default — Enter submits all", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(
+    const { stdin, lastFrame } = render(
       <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
     );
-    await wait();
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     stdin.write("\r");
-    await wait();
+    await waitFor(() => expect(cb.result.submitted).not.toBeNull());
     expect(cb.result.submitted?.sort()).toEqual(["cache", "logs", "memory", "scratch"]);
   });
 
   test("empty buckets still checked by default", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(
+    const { stdin, lastFrame } = render(
       <ForgetDialog
         footprints={{
           memory: { state: "empty" },
@@ -118,45 +114,44 @@ describe("ForgetDialog", () => {
         onCancel={cb.onCancel}
       />,
     );
-    await wait();
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("(empty)"));
     stdin.write("\r");
-    await wait();
+    await waitFor(() => expect(cb.result.submitted).not.toBeNull());
     expect(cb.result.submitted?.sort()).toEqual(["cache", "logs", "memory", "scratch"]);
   });
 
   test("Space toggles the focused item off, Enter submits the rest", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(
+    const { stdin, lastFrame } = render(
       <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
     );
-    await wait();
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     // Cursor starts on first item (memory) — toggle it off.
     stdin.write(" ");
     await wait();
     stdin.write("\r");
-    await wait();
+    await waitFor(() => expect(cb.result.submitted).not.toBeNull());
     expect(cb.result.submitted).not.toContain("memory");
     expect(cb.result.submitted?.length).toBe(3);
   });
 
   test("Esc triggers onCancel", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(
+    const { stdin, lastFrame } = render(
       <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
     );
-    await wait();
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     stdin.write("\x1b");
-    await wait();
-    expect(cb.result.cancelled).toBe(true);
+    await waitFor(() => expect(cb.result.cancelled).toBe(true));
     expect(cb.result.submitted).toBeNull();
   });
 
   test("Empty submit (all toggled off + Enter) fires onSubmit with []", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(
+    const { stdin, lastFrame } = render(
       <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
     );
-    await wait();
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     // Toggle each of the four items off (cursor stays on row 0 across toggles? no, space just toggles current row)
     // Move cursor + toggle in pairs.
     stdin.write(" "); // toggle memory off
@@ -174,7 +169,7 @@ describe("ForgetDialog", () => {
     stdin.write(" "); // toggle scratch off
     await wait();
     stdin.write("\r");
-    await wait();
+    await waitFor(() => expect(cb.result.submitted).not.toBeNull());
     expect(cb.result.submitted).toEqual([]);
   });
 });

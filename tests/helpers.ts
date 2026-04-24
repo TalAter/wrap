@@ -79,3 +79,27 @@ export async function wrapMock(
   }
   return wrap(prompt, env, stdin);
 }
+
+/**
+ * Poll an assertion until it passes or the timeout elapses. Returns as soon
+ * as `check` runs without throwing. On timeout, re-throws the last assertion
+ * error. Use for async UI state where a fixed wait would be either flaky
+ * (too short under load) or wasteful (too long on a fast machine).
+ */
+export async function waitFor(
+  check: () => void,
+  { timeout = 2000, interval = 10 }: { timeout?: number; interval?: number } = {},
+): Promise<void> {
+  const start = Date.now();
+  let lastError: unknown;
+  while (true) {
+    try {
+      check();
+      return;
+    } catch (e) {
+      lastError = e;
+    }
+    if (Date.now() - start >= timeout) throw lastError;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
