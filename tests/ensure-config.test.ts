@@ -35,24 +35,36 @@ describe("ensureConfig", () => {
       defaultProvider: "anthropic",
     };
 
-    const { config, justCreated } = await ensureConfig({
-      WRAP_HOME: home,
-      _testWizardResult: fakeResult,
-    });
+    // Mock process.exit so any "wizard cancel" fallthrough surfaces as a
+    // thrown "unreachable" rather than silently halting the test runner.
+    let exitCalled = false;
+    const originalExit = process.exit;
+    process.exit = ((_code?: number) => {
+      exitCalled = true;
+    }) as never;
+    try {
+      const { config, justCreated } = await ensureConfig({
+        WRAP_HOME: home,
+        _testWizardResult: fakeResult,
+      });
 
-    expect(config.providers?.anthropic?.apiKey).toBe("sk-new");
-    expect(config.providers?.anthropic?.model).toBe("claude-sonnet-4-6");
-    expect(config.defaultProvider).toBe("anthropic");
-    expect(justCreated).toBe(true);
+      // Happy path must not hit process.exit(0) — the mock exists so a bad
+      // mutation doesn't silently halt the runner with a clean exit code.
+      expect(exitCalled).toBe(false);
+      expect(config.providers?.anthropic?.apiKey).toBe("sk-new");
+      expect(config.providers?.anthropic?.model).toBe("claude-sonnet-4-6");
+      expect(config.defaultProvider).toBe("anthropic");
+      expect(justCreated).toBe(true);
 
-    // Verify config.jsonc was written
-    const raw = readFileSync(join(home, "config.jsonc"), "utf8");
-    const parsed = JSON.parse(raw);
-    expect(parsed.$schema).toBe("./config.schema.json");
+      const raw = readFileSync(join(home, "config.jsonc"), "utf8");
+      const parsed = JSON.parse(raw);
+      expect(parsed.$schema).toBe("./config.schema.json");
 
-    // Verify config.schema.json was written
-    const schema = JSON.parse(readFileSync(join(home, "config.schema.json"), "utf8"));
-    expect(schema.$schema).toContain("json-schema");
+      const schema = JSON.parse(readFileSync(join(home, "config.schema.json"), "utf8"));
+      expect(schema.$schema).toContain("json-schema");
+    } finally {
+      process.exit = originalExit;
+    }
   });
 
   test("wizard cancel exits with code 0", async () => {
