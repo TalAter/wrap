@@ -106,6 +106,16 @@ Two auto-bump gotchas, one combined fix:
 
 The auto-bump carries both URLs + shas forward in one pass; the file's "one URL per arch" surface is acceptable churn.
 
+### Known limitation — auto-bump only updates the first arch URL
+
+`brew bump-formula-pr` (what `dawidd6/action-homebrew-bump-formula` wraps) is built around single-URL formulae. Our formula has two URLs (`on_arm` + `on_intel` inside `on_macos`). The auto-bump updates only the `on_arm` URL and sha256; the `on_intel` entry is left on the old version. Until this is replaced with a custom bump step, **the release flow requires one manual fix per version**: after bump-tap opens the PR, edit the PR branch to fill the intel URL + sha256, then merge.
+
+Fix path (not yet done): replace the `dawidd6` action with a custom step in `release.yml` that computes sha256s for all 4 tarballs and commits a single atomic patch to the tap.
+
+### Why `depends_on :macos`
+
+`brew test-bot --only-tap-syntax` (run by the tap's own `tests.yml` on every PR) validates the formula on all platforms it knows about, including Linux. Without `depends_on :macos`, brew on Linux sees no URL in `on_macos do` and rejects the formula as *"Invalid formula"*. `depends_on :macos` tells brew the absence of Linux URLs is intentional, and the tap-syntax check passes on Linux runners. When a Linux formula block is eventually added, this directive can come out.
+
 ### Why `no_fork: true`
 
 Standard `brew bump-formula-pr` flow forks the tap into the PAT owner's account, pushes the bump branch to the fork, and opens a PR cross-repo. Our fine-grained PAT is scoped to `talater/homebrew-wrap` only — it cannot create a fork (that needs `Administration: write` on the user account). Since we own the tap, forking is redundant: `no_fork: true` makes the action push the bump branch to `origin` and open a same-repo PR. Fewer moving parts, smaller PAT surface.
