@@ -5,7 +5,7 @@ import { stripAnsi } from "../src/core/ansi.ts";
 import type { WizardResult } from "../src/session/dialog-host.ts";
 import { ConfigWizardDialog, type WizardCallbacks } from "../src/tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../src/wizard/models-filter.ts";
-import { seedTestConfig } from "./helpers.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 const FIXTURE: ModelsDevData = {
   anthropic: {
@@ -161,29 +161,24 @@ describe("ConfigWizardDialog", () => {
     await wait();
     // Submit selection
     stdin.write("\r");
-    await wait(100);
 
     // Should be on API key screen after models load
-    let text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("API key");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("API key"));
 
     // Type a key
     stdin.write("sk-ant-test-key");
     await wait();
     // Submit key
     stdin.write("\r");
-    await wait();
 
     // Should be on model picker
-    text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("model");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("model"));
 
     // Submit (accept default = first model)
     stdin.write("\r");
-    await wait();
 
     // Single provider → auto-default → done
-    expect(cb.result).not.toBeNull();
+    await waitFor(() => expect(cb.result).not.toBeNull());
     expect(cb.result?.defaultProvider).toBe("anthropic");
     expect(cb.result?.entries.anthropic?.apiKey).toBe("sk-ant-test-key");
     expect(cb.result?.entries.anthropic?.model).toBe("claude-sonnet-4-6");
@@ -204,8 +199,7 @@ describe("ConfigWizardDialog", () => {
     });
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await passIntro(stdin);
-    const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("Claude Code");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Claude Code"));
   });
 
   test("loading screen shows spinner text", async () => {
@@ -231,7 +225,6 @@ describe("ConfigWizardDialog", () => {
 
     // Resolve the fetch
     resolveModels?.(FIXTURE);
-    await wait();
-    expect(stripAnsi(lastFrame() ?? "")).toContain("API key");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("API key"));
   });
 });

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import { type NerdIconsResult, NerdIconsSection } from "../src/tui/nerd-icons-section.tsx";
-import { seedTestConfig } from "./helpers.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 beforeEach(() => {
   seedTestConfig();
@@ -32,41 +32,36 @@ describe("NerdIconsSection", () => {
   test("renders icon detection prompt", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(<NerdIconsSection {...cb} />);
-    await wait();
-    const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("four icons");
-    expect(text).toContain("Setup Wizard");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("four icons"));
+    expect(stripAnsi(lastFrame() ?? "")).toContain("Setup Wizard");
   });
 
   test("selecting Yes returns nerdFonts: true", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(<NerdIconsSection {...cb} />);
-    await wait();
+    const { stdin, lastFrame } = render(<NerdIconsSection {...cb} />);
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("four icons"));
     // Yes is the first option (already highlighted), press Enter
     stdin.write("\r");
-    await wait();
-    expect(cb.result).toEqual({ nerdFonts: true });
+    await waitFor(() => expect(cb.result).toEqual({ nerdFonts: true }));
   });
 
   test("selecting No returns nerdFonts: false", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(<NerdIconsSection {...cb} />);
-    await wait();
+    const { stdin, lastFrame } = render(<NerdIconsSection {...cb} />);
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("four icons"));
     // Move down to No
     stdin.write("\x1b[B"); // arrow down
-    await wait(100);
+    await wait();
     // Submit
     stdin.write("\r");
-    await wait();
-    expect(cb.result).toEqual({ nerdFonts: false });
+    await waitFor(() => expect(cb.result).toEqual({ nerdFonts: false }));
   });
 
   test("Esc cancels the wizard", async () => {
     const cb = makeCallbacks();
-    const { stdin } = render(<NerdIconsSection {...cb} />);
-    await wait();
+    const { stdin, lastFrame } = render(<NerdIconsSection {...cb} />);
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("four icons"));
     stdin.write("\x1b");
-    await wait();
-    expect(cb.cancelled).toBe(true);
+    await waitFor(() => expect(cb.cancelled).toBe(true));
   });
 });

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { useState } from "react";
 import { Checklist, type ChecklistItem } from "../src/tui/checklist.tsx";
-import { seedTestConfig } from "./helpers.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
@@ -60,8 +60,7 @@ describe("Checklist", () => {
     );
     await wait();
     stdin.write("\r");
-    await wait();
-    expect(spy.value).toEqual(["a"]);
+    await waitFor(() => expect(spy.value).toEqual(["a"]));
   });
 
   test("Enter with empty selection fires onSubmit([]) when allowEmptySubmit=true", async () => {
@@ -71,7 +70,6 @@ describe("Checklist", () => {
     );
     await wait();
     stdin.write("\r");
-    await wait();
-    expect(spy.value).toEqual([]);
+    await waitFor(() => expect(spy.value).toEqual([]));
   });
 });

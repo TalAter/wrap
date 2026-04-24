@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { seedTestConfig } from "./helpers.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 beforeEach(() => seedTestConfig());
 
@@ -85,9 +85,8 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("\r");
-    await tick();
     // Default selection is first item ("cancel").
-    expect(events.some((e) => e.type === "key-action")).toBe(true);
+    await waitFor(() => expect(events.some((e) => e.type === "key-action")).toBe(true));
   });
 
   test("hotkey y dispatches key-action run", async () => {
@@ -99,8 +98,7 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("y");
-    await tick();
-    expect(events).toContainEqual({ type: "key-action", action: "run" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-action", action: "run" }));
   });
 
   test("hotkey n dispatches key-action cancel", async () => {
@@ -112,8 +110,7 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("n");
-    await tick();
-    expect(events).toContainEqual({ type: "key-action", action: "cancel" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-action", action: "cancel" }));
   });
 
   test("hotkey e dispatches key-action edit", async () => {
@@ -125,8 +122,7 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("e");
-    await tick();
-    expect(events).toContainEqual({ type: "key-action", action: "edit" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-action", action: "edit" }));
   });
 
   test("hotkey f dispatches key-action followup", async () => {
@@ -138,8 +134,7 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("f");
-    await tick();
-    expect(events).toContainEqual({ type: "key-action", action: "followup" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-action", action: "followup" }));
   });
 
   test("Esc dispatches key-esc", async () => {
@@ -151,8 +146,7 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("\u001b");
-    await tick();
-    expect(events.some((e) => e.type === "key-esc")).toBe(true);
+    await waitFor(() => expect(events.some((e) => e.type === "key-esc")).toBe(true));
   });
 
   test("q is an alias for cancel", async () => {
@@ -164,8 +158,7 @@ describe("Dialog — confirming", () => {
       </ThemeProvider>,
     );
     stdin.write("q");
-    await tick();
-    expect(events).toContainEqual({ type: "key-action", action: "cancel" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-action", action: "cancel" }));
   });
 });
 
@@ -196,8 +189,7 @@ describe("Dialog — editing", () => {
       </ThemeProvider>,
     );
     stdin.write("x");
-    await tick();
-    expect(events.some((e) => e.type === "draft-change")).toBe(true);
+    await waitFor(() => expect(events.some((e) => e.type === "draft-change")).toBe(true));
   });
 
   test("Enter on editing dispatches submit-edit with the draft", async () => {
@@ -212,8 +204,9 @@ describe("Dialog — editing", () => {
       </ThemeProvider>,
     );
     stdin.write("\r");
-    await tick();
-    expect(events).toContainEqual({ type: "submit-edit", text: "echo rm-i-fake" });
+    await waitFor(() =>
+      expect(events).toContainEqual({ type: "submit-edit", text: "echo rm-i-fake" }),
+    );
   });
 
   test("Enter on editing with blank draft does NOT dispatch submit-edit", async () => {
@@ -241,8 +234,7 @@ describe("Dialog — editing", () => {
       </ThemeProvider>,
     );
     stdin.write("\u001b");
-    await tick();
-    expect(events).toContainEqual({ type: "key-esc" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-esc" }));
   });
 });
 
@@ -256,8 +248,7 @@ describe("Dialog — composing", () => {
       </ThemeProvider>,
     );
     stdin.write("x");
-    await tick();
-    expect(events.some((e) => e.type === "draft-change")).toBe(true);
+    await waitFor(() => expect(events.some((e) => e.type === "draft-change")).toBe(true));
   });
 
   test("Enter dispatches submit-followup with the draft", async () => {
@@ -269,8 +260,9 @@ describe("Dialog — composing", () => {
       </ThemeProvider>,
     );
     stdin.write("\r");
-    await tick();
-    expect(events).toContainEqual({ type: "submit-followup", text: "be safer" });
+    await waitFor(() =>
+      expect(events).toContainEqual({ type: "submit-followup", text: "be safer" }),
+    );
   });
 
   test("Enter on composing with blank draft does NOT dispatch submit-followup", async () => {
@@ -295,8 +287,7 @@ describe("Dialog — composing", () => {
       </ThemeProvider>,
     );
     stdin.write("\u001b");
-    await tick();
-    expect(events).toContainEqual({ type: "key-esc" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-esc" }));
   });
 
   test("renders the placeholder when draft is empty", () => {
@@ -343,8 +334,7 @@ describe("Dialog — processing", () => {
       </ThemeProvider>,
     );
     stdin.write("\u001b");
-    await tick();
-    expect(events).toContainEqual({ type: "key-esc" });
+    await waitFor(() => expect(events).toContainEqual({ type: "key-esc" }));
   });
 });
 
@@ -370,8 +360,7 @@ describe("Dialog — rerender behaviour", () => {
         <ResponseDialog state={state2} dispatch={dispatch} />
       </ThemeProvider>,
     );
-    await tick();
-    expect(stripAnsi(lastFrame() ?? "")).toContain("second cmd");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("second cmd"));
   });
 });
 

@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 import { stripAnsi } from "../src/core/ansi.ts";
 import { TextInput } from "../src/tui/text-input.tsx";
+import { waitFor } from "./helpers.ts";
 
 describe("TextInput — editable", () => {
   test("renders the value", () => {
@@ -24,8 +25,7 @@ describe("TextInput — editable", () => {
       />,
     );
     stdin.write("\r");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(submitted).toBe("abc");
+    await waitFor(() => expect(submitted).toBe("abc"));
   });
 
   test("calls onChange when typing", async () => {
@@ -40,8 +40,7 @@ describe("TextInput — editable", () => {
       />,
     );
     stdin.write("c");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(captured).toBe("abc");
+    await waitFor(() => expect(captured).toBe("abc"));
   });
 
   test("renders placeholder when value is empty", () => {
@@ -80,8 +79,7 @@ describe("TextInput — editable", () => {
       />,
     );
     stdin.write("\r");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(submitted).toBe("key123");
+    await waitFor(() => expect(submitted).toBe("key123"));
   });
 
   test("does not handle Esc (parent owns it)", async () => {
@@ -115,8 +113,7 @@ describe("TextInput — multiline", () => {
       />,
     );
     stdin.write("\r");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(submitted).toBe("abc");
+    await waitFor(() => expect(submitted).toBe("abc"));
   });
 
   test("empty-buffer Enter is a no-op", async () => {
@@ -149,8 +146,7 @@ describe("TextInput — multiline", () => {
       />,
     );
     stdin.write("\r");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(captured).toBe("foo\n");
+    await waitFor(() => expect(captured).toBe("foo\n"));
   });
 
   test("Ctrl+J inserts newline", async () => {
@@ -167,8 +163,7 @@ describe("TextInput — multiline", () => {
     );
     // Ctrl+J without kitty: raw 0x0A byte; Ink reports input === "\n", key.return === false.
     stdin.write("\n");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(captured).toBe("ab\n");
+    await waitFor(() => expect(captured).toBe("ab\n"));
   });
 
   test("single-line mode: \\n from paste is stripped on insert", async () => {
@@ -188,10 +183,9 @@ describe("TextInput — multiline", () => {
       />,
     );
     stdin.write("hi\nthere");
-    await new Promise((r) => setTimeout(r, 30));
     // Single-line: newline stripped, rest inserted.
+    await waitFor(() => expect(captured).toContain("there"));
     expect(captured).toContain("hi");
-    expect(captured).toContain("there");
     expect(captured).not.toContain("\n");
   });
 
