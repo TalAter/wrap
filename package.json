@@ -6,8 +6,10 @@
   "license": "MIT",
   "scripts": {
     "start": "bun run src/index.ts",
-    "build:watch": "watchexec -w src bun run build.ts",
-    "build": "bun run build.ts",
+    "build:watch": "watchexec -w src bun run scripts/build.ts",
+    "build": "bun run scripts/build.ts",
+    "build:release": "bun run scripts/build-release.ts",
+    "release": "bun run scripts/release.ts",
     "test": "bun test",
     "mutate": "stryker run stryker/stryker.config.json",
     "lint": "bunx biome check . --write --error-on-warnings && bunx tsc --noEmit",
