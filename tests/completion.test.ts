@@ -37,21 +37,16 @@ describe("generateZshCompletion", () => {
     expect(script).toContain("_wrap()");
   });
 
-  test("parametrizes command name via optional arg", () => {
-    const custom = generateZshCompletion({ commands, options, providers }, "w");
-    expect(custom.startsWith("#compdef w\n")).toBe(true);
-    expect(custom).toContain("_w()");
-    expect(custom).toContain("_w_providers()");
-    expect(custom).toContain(":provider:_w_providers");
-    expect(custom).toContain('_w "$@"');
-  });
-
-  test("parametrized providers helper is scoped to the name", () => {
+  test("parametrizes command name into every identifier and directive", () => {
     const custom = generateZshCompletion({ commands, options, providers }, "foo");
+    expect(custom.startsWith("#compdef foo\n")).toBe(true);
     expect(custom).toContain("_foo()");
     expect(custom).toContain("_foo_providers()");
     expect(custom).toContain(":provider:_foo_providers");
-    expect(custom).not.toContain("_wrap_providers");
+    expect(custom).toContain('_foo "$@"');
+    // No leak of the default name into the parametrized script.
+    expect(custom).not.toContain("_wrap");
+    expect(custom).not.toContain("#compdef wrap");
   });
 
   test("includes every command flag and alias from the registry", () => {
@@ -321,15 +316,16 @@ describe("runCompletion", () => {
     expect(runCompletion(["bash", "myalias"])).toEqual({ shell: "bash", name: "myalias" });
   });
 
-  test("rejects invalid name that breaks shell function identifiers", () => {
-    const result = runCompletion(["zsh", "bad name"]);
-    expect(result).not.toHaveProperty("shell");
-    if (!("error" in result)) return;
-    expect(result.error).toContain("name");
-  });
-
-  test("rejects empty-string name", () => {
-    const result = runCompletion(["zsh", ""]);
+  test.each([
+    ["bad name", "whitespace"],
+    ["1wrap", "leading digit"],
+    ["my-wrap", "hyphen (rejected — not valid as bash function identifier)"],
+    ["wräp", "non-ASCII letter"],
+    ["wrap;rm", "shell metacharacter"],
+    ["wrap$(pwd)", "command substitution"],
+    ["", "empty string"],
+  ])("rejects invalid name %p (%s)", (badName) => {
+    const result = runCompletion(["zsh", badName]);
     expect(result).not.toHaveProperty("shell");
     if (!("error" in result)) return;
     expect(result.error).toContain("name");

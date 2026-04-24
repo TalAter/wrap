@@ -195,7 +195,9 @@ export function runCompletion(args: string[]): RunResult {
     };
   }
   if (args.length > 2) {
-    return { error: "--completion takes at most two arguments (shell and optional name)." };
+    return {
+      error: `--completion takes at most two arguments (shell and optional name). ${HINT}`,
+    };
   }
   const shell = args[0] as string;
   if (!SUPPORTED_SHELLS.includes(shell as Shell)) {
@@ -219,7 +221,7 @@ export const completionCmd: Command = {
   completion: "shells",
   id: "completion",
   description: "Print shell completion script",
-  usage: "wrap --completion <shell> [name]",
+  usage: "w --completion <shell> [name]",
   help: [
     `Supported shells: ${SUPPORTED_SHELLS.join(", ")}`,
     "",
