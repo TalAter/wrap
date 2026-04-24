@@ -226,12 +226,15 @@ describe("TextInput — multiline", () => {
     );
     const out = stripAnsi(lastFrame() ?? "");
     const lines = out.split("\n");
-    // Exactly 3 rendered content rows, each at most 22 chars (paddingX=1 * 2 + wrapWidth).
-    // The InputFrame adds side padding, so the row itself is wrapWidth+2 chars max.
+    // Exactly 3 rendered content rows, each at most 22 chars (paddingX=1 * 2 + wrapWidth)
+    // of actual text. InputFrame has a backgroundColor and width="100%", so Ink may
+    // pad the row with trailing bg spaces out to the terminal width — strip those
+    // before measuring, we care about content, not cosmetic fill.
     const contentLines = lines.filter((l) => l.trim().length > 0);
     expect(contentLines.length).toBeLessThanOrEqual(3);
     for (const line of contentLines) {
-      expect(line.length).toBeLessThanOrEqual(24); // wrapWidth + paddingX*2 + slack
+      const trimmed = line.replace(/\s+$/, "");
+      expect(trimmed.length).toBeLessThanOrEqual(24); // wrapWidth + paddingX*2 + slack
     }
   });
 
