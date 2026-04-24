@@ -51,6 +51,21 @@ const FIXTURE: ModelsDevData = {
 
 const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
+async function waitFor(check: () => void, { timeout = 2000, interval = 10 } = {}) {
+  const start = Date.now();
+  let lastError: unknown;
+  while (Date.now() - start < timeout) {
+    try {
+      check();
+      return;
+    } catch (e) {
+      lastError = e;
+    }
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw lastError;
+}
+
 function makeCallbacks(overrides?: Partial<WizardCallbacks>): WizardCallbacks & {
   result: WizardResult | null;
   cancelled: boolean;
@@ -161,11 +176,9 @@ describe("ConfigWizardDialog", () => {
     await wait();
     // Submit selection
     stdin.write("\r");
-    await wait(100);
 
     // Should be on API key screen after models load
-    let text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("API key");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("API key"));
 
     // Type a key
     stdin.write("sk-ant-test-key");
@@ -175,8 +188,7 @@ describe("ConfigWizardDialog", () => {
     await wait();
 
     // Should be on model picker
-    text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("model");
+    expect(stripAnsi(lastFrame() ?? "")).toContain("model");
 
     // Submit (accept default = first model)
     stdin.write("\r");
@@ -204,8 +216,7 @@ describe("ConfigWizardDialog", () => {
     });
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
     await passIntro(stdin);
-    const text = stripAnsi(lastFrame() ?? "");
-    expect(text).toContain("Claude Code");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Claude Code"));
   });
 
   test("loading screen shows spinner text", async () => {
@@ -231,7 +242,6 @@ describe("ConfigWizardDialog", () => {
 
     // Resolve the fetch
     resolveModels?.(FIXTURE);
-    await wait();
-    expect(stripAnsi(lastFrame() ?? "")).toContain("API key");
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("API key"));
   });
 });
