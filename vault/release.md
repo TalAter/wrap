@@ -97,9 +97,14 @@ brew formulae cannot write to `$HOME` during install. The Wrap wizard handles co
 
 Bun's `--compile` has version-specific bugs (notably the self-sign SIGKILL, mitigated with `BUN_NO_CODESIGN_MACHO_BINARY=1`). Floating on `latest` means a Bun release can silently break the binary. Pinning in a file means there's one place to bump. Auto-stamping that file from `Bun.version` inside `release.ts` means CI is guaranteed to use whatever Bun the release author actually tested with — no drift between "the Bun I ran `bun run check` on" and "the Bun CI compiles with."
 
-### Why the formula uses literal version URLs, not interpolation
+### Why the formula uses literal version URLs and no `version` field
 
-`url "…/v0.0.1/wrap-<triple>.tar.gz"`, not `url "…/v#{version}/…"`. `brew bump-formula-pr` (which the auto-bump action wraps) does an `inreplace` on the formula file looking for the literal previous URL; with `#{version}` interpolation, the regex never matches the source and the bump fails with `inreplace failed`. Explicit URLs make the file one more place to keep in sync, but the auto-bump takes care of that.
+Two auto-bump gotchas, one combined fix:
+
+- `url "…/v0.0.1/wrap-<triple>.tar.gz"`, not `url "…/v#{version}/…"`. `brew bump-formula-pr` (the tool the auto-bump action wraps) does an `inreplace` looking for the literal previous URL; with `#{version}` interpolation, the regex never matches and the bump fails with `inreplace failed`.
+- No explicit `version "0.0.1"` line. If present, bump-formula-pr updates URLs but not that line, so post-rewrite the parsed version is unchanged and the bump aborts with *"new version and old version are both 0.0.1"*. Omitting the field lets brew derive the version from the URL path, which bump-formula-pr *does* update.
+
+The auto-bump carries both URLs + shas forward in one pass; the file's "one URL per arch" surface is acceptable churn.
 
 ### Why `bump-tap` runs on macOS
 
