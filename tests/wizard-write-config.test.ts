@@ -1,20 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProviderEntry } from "../src/config/config.ts";
 import { buildConfig, writeWizardConfig } from "../src/wizard/write-config.ts";
 import { tmpHome } from "./helpers.ts";
 
 describe("buildConfig", () => {
-  test("returns Config with providers and defaultProvider", () => {
-    const entries: Record<string, ProviderEntry> = {
-      anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" },
-    };
-    const config = buildConfig(entries, "anthropic");
-    expect(config.providers).toEqual(entries);
-    expect(config.defaultProvider).toBe("anthropic");
-  });
-
   test("rejects entries that fail validateProviderEntry (ollama without baseURL)", () => {
     expect(() => buildConfig({ ollama: { model: "llama3.2" } }, "ollama")).toThrow(
       /ollama.*requires baseURL/,

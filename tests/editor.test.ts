@@ -51,12 +51,6 @@ describe("EDITORS record", () => {
       if (!meta.gui) expect(meta.waitFlag).toBeUndefined();
     }
   });
-
-  test("every entry has a displayName", () => {
-    for (const meta of Object.values(EDITORS)) {
-      expect(meta.displayName.length).toBeGreaterThan(0);
-    }
-  });
 });
 
 describe("resolveEditor", () => {

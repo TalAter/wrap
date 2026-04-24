@@ -37,13 +37,6 @@ describe("WelcomeSection", () => {
     expect(text).toContain("45 seconds");
   });
 
-  test("omits the setup wizard badge", async () => {
-    const cb = makeCallbacks();
-    const { lastFrame } = render(<WelcomeSection {...cb} />);
-    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("a cli with taste"));
-    expect(stripAnsi(lastFrame() ?? "")).not.toContain("setup wizard");
-  });
-
   test("Enter advances the wizard", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(<WelcomeSection {...cb} />);

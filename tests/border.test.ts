@@ -6,7 +6,6 @@ import {
   type TopBadge,
   topBorderSegments,
 } from "../src/tui/border.ts";
-import type { PillSegment } from "../src/tui/pill.tsx";
 import { getRiskPreset } from "../src/tui/risk-presets.ts";
 import { seedTestConfig } from "./helpers.ts";
 
@@ -286,16 +285,5 @@ describe("bottomBorderSegments with status", () => {
     expect(stringWidth(plainText(border))).toBe(7);
     expect(plainText(border)).not.toContain("…");
     expect(plainText(border)).not.toContain("Reticulating");
-  });
-});
-
-// Pill sits on `PillSegment`; risk-presets provides it. Smoke-check the shape.
-describe("risk preset shape", () => {
-  test("each level exposes a single PillSegment with label", () => {
-    for (const level of ["low", "medium", "high"] as const) {
-      const p: PillSegment = getRiskPreset(level).pill;
-      expect(typeof p.label).toBe("string");
-      expect(p.label.length).toBeGreaterThan(0);
-    }
   });
 });

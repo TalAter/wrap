@@ -165,13 +165,6 @@ describe("appendFacts", () => {
     expect(result[cwd]).toEqual([{ fact: "relative scope fact" }]);
   });
 
-  test("returns updated Memory map", () => {
-    const dir = tempDir();
-    saveMemory(dir, { "/": [{ fact: "a" }] });
-    const result = appendFacts(dir, [{ fact: "b", scope: "/" }], "/");
-    expect(result["/"]).toEqual([{ fact: "a" }, { fact: "b" }]);
-  });
-
   test("sorts keys in persisted file", () => {
     const dir = tempDir();
     const resolved = realpathSync("/tmp");

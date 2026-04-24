@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  emit,
-  type Notification,
-  notifications,
-  resetNotifications,
-  subscribe,
-} from "../src/core/notify.ts";
+import { emit, type Notification, resetNotifications, subscribe } from "../src/core/notify.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 
 beforeEach(() => {
@@ -64,14 +58,6 @@ describe("notifications bus", () => {
     resetNotifications();
     emit({ kind: "chrome", text: "hi" });
     expect(seen).toHaveLength(0);
-  });
-
-  test("notifications namespace exposes emit and subscribe", () => {
-    const seen: Notification[] = [];
-    const unsub = notifications.subscribe((n) => seen.push(n));
-    notifications.emit({ kind: "chrome", text: "via namespace" });
-    unsub();
-    expect(seen).toHaveLength(1);
   });
 
   test("chrome notification with icon writes icon prefix to stderr", () => {

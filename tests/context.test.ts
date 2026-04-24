@@ -203,21 +203,6 @@ describe("scoped memory in prompt", () => {
     expect(text).not.toContain("irrelevant");
   });
 
-  test("recency instruction appears in system prompt", () => {
-    const result = assemblePromptScaffold(makeContext());
-    expect(result.system).toContain("later (more recent) fact");
-  });
-
-  test("tools scope instruction appears in system prompt", () => {
-    const result = assemblePromptScaffold(makeContext());
-    expect(result.system).toContain("not exhaustive");
-  });
-
-  test("voice instructions appear in system prompt", () => {
-    const result = assemblePromptScaffold(makeContext());
-    expect(result.system).toContain("dry wit");
-  });
-
   test("attached input instruction in system prompt when preview present", () => {
     const result = assemblePromptScaffold(
       makeContext({

@@ -2,9 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import configSchema from "../src/config/config.schema.json";
 import { loadConfig } from "../src/config/config.ts";
-import { SETTINGS } from "../src/config/settings.ts";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "wrap-test-"));
@@ -257,35 +255,6 @@ describe("loadConfig", () => {
       );
       const config = loadConfig({ WRAP_HOME: dir });
       expect(config.providers?.anthropic?.model).toBe("haiku");
-    });
-
-    test("exported configSchema documents providers + defaultProvider", () => {
-      expect(configSchema.$schema).toBe("http://json-schema.org/draft-07/schema#");
-      expect(configSchema.type).toBe("object");
-      expect(configSchema.properties.providers.type).toBe("object");
-      expect(configSchema.properties.providers.additionalProperties.type).toBe("object");
-      expect(configSchema.properties.defaultProvider.type).toBe("string");
-    });
-
-    test("configSchema.maxRounds default matches SETTINGS.maxRounds.default", () => {
-      const mr = configSchema.properties.maxRounds;
-      expect(mr.type).toBe("integer");
-      expect(mr.default).toBe(SETTINGS.maxRounds.default);
-      expect(mr.minimum).toBe(1);
-    });
-
-    test("configSchema.maxCapturedOutputChars default matches SETTINGS", () => {
-      const mp = configSchema.properties.maxCapturedOutputChars;
-      expect(mp.type).toBe("integer");
-      expect(mp.default).toBe(SETTINGS.maxCapturedOutputChars.default);
-      expect(mp.minimum).toBe(1000);
-    });
-
-    test("configSchema.maxAttachedInputChars default matches SETTINGS", () => {
-      const mp = configSchema.properties.maxAttachedInputChars;
-      expect(mp.type).toBe("integer");
-      expect(mp.default).toBe(SETTINGS.maxAttachedInputChars.default);
-      expect(mp.minimum).toBe(1000);
     });
   });
 

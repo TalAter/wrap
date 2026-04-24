@@ -10,12 +10,6 @@ describe("resolvePath", () => {
     expect(result).toBe(homedir());
   });
 
-  test("resolves ~/subdir to homedir/subdir", () => {
-    // ~ itself must exist; ~/subdir might not — only test if it does
-    const result = resolvePath("~");
-    expect(result).toBe(homedir());
-  });
-
   test("resolves . to process.cwd()", () => {
     const result = resolvePath(".");
     expect(result).not.toBeNull();
@@ -26,13 +20,6 @@ describe("resolvePath", () => {
 
   test("resolves relative path against cwd param", () => {
     const tmp = mkdtempSync(join(require("node:os").tmpdir(), "wrap-paths-test-"));
-    const result = resolvePath(".", tmp);
-    expect(result).toBe(require("node:fs").realpathSync(tmp));
-  });
-
-  test("resolves ./subdir against cwd param when subdir exists", () => {
-    const tmp = mkdtempSync(join(require("node:os").tmpdir(), "wrap-paths-test-"));
-    // tmp itself exists, so resolve "." against it
     const result = resolvePath(".", tmp);
     expect(result).toBe(require("node:fs").realpathSync(tmp));
   });

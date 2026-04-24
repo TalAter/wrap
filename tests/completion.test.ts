@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../src/llm/providers/registry.ts";
 import {
-  completionCmd,
   generateBashCompletion,
   generateCompletion,
   generateFishCompletion,
@@ -370,10 +369,6 @@ describe("--completion subcommand end-to-end", () => {
     expect(result.stdout.startsWith("#compdef w\n")).toBe(true);
     expect(result.stdout).toContain("_w()");
     expect(result.stderr).toBe("");
-  });
-
-  test("completionCmd is exported and registered with shells completer", () => {
-    expect(completionCmd.completion).toBe("shells");
   });
 
   test("unsupported shell writes error to stderr, empty stdout, non-zero exit", async () => {

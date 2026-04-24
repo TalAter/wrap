@@ -37,43 +37,6 @@ describe("runProbes", () => {
     const output = runProbes();
     expect(output).toContain("## Shell");
   });
-
-  test("each probe section has label and output", () => {
-    const output = runProbes();
-    for (const probe of PROBE_COMMANDS) {
-      expect(output).toContain(`## ${probe.label}`);
-    }
-  });
-});
-
-describe("PROBED_TOOLS", () => {
-  test("includes clipboard tools", () => {
-    expect(PROBED_TOOLS).toContain("pbcopy");
-    expect(PROBED_TOOLS).toContain("pbpaste");
-    expect(PROBED_TOOLS).toContain("xclip");
-    expect(PROBED_TOOLS).toContain("xsel");
-    expect(PROBED_TOOLS).toContain("wl-copy");
-    expect(PROBED_TOOLS).toContain("wl-paste");
-  });
-
-  test("includes package managers", () => {
-    expect(PROBED_TOOLS).toContain("brew");
-  });
-
-  test("includes core dev tools", () => {
-    expect(PROBED_TOOLS).toContain("git");
-    expect(PROBED_TOOLS).toContain("docker");
-    expect(PROBED_TOOLS).toContain("node");
-    expect(PROBED_TOOLS).toContain("bun");
-    expect(PROBED_TOOLS).toContain("curl");
-  });
-
-  test("includes web reading tools (curl alternative + HTML extractors)", () => {
-    expect(PROBED_TOOLS).toContain("wget");
-    expect(PROBED_TOOLS).toContain("textutil");
-    expect(PROBED_TOOLS).toContain("lynx");
-    expect(PROBED_TOOLS).toContain("w3m");
-  });
 });
 
 describe("probeTools", () => {

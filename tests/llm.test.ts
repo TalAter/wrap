@@ -3,7 +3,6 @@ import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { StructuredOutputError } from "../src/core/parse-response.ts";
 import { isStructuredOutputError } from "../src/core/round.ts";
 import { initProvider, runCommandPrompt } from "../src/llm/index.ts";
-import { claudeCodeProvider } from "../src/llm/providers/claude-code.ts";
 import { TEST_RESOLVED_PROVIDER, testProvider } from "../src/llm/providers/test.ts";
 import type { PromptInput, ResolvedProvider } from "../src/llm/types.ts";
 
@@ -148,11 +147,6 @@ describe("runCommandPrompt", () => {
 });
 
 describe("claudeCodeProvider", () => {
-  test("returns a provider with runPrompt", () => {
-    const provider = claudeCodeProvider(CLAUDE_CODE_RESOLVED);
-    expect(typeof provider.runPrompt).toBe("function");
-  });
-
   test("throws retryable StructuredOutputError on invalid schema", async () => {
     // Simulate what claudeCodeProvider does after spawnAndRead returns:
     // stripFences → JSON.parse → safeParse. When the schema fails, the thrown

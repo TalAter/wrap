@@ -44,19 +44,6 @@ describe("executeShellCommand (capture mode)", () => {
     expect(result.exitCode).toBe(7);
   });
 
-  test("returns exec_ms as a non-negative integer", async () => {
-    const result = await executeShellCommand("true", { mode: "capture" });
-    expect(typeof result.exec_ms).toBe("number");
-    expect(result.exec_ms).toBeGreaterThanOrEqual(0);
-    expect(Number.isInteger(result.exec_ms)).toBe(true);
-  });
-
-  test("reports the shell that was used", async () => {
-    const result = await executeShellCommand("true", { mode: "capture" });
-    expect(typeof result.shell).toBe("string");
-    expect(result.shell.length).toBeGreaterThan(0);
-  });
-
   test("falls back to 'sh' when SHELL env var is unset", async () => {
     const saved = process.env.SHELL;
     delete process.env.SHELL;

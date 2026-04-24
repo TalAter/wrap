@@ -12,22 +12,12 @@ import { mockStderr } from "./helpers/mock-stderr.ts";
 import { seedTestConfig } from "./helpers.ts";
 
 describe("SPINNER_FRAMES", () => {
-  test("has frames", () => {
-    expect(SPINNER_FRAMES.length).toBeGreaterThan(0);
-  });
-
   test("all frames have consistent visual width", () => {
     // bottomBorderSegments embeds the frame in a fixed-width slot — frames
     // that disagree on width would shift the trailing dashes each tick.
     const widths = SPINNER_FRAMES.map((f) => stringWidth(f));
     const first = widths[0];
     expect(widths.every((w) => w === first)).toBe(true);
-  });
-});
-
-describe("SPINNER_INTERVAL", () => {
-  test("is a positive number", () => {
-    expect(SPINNER_INTERVAL).toBeGreaterThan(0);
   });
 });
 

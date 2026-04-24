@@ -22,15 +22,9 @@ describe("getWrapHome", () => {
     expect(getWrapHome({ WRAP_HOME: "/custom/path" })).toBe("/custom/path");
   });
 
-  test("falls back to ~/.wrap when WRAP_HOME is unset", () => {
+  test("falls back to ~/.wrap when WRAP_HOME is unset, undefined, or empty", () => {
     expect(getWrapHome({})).toBe(join(homedir(), ".wrap"));
-  });
-
-  test("falls back to ~/.wrap when WRAP_HOME is undefined", () => {
     expect(getWrapHome({ WRAP_HOME: undefined })).toBe(join(homedir(), ".wrap"));
-  });
-
-  test("falls back to ~/.wrap when WRAP_HOME is empty string", () => {
     expect(getWrapHome({ WRAP_HOME: "" })).toBe(join(homedir(), ".wrap"));
   });
 });

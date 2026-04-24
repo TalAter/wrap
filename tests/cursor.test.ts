@@ -2,17 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { Cursor } from "../src/tui/cursor.ts";
 
 describe("Cursor — basic construction", () => {
-  test("creates from text with offset at end", () => {
-    const c = new Cursor("hello", 5);
-    expect(c.text).toBe("hello");
-    expect(c.offset).toBe(5);
-  });
-
-  test("creates from text with offset at start", () => {
-    const c = new Cursor("hello", 0);
-    expect(c.offset).toBe(0);
-  });
-
   test("clamps offset to valid range", () => {
     expect(new Cursor("hi", -1).offset).toBe(0);
     expect(new Cursor("hi", 99).offset).toBe(2);

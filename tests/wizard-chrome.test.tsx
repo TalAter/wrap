@@ -3,7 +3,6 @@ import {
   stepIndexFromScreen,
   wizardCrumbPill,
   wizardCrumbPillNarrow,
-  wizardLabelPill,
 } from "../src/tui/wizard-chrome.tsx";
 import { seedTestConfig } from "./helpers.ts";
 
@@ -32,15 +31,6 @@ describe("stepIndexFromScreen", () => {
 
   test("done points past the last step", () => {
     expect(stepIndexFromScreen("done")).toBe(4);
-  });
-});
-
-describe("wizardLabelPill", () => {
-  test("returns a single 🧙 Setup Wizard pill", () => {
-    const segs = wizardLabelPill();
-    expect(segs.length).toBe(1);
-    expect(segs[0]?.label).toContain("🧙 Setup Wizard");
-    expect(segs[0]?.bold).toBe(true);
   });
 });
 

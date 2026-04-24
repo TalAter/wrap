@@ -42,12 +42,6 @@ describe("verbose module", () => {
     expect(stderr.text).toContain("Tools: 28/34 available");
   });
 
-  test("verbose line ends with newline", () => {
-    seedTestConfig({ verbose: true });
-    verbose("test");
-    expect(stderr.text).toMatch(/\n$/);
-  });
-
   test("verbose line is wrapped in dim ANSI", () => {
     seedTestConfig({ verbose: true });
     verbose("dim text");

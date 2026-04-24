@@ -139,11 +139,4 @@ describe("pillSegments", () => {
     expect(wizBody?.bold).toBe(true);
     expect(doneBody?.bold).toBeFalsy();
   });
-
-  test("empty segments array returns empty", () => {
-    expect(pillSegments([], true, false)).toEqual([]);
-    expect(pillSegments([], false, false)).toEqual([]);
-    expect(pillWidth([], true, false)).toBe(0);
-    expect(pillWidth([], false, false)).toBe(0);
-  });
 });

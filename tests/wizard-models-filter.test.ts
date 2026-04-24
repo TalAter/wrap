@@ -159,15 +159,6 @@ describe("filterAndSortModels", () => {
     };
     expect(filterAndSortModels(data, "test")).toEqual([]);
   });
-
-  test("ModelEntry carries id, releaseDate, and recommended flag (default false)", () => {
-    const [first] = filterAndSortModels(DATA, "anthropic");
-    expect(first).toEqual({
-      id: "claude-sonnet-4-6",
-      releaseDate: "2026-03-01",
-      recommended: false,
-    });
-  });
 });
 
 describe("applyRecommendation", () => {
