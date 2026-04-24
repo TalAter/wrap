@@ -126,3 +126,6 @@ jobs:
           tap: talater/homebrew-wrap
           formula: wrap
           tag: ${{ github.ref_name }}
+          # PAT is scoped to the tap repo only and can't create a fork.
+          # The tap is ours, so push the bump branch to origin directly.
+          no_fork: true

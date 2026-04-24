@@ -106,6 +106,10 @@ Two auto-bump gotchas, one combined fix:
 
 The auto-bump carries both URLs + shas forward in one pass; the file's "one URL per arch" surface is acceptable churn.
 
+### Why `no_fork: true`
+
+Standard `brew bump-formula-pr` flow forks the tap into the PAT owner's account, pushes the bump branch to the fork, and opens a PR cross-repo. Our fine-grained PAT is scoped to `talater/homebrew-wrap` only — it cannot create a fork (that needs `Administration: write` on the user account). Since we own the tap, forking is redundant: `no_fork: true` makes the action push the bump branch to `origin` and open a same-repo PR. Fewer moving parts, smaller PAT surface.
+
 ### Why `bump-tap` runs on macOS
 
 The formula is `on_macos do`-only (no Linux block yet). When `dawidd6/action-homebrew-bump-formula` loads the formula on a Linux runner, the `on_macos` block is skipped, no `url` is visible, and the action errors with `formula requires at least a URL`. Running the job on macOS makes the `on_arm`/`on_intel` URLs load, and the action can compute both sha256s. If we ever add a Linux formula block, the macOS runner still handles everything — the macOS side also evaluates the `on_linux` block just fine, it's just formula Ruby.
