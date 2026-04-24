@@ -63,15 +63,20 @@ jobs:
         with:
           bun-version-file: .bun-version
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-${{ runner.arch }}-
+
       - run: bun install --frozen-lockfile
 
-      # BUN_BUILD_TARGET is consumed by `scripts/build-release.ts` (not a
-      # Bun-native var). BUN_NO_CODESIGN_MACHO_BINARY avoids Bun's self-sign
-      # SIGKILL bug (oven-sh/bun#29120). Verify name if updating Bun.
+      # BUN_NO_CODESIGN_MACHO_BINARY avoids Bun's self-sign SIGKILL bug
+      # (oven-sh/bun#29120). Verify name if updating Bun.
       - name: Build
         env:
           BUN_NO_CODESIGN_MACHO_BINARY: "1"
-          BUN_BUILD_TARGET: ${{ matrix.bun_target }}
+          WRAP_BUILD_TARGET: ${{ matrix.bun_target }}
         run: bun run build:release
 
       - name: Ad-hoc sign (macOS)

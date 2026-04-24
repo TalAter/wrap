@@ -1,9 +1,9 @@
 import { stubReactDevtoolsPlugin } from "./build-config.ts";
 
-const target = process.argv[2] ?? process.env.BUN_BUILD_TARGET;
+const target = process.argv[2] ?? process.env.WRAP_BUILD_TARGET;
 if (!target) {
   console.error(
-    "build-release: target required (argv[2] or BUN_BUILD_TARGET).\n" +
+    "build-release: target required (argv[2] or WRAP_BUILD_TARGET).\n" +
       "  e.g. bun run scripts/build-release.ts bun-darwin-arm64",
   );
   process.exit(1);

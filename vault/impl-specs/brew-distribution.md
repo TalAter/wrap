@@ -28,7 +28,7 @@ Out of scope (future, see § Future channels):
 
 ## Prerequisites — code changes in app repo
 
-1. **Release build script.** `scripts/build-release.ts` reads target from `BUN_BUILD_TARGET` env or argv, reuses the stub plugin exported from `scripts/build-config.ts`, and calls `Bun.build({ compile: { target, outfile: "wrap" } })`. Output filename stays `wrap` regardless of target. Local dev still uses `scripts/build.ts`.
+1. **Release build script.** `scripts/build-release.ts` reads target from `WRAP_BUILD_TARGET` env or argv, reuses the stub plugin exported from `scripts/build-config.ts`, and calls `Bun.build({ compile: { target, outfile: "wrap" } })`. Output filename stays `wrap` regardless of target. Local dev still uses `scripts/build.ts`.
 
 2. **Release helper.** `bun run release <version>` (`scripts/release.ts`) writes the currently-installed `Bun.version` to `.bun-version`, bumps `package.json`, commits, tags `v<version>`. User pushes manually. This keeps CI's Bun pin synced with whatever Bun the release author tested on.
 
@@ -138,7 +138,7 @@ Single-creator + matrix-uploaders avoids the race that 4 parallel "create or app
 2. Verify tag matches `package.json` version (fail fast on mismatch).
 3. Install Bun (`oven-sh/setup-bun@v2`, pin to a specific Bun version via `bun-version:` input — do not float on `latest`, since the `--compile` self-sign bug is version-specific).
 4. `bun install --frozen-lockfile`.
-5. Build: `BUN_NO_CODESIGN_MACHO_BINARY=1 BUN_BUILD_TARGET=bun-<arch> bun run scripts/build-release.ts` (workaround Bun self-sign SIGKILL bug, oven-sh/bun#29120). Verify env var name against the pinned Bun version's docs before merging — historical name is `BUN_NO_CODESIGN_MACHO_BINARY`, may have been renamed.
+5. Build: `BUN_NO_CODESIGN_MACHO_BINARY=1 WRAP_BUILD_TARGET=bun-<arch> bun run scripts/build-release.ts` (workaround Bun self-sign SIGKILL bug, oven-sh/bun#29120). Verify env var name against the pinned Bun version's docs before merging — historical name is `BUN_NO_CODESIGN_MACHO_BINARY`, may have been renamed.
 6. **macOS only:** `codesign --sign - --force ./wrap` (ad-hoc sign).
 7. Strip (per-OS):
    - macOS: `strip -x wrap` (`-x` removes local symbols).
