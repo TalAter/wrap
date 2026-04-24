@@ -1,0 +1,42 @@
+# File rotation for the mutation-survivor routine.
+#
+# Ordered oldest-first: entry at top was processed longest ago. On each run
+# the agent either picks an eligible src file NOT in this list (new work) or,
+# if none, pops the top entry and reprocesses it. Whichever file ran is
+# appended to the bottom when the run ends.
+#
+# See vault/agents/stryker-agent.md for the full workflow.
+
+- src/command-response.schema.ts
+- src/core/parse-response.ts
+- src/core/round.ts
+- src/core/runner.ts
+- src/core/transcript.ts
+- src/core/shell.ts
+- src/config/resolve.ts
+- src/memory/memory.ts
+- src/discovery/init-probes.ts
+- src/logging/entry.ts
+- src/session/reducer.ts
+- src/llm/providers/registry.ts
+- src/llm/resolve-provider.ts
+- src/llm/format-context.ts
+- src/wizard/state.ts
+- src/core/truncate.ts
+- src/llm/build-prompt.ts
+- src/wizard/models-filter.ts
+- src/core/attached-input.ts
+- src/core/input.ts
+- src/discovery/cwd-files.ts
+- src/discovery/watchlist.ts
+- src/llm/context.ts
+- src/subcommands/forget-footprint.ts
+- src/core/ansi.ts
+- src/subcommands/log.ts
+- src/core/detect-appearance.ts
+- src/subcommands/completion.ts
+- src/session/notification-router.ts
+- src/core/notify.ts
+- src/core/editor.ts
+- src/fs/cache.ts
+- src/config/ensure.ts
