@@ -892,3 +892,33 @@
   mutated: '/-256(color)/'
   reason: equivalent on realistic TERM values — the optional `(color)?` group only matters for TERM values ending in bare `-256` without the `color` suffix. Terminfo entries supporting 256 colors are named `xterm-256color`, `screen-256color`, `tmux-256color`, etc.; no real terminal emits a bare `-256`.
   added: 2026-04-24
+- file: src/core/logo.ts
+  mutator: StringLiteral
+  original: '"██║    ██║██╔══██╗██╔══██╗██╔══██╗"'
+  mutated: '""'
+  reason: logo.ts is a pure-data ASCII-art constant (analogous to the already-excluded welcome-animation-frames.ts). Individual rows have no runtime semantics — mutating one to "" produces a visually broken but functionally identical render. Binding the exact art in a test is brittle; the only meaningful invariant (uniform row width) is a data-shape property, not user-visible behavior.
+  added: 2026-04-24
+- file: src/core/logo.ts
+  mutator: StringLiteral
+  original: '"██║ █╗ ██║██████╔╝███████║██████╔╝"'
+  mutated: '""'
+  reason: logo.ts is a pure-data ASCII-art constant; same reasoning as the paired row ignore above.
+  added: 2026-04-24
+- file: src/core/logo.ts
+  mutator: StringLiteral
+  original: '"██║███╗██║██╔══██╗██╔══██║██╔═══╝ "'
+  mutated: '""'
+  reason: logo.ts is a pure-data ASCII-art constant; same reasoning as the paired row ignore above.
+  added: 2026-04-24
+- file: src/core/logo.ts
+  mutator: StringLiteral
+  original: '"╚███╔███╔╝██║  ██║██║  ██║██║     "'
+  mutated: '""'
+  reason: logo.ts is a pure-data ASCII-art constant; same reasoning as the paired row ignore above.
+  added: 2026-04-24
+- file: src/core/logo.ts
+  mutator: StringLiteral
+  original: '" ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     "'
+  mutated: '""'
+  reason: logo.ts is a pure-data ASCII-art constant; same reasoning as the paired row ignore above.
+  added: 2026-04-24
