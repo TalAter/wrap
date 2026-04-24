@@ -13,6 +13,8 @@ export type ActionItem = {
   label: string;
   /** Highlight color on the glyph/letter — marks a first-tier action. */
   primary?: boolean;
+  /** Approve-style only; tints both head and tail (e.g. flash `Copied` green). */
+  flashColor?: string;
 };
 
 type ActionBarProps = {
@@ -62,14 +64,16 @@ export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps)
         const dividerNode = hasDivider(i) ? <Text color={divider}>{" │ "}</Text> : null;
 
         if (isApproveStyle(item)) {
-          const accent = item.primary
+          const defaultAccent = item.primary
             ? isFocused
               ? highlightBright
               : highlight
             : isFocused
               ? primary
               : secondary;
-          const tail = isFocused ? primary : muted;
+          const defaultTail = isFocused ? primary : muted;
+          const accent = item.flashColor ?? defaultAccent;
+          const tail = item.flashColor ?? defaultTail;
           const head = item.label[0] as string;
           const rest = item.label.slice(1);
           return (

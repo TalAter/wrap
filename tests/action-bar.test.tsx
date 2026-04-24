@@ -82,6 +82,12 @@ describe("ActionBar", () => {
     expect(text).toContain("Gamma");
   });
 
+  test("flashColor on an approve-style item still renders the full label", async () => {
+    const items: ActionItem[] = [{ glyph: "C", label: "Copied", flashColor: "#ff00ff" }];
+    const { lastFrame } = render(<ActionBar items={items} />);
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Copied"));
+  });
+
   test("dividerAfter=[1] places exactly one divider between items 1 and 2", async () => {
     const items: ActionItem[] = [
       { glyph: "A", label: "Alpha" },
