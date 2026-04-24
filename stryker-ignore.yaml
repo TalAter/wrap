@@ -832,3 +832,15 @@
   mutated: 'chrome("Configuration saved", "")'
   reason: cosmetic — the emoji/glyph is decorative stderr chrome shown once after the wizard completes; no test inspects it and it carries no runtime behavior.
   added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: ConditionalExpression
+  original: 'while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;'
+  mutated: 'while (true && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;'
+  reason: equivalent on valid UTF-8 — the backtrack walks over continuation bytes to the nearest code-point leading byte. Since `bytes` comes from TextEncoder, valid UTF-8 guarantees a leading byte within 3 positions, never a run of continuation bytes that spans to index 0. The `end > 0` guard only matters for invalid UTF-8 that TextEncoder cannot produce.
+  added: 2026-04-23
+- file: src/tui/clamp-buffer.ts
+  mutator: EqualityOperator
+  original: 'end > 0'
+  mutated: 'end >= 0'
+  reason: equivalent on valid UTF-8 — at end=0 the byte is necessarily a code-point leading byte (non-continuation) since TextEncoder emits valid UTF-8, so the continuation-byte clause fails and the loop exits regardless of whether the boundary is `> 0` or `>= 0`.
+  added: 2026-04-23
