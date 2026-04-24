@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { executeShellCommand } from "../src/core/shell.ts";
 import { dirStats, ensureTempDir, formatSize, formatTempDirSection } from "../src/fs/temp.ts";
+import promptConstants from "../src/prompt.constants.json";
 
 describe("ensureTempDir", () => {
   let prev: string | undefined;
@@ -96,6 +97,38 @@ describe("formatTempDirSection", () => {
     expect(section).toContain("(empty)");
     // Must not have created one as a side effect — lazy creation is the whole point.
     expect(process.env.WRAP_TEMP_DIR).toBeUndefined();
+  });
+
+  test("section layout: header, sorted entries, dir slash, file sizes, recursion, newlines", () => {
+    // Reverse-sort order pins the entries.sort() contract — Bun readdirSync
+    // returns insertion order on macOS APFS.
+    writeFileSync(join(dir, "z-file.txt"), "hello"); // 5 bytes
+    mkdirSync(join(dir, "a-sub"));
+    writeFileSync(join(dir, "a-sub", "inner.md"), "xyz"); // 3 bytes
+    const section = formatTempDirSection();
+    expect(section.split("\n")).toEqual([
+      promptConstants.sectionTempDir,
+      "$WRAP_TEMP_DIR/a-sub/",
+      "$WRAP_TEMP_DIR/a-sub/inner.md (3B)",
+      "$WRAP_TEMP_DIR/z-file.txt (5B)",
+    ]);
+  });
+
+  test("nonexistent WRAP_TEMP_DIR path → empty section, no throw", () => {
+    process.env.WRAP_TEMP_DIR = join(dir, "does-not-exist-xyz");
+    const section = formatTempDirSection();
+    expect(section).toContain(promptConstants.tempDirEmpty);
+  });
+
+  test("broken symlink is skipped silently, no throw", () => {
+    // statSync follows symlinks, so a dangling target throws ENOENT.
+    // The walker must skip the entry, not crash.
+    symlinkSync(join(dir, "nonexistent-target"), join(dir, "broken-link"));
+    writeFileSync(join(dir, "real.txt"), "x");
+    expect(() => formatTempDirSection()).not.toThrow();
+    const section = formatTempDirSection();
+    expect(section).toContain("real.txt");
+    expect(section).not.toContain("broken-link");
   });
 });
 
@@ -206,6 +239,7 @@ describe("dirStats", () => {
       const stats = dirStats(dir);
       // Symlink itself = 1 file. Its size is small (path bytes), definitely < 10_000.
       expect(stats.files).toBe(1);
+      expect(stats.bytes).toBeGreaterThan(0);
       expect(stats.bytes).toBeLessThan(10_000);
     } finally {
       rmSync(target, { recursive: true, force: true });
