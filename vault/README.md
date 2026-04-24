@@ -178,3 +178,4 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 - Top-level orchestration, flow order → [[architecture]]
 - Editing personality / voice → [[answer-voice]]
 - First-run / wizard changes → [[wizard]] + [[config]]
+- Writing tests or implementing any feature → `.claude/skills/testing.md`
