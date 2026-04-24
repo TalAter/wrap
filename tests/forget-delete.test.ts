@@ -55,6 +55,14 @@ describe("deleteMemory", () => {
     deleteMemory(home);
     expect(existsSync(join(home, "config.jsonc"))).toBe(true);
   });
+
+  test("non-ENOENT unlink failure is recorded in errors", () => {
+    // memory.json as a directory → unlinkSync throws EISDIR (not ENOENT).
+    mkdirSync(join(home, "memory.json"));
+    const r = deleteMemory(home);
+    expect(r.errors).toEqual([join(home, "memory.json")]);
+    expect(r.removed).toBe(false);
+  });
 });
 
 describe("deleteLogs", () => {
@@ -106,6 +114,16 @@ describe("deleteCache", () => {
     expect(existsSync(join(home, "cache"))).toBe(false);
   });
 
+  test("cache path is a file → removed=true, cache is unlinked", () => {
+    // readdirSync on a regular file throws ENOTDIR (not ENOENT), so `existed`
+    // stays true; rmSync(force:true, recursive:true) unlinks the file.
+    writeFileSync(join(home, "cache"), "oops");
+    const r = deleteCache(home);
+    expect(r.removed).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(existsSync(join(home, "cache"))).toBe(false);
+  });
+
   test("removes symlink inside cache but not the symlink target", () => {
     const target = mkdtempSync(join(tmpdir(), "wrap-cache-target-"));
     try {
@@ -137,6 +155,12 @@ describe("deleteScratch", () => {
 
   test("no matching dirs → removed false", () => {
     expect(deleteScratch(base)).toEqual({ removed: false, errors: [] });
+  });
+
+  test("nonexistent tmpBase is swallowed → empty result, no throw", () => {
+    const gone = join(base, "does-not-exist");
+    expect(() => deleteScratch(gone)).not.toThrow();
+    expect(deleteScratch(gone)).toEqual({ removed: false, errors: [] });
   });
 
   test("removes every wrap-scratch-* under tmpBase", () => {
