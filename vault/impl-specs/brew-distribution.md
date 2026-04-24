@@ -28,8 +28,6 @@ Out of scope (future, see § Future channels):
 
 ## Prerequisites — code changes in app repo
 
-> Completion-generator parametrization shipped in commit 31744bd — `wrap --completion <shell> [name]` emits `wrap`-named completions by default, optional positional name overrides (e.g. `wrap --completion zsh w` for shell-alias completions). Brew's `generate_completions_from_executable(... shell_parameter_format: :arg)` passes only the shell name → gets `wrap`-named completions unchanged.
-
 1. **Create a release build script.** Add `scripts/build-release.ts` (or similar) for CI cross-compile. Do **not** extend `build.ts` — it's for local dev (`bun run build`); release build is a CI concern with different inputs (target arch). Keep them separate.
 
    The `react-devtools-core` stub plugin in `build.ts` is required for Ink to compile and must be reused by the release script. Extract it into a shared module (e.g. `scripts/build-config.ts`) imported by both `build.ts` and `build-release.ts`. Release script reads target from arg or `BUN_BUILD_TARGET` env, passes into `Bun.build({ compile: { target, outfile: "wrap" } })`. Output filename stays `wrap` regardless of target.
@@ -234,7 +232,6 @@ Principle across all channels: wizard owns first-run experience (config + alias)
 Ordering matters: app repo work + first manual release happens **before** the tap is functional, since `dawidd6/action-homebrew-bump-formula` needs an existing formula in the tap to bump. Bootstrap = hand-written v0.0.1 formula → first manual `brew install` works → subsequent releases auto-bump.
 
 App repo (`talater/wrap`):
-- [x] Parametrize `src/subcommands/completion.ts` with optional positional `<name>` arg (default `wrap`) — commit 31744bd.
 - [ ] Extract shared build config (`react-devtools-core` plugin etc.) from `build.ts` into `scripts/build-config.ts`. Add `scripts/build-release.ts` that reads target from `BUN_BUILD_TARGET` env (or arg), reuses shared config, calls `Bun.build({ compile: { target, outfile: "wrap" } })`.
 - [ ] `.github/workflows/release.yml` — tag-driven, version-match check, 4-arch matrix, draft release, ad-hoc sign (mac), per-OS strip, tar, upload, publish, tap bump.
 - [ ] `HOMEBREW_TAP_TOKEN` secret added (fine-grained PAT, see § PAT setup).

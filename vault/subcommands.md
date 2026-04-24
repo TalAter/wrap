@@ -2,7 +2,7 @@
 name: subcommands
 description: CLI flags — subcommands (--log, --help, --version) and modifier options (--verbose, --model, --no-animation)
 Source: src/subcommands/, src/core/input.ts, src/config/settings.ts
-Last-synced: c54a1a5
+Last-synced: 17659d3
 ---
 
 # Subcommands
@@ -28,6 +28,7 @@ Registry at `src/subcommands/registry.ts` is the single source of truth. Options
 | `--help` | `-h` | Auto-generated from registry. TTY: animated gradient logo. `w --help <name>` prints per-flag detail. |
 | `--version` | `-v` | Reads `package.json`. |
 | `--log` | — | Log viewer. See [[logging]]. |
+| `--completion <shell> [name]` | `--completions` | Emit zsh/bash/fish completion script to stdout. Default registered command name comes from `package.json#name`; optional positional overrides it (future wizard alias step, without colliding with the brew-installed `wrap` completion). Name is templated into shell function identifiers, so it's validated against `[A-Za-z_][A-Za-z0-9_]*` (bash identifier alphabet). |
 | `--forget` | — | Delete persisted user data (memory, logs, cache, temp files). `--yolo` skips the interactive dialog. See [[forget]]. |
 
 ## Modifier options
