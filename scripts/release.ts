@@ -1,6 +1,3 @@
-// Stamps the locally-installed Bun into `.bun-version` so CI rebuilds with
-// the same Bun the release author tested on.
-
 import { $ } from "bun";
 import pkg from "../package.json";
 
@@ -22,6 +19,14 @@ if (branch !== "main") {
   process.exit(1);
 }
 
+await $`git fetch origin main --quiet`;
+const local = (await $`git rev-parse main`.text()).trim();
+const remote = (await $`git rev-parse origin/main`.text()).trim();
+if (local !== remote) {
+  console.error("Local `main` differs from `origin/main`. Pull/push first.");
+  process.exit(1);
+}
+
 const tag = `v${version}`;
 const existing = await $`git tag -l ${tag}`.text();
 if (existing.trim()) {
@@ -36,13 +41,16 @@ if (check.exitCode !== 0) {
   process.exit(1);
 }
 
-const bunVersion = Bun.version;
-
+// Bump version in package.json
 pkg.version = version;
 await Bun.write("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
+
+// Stamps the locally-installed Bun into `.bun-version` so CI rebuilds with the same version
+const bunVersion = Bun.version;
 await Bun.write(".bun-version", `${bunVersion}\n`);
 
 await $`git add package.json .bun-version`;
+// Re-run safe: skip commit if already at target version, still tag.
 const staged = (await $`git diff --cached --name-only`.text()).trim();
 if (staged) {
   await $`git commit -m ${`release ${tag}`}`;
