@@ -40,3 +40,4 @@
 - src/core/editor.ts
 - src/fs/cache.ts
 - src/config/ensure.ts
+- src/config/config.ts
