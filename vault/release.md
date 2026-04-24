@@ -1,7 +1,7 @@
 ---
 name: release
 description: How to cut a Wrap release — semver bump, tag, watch CI, merge tap bump. Brew distribution design notes.
-Source: scripts/release.ts, .github/workflows/release.yml
+Source: scripts/release.ts, .github/workflows/release.yml, scripts/bump-tap.ts
 Last-synced: b6ebba4
 ---
 
@@ -36,11 +36,11 @@ It **does not push** — you push manually so an un-intended run is easy to undo
 Once the tag lands on GitHub, the `.github/workflows/release.yml` workflow takes over:
 
 1. **`create-release`** — cuts a draft GH Release, verifies that the tag matches `package.json` version.
-2. **`build`** — four parallel matrix jobs: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu`. Each cross-compiles the binary, strips symbols, then (macOS only) ad-hoc codesigns it, tars it, and uploads to the draft.
+2. **`build`** — four parallel matrix jobs: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu`. Each cross-compiles, strips, then (macOS only) ad-hoc codesigns, tars, and uploads to the draft.
 3. **`publish-release`** — flips the draft to published. Tags containing `-` (e.g. `v0.0.2-rc.1`) are marked prerelease.
-4. **`bump-tap`** — runs on macOS, uses `dawidd6/action-homebrew-bump-formula` to open a PR in `talater/homebrew-wrap` that bumps the formula URL to the new tag and updates sha256s. **Skipped on prereleases.**
+4. **`bump-tap`** — runs `scripts/bump-tap.ts`, which opens a same-repo PR in `talater/homebrew-wrap` that bumps all three URLs + sha256s (source archive, arm64-darwin, x86_64-darwin). **Skipped on prereleases.**
 
-When the bump PR lands in `talater/homebrew-wrap`, `brew install talater/wrap/wrap` picks up the new version.
+When the bump PR lands in the tap, `brew install talater/wrap/wrap` picks up the new version.
 
 **Manual merge policy:** review the tap bump PR and click merge. No auto-merge until the pipeline is battle-tested.
 
@@ -48,9 +48,8 @@ When the bump PR lands in `talater/homebrew-wrap`, `brew install talater/wrap/wr
 
 ## What can go wrong
 
-- **Any build-matrix arch fails.** `publish-release` is gated by `needs: build`, so nothing publishes. Partial assets may have landed on the draft. Recovery: delete the GH Release and tag, fix, retry. `create-release` is guarded with `gh release view || gh release create`, so re-running the workflow on the same tag is safe even if the draft already exists.
-- **Tap bump fails after publish.** Publish already happened, so `brew install` against the pinned tarball URL still works for whoever can find the release — but the tap won't move forward automatically. Recover by merging the PR by hand (or fixing whatever tripped the action and re-triggering).
-- **Release CI green but `brew install` SIGKILLs on macOS.** The canonical cause is signature invalidation: `strip` was run *after* `codesign`, which kills the Mach-O signature and macOS refuses to execute. The workflow currently strips before signing — keep it that way.
+- **Any build-matrix arch fails.** `publish-release` is gated by `needs: build`, so nothing publishes. Partial assets may have landed on the draft. Recovery: delete the GH Release and tag, fix, retry. `create-release` is guarded with `gh release view || gh release create`, so re-running on the same tag is safe even if the draft already exists.
+- **Release CI green but `brew install` SIGKILLs on macOS.** Canonical cause is signature invalidation: something modified the binary *after* `codesign` (a `strip` step in the wrong order, brew's bottle-build path rewriting, etc.). The workflow strips before signing — keep that order. Anything that mutates the Mach-O after signing needs a re-sign.
 
 **Partial-failure recovery recipe:**
 
@@ -71,23 +70,19 @@ Implementation details are in the code; the rationale is here.
 
 ### Why a personal tap, not homebrew-core
 
-homebrew-core has a high bar (popularity, maturity, source-built), ongoing review burden, and couples our release cadence to their review queue. A personal tap:
-
-- Ships the moment a tag builds.
-- Accepts prebuilt binaries, so there's no need to teach brew how to build a Bun-compiled TS CLI from source.
-- Keeps submission to core as a later option once usage justifies it.
+homebrew-core has a high bar (popularity, maturity, source-built), ongoing review burden, and couples our release cadence to their review queue. A personal tap ships the moment a tag builds, accepts prebuilt binaries, and keeps submission to core as a later option once usage justifies it.
 
 ### Why prebuilt binaries instead of source
 
-`bun --compile` produces a single ~63MB binary that includes the Bun runtime. Asking brew to source-build that would mean installing Bun at build time and compiling from a git checkout — slower, more moving parts, and it fights brew's "no network at build time after download" expectations. The tarball-per-arch approach mirrors what zellij, starship, and most other Rust-style CLI tools use.
+`bun --compile` produces a single ~63MB binary that includes the Bun runtime. Asking brew to source-build that would mean installing Bun at build time and compiling from a git checkout — slower, more moving parts, and it fights brew's "no network at build time after download" expectations. The tarball-per-arch approach mirrors zellij, starship, and most Rust-style CLI tools.
 
 ### Why rust-style target triples
 
-`aarch64-apple-darwin` / `x86_64-apple-darwin` / `aarch64-unknown-linux-gnu` / `x86_64-unknown-linux-gnu` match homebrew-core precedent for Rust binaries (zellij, starship, etc.). Staying on this convention makes a future core submission a smaller diff and makes the tarball names obvious to anyone who's installed a Rust CLI via brew.
+`aarch64-apple-darwin` / `x86_64-apple-darwin` / `aarch64-unknown-linux-gnu` / `x86_64-unknown-linux-gnu` match homebrew-core precedent for Rust binaries. Staying on this convention makes a future core submission a smaller diff and makes the tarball names obvious to anyone who's installed a Rust CLI via brew.
 
 ### Why ad-hoc codesign, not Developer ID + notarization
 
-macOS refuses to run unsigned binaries from outside the App Store. Ad-hoc signing (`codesign --sign - --force`) satisfies the *first-run execution* requirement without paying the Apple Developer fee or running a notarization flow. The cost: no Gatekeeper quarantine bypass, so a future `curl install.sh | bash` channel will show the "downloaded from internet" dialog. Brew installs are fine because brew sets trusted extended attributes. Upgrade path when a `curl` channel ships: Developer ID + `xcrun notarytool`.
+macOS refuses to run unsigned binaries from outside the App Store. Ad-hoc signing (`codesign --sign - --force`) satisfies first-run execution without paying the Apple Developer fee or running a notarization flow. The cost: no Gatekeeper quarantine bypass, so a future `curl install.sh | bash` channel will show the "downloaded from internet" dialog. Brew installs are fine because brew sets trusted extended attributes. Upgrade path when a `curl` channel ships: Developer ID + `xcrun notarytool`.
 
 ### Why no `post_install`
 
@@ -95,52 +90,34 @@ brew formulae cannot write to `$HOME` during install. The Wrap wizard handles co
 
 ### Why Bun is pinned via `.bun-version` + `release.ts`
 
-Bun's `--compile` has version-specific bugs (notably the self-sign SIGKILL, mitigated with `BUN_NO_CODESIGN_MACHO_BINARY=1`). Floating on `latest` means a Bun release can silently break the binary. Pinning in a file means there's one place to bump. Auto-stamping that file from `Bun.version` inside `release.ts` means CI is guaranteed to use whatever Bun the release author actually tested with — no drift between "the Bun I ran `bun run check` on" and "the Bun CI compiles with."
-
-### Why the formula uses literal version URLs and no `version` field
-
-Two auto-bump gotchas, one combined fix:
-
-- `url "…/v0.0.1/wrap-<triple>.tar.gz"`, not `url "…/v#{version}/…"`. `brew bump-formula-pr` (the tool the auto-bump action wraps) does an `inreplace` looking for the literal previous URL; with `#{version}` interpolation, the regex never matches and the bump fails with `inreplace failed`.
-- No explicit `version "0.0.1"` line. If present, bump-formula-pr updates URLs but not that line, so post-rewrite the parsed version is unchanged and the bump aborts with *"new version and old version are both 0.0.1"*. Omitting the field lets brew derive the version from the URL path, which bump-formula-pr *does* update.
-
-The auto-bump carries both URLs + shas forward in one pass; the file's "one URL per arch" surface is acceptable churn.
-
-### Why we ship a custom `scripts/bump-tap.ts` instead of `dawidd6/action-homebrew-bump-formula`
-
-We originally used `dawidd6/action-homebrew-bump-formula`, which wraps `brew bump-formula-pr`. Two problems surfaced on first real use:
-
-- **It only bumps one URL.** `brew bump-formula-pr` is built around single-URL formulae. With `on_arm` + `on_intel` inside `on_macos`, only the `on_arm` URL was rewritten; `on_intel` stayed on the old version and intel users silently got the old binary.
-- **Formula-level `version` plus `brew bump-formula-pr` don't mix.** `--version=X` updated URLs but not an explicit `version "…"` line, so the post-rewrite parse returned the old version and the action bailed with *"new version and old version are both …"*.
-- **Fork scope.** The default flow forks the tap into the PAT owner's account; the fine-grained PAT scoped to the tap can't create a fork.
-
-`scripts/bump-tap.ts` replaces it: downloads the 3 tarballs (source archive + arm64 + intel), computes sha256s in parallel, rewrites all three `url`/`sha256` pairs atomically via a regex-per-pair pass, commits, force-pushes to a `bump-wrap-<version>` branch, and opens a same-repo PR via `gh`. Runs on ubuntu (no macOS runner needed). If the branch already exists from a previous failed run, the push is a force-with-lease; if the PR already exists, the step skips the create.
-
-### Why `depends_on :macos` + top-level url placeholder
-
-`brew test-bot --only-tap-syntax` (which the tap's own `tests.yml` runs on every PR) calls `brew readall --os=all --arch=all`. That loads the formula under every OS/arch combo, including Linux. `depends_on :macos` blocks *install* on Linux but does **not** stop `readall` from trying to load — so with all URLs nested inside `on_macos`, `readall` on Linux sees no URL and errors *"formula requires at least a URL"*.
-
-Fix: top-level `url` + `sha256` pointing at the source archive (`archive/refs/tags/v<version>.tar.gz`). On macOS the `on_macos` block overrides it, so the prebuilt binary is still what gets installed. On Linux, the top-level url satisfies `readall`, and `depends_on :macos` still blocks the install. The source-archive sha is also recomputed by `bump-tap.ts` on each release.
-
-When a Linux formula block eventually lands, both the top-level placeholder and `depends_on :macos` come out.
-
-### Why `bump-tap` runs on macOS
-
-The formula is `on_macos do`-only (no Linux block yet). When `dawidd6/action-homebrew-bump-formula` loads the formula on a Linux runner, the `on_macos` block is skipped, no `url` is visible, and the action errors with `formula requires at least a URL`. Running the job on macOS makes the `on_arm`/`on_intel` URLs load, and the action can compute both sha256s. If we ever add a Linux formula block, the macOS runner still handles everything — the macOS side also evaluates the `on_linux` block just fine, it's just formula Ruby.
-
-### Why completions are a subcommand flag, not a separate `completion` command
-
-`wrap --completion <shell> [name]` stays within the single-binary shape and doesn't require brew to know anything special. The optional `[name]` argument means the wizard can later reuse the same binary to install `alias`-flavored completions (`w` instead of `wrap`) without colliding with the brew-owned set. See [[subcommands]] for the completion subcommand shape.
+Bun's `--compile` has version-specific bugs (notably the self-sign SIGKILL, mitigated with `BUN_NO_CODESIGN_MACHO_BINARY=1`). Floating on `latest` means a Bun release can silently break the binary. Pinning in a file means there's one place to bump; auto-stamping from `Bun.version` inside `release.ts` means CI is guaranteed to use whatever Bun the release author actually tested with — no drift.
 
 ### Why `WRAP_BUILD_TARGET`, not `BUN_BUILD_TARGET`
 
-The env var is ours — it's consumed by `scripts/build.ts`, not by Bun. Naming it with a `BUN_` prefix invites future readers to search Bun's docs and find nothing. `WRAP_*` makes the ownership obvious.
+The env var is ours — consumed by `scripts/build.ts`, not by Bun. A `BUN_` prefix invites future readers to search Bun's docs and find nothing.
+
+### Why the formula uses no `version` field and has a top-level `url` placeholder
+
+Two things shape the formula file:
+
+- **No explicit `version "…"` line.** brew derives the version from the URL path (`…/v0.0.N/…`). Having both is redundant and creates a footgun if they drift.
+- **Top-level `url` + `sha256` pointing at the source archive, outside `on_macos`.** `brew readall --os=all --arch=all` (what `brew test-bot --only-tap-syntax` runs) loads the formula on every OS including Linux. With all URLs nested in `on_macos`, Linux sees no URL and rejects the formula. `depends_on :macos` blocks *install* but not *load*. A top-level source-archive url satisfies the loader; `on_macos` overrides it on the actual install path. When a Linux formula block lands, both the placeholder and `depends_on :macos` come out.
+
+### Why `scripts/bump-tap.ts`, not `dawidd6/action-homebrew-bump-formula`
+
+`brew bump-formula-pr` (the backend the dawidd6 action wraps) is built around single-URL formulae. Our formula has three URLs (source + arm64 + intel), and the action would only update the first — intel users silently stuck on the old version. The custom script downloads the three tarballs, computes sha256s in parallel, rewrites all three `url`/`sha256` pairs in one pass, commits, force-pushes to a `bump-wrap-<version>` branch, and opens a same-repo PR via `gh`. Runs on ubuntu (no macOS runner needed).
+
+### Why the tap's `tests.yml` is syntax-only
+
+`brew test-bot --only-formulae` / `--build-bottle` rewrites paths inside the ad-hoc-signed Mach-O, which invalidates the signature and then `generate_completions_from_executable` SIGKILLs on the now-dead binary. The bottle-build step is also meaningless for a binary-only tap — we already ship the binary. Keep `--only-tap-syntax` (value: `brew readall` + `brew style` + `brew audit`); the actual install path is exercised by every real `brew install`.
+
+### Why completions are a subcommand flag, not a separate `completion` command
+
+`wrap --completion <shell> [name]` stays within the single-binary shape and doesn't require brew to know anything special. The optional `[name]` argument means the wizard can later reuse the same binary to install `alias`-flavored completions (`w` instead of `wrap`) without colliding with the brew-owned set. See [[subcommands]].
 
 ---
 
 ## Completion ownership
-
-Who writes which completion file, for which command name:
 
 | Owner | Shell | Path | Command name |
 |---|---|---|---|
@@ -159,19 +136,17 @@ No overlap — each file registers one distinct command name.
 
 Not built yet; the release pipeline is shaped to make fan-out cheap.
 
-1. **Linuxbrew.** Add `on_linux do { on_arm / on_intel }` to the same formula using the already-built Linux tarballs. `bump-tap` continues to run on macOS.
-2. **`curl -fsSL install.sh | bash`.** Script in `talater/wrap`. Detect OS/arch, download the matching release tarball, extract to `~/.local/bin/`, prompt for alias. Gatekeeper quarantine dialog fires unless Developer ID + notarization is added — see above.
+1. **Linuxbrew.** Add `on_linux do { on_arm / on_intel }` to the same formula using the already-built Linux tarballs. Remove the top-level placeholder `url` + `depends_on :macos` once Linux URLs are visible.
+2. **`curl -fsSL install.sh | bash`.** Script in `talater/wrap`. Detect OS/arch, download the matching release tarball, extract to `~/.local/bin/`, prompt for alias. Gatekeeper quarantine dialog fires on macOS unless Developer ID + notarization is added.
 3. **GH Release tarball (manual download).** Already shipped as side effect. Add `SHA256SUMS` for verification.
-4. **`.deb` package + apt repo.** Add `dpkg-deb` step to the build matrix, host via GH Pages or packagecloud.
+4. **`.deb` package + apt repo.** Add `dpkg-deb` step to the build matrix; host via GH Pages or packagecloud.
 5. **homebrew-core.** Once usage justifies the review cost. The current formula already matches core conventions (rust-style triples, no `post_install`, `livecheck`).
 
 Principle across all channels: the wizard owns the first-run experience (config + alias). Package managers only drop the binary and completion files. Never write `$HOME` from install hooks.
 
 ---
 
-## One-time setup (already done for v0.0.1)
-
-### `HOMEBREW_TAP_TOKEN` secret
+## `HOMEBREW_TAP_TOKEN` — one-time setup
 
 Fine-grained PAT that lets the workflow open PRs in the tap:
 
