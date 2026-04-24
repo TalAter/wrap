@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  create-release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches package.json version
+        run: |
+          pkg_version="$(jq -r .version package.json)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+            exit 1
+          fi
+
+      - name: Create draft release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Release $GITHUB_REF_NAME"
+
+  build:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: aarch64-apple-darwin
+            bun_target: bun-darwin-arm64
+            runner: macos-14
+            os: macos
+          - triple: x86_64-apple-darwin
+            bun_target: bun-darwin-x64
+            runner: macos-13
+            os: macos
+          - triple: aarch64-unknown-linux-gnu
+            bun_target: bun-linux-arm64
+            runner: ubuntu-24.04-arm
+            os: linux
+          - triple: x86_64-unknown-linux-gnu
+            bun_target: bun-linux-x64
+            runner: ubuntu-24.04
+            os: linux
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - run: bun install --frozen-lockfile
+
+      # BUN_BUILD_TARGET is consumed by `scripts/build-release.ts` (not a
+      # Bun-native var). BUN_NO_CODESIGN_MACHO_BINARY avoids Bun's self-sign
+      # SIGKILL bug (oven-sh/bun#29120). Verify name if updating Bun.
+      - name: Build
+        env:
+          BUN_NO_CODESIGN_MACHO_BINARY: "1"
+          BUN_BUILD_TARGET: ${{ matrix.bun_target }}
+        run: bun run build:release
+
+      - name: Ad-hoc sign (macOS)
+        if: matrix.os == 'macos'
+        run: codesign --sign - --force ./wrap
+
+      - name: Strip (macOS)
+        if: matrix.os == 'macos'
+        run: strip -x wrap
+
+      - name: Strip (Linux)
+        if: matrix.os == 'linux'
+        run: strip --strip-unneeded wrap
+
+      - name: Tar
+        env:
+          TRIPLE: ${{ matrix.triple }}
+        run: tar -czf "wrap-${TRIPLE}.tar.gz" wrap
+
+      - name: Upload to draft release
+        env:
+          TRIPLE: ${{ matrix.triple }}
+        run: gh release upload "$GITHUB_REF_NAME" "wrap-${TRIPLE}.tar.gz" --clobber
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish release
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease=${{ contains(github.ref_name, '-') }}
+
+  bump-tap:
+    needs: publish-release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: dawidd6/action-homebrew-bump-formula@v4
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          tap: talater/homebrew-wrap
+          formula: wrap
+          tag: ${{ github.ref }}
