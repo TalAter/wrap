@@ -28,6 +28,12 @@ describe("clampBufferSize", () => {
     expect(new TextEncoder().encode(r.value).byteLength).toBeLessThanOrEqual(MAX_BUFFER_BYTES);
   });
 
+  test("ASCII above cap: retains first MAX_BUFFER_BYTES bytes (not empty, not all)", () => {
+    const s = "a".repeat(MAX_BUFFER_BYTES + 100);
+    const r = clampBufferSize(s);
+    expect(r.value).toBe("a".repeat(MAX_BUFFER_BYTES));
+  });
+
   test("truncation respects UTF-8 code-point boundary (no mojibake)", () => {
     // Build a string whose byte count lands mid-code-point when cut at the cap.
     // Use 4-byte emoji so the cap falls inside one.
