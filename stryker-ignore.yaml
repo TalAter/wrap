@@ -652,3 +652,9 @@
   mutated: '``'
   reason: cosmetic stderr chrome message in the catch path; tests assert only the return value (null).
   added: 2026-04-23
+- file: src/config/config.ts
+  mutator: ConditionalExpression
+  original: 'if (envConfig === undefined) return fileConfig;'
+  mutated: 'if (false) return fileConfig;'
+  reason: equivalent — with the guard removed, loadConfig falls through to `{...fileConfig, ...envConfig}`. When envConfig is undefined, object spread of undefined contributes no keys, so the merged result equals fileConfig. Short-circuit is a performance/clarity optimization, not a behavior branch.
+  added: 2026-04-23
