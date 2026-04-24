@@ -115,17 +115,14 @@ jobs:
   bump-tap:
     needs: publish-release
     if: ${{ !contains(github.ref_name, '-') }}
-    # Runs on macOS because the formula is macOS-only (`on_macos do`);
-    # the action needs the `url` visible to compute checksums, which
-    # requires loading the formula on a matching platform.
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     steps:
-      - uses: dawidd6/action-homebrew-bump-formula@v7
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          tap: talater/homebrew-wrap
-          formula: wrap
-          tag: ${{ github.ref_name }}
-          # PAT is scoped to the tap repo only and can't create a fork.
-          # The tap is ours, so push the bump branch to origin directly.
-          no_fork: true
+          bun-version-file: .bun-version
+      - name: Bump tap formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: bun run scripts/bump-tap.ts

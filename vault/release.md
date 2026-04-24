@@ -106,19 +106,23 @@ Two auto-bump gotchas, one combined fix:
 
 The auto-bump carries both URLs + shas forward in one pass; the file's "one URL per arch" surface is acceptable churn.
 
-### Known limitation — auto-bump only updates the first arch URL
+### Why we ship a custom `scripts/bump-tap.ts` instead of `dawidd6/action-homebrew-bump-formula`
 
-`brew bump-formula-pr` (what `dawidd6/action-homebrew-bump-formula` wraps) is built around single-URL formulae. Our formula has two URLs (`on_arm` + `on_intel` inside `on_macos`). The auto-bump updates only the `on_arm` URL and sha256; the `on_intel` entry is left on the old version. Until this is replaced with a custom bump step, **the release flow requires one manual fix per version**: after bump-tap opens the PR, edit the PR branch to fill the intel URL + sha256, then merge.
+We originally used `dawidd6/action-homebrew-bump-formula`, which wraps `brew bump-formula-pr`. Two problems surfaced on first real use:
 
-Fix path (not yet done): replace the `dawidd6` action with a custom step in `release.yml` that computes sha256s for all 4 tarballs and commits a single atomic patch to the tap.
+- **It only bumps one URL.** `brew bump-formula-pr` is built around single-URL formulae. With `on_arm` + `on_intel` inside `on_macos`, only the `on_arm` URL was rewritten; `on_intel` stayed on the old version and intel users silently got the old binary.
+- **Formula-level `version` plus `brew bump-formula-pr` don't mix.** `--version=X` updated URLs but not an explicit `version "…"` line, so the post-rewrite parse returned the old version and the action bailed with *"new version and old version are both …"*.
+- **Fork scope.** The default flow forks the tap into the PAT owner's account; the fine-grained PAT scoped to the tap can't create a fork.
 
-### Why `depends_on :macos`
+`scripts/bump-tap.ts` replaces it: downloads the 3 tarballs (source archive + arm64 + intel), computes sha256s in parallel, rewrites all three `url`/`sha256` pairs atomically via a regex-per-pair pass, commits, force-pushes to a `bump-wrap-<version>` branch, and opens a same-repo PR via `gh`. Runs on ubuntu (no macOS runner needed). If the branch already exists from a previous failed run, the push is a force-with-lease; if the PR already exists, the step skips the create.
 
-`brew test-bot --only-tap-syntax` (run by the tap's own `tests.yml` on every PR) validates the formula on all platforms it knows about, including Linux. Without `depends_on :macos`, brew on Linux sees no URL in `on_macos do` and rejects the formula as *"Invalid formula"*. `depends_on :macos` tells brew the absence of Linux URLs is intentional, and the tap-syntax check passes on Linux runners. When a Linux formula block is eventually added, this directive can come out.
+### Why `depends_on :macos` + top-level url placeholder
 
-### Why `no_fork: true`
+`brew test-bot --only-tap-syntax` (which the tap's own `tests.yml` runs on every PR) calls `brew readall --os=all --arch=all`. That loads the formula under every OS/arch combo, including Linux. `depends_on :macos` blocks *install* on Linux but does **not** stop `readall` from trying to load — so with all URLs nested inside `on_macos`, `readall` on Linux sees no URL and errors *"formula requires at least a URL"*.
 
-Standard `brew bump-formula-pr` flow forks the tap into the PAT owner's account, pushes the bump branch to the fork, and opens a PR cross-repo. Our fine-grained PAT is scoped to `talater/homebrew-wrap` only — it cannot create a fork (that needs `Administration: write` on the user account). Since we own the tap, forking is redundant: `no_fork: true` makes the action push the bump branch to `origin` and open a same-repo PR. Fewer moving parts, smaller PAT surface.
+Fix: top-level `url` + `sha256` pointing at the source archive (`archive/refs/tags/v<version>.tar.gz`). On macOS the `on_macos` block overrides it, so the prebuilt binary is still what gets installed. On Linux, the top-level url satisfies `readall`, and `depends_on :macos` still blocks the install. The source-archive sha is also recomputed by `bump-tap.ts` on each release.
+
+When a Linux formula block eventually lands, both the top-level placeholder and `depends_on :macos` come out.
 
 ### Why `bump-tap` runs on macOS
 
