@@ -80,7 +80,7 @@ jobs:
         env:
           BUN_NO_CODESIGN_MACHO_BINARY: "1"
           WRAP_BUILD_TARGET: ${{ matrix.bun_target }}
-        run: bun run build:release
+        run: bun run build
 
       # Strip before signing — strip invalidates signatures.
       - name: Strip (macOS)

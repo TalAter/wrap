@@ -29,6 +29,13 @@ if (existing.trim()) {
   process.exit(1);
 }
 
+console.log("Running bun run check…");
+const check = await $`bun run check`.nothrow();
+if (check.exitCode !== 0) {
+  console.error("`bun run check` failed. Fix before tagging.");
+  process.exit(1);
+}
+
 const bunVersion = Bun.version;
 
 pkg.version = version;

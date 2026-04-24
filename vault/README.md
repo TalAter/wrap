@@ -160,6 +160,9 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 ### Observability
 - [[logging]] — JSONL logs
 
+### Distribution
+- [[release]] — cutting a release; brew tap design
+
 ### UX
 - [[interactive-mode]] — free-text compose when `w` has no args on a TTY
 
@@ -174,6 +177,7 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 - Changing what gets logged → [[logging]]
 - Adding a setting or changing precedence → [[config]]
 - Adding a subcommand → [[subcommands]]
+- Cutting a release / brew distribution → [[release]]
 - Multi-step flows → [[multi-step]]
 - Top-level orchestration, flow order → [[architecture]]
 - Editing personality / voice → [[answer-voice]]
