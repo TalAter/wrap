@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chrome, chromeRaw, colorLevel, shouldAnimate } from "../src/core/output.ts";
+import { chrome, chromeRaw, colorLevel, hasJq, shouldAnimate, supportsColor } from "../src/core/output.ts";
 import { seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 
@@ -177,5 +177,69 @@ describe("colorLevel", () => {
   test("FORCE_COLOR=foo falls back to 1", () => {
     process.env.FORCE_COLOR = "foo";
     expect(colorLevel()).toBe(1);
+  });
+});
+
+describe("supportsColor", () => {
+  const envKeys = ["NO_COLOR", "FORCE_COLOR"];
+  let saved: Record<string, string | undefined>;
+  let origIsTTY: boolean | undefined;
+
+  beforeEach(() => {
+    saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
+    for (const k of envKeys) delete process.env[k];
+    origIsTTY = process.stdout.isTTY;
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+  });
+
+  afterEach(() => {
+    for (const k of envKeys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
+  });
+
+  test("true when stdout is a TTY and no opt-out env vars", () => {
+    expect(supportsColor()).toBe(true);
+  });
+
+  test("false when NO_COLOR is set", () => {
+    process.env.NO_COLOR = "1";
+    expect(supportsColor()).toBe(false);
+  });
+
+  test("NO_COLOR wins over FORCE_COLOR", () => {
+    process.env.NO_COLOR = "1";
+    process.env.FORCE_COLOR = "3";
+    expect(supportsColor()).toBe(false);
+  });
+
+  test("true when FORCE_COLOR=1", () => {
+    process.env.FORCE_COLOR = "1";
+    expect(supportsColor()).toBe(true);
+  });
+
+  test("false when FORCE_COLOR=0", () => {
+    process.env.FORCE_COLOR = "0";
+    expect(supportsColor()).toBe(false);
+  });
+
+  test("FORCE_COLOR bypasses TTY check", () => {
+    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+    process.env.FORCE_COLOR = "3";
+    expect(supportsColor()).toBe(true);
+  });
+
+  test("false when not a TTY and no opt-in", () => {
+    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+    expect(supportsColor()).toBe(false);
+  });
+});
+
+describe("hasJq", () => {
+  const jqPath = Bun.which("jq");
+  test.skipIf(!jqPath)("true when jq is on PATH", () => {
+    expect(hasJq()).toBe(true);
   });
 });
