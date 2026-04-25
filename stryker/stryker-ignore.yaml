@@ -922,3 +922,33 @@
   mutated: '""'
   reason: logo.ts is a pure-data ASCII-art constant; same reasoning as the paired row ignore above.
   added: 2026-04-24
+- file: src/core/clipboard.ts
+  mutator: BlockStatement
+  original: 'try { return Bun.which(cmd); } catch { return null; }'
+  mutated: '{}'
+  reason: defaultWhich body. Tests inject their own `which` function so the default path is unexercised in the unit-test harness; analogous to the editor.ts defaultWhich ignores.
+  added: 2026-04-25
+- file: src/core/clipboard.ts
+  mutator: BlockStatement
+  original: 'return Bun.which(cmd);'
+  mutated: '{}'
+  reason: defaultWhich's try body. Tests inject their own `which`, so this default path is unexercised; emptying the body makes it return undefined which only matters in production.
+  added: 2026-04-25
+- file: src/core/clipboard.ts
+  mutator: BlockStatement
+  original: 'return null;'
+  mutated: '{}'
+  reason: defaultWhich's catch body — unreachable because Bun.which does not throw for plain command strings in current Bun versions; the catch is a defensive guard.
+  added: 2026-04-25
+- file: src/core/clipboard.ts
+  mutator: ConditionalExpression
+  original: 'opts.resolve !== undefined'
+  mutated: 'true'
+  reason: '_setClipboardTestHooks is a test-only API; both call sites (response-dialog.test.tsx) pass `resolve` explicitly (function or null), so the absent-key path the guard protects is never exercised. With the mutant, an absent `resolve` would clear resolveOverride to undefined — equivalent on every real caller.'
+  added: 2026-04-25
+- file: src/core/clipboard.ts
+  mutator: ConditionalExpression
+  original: 'opts.copy !== undefined'
+  mutated: 'true'
+  reason: same as the paired guard — `_setClipboardTestHooks` callers always set `copy` explicitly, so the absent-key path is never produced.
+  added: 2026-04-25
