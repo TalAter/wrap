@@ -10,6 +10,11 @@ describe("resolvePath", () => {
     expect(result).toBe(homedir());
   });
 
+  test("resolves ~/ to homedir", () => {
+    const result = resolvePath("~/");
+    expect(result).toBe(homedir());
+  });
+
   test("resolves . to process.cwd()", () => {
     const result = resolvePath(".");
     expect(result).not.toBeNull();
