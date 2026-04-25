@@ -68,11 +68,13 @@ describe("listCwdFiles", () => {
   });
 
   test("returns all entries sorted by mtime when 50 or fewer", async () => {
-    for (let i = 0; i < 50; i++) {
-      const name = `file-${String(i).padStart(3, "0")}.txt`;
-      await writeFile(join(tmpDir, name), "");
-      await utimes(join(tmpDir, name), new Date(2024, 0, i + 1), new Date(2024, 0, i + 1));
-    }
+    await Promise.all(
+      Array.from({ length: 50 }, async (_, i) => {
+        const name = `file-${String(i).padStart(3, "0")}.txt`;
+        await writeFile(join(tmpDir, name), "");
+        await utimes(join(tmpDir, name), new Date(2024, 0, i + 1), new Date(2024, 0, i + 1));
+      }),
+    );
 
     const result = await listCwdFiles(tmpDir);
     expect(result).toBeDefined();
@@ -84,11 +86,13 @@ describe("listCwdFiles", () => {
   });
 
   test("caps at 50: oldest 20 + newest 30, with count", async () => {
-    for (let i = 0; i < 73; i++) {
-      const name = `file-${String(i).padStart(3, "0")}.txt`;
-      await writeFile(join(tmpDir, name), "");
-      await utimes(join(tmpDir, name), new Date(2024, 0, i + 1), new Date(2024, 0, i + 1));
-    }
+    await Promise.all(
+      Array.from({ length: 73 }, async (_, i) => {
+        const name = `file-${String(i).padStart(3, "0")}.txt`;
+        await writeFile(join(tmpDir, name), "");
+        await utimes(join(tmpDir, name), new Date(2024, 0, i + 1), new Date(2024, 0, i + 1));
+      }),
+    );
 
     const result = await listCwdFiles(tmpDir);
     expect(result).toBeDefined();
@@ -111,11 +115,13 @@ describe("listCwdFiles", () => {
   });
 
   test("exactly 51 entries triggers truncation", async () => {
-    for (let i = 0; i < 51; i++) {
-      const name = `file-${String(i).padStart(3, "0")}.txt`;
-      await writeFile(join(tmpDir, name), "");
-      await utimes(join(tmpDir, name), new Date(2024, 0, i + 1), new Date(2024, 0, i + 1));
-    }
+    await Promise.all(
+      Array.from({ length: 51 }, async (_, i) => {
+        const name = `file-${String(i).padStart(3, "0")}.txt`;
+        await writeFile(join(tmpDir, name), "");
+        await utimes(join(tmpDir, name), new Date(2024, 0, i + 1), new Date(2024, 0, i + 1));
+      }),
+    );
 
     const result = await listCwdFiles(tmpDir);
     expect(result).toBeDefined();
