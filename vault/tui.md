@@ -1,8 +1,8 @@
 ---
 name: tui
 description: Ink dialog, three output tiers, custom borders, text input, action bar, host lifecycle
-Source: src/tui/, src/session/dialog-host.ts, src/session/notification-router.ts
-Last-synced: 0f71703
+Source: src/tui/, src/session/dialog-host.ts, src/session/notification-router.ts, src/core/clipboard.ts
+Last-synced: 9fe9903
 ---
 
 # TUI
@@ -58,9 +58,11 @@ Why custom: `ink-text-input` can't be styled with `backgroundColor` and lacks wo
 
 ## Action bar
 
-Every dialog's bottom row renders through one component: `src/tui/action-bar.tsx`. Items are `{ glyph, label, primary? }`. A single ASCII letter matching `label[0]` renders approve-style (underlined hotkey inside the label); anything else renders combo-style (`<glyph> <label>`). Items share a `" │ "` divider. `focusedIndex` is decoration only — ActionBar owns no keys. ActionBar renders items flush; callers wrap in `<Box paddingLeft={3}>` for the standard gutter. Optional `dividerAfter: readonly number[]` replaces the between-every-pair default with dividers only after the listed indices — ResponseDialog's confirming bar passes `[1]` to keep the primary/secondary group break.
+Every dialog's bottom row renders through one component: `src/tui/action-bar.tsx`. Items are `{ glyph, label, primary?, flashColor? }`. A single ASCII letter matching `label[0]` renders approve-style (underlined hotkey inside the label); anything else renders combo-style (`<glyph> <label>`). Items share a `" │ "` divider. `focusedIndex` is decoration only — ActionBar owns no keys. ActionBar renders items flush; callers wrap in `<Box paddingLeft={3}>` for the standard gutter. Optional `dividerAfter: readonly number[]` replaces the between-every-pair default with dividers only after the listed indices — ResponseDialog's confirming bar passes `[1]` to keep the primary/secondary group break. `flashColor` (approve-style only) tints both head and tail uniformly and drops the head's hotkey underline — used to flash a status word like `Copied` without conflating with a primary-action accent.
 
-ResponseDialog's confirming bar: Yes/No/Edit/Follow-up/Copy. Hotkeys `y`/`n`/`e`/`f`/`c` come from `label[0]`; `q` and Ctrl+C also cancel. `←`/`→` navigate, `Enter` activates the focused item. Same bindings for every risk level — explicit selection + confirmation model provides sufficient safety.
+ResponseDialog's confirming bar: Yes/No/Edit/Follow-up + optionally Copy when a clipboard tool is resolvable (`src/core/clipboard.ts` sweeps `wl-copy`, `xclip`, `xsel`, `pbcopy`, `clip.exe` in declared order, module-cached). Hotkeys `y`/`n`/`e`/`f`/`c` come from `label[0]`; `q` and Ctrl+C also cancel. `←`/`→` navigate, `Enter` activates the focused item. Same bindings for every risk level — explicit selection + confirmation model provides sufficient safety.
+
+Copy is dialog-local: it never reaches the reducer. Pressing `c` pipes the command to the clipboard binary and flashes the label to `Copied` for 2.5s; the timer resets on re-press and clears on transitions out of confirming. The write strips any trailing `\n` run (paste-to-shell auto-execute footgun) and is non-blocking — `proc.unref()` immediately, no `await proc.exited`, all errors swallowed. A hung `xclip` or `clip.exe` cannot wedge the dialog or block process exit.
 
 ## Input handling
 
