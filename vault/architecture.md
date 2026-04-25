@@ -2,27 +2,16 @@
 name: architecture
 description: Invocation flow, core/session split, and cross-cutting design decisions
 Source: src/main.ts, src/index.ts
-Last-synced: c54a1a5
+Last-synced: 0a22f2a
 ---
 
 # Architecture
 
 ## Invocation flow
 
-```
-parseArgs(argv)                 strip modifier options
-setConfig(resolveSettings(...)) seed from CLI + env + defaults
-dispatch subcommand?            yes → run subcommand, exit
-ensureConfig                    load config.jsonc or run wizard
-setConfig(resolveSettings(...)) re-resolve with file layered in
-resolveProvider                 config + override → ResolvedProvider
-probeTools + loadWatchlist      which-check every tool
-ensureMemory                    load or initialize memory
-runSession                      rounds × LLM × dialog × execute
-appendLogEntry                  JSONL at ~/.wrap/logs/wrap.jsonl
-```
+Parse args → seed config → maybe dispatch subcommand → ensure config (wizard if needed) → re-resolve config with file → resolve provider → probe tools → load memory → run session → append log entry.
 
-Subcommands short-circuit before `ensureConfig`. They see seeded config (CLI + env + defaults) but not file config or memory. See [[subcommands]].
+Subcommands short-circuit before config file load and memory; they see CLI/env/defaults only. See [[subcommands]].
 
 ## Core vs. session
 
@@ -34,7 +23,7 @@ Each half's tests pin its behavior without dragging in the other.
 
 ## Decisions
 
-- **Sequential code, not pipeline/middleware.** Small fixed set of flows; pipeline composability doesn't pay for implicit ordering, shared mutable context, and indirection.
-- **Ensure-pattern over resolve/execute split.** Flows continue after prerequisites — `ensureConfig()` returns and the next line runs. No second pass.
-- **Global config store, no prop drilling.** Modules call `getConfig()`. Store holds `ResolvedConfig`; `setConfig` refuses partials. Wizard mutates mid-flight via `updateConfig(patch)`. See [[config]].
-- **Prompt scaffold, not prompt string.** Cacheable prefix stays stable across rounds; few-shot examples are real turns. See [[llm]].
+- **Sequential code, not pipeline/middleware.** Small fixed flow set; pipelines pay for implicit ordering and shared mutable context without a payoff.
+- **Ensure-pattern.** Prerequisite functions return; the next line runs. No resolve/execute split.
+- **Global config store.** Modules call `getConfig()`; no prop drilling. Wizard mutates mid-flight. See [[config]].
+- **Prompt scaffold, not prompt string.** Cacheable prefix stable across rounds; few-shot examples are real turns. See [[llm]].

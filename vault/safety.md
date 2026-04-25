@@ -1,91 +1,54 @@
 ---
 name: safety
 description: Risk classification, execution gates, local rule engine, prompt injection defenses
-Source: src/session/reducer.ts, src/session/session.ts, src/core/round.ts, src/core/runner.ts, src/config/settings.ts
-Last-synced: e417d75
+Source: src/session/, src/core/round.ts, src/core/runner.ts
+Last-synced: 0a22f2a
 ---
 
 # Safety
 
-Wrap executes LLM-generated shell commands. The LLM is both generator and safety judge — single point of failure. Safety is layered so no single component's failure leads to dangerous execution.
+Wrap executes LLM-generated shell commands. The LLM is both generator and safety judge — single point of failure. Defenses are layered so no single component's failure leads to dangerous execution.
 
 | Layer | Status |
 |-------|--------|
 | LLM risk classification (`low`/`medium`/`high`) | Built |
 | Local rule engine (deterministic, escalate-only) | Planned |
 | Execution gate (auto-exec / dialog / block) | Built |
-| Adversarial eval (red-team examples, weight 3.0) | Partial |
-| Prompt injection resistance (trust fence, nonces) | Planned |
+| Adversarial eval | Partial |
+| Prompt injection resistance | Planned |
 
 ## Execution gate
 
-- `low` → auto-execute on initial round.
-- `medium` / `high` → confirmation dialog.
-- No TTY + non-low on initial round → block, stderr error, exit non-zero.
-- Non-final low → execute inline without confirmation. Non-final medium/high → dialog confirms before step runs. See [[multi-step]].
-- Non-final steps should be `low`. Non-low non-final retried once in-round asking for a low-risk alternative. If still non-low → routes through dialog confirmation (`executing-step`). See [[multi-step]].
-- Inside an already-mounted dialog (follow-up / processing): even `low` opens the dialog — user is mid-refinement.
+- `low` auto-executes on the initial round; `medium`/`high` open the confirmation dialog.
+- No TTY + non-low → block with stderr error and non-zero exit. There's no one to confirm.
+- Inside an already-mounted dialog (follow-up / processing) every level routes through the dialog — the user is mid-refinement.
+- Non-final steps should be `low`; non-low non-final retries once for a low alternative, otherwise routes through dialog confirmation. See [[multi-step]].
 
 ## Modes
 
-Gate behaviour per mode:
-
-- **default** — auto-exec low; confirm medium/high. Implemented.
-- **yolo** — auto-exec everything. Implemented. See below.
-- **force-cmd** — as default; forces `type: command`. Planned.
-- **force-answer** — no execution possible (`type: reply`). Planned.
-- **confirm-all** — confirm every command regardless of level. Planned.
+- **default** — auto-exec low; confirm medium/high. Built.
+- **yolo** — every gate off. Built.
+- **force-cmd**, **force-answer**, **confirm-all** — planned.
 
 ### Yolo
 
-Opt-in skip of all confirmation gates. Enabled via `--yolo`, `WRAP_YOLO`, or `yolo: true` in config. Two behavioural deltas from default:
+Opt-in via flag, env, or config. Skips the confirmation dialog and the no-TTY block, and runs non-final steps inline regardless of risk. The LLM still reports risk (logged for audit) and the rule engine (when built) still escalates for logging — yolo's contract is "no gates," not "no observation."
 
-1. **No confirmation dialog.** `reduceThinking` routes every final command directly to `exiting { kind: "run" }` regardless of `risk_level`.
-2. **Non-final steps inline regardless of risk.** `runLoop` broadens its inline-step condition to include medium/high when yolo is on — probes run inline instead of exiting the generator for dialog confirmation.
-
-The no-TTY block in `pumpLoop` is also skipped in yolo — there's nothing to confirm.
-
-**What yolo does NOT change:** LLM still reports `risk_level` (logged for audit). Rule engine (when built) still runs and escalates for logging. Retry/error handling identical. Answer-mode responses still print to stdout and exit 0. `exhausted` / `aborted` / `error` outcomes unchanged.
-
-**Yolo × rule engine:** yolo bypasses the rule engine too. The rule engine exists to catch LLM misclassification, but yolo's contract is "no gates, period." Users who want safety-with-convenience should use default mode (or future confirm-all).
-
-**Safety note.** Yolo disables every gate. The LLM could hallucinate `rm -rf /` and it will execute immediately. This is by design — the user explicitly opted in. The setting name and description make the risk clear.
-
-**Invocation**
-
-```bash
-w --yolo find all typescript files modified today
-WRAP_YOLO=1 w deploy to staging
-# or "yolo": true in ~/.wrap/config.jsonc
-```
+By design, yolo will execute hallucinated `rm -rf /` immediately. The setting name and description make that clear. Users wanting safety-with-convenience should use default mode (or future confirm-all). Yolo bypasses the rule engine too — same contract.
 
 ## Local rule engine (planned)
 
-Fast deterministic pattern matching after LLM response parse, before the execution gate. **Can only escalate risk, never lower it.** `effective = max(llm_risk, rule_risk)`.
+Fast deterministic pattern matching after LLM parse, before the gate. **Escalate-only:** `effective = max(llm_risk, rule_risk)`. Microseconds, zero tokens, every pattern auditable.
 
-Why: LLMs can be fooled (indirect phrasing, injection, weak models). Regex cannot. Runs in microseconds, zero tokens, every pattern auditable.
+Why: LLMs can be fooled by indirect phrasing or injection. Regex cannot. Examples: `rm -rf`, `sudo`, `dd if=`, `mkfs`, pipe-to-shell, `git reset --hard`, base64-decode-and-execute. Both `llm_risk` and `effective_risk` log so auditors see where rules intervened.
 
-Planned patterns: `rm -rf` → high, `sudo` → medium, `dd if=` → high, `mkfs` → high, pipe-to-shell → high, `git reset --hard` → medium, base64-decode-and-execute → high. False positives intentional — a confirm is one keypress; a false-negative is unrecoverable.
+## Prompt injection (planned)
 
-**Logging:** both `llm_risk` (what the LLM returned) and `effective_risk` (after rule escalation) go in the round log. Only `effective_risk` gates flow — dialog, execution, retry-on-error. Keeping both lets auditors see where the rule engine intervened.
-
-## Prompt injection resistance (planned)
-
-Injection surfaces: attached input (materialized at `$WRAP_TEMP_DIR/input`; preview lands in the prompt), probe/step results, error messages, thread history.
-
-Planned defenses:
-- **Trust fence** — instruction between untrusted context and user request. Leverages LLM recency bias. Build first.
-- **System instruction** — labels untrusted content as data.
-- **Nonce delimiters** — random boundary markers around untrusted sections. Attacker can't predict the nonce.
-- **Rule engine** — catches dangerous commands regardless of how elicited.
-- **Adversarial eval** — measures boundary effectiveness.
-
-## Invariant
-
-- **Effective risk is monotone.** Rule engine can only escalate, never lower. This is the design constraint for when it's built.
+Untrusted surfaces: attached input, probe/step results, error messages, thread history. Planned defenses — trust fence (recency-bias instruction between untrusted context and user request, build first), system instruction labelling untrusted content as data, nonce delimiters around untrusted sections, the rule engine, and adversarial eval.
 
 ## Decisions
 
-- **False positives over false negatives.** `chmod +x` → medium. One keypress to confirm; destructive false-negative is unrecoverable.
-- **Small, readable pattern list.** If a reviewer can't scan it in 30 seconds, it's too big.
-- **Layered defenses.** No single defense suffices. Fence + instruction + nonce + rules + eval.
+- **False positives over false negatives.** A confirm is one keypress; a destructive false-negative is unrecoverable.
+- **Effective risk is monotone.** Rules can only escalate.
+- **Small, scannable pattern list.** If a reviewer can't read it in 30 seconds it's too big.
+- **Layered defenses.** No single layer suffices.

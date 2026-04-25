@@ -2,116 +2,63 @@
 name: llm
 description: Provider interface, taxonomy, prompt scaffold, structured output, round retry
 Source: src/llm/
-Last-synced: 819c596
+Last-synced: 0a22f2a
 ---
 
 # LLM
 
-## Provider interface
-
-Every provider implements `runPrompt(input, schema?)`.
-
-- **No schema** → plain text. Used by memory init.
-- **With a Zod schema** → validated, typed object. Used by the command/reply flow.
-
-Schema-awareness stays outside providers; they don't know about Wrap's command-response format. `runCommandPrompt` is the thin wrapper that injects `CommandResponseSchema`.
-
-`PromptInput` separates `system: string` from `messages: ConversationMessage[]`. CLI providers pass `system` via `--system-prompt`. `messages` are pure user/assistant turns: few-shot examples, separator, context, user query, round-retry turns, thread continuation.
+Wrap talks to many providers through one thin interface. Schema-awareness lives outside providers — they don't know about Wrap's command-response format. Memory init uses plain text; the command/reply flow uses Zod-validated structured output.
 
 ## Provider taxonomy
 
-| Name          | Allowed fields                                | `kind`          | Dispatches to                              |
-|---------------|-----------------------------------------------|-----------------|--------------------------------------------|
-| `anthropic`   | `apiKey?`, `baseURL?`, `model`                | `anthropic`     | `@ai-sdk/anthropic`                        |
-| `openai`      | `apiKey?`, `baseURL?`, `model`                | `openai`        | `@ai-sdk/openai` (Responses API)           |
-| `openrouter`  | `baseURL` *(required)*, `apiKey`, `model`     | `openai-compat` | `@ai-sdk/openai-compatible`                |
-| `groq`        | `baseURL` *(required)*, `apiKey`, `model`     | `openai-compat` | `@ai-sdk/openai-compatible`                |
-| `mistral`     | `baseURL` *(required)*, `apiKey`, `model`     | `openai-compat` | `@ai-sdk/openai-compatible`                |
-| `ollama`      | `baseURL` *(required)*, `model`               | `openai-compat` | `@ai-sdk/openai-compatible` (placeholder key) |
-| `claude-code` | `model`                                       | `claude-code`   | `claude` CLI subprocess                    |
-| *any other*   | `baseURL`, `apiKey`, `model` (all required)   | `openai-compat` | `@ai-sdk/openai-compatible`                |
+A registry maps each provider name to a `kind` that selects the SDK family. Names supported as first-class: `anthropic`, `openai`, `openrouter`, `groq`, `mistral`, `ollama`, `claude-code`. Unknown names default to OpenAI-compat so users can point Wrap at any compat endpoint without code changes — but they must supply an API key (silent placeholder against a billed endpoint is unacceptable).
 
-The registry at `src/llm/providers/registry.ts` is the single source of truth. `API_PROVIDERS` and `CLI_PROVIDERS` each carry runtime metadata (`kind`, optional `validate`, `modelOptional`, `supportsStructuredOutputs`) and wizard metadata (`displayName`, `apiKeyUrl`, recommended-model regex). `getRegistration(name)` falls through both maps. `kind` selects the SDK family — one kind, one factory. `openai-compat` is deliberately separate from `openai`: the Responses API validator rejects multi-turn shapes against non-OpenAI backends (openrouter, groq, …), so those speak Chat Completions via `@ai-sdk/openai-compatible`.
+OpenAI-compat is deliberately separate from OpenAI proper: the OpenAI Responses API rejects multi-turn shapes against non-OpenAI backends, so those speak Chat Completions instead.
 
-Unknown provider names default to `openai-compat` so users can point Wrap at together / fireworks / any OpenAI-compat endpoint without code changes. The user-facing name **is** the discriminant — there is no `type` field.
+The user-facing name **is** the discriminant — no `type` field. Users type `anthropic`, not a tagged object.
 
 ## Prompt scaffold
 
-The per-session `PromptScaffold` is built once at session start, not per round:
+Built once per session, immutable: a system string, a prefix message list (few-shot pairs + separator turn), and the initial user turn (context + query). The runner appends evolving transcript turns each round.
 
-```
-{ system, prefixMessages, initialUserText }
-```
+Cache-friendly ordering: static few-shots first, then a separator user turn marking where examples end, then the per-request context and query. Memory and CWD live in the user turn, not `system`, so the system prefix stays cacheable.
 
-- `system` — concatenated instruction blocks. Static, cacheable.
-- `prefixMessages` — few-shot turn pairs + a separator user turn. Prepended verbatim to every round.
-- `initialUserText` — context string + user query. Pushed to the transcript as the first user turn.
-
-The runner combines these with the evolving transcript each round via `buildPromptInput`. The scaffold itself is immutable.
-
-### Composition
-
-System prompt: `instruction` + `memoryRecencyInstruction` + `toolsScopeInstruction` + `voiceInstructions` + (if stdin was piped) `attachedInputInstruction` + (if a schema is attached) `schemaInstruction` + `schemaText`. All joined with blank lines.
-
-Message ordering (cache-friendly):
-
-1. Few-shot user/assistant pairs — static, cacheable across runs.
-2. Separator ("Now handle the following request.") as a final user turn in `prefixMessages`. Marks the boundary so the LLM does not treat real conversation as more examples.
-3. Initial user turn: context string + section-request header + query.
-4. Subsequent round turns, appended by the loop.
+Few-shots are real user/assistant turns, not inline prose. The separator prevents the model from treating real conversation as more examples.
 
 ### Source files
 
-- `src/prompt.constants.json` — static strings (section headers, separators, behavioral instructions). Committed and hand-edited.
-- `src/prompt.optimized.json` — DSPy optimizer output (instruction, demos, schema text, prompt hash). Regenerated via `bun run optimize`. See `eval/specs/eval.md`.
+- `src/prompt.constants.json` — hand-edited static strings.
+- `src/prompt.optimized.json` — DSPy optimizer output (instruction, demos, schema text). Regenerated via `bun run optimize`. See `eval/specs/eval.md`.
 
-**Before editing prompt text, read `.claude/skills/editing-prompts.md`.** The prompt has a Python source of truth (for the DSPy optimizer) and a TS runtime mirror — editing the wrong one silently breaks the optimizer.
+**Before editing prompt text, read `.claude/skills/editing-prompts.md`.** Python is the source of truth for the optimizer; TS mirrors it at runtime. Editing the wrong one silently breaks the optimizer.
 
-## Context building
-
-Delegated to pure functions:
-
-- `formatContext()` in `src/llm/format-context.ts` — turns memory (filtered by cwd prefix, sectioned by scope), tools, cwd files, cwd, the piped-stdout flag, and the attached-input preview (see [[piped-input]]) into a single context string.
-- `buildPromptScaffold()` in `src/llm/build-prompt.ts` — assembles `system` + `prefixMessages` + `initialUserText` from prompt config, context string, and query.
-
-Inputs come from [[memory]] and [[discovery]].
+Context inputs come from [[memory]] and [[discovery]]. Piped-stdout context lives in [[piped-input]].
 
 ## Structured output
 
-The AI SDK path calls `generateText` with `Output.object({ schema })`. Two gotchas:
+Two gotchas worth knowing:
 
-### OpenAI strict schema
+- **OpenAI strict schema requires every property in `required`.** Wrap's optional fields use `.nullable().optional()`, which produces `anyOf: [type, null]` but no `required` entry. A walker injects every key. Gated per-provider — non-strict providers fall back to JSON mode and Zod validates.
+- **OpenAI-compat clients demand an API key even for local servers.** Wrap injects a literal placeholder so Ollama/LM Studio work without a dummy env var.
 
-OpenAI's strict `json_schema` mode requires every property to appear in `required`. Wrap's Zod schema uses `.nullable().optional()` for optional fields, which generates `anyOf: [type, null]` — but the keys still are not listed in `required`. `toOpenAIStrictSchema` walks the JSON schema tree (`properties`, `items`, `anyOf` / `oneOf` / `allOf`) and injects every property key into `required`. Gated by `supportsStructuredOutputs` in the registry — currently true for `openai`, `groq`, `mistral`. Non-strict providers (openrouter, ollama, unknown) pass the schema through; the SDK falls back to JSON mode and Zod validates the response.
+## Claude Code provider
 
-### Local-endpoint placeholder key
+Spawns the `claude` CLI. Has no multi-turn input format, so messages are flattened into one prompt. Runs in a tmpdir with session persistence off — avoids leaking the user's cwd or writing disk state.
 
-`@ai-sdk/openai-compatible` demands an API key even when `baseURL` points at a local model server (Ollama, LM Studio). When no key is configured, Wrap injects the literal `"nokey"` so local models work without a dummy env var.
+## Test provider
 
-## Provider implementations
-
-- **AI SDK provider** (`src/llm/providers/ai-sdk.ts`) — dispatches on `kind` + `name` to `createAnthropic`, `createOpenAI`, or `createOpenAICompatible`, then `generateText` with `Output.object({ schema })`.
-- **Claude Code provider** (`src/llm/providers/claude-code.ts`) — spawns the `claude` CLI. Passes `--system-prompt` directly; flattens the messages array into a single `-p` string (`User: ...\n\nAssistant: ...`) because the CLI has no multi-turn input format. With a schema, passes `--json-schema` and strips code fences from the response. Runs in `tmpdir()` to avoid leaking the user's cwd; `--no-session-persistence` prevents disk state.
-- **Test provider** (`src/llm/providers/test.ts`) — deterministic mock selected by env presence, not config. `WRAP_TEST_RESPONSE` serves one canned response for every call; `WRAP_TEST_RESPONSES` is a JSON array consumed in order. Responses starting with `ERROR:` throw. With a schema, responses are JSON-parsed and validated. Config is not consulted at all — tests do not need a providers block.
-- **Dispatch** (`src/llm/index.ts`) — `initProvider(resolved)` takes a `ResolvedProvider`, special-cases the `test` sentinel, and otherwise switches on `getRegistration(name).kind`.
+Selected by env presence, not config. Tests inject canned responses; config is not consulted. Responses prefixed `ERROR:` throw.
 
 ## Round retry
 
-A structured-output error (invalid JSON, schema mismatch, `NoObjectGeneratedError`) retries the round **once**. The retry appends the failed raw text as an assistant turn plus `jsonRetryInstruction` as a user turn, so the model can self-correct.
-
-Retry messages are built fresh — the caller's `input.messages` is never mutated, because rounds reuse it.
+A structured-output failure (invalid JSON, schema mismatch) retries the round **once**, appending the failed raw text plus a corrective instruction. Not a loop: looping hides real breakage (missing fields, wrong types) behind cost.
 
 ## Decisions
 
-- **Single `runPrompt`, optional schema.** TypeScript overloads on object-literal implementations are painful; one signature keeps every provider a plain object.
-- **Static imports for providers.** Run-once CLI; startup cost is negligible. Keeps `initProvider` synchronous and the dispatch table obvious.
-- **Name is the discriminant; no `type` field.** Provider name maps to `kind` via the registry. Users type `anthropic`, not `{ type, name }`.
-- **Unknown providers require `apiKey`.** Without one the call would silently send a placeholder against a billed endpoint.
-- **Memory and cwd in the user turn, not `system`.** Dynamic per-request; keeping them out of `system` lets the prefix be cached.
-- **Scaffold, not string.** Cache-friendly ordering, deterministic tests, few-shot examples as real turns instead of inline text.
-- **Retry once, not loop.** Structured-output failures the model can self-correct happen once. A loop hides real breakage (missing fields, wrong types) behind cost.
-
-## Extending
-
-- **New built-in provider** — one entry in `API_PROVIDERS` or `CLI_PROVIDERS`.
-- **New SDK family** — new `kind`, new branch in `initProvider`, new factory file.
+- **Single `runPrompt`, optional schema.** TypeScript overloads are painful; one signature keeps every provider a plain object.
+- **Static imports for providers.** Run-once CLI; startup cost is negligible.
+- **Name as discriminant.** Users type provider names, not tagged objects.
+- **Unknown providers require `apiKey`.** No silent placeholders against billed endpoints.
+- **Memory and cwd in the user turn.** Keeps the system prefix cacheable.
+- **Scaffold, not string.** Cache-friendly ordering, deterministic tests, few-shots as real turns.
+- **Retry once, not loop.** Self-correctable failures happen once; loops mask bugs.

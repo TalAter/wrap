@@ -1,129 +1,58 @@
 ---
 name: interactive-mode
-description: Free-text prompt area when w is run with no args on a TTY
+description: Free-text compose dialog when w is run with no args on a TTY
 Source: src/session/session.ts, src/tui/response-dialog.tsx, src/tui/text-input.tsx, src/core/editor.ts
-Last-synced: (head)
+Last-synced: 0a22f2a
 ---
 
 # Interactive mode
 
-> **Status:** Implemented.
+When `w` runs with no user prompt on a TTY, Wrap opens a multiline compose dialog instead of help. The user drafts without shell quoting; submit morphs the dialog in place into thinking → confirming (or answer), sharing the same shell as [[follow-up]]. No TTY + nothing piped still falls through to `--help`; piped input is unchanged.
 
-When `w` runs with no user prompt on a TTY, Wrap enters a multiline compose dialog. The user drafts the prompt without shell quoting or single-line constraints; submit morphs the dialog in place through thinking → confirming (or answer), the same shell as [[follow-up]].
-
-## Trigger
-
-- CLI input empty AND stdin is a TTY. `main.ts` falls through to `runSession(prompt: "")`.
-- No TTY + nothing piped → `--help` as before.
-- No TTY + piped input → `runSession(prompt: "")`, pipe IS the prompt (unchanged).
-- First-run wizard completion on an interactive invocation prints `✓ wrap configured — run w again to start wrapping` and exits 0 rather than auto-launching compose.
-
-Compose lives inside `runSession`: empty prompt + TTY seeds the initial state as `composing-interactive` instead of `thinking`, and the transcript stays empty until submit so the LLM never sees a context blurb with no user request attached.
+Compose lives inside the normal session loop. Empty prompt + TTY seeds compose state directly so the transcript stays empty until submit — the LLM never sees a context blurb without a user request attached.
 
 ## State machine
 
-Three new tags peer with the existing dialog tags (see [[session]]):
+Three tags peer with the existing dialog tags (see [[session]]): a compose tag while the user types, a processing tag covering the first LLM round (Esc cancels and restores the draft), and a transient editor-handoff tag for terminal-owning external editors. Submit always lands at confirming, even for low-risk commands — the dialog is already mounted, so the auto-exec shortcut doesn't apply.
 
-- `composing-interactive { draft }` — user typing. Submit → `processing-interactive`. Esc → `exiting{cancel}`. Ctrl-G → `editor-handoff`.
-- `processing-interactive { draft, status? }` — first LLM round in flight. Esc → `composing-interactive` (draft preserved, in-flight LLM aborted). `loop-final command` → `confirming` (any risk, because the dialog is already mounted — low-risk auto-exec only applies from `thinking`). Reply/exhausted exit normally.
-- `editor-handoff { origin, draft, response?, round? }` — transient state while a terminal-owning editor holds the TTY. Excluded from `isDialogTag` so Ink unmounts. On `editor-done` the reducer restores the origin (composing-interactive / composing-followup / editing) with the new or preserved draft.
+Submit is a distinct event from follow-up submit. Interactive submit bootstraps an empty transcript and frames the draft as the user request; follow-up appends to a transcript whose last turn is already a candidate command. The coordinator handles them differently at submit time, not by inspecting tags.
 
-Events added: `submit-interactive { text }`, `enter-editor { draft }`, `editor-done { text: string | null }`.
-
-### Why a separate bootstrap event
-
-`submit-interactive` is distinct from `submit-followup` because the coordinator handles them differently. The interactive submit bootstraps an empty transcript and rebuilds the scaffold with the draft (so `initialUserText` carries the proper user-request framing), whereas `submit-followup` appends to an existing transcript where the candidate-command turn is already the last message.
-
-### Why `editor-handoff` lives in the reducer
-
-GUI editors (VS Code, Cursor, Sublime) fork and detach from the TTY; Ink stays mounted, the dialog runs the spawn in a local `useEffect`, and the TextInput's `editingExternal` prop renders the "Save and close editor to continue..." frame. Terminal-owning editors (vim, nano, hx) own the TTY — Ink must unmount before the spawn or the child fights the reconciler over stdin. A dialog-local effect cannot orchestrate its own unmount, so the coordinator has to own that path. Making `editor-handoff` a reducer tag keeps the state transition observable and gives the coordinator a single post-transition hook to drive spawn → await → `editor-done`.
-
-### Cancel exits 0
-
-User-initiated abort (Esc / Ctrl-C in any compose / confirming / editing state) returns 0 from the session now. `exhausted`, `blocked`, `error` still return 1 — those are limits or system failures, not user choices.
+User-initiated abort (Esc / Ctrl-C in any compose, confirming, or editing state) returns 0 — graceful, not a failure. `exhausted`, `blocked`, and `error` still return 1.
 
 ## Dialog
 
-Rendered through the shared `ResponseDialog` shell. The compose view uses a `compose` pill (left-aligned top border) and the low-risk blue gradient; no risk pill. The body is a multiline `TextInput` (see [[tui]]) that fills the dialog and caps visible rows at `terminalRows - DIALOG_CHROME_ROWS`, scrolling to keep the cursor in view for long drafts. Bottom bar: `INTERACTIVE_COMPOSE_ACTIONS` via the shared `ActionBar` (`⏎ send`, `ctrl+G edit in <Editor>` when an editor resolves, `Esc cancel`).
+Rendered through the shared response-dialog shell with a compose pill (no risk badge) and the low-risk gradient. The body is a multiline TextInput sized to the terminal, with a windowed scroll so long drafts keep the cursor visible. Truncation banner for over-cap pastes renders under the input — close to the trimmed content, doesn't fight the spinner slot, clears on next keystroke. Placeholder rotates from a curated set; a fresh pick fires only when the buffer empties.
 
-Paste truncation banner renders *under the input box* (not in the border) so it stays close to the content that was trimmed. Clears on the next keystroke.
+## Multiline TextInput
 
-Placeholder is a random pick from a curated set (`list all markdown files here`, `delete all .DS_Store files in this project`, `add .env to git ignore`). Static within a given empty-buffer state; a fresh pick fires each time the buffer goes from non-empty back to empty.
+Single component, multiline opt-in. Single-line mode strips newlines from multi-char input and pastes so a misbehaving terminal can't smuggle them through. In multiline, plain Enter submits; newline insertion comes from Shift+Enter (kitty CSI-u), Ctrl+J, trailing-backslash + Enter, or bracketed paste. Ctrl+J and `\`+Enter are guaranteed fallbacks — every terminal handles them with no protocol detection.
 
-## TextInput
-
-`src/tui/text-input.tsx` exposes a discriminated union: `multiline?: false` keeps the existing single-line behavior (API-key entry, edit-command, pre-slice-10 follow-up); `multiline: true` opts into newline insertion, soft-wrap, and windowed scroll via `maxRows`. `editingExternal?: boolean` is orthogonal — swaps the buffer for the "Save and close editor..." frame and gates input/paste off during external-editor spawns.
-
-### Submit vs newline (multiline)
-
-Plain Enter submits (empty buffer is a no-op). Newline inserts on:
-
-- **Shift+Enter** via kitty CSI-u (Ink 7's `parseKeypress` surfaces this as `{ return: true, shift: true }`).
-- **Ctrl+J** — kitty: `{ ctrl: true, input: "j" }`; non-kitty: raw `\n` with `key.return === false`. Both handled.
-- **Backslash + Enter** — buffer ends with `\` and Enter is pressed; strip the `\`, insert `\n`.
-- **Inside bracketed paste** via Ink 7's `usePaste`, which emits the pasted string atomically.
-
-Single-line mode strips `\n` from multi-char input and from pastes so a terminal dropping newlines into a single-field input can't smuggle them through.
-
-### Paste policy
-
-`usePaste` owns bracketed paste — it auto-toggles `\x1b[?2004h` on mount, emits the paste atomically, and buffers across stdin chunks. Inside the handler we only:
-
-1. Sanitize: `\r\n` → `\n`, drop other control bytes (keep tab + LF).
-2. Run the sanitized string through `clampBufferSize` (256KB cap, UTF-8 boundary-safe).
-3. Fire `onTruncate` if the cap was hit — parent renders the banner.
-
-### Why 256KB
-
-Above this, Ink reflow starts freezing per keystroke even on fast terminals. The soft cap is enforced at every source that can grow the buffer: `usePaste`, multi-char `useInput` bursts, and the external-editor return handler. Buffer math stays trivial relative to Ink's own reflow cost at that size, so no memoization.
+Bracketed paste goes through Ink 7's `usePaste` (atomic, buffered across stdin chunks). The handler sanitizes line endings, drops other control bytes, and clamps to a 256KB buffer cap — above that, Ink reflow freezes per keystroke. The cap is enforced at every source that can grow the buffer.
 
 ## Keyboard protocol
 
-**Ink 7 does the heavy lifting.** Its `parseKeypress` parses kitty CSI-u natively; `usePaste` owns bracketed paste. What we own:
-
-- **Kitty enable/disable bytes** (`\x1b[>1u` on compose mount, `\x1b[<u` on unmount). Ink does not write these; without them most terminals drop Shift+Enter's shift bit. Registered with the exit-teardown registry so a SIGINT during compose doesn't leave the terminal in the extended keyboard protocol.
-- **Mount-order invariant:** Ink's existing mount useEffect drains stdin before our kitty-enable useEffect fires, so buffered pre-mount keystrokes and in-flight paste CSI sequences are handled before the protocol toggle lands.
-
-Ctrl+J + `\` + Enter fallbacks cover terminals without kitty (tmux without `extended-keys on`, etc.) with no protocol detection.
+Ink 7's `parseKeypress` and `usePaste` cover kitty CSI-u and bracketed paste natively. Wrap only writes the kitty enable/disable bytes (Ink doesn't), registered with the exit-teardown registry so a SIGINT during compose can't leave the terminal in an extended protocol mode. Ink's stdin drain runs before the protocol toggle so buffered pre-mount bytes are handled before the switch.
 
 ## External editor (Ctrl-G)
 
-`src/core/editor.ts` exposes `resolveEditor()` (module-cached first-call-wins) and an `EDITORS` record keyed by basename. Resolution order: `$VISUAL` → `$EDITOR` → sweep known editors via `Bun.which` in declaration order, short-circuit on first hit.
+Resolution order: `$VISUAL` → `$EDITOR` → sweep known editors. Wired into compose-interactive, compose-followup, and edit-command, all using one editor module.
 
-GUI editors (VS Code, Cursor, Sublime, …) carry a `waitFlag` and `gui: true`; the spawn is dialog-local and bypasses the reducer. Terminal-owning editors (vim, nvim, nano, emacs, hx, helix, micro, vi) block naturally and go through `editor-handoff`. Unknown resolved editors fall back to the terminal-owning path — better to surface the mismatch than silently drop the buffer because a detached GUI editor exited instantly.
+GUI editors (VS Code, Cursor, Sublime) carry a wait flag and don't take the TTY — the spawn is dialog-local, Ink stays mounted, the input renders a "save and close" frame. Terminal-owning editors (vim, nano, hx, …) own the TTY — Ink must unmount before the spawn or the child fights the reconciler over stdin. A dialog-local effect can't orchestrate its own unmount, so the coordinator owns the path: `editor-handoff` is a reducer tag, excluded from dialog tags so Ink unmounts; the coordinator drops raw mode (Ink's unmount doesn't always clear it), spawns, awaits, then dispatches `editor-done` and the reducer restores the origin tag with the new draft. Unknown editors fall back to the terminal-owning path — better to surface a mismatch than silently drop the buffer because a detached GUI editor exited instantly.
 
-Temp file lives at `$WRAP_TEMP_DIR/prompt.md` (lazy-created per invocation). Exit-code policy: `0 + non-empty file` replaces the buffer; `0 + empty file` and any non-zero exit preserve the current buffer.
+Exit policy: zero exit + non-empty file replaces the buffer; everything else preserves it.
 
-Ctrl-G is wired into three origins in v1 — `composing-interactive`, `composing-followup`, `editing` — all using the same `editor.ts` module, the same `editingExternal` TextInput prop, and the same GUI vs terminal-owning dispatch. Hint bars hide the `ctrl+G` item when nothing resolves.
+## Logging
 
-### Terminal-owning handoff sequence
-
-When `enter-editor` fires for a terminal-owning editor, the coordinator:
-
-1. Ink is already unmounting (editor-handoff isn't a dialog tag).
-2. Explicitly drops raw mode — Ink's unmount does not always clear it, and a raw-mode TTY inherited by the editor child produces wedged input.
-3. Kitty disambiguate mode is popped by the compose useEffect cleanup; no extra write here.
-4. `Bun.spawn` the editor with stdio `inherit`; await `proc.exited`.
-5. Read temp file per the exit-code rules, dispatch `editor-done { text }`. Reducer transitions back to the origin; Ink remounts and re-applies protocol modes on compose mount.
-
-## Logging + discoverability
-
-`LogEntry.input_source: "argv" | "pipe" | "tui"` records how the prompt arrived. Absent on legacy entries — consumers should default to `"argv"`. Set by `main.ts` from the input type; the coordinator overrides to `"tui"` when `submit-interactive` fires. Verbose mode additionally echoes the submitted prompt line-by-line through the notification bus (flushes on teardown).
-
-`--help` (both plain and styled) gains an Examples block above Commands so the bare `wrap` form is discoverable.
+Log entries record how the prompt arrived (argv / pipe / tui). Verbose mode echoes the submitted prompt through the notification bus on teardown. `--help` carries an Examples block so the bare `wrap` form is discoverable.
 
 ## Decisions
 
-- **Extend `TextInput` with `multiline` prop, don't fork a new component.** Cursor stays string-based; existing single-line call sites pass no prop and behave as today.
-- **State tag names use `-followup` / `-interactive` suffixes symmetrically.** Each tag is a self-contained shape per [[session]] convention.
-- **Event name `submit-interactive` parallels `submit-followup`.** The coordinator distinguishes bootstrap (empty transcript, rebuild scaffold) from append (existing transcript) at submit time, not via tag inspection.
-- **Cancel exits 0.** User-initiated abort is graceful, not a failure.
-- **`editingExternal` is a TextInput prop, not session state.** Three real consumers in v1 all gain Ctrl-G wiring; per-site cost is one `useKeyBindings` entry + the GUI spawn effect.
+- **Multiline as a TextInput prop, not a fork.** Existing single-line call sites pass nothing and behave as before.
+- **Cancel exits 0.** User-initiated abort is graceful.
+- **External-editor flag is a TextInput prop, not session state.** Multiple consumers wire Ctrl-G with one effect each.
 - **Ctrl+J + `\`+Enter as guaranteed fallbacks.** Work in every terminal without protocol detection.
-- **256KB buffer cap.** Above this Ink reflow freezes per keystroke.
-- **Static placeholder from a curated set.** Motion while typing distracts; fresh pick only when the buffer empties.
+- **256KB buffer cap.** Above this, Ink reflow freezes per keystroke.
+- **Static placeholder.** Motion while typing distracts; fresh pick only when buffer empties.
 - **Skip Ink unmount for GUI editors.** They don't take the TTY — unmounting is pure flicker.
-- **Lean on Ink 7's `parseKeypress` + `usePaste`; no custom stdin parser.** Kitty CSI-u is handled natively; we only write the enable/disable bytes.
-- **Drop modifyOtherKeys (`\x1b[>4;2m`).** Ink's parser doesn't match the `CSI 27;m;code~` shape so enabling it yields no usable events. Kitty + Ctrl+J + `\`+Enter is sufficient coverage.
-- **Drop Ctrl+X Ctrl+E chord from v1.** Would be the first keyboard chord in the codebase for a muscle-memory alias of Ctrl+G. Ctrl+G already works and is in the bar.
-- **Truncation banner under the input, not in the border.** Close to the content that got trimmed, doesn't fight the spinner slot, clears on next keystroke.
+- **Lean on Ink 7's `parseKeypress` + `usePaste`.** Kitty CSI-u is handled natively; we only own the enable/disable bytes.
+- **Truncation banner under the input, not in the border.** Close to trimmed content, doesn't fight the spinner slot.

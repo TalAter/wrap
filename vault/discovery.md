@@ -1,8 +1,8 @@
 ---
 name: discovery
-description: How Wrap learns its environment — init probes, tool probes, tool watchlist, CWD files, web reading
+description: How Wrap learns its environment — init probes, tool probes, watchlist, CWD files, web reading
 Source: src/discovery/, src/llm/format-context.ts
-Last-synced: c54a1a5
+Last-synced: 0a22f2a
 ---
 
 # Discovery
@@ -13,53 +13,43 @@ Four mechanisms at different timescales:
 |-----------|------|----------|
 | Init probes | First run | Global memory facts |
 | Tool probe + watchlist | Every invocation | Watchlist persists |
-| CWD files | Every invocation | No (ephemeral context) |
+| CWD files | Every invocation | No |
 | Non-final steps | On-demand during query | Scoped memory when appropriate |
 
 ## Init probes
 
-First run: probe locally (OS, shell, distro, config files), send raw output to LLM to parse into concise facts, save as global (`/` scope) [[memory]]. Uses a plain-text prompt, not the command schema — it's a parsing task. Fail closed: LLM unreachable → error and exit.
+First run probes locally (OS, shell, distro, config files), sends raw output to the LLM to parse into concise facts, saves them as global [[memory]]. Plain-text prompt — it's a parsing task. Fail closed: LLM unreachable means error and exit.
 
 Why LLM parsing: covers things that rarely change and benefit from semantic interpretation ("Darwin" → "macOS", "arm64" → "Apple Silicon").
 
-## Tool probe
+## Tool probe + watchlist
 
-Runs before every query. Merges static `PROBED_TOOLS` list with the tool watchlist, runs one `which` call (~5ms), returns `{ available, unavailable }`.
+Runs before every query. Merges a static probe list with the watchlist, runs one `which` call (~5ms), reports which are available and which aren't.
 
-Why every run: installed tools change (`brew install`), version managers switch paths per directory. `which` is always accurate.
+Why every run: installed tools change (`brew install`), version managers switch paths per directory. `which` is always accurate, and stale facts are worse than 5ms.
 
-Prompt format: `## Detected tools` (full paths, one per line) and `## Unavailable tools` (comma-separated). Either section omitted when empty.
+The watchlist is a persistence point a compromised response could poison, so tool names are validated before interpolation.
 
-Injection safety: tool names validated against `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` before interpolation. Watchlist is a persistence point a compromised response could poison.
+**Comprehensive nominations.** When the LLM proposes watchlist additions, it nominates all well-known tools in the domain on the OS, not just the one it picked. Otherwise only its choice appears in future detected-tools lists, steering subsequent runs. Domain-wide nomination gives balanced visibility.
 
-## Tool watchlist
-
-`~/.wrap/tool-watchlist.json` — flat array of `{tool, added}` entries. Any LLM response may include `watchlist_additions`. The `added` date refreshes on re-nomination (for future pruning). Merged into the tool probe's `which` call on startup.
-
-Why separate from memory: watchlist entries are tool names fed to `which` (always global), not scoped text shown to the LLM.
-
-**Comprehensive nominations.** When returning `watchlist_additions`, the LLM nominates all well-known tools for the domain on the OS, not just the one it picks. Otherwise only the chosen tool appears in future `## Detected tools`, steering subsequent runs. Nominating the full domain gives balanced visibility.
+Watchlist is separate from memory: it holds tool names fed to `which` (always global), not scoped text shown to the LLM. Unavailable tools are useful too — "`convert` not installed" saves a probe round.
 
 ## CWD files
 
-Every request includes `## Files in CWD`. Depth-1 readdir sorted by mtime. Hard cap: 50 entries — oldest 20 + newest 30 when truncated, gap marker. No exclusions (`node_modules/` is a useful signal). Empty/unreadable → section omitted.
-
-Why oldest + newest: pure newest misses stable project files; pure oldest misses active work.
+Every request includes a depth-1 readdir of CWD, sorted by mtime, capped at 50 entries (oldest 20 + newest 30 when truncated). No exclusions — `node_modules/` is itself a useful signal. Pure newest misses stable project files; pure oldest misses active work.
 
 ## Web reading
 
-URL-fetching reuses the non-final step loop — no new response type. The LLM probe-fetches URLs whose live content would improve the response, per a grounding rule in the system prompt: **if you can read the real thing, read it instead of guessing.**
+URL fetching reuses the non-final step loop — no new response type. The system prompt carries a grounding rule: **if you can read the real thing, read it instead of guessing.** HTML extraction tools are in the probe list; the LLM picks the pipeline based on detected tools. Output is truncated to keep huge pages bounded. JS-rendered sites won't return useful content via `curl` — known limitation.
 
-HTML extraction tools (`textutil`, `lynx`, `w3m`) are in `PROBED_TOOLS`. LLM picks the pipeline based on detected tools. `maxProbeOutputChars` truncation keeps huge pages bounded. Dynamic (JS-rendered) sites won't return useful content via `curl` — known limitation. Fetching reuses the non-final step loop from [[multi-step]].
+For `curl URL | sh` requests: fetch the script, analyze as a reply. Flag but don't chase nested downloads.
 
-For `curl URL | sh` requests: fetch-step the script, analyze as a reply. Flag but don't chase nested downloads.
-
-Step indicator: `🌐` for URL fetches, `🔍` otherwise.
+See [[multi-step]] for the step loop.
 
 ## Decisions
 
 - **Tool probe every run, not init.** Stale facts worse than 5ms cost.
-- **Watchlist not "discovered tools".** It holds tools to repeatedly check, not confirmed-present tools. "`convert` not installed" saves a probe round too.
-- **Step content is tactical, watchlist_additions is strategic.** Check what's needed now; nominate the full domain for future runs.
+- **Watchlist holds tools-to-check, not confirmed-present tools.** Negative results are useful.
+- **Step content is tactical, watchlist additions are strategic.** Run what's needed now; nominate the full domain for future runs.
 - **No CWD globbing in v1.** Parsing config files deferred — readdir signals suffice.
 - **Grounding rule is prompt-level, not a mechanism.** Existing step loop handles everything.

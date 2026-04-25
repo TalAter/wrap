@@ -1,51 +1,26 @@
 ---
 name: subcommands
-description: CLI flags — subcommands (--log, --help, --version) and modifier options (--verbose, --model, --no-animation)
+description: CLI flags — subcommands and modifier options
 Source: src/subcommands/, src/core/input.ts, src/config/settings.ts
-Last-synced: 17659d3
+Last-synced: 0a22f2a
 ---
 
 # Subcommands
 
 ## Why flags, not positional verbs
 
-Wrap's first positional arg is natural language. `w log me in` must be NL, not a log viewer. A leading `--` disambiguates — never appears in real NL input.
+Wrap's first positional arg is natural language. `w log me in` must stay NL. A leading `--` disambiguates — never appears in real NL input. Modifier options are stripped from leading argv first, then the first arg is checked.
 
-Detection is positional: modifier options are stripped from leading argv first (see `src/core/input.ts`), then the first arg is checked.
+## Two kinds
 
-## Architecture
+- **Commands** — short-circuit subcommands (`--help`, `--version`, `--log`, `--completion`, `--forget`). Run before config/provider/memory init; handle their own prerequisites.
+- **Modifier options** — strip from argv and tweak a query without branching (`--model`, `--verbose`, `--no-animation`).
 
-`CLIFlag` is a discriminated union:
-- **Command** (`kind: "command"`) — `run(args)`. Invoked when first non-option arg is a known flag.
-- **Option** (`kind: "option"`) — `takesValue`. Stripped from leading argv by `extractModifiers()`. `id` becomes the key in the `Modifiers` map.
+A single registry drives help, dispatch, and the modifier parser. Modifier options are derived from the settings registry (entries with a `flag`) — no manual sync between config and CLI. See [[config]].
 
-Registry at `src/subcommands/registry.ts` is the single source of truth. Options derived from SETTINGS registry — entries with a `flag` become Options automatically. See [[config]].
+## Behaviour
 
-## Commands
-
-| Flag | Aliases | Notes |
-|---|---|---|
-| `--help` | `-h` | Auto-generated from registry. TTY: animated gradient logo. `w --help <name>` prints per-flag detail. |
-| `--version` | `-v` | Reads `package.json`. |
-| `--log` | — | Log viewer. See [[logging]]. |
-| `--completion <shell> [name]` | `--completions` | Emit zsh/bash/fish completion script to stdout. Default registered command name comes from `package.json#name`; optional positional overrides it (future wizard alias step, without colliding with the brew-installed `wrap` completion). Name is templated into shell function identifiers, so it's validated against `[A-Za-z_][A-Za-z0-9_]*` (bash identifier alphabet). |
-| `--forget` | — | Delete persisted user data (memory, logs, cache, temp files). `--yolo` skips the interactive dialog. See [[forget]]. |
-
-## Modifier options
-
-| Flag | Aliases | Env | Notes |
-|---|---|---|---|
-| `--model` | `--provider` | `WRAP_MODEL` | Override provider/model. Formats: `provider:model`, `provider`, `:model`, bare `model`. |
-| `--verbose` | — | — | Curated pipeline output on stderr: config, probes, LLM calls, executions. Human-friendly subset of what logs capture. Format: `» [+elapsed_s] message` in dim ANSI. |
-| `--no-animation` | — | `WRAP_NO_ANIMATION` | Disable animations. Also triggered by `CI`, `TERM=dumb`, `NO_COLOR`. |
-
-## Invariants
-
-- **Short-circuit.** Commands run before `ensureConfig`, provider init, memory. Handle their own prerequisites.
-- **No args + no pipe → `--help`.** No args + pipe → empty user prompt (the piped content is the context). See [[piped-input]].
-- **Unknown flag → exit 1** with specific flag name on stderr.
-
-## Decisions
-
-- **Registry is single source of truth.** Help, dispatch, modifier parser all read from it. Adding a flag = one entry.
-- **Options derived from SETTINGS.** No manual sync between config and CLI flags.
+- No args + no pipe → `--help`. No args + pipe → empty user prompt; piped content is the context. See [[piped-input]].
+- Unknown flag → exit 1 with the offending flag on stderr.
+- `--forget` deletes persisted user data; `--yolo` skips its dialog. See [[forget]].
+- `--verbose` writes a curated pipeline trace to stderr — a human subset of what logs capture. See [[logging]].

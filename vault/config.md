@@ -1,76 +1,38 @@
 ---
 name: config
-description: Config sources, precedence, SETTINGS registry, resolver, store, and disk schema
+description: Config sources, precedence, registry, and disk format
 Source: src/config/
-Last-synced: c54a1a5
+Last-synced: 0a22f2a
 ---
 
 # Config
 
 ## Precedence
 
-A setting can come from up to four places, highest priority first:
+Highest priority first: CLI flag → env var → config file → default.
 
-1. **CLI flag** (`--verbose`, `--model`, `--no-animation`)
-2. **Environment variable** (`WRAP_MODEL`, `WRAP_NO_ANIMATION`, …)
-3. **Config file** (`~/.wrap/config.jsonc`, or full JSON via `WRAP_CONFIG`)
-4. **Default** (from SETTINGS registry)
+Per-setting: `cli ?? env ?? file ?? default`. The resolver always rebuilds from layers — never incremental-merges onto the store. Prevents "default blocks file config" bugs.
 
-Per-setting: `finalValue = cli ?? env ?? file ?? default`. The resolver always rebuilds from layers — never incremental-merges onto the store.
+## Settings registry
 
-## SETTINGS registry
+Single source of truth for the list of user-settable values. Drives the CLI options array, per-flag help, defaults, and the naming convention across flag/env/config. Adding a setting is one entry — no drift between layers.
 
-`src/config/settings.ts` — canonical list of user-settable values. Each entry declares sources (`flag`, `env`), metadata (`description`, `usage`, `help`), and optional `default`.
+## Resolved vs. on-disk shape
 
-Single source of truth for:
-- CLI options array (derived from entries with `flag`)
-- Per-flag help output
-- Defaults materialized by the resolver
-- Naming convention across flag / env / config
+The disk shape is partial; the in-memory store has every defaulted field required. Distinct types so read sites need no casts. A compile-time drift check fails if the registry grows a default without the store gaining the matching required field.
 
-Adding a setting = one entry. No drift.
+Boolean env vars accept the usual truthy/falsy spellings; anything else throws.
 
-## Resolver
+## Virtual `model`
 
-`resolveSettings(modifiers, env, fileConfig) → ResolvedConfig`
+`--model` doesn't write a `model` field. It's parsed (`provider:model`, `provider`, `:model`, bare `model`) and selects from `config.providers`. Setting key = config key everywhere except here. See [[llm]].
 
-- Boolean sources: CLI flag presence → `true`. Env var value parsed: `1/true/yes/on` → true; `0/false/no/off/""` → false (case-insensitive, trimmed); other values throw.
-- String sources: CLI flag value or env var value.
-- File layer: fields not in SETTINGS (like `providers`) pass through.
+## `noAnimation` aggregation
 
-### `model` is virtual
-
-`--model anthropic:claude-opus` doesn't write a `model` field. `resolveProvider` parses `provider:model`, `provider`, `:model`, or bare `model` (smart match) and selects the entry from `config.providers`. Falls back to `defaultProvider` when no override given. The resolver skips `model` entirely. See [[llm]].
-
-### `noAnimation` aggregation
-
-Folds user intent and env-wide capability signals at resolve time:
-
-`config.noAnimation = userSays(cli/env/file) || CI || TERM=dumb || NO_COLOR`
-
-Per-stream TTY stays local at call site: `if (config.noAnimation || !stream.isTTY) skip animation`.
-
-## Store
-
-`ResolvedConfig` is `Config` with every SETTINGS-with-default field required.
-
-- `setConfig(c: ResolvedConfig)` — strict, can't take a partial.
-- `getConfig(): ResolvedConfig` — no casts at read sites.
-- `updateConfig(patch)` — wizard's incremental builder. Skips `undefined` keys.
-
-A compile-time `_DriftCheck` type fails if SETTINGS grows a default without `ResolvedConfig` gaining the matching required field. Runtime test complements it.
+Folds user intent and env capability at resolve time: user opt-out OR `CI` OR `TERM=dumb` OR `NO_COLOR`. Per-stream TTY check stays at the call site. One signal at use sites instead of scattered env checks.
 
 ## Disk format
 
-`config.jsonc` at `${WRAP_HOME}/config.jsonc`. Supports JSONC (comments, trailing commas) via `jsonc-parser`. `config.schema.json` ships bundled for editor validation; wizard writes it at first run.
+`config.jsonc` at `$WRAP_HOME/config.jsonc`. JSONC (comments, trailing commas). A bundled JSON schema ships for editor validation; the wizard writes it on first run. Schema is hand-maintained — the registry does not auto-generate it.
 
-`WRAP_CONFIG` env var — full JSON blob, shallow-merged on top of file config. Used by tests and one-shot overrides. When set, `ensureConfig()` skips the wizard.
-
-**Keep in sync:** new settings that persist in config need a matching entry in `config.schema.json` — SETTINGS does not auto-generate the schema.
-
-## Decisions
-
-- **Rebuild from layers, never merge onto store.** Prevents "default blocks file config" bugs.
-- **`noAnimation` aggregates env signals at resolve time.** One check at call sites, not scattered `CI` / `TERM=dumb` checks.
-- **`ResolvedConfig` distinct from `Config`.** Disk shape is partial; store shape has required fields. No `as number` casts.
-- **Setting key = config key.** Except `model`, which is virtual.
+`WRAP_CONFIG` env var carries a full JSON blob shallow-merged on top. Used by tests and one-shot overrides; bypasses the wizard.

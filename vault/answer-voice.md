@@ -2,12 +2,12 @@
 name: answer-voice
 description: Personality rules for reply responses — voice guide, piped-output override, two-instruction design
 Source: src/prompt.constants.json, src/llm/build-prompt.ts, src/llm/format-context.ts
-Last-synced: c54a1a5
+Last-synced: 0a22f2a
 ---
 
 # Answer voice
 
-Personality applies only to `reply` response types. Commands stay dry and accurate — machine-readable, not conversation.
+Personality applies only to `reply` responses. Commands stay dry and accurate — machine-readable, not conversation.
 
 ## Voice guide
 
@@ -31,12 +31,7 @@ Commands and non-final steps have no personality, so the override is a no-op for
 
 ## Two instructions
 
-- `voiceInstructions` — always in the system prompt. Sets TTY voice. Shared with DSPy optimizer.
-- `pipedOutputInstruction` — appended to context string by `formatContext` only when `piped` is true. Runtime-only.
-
-Why separate: the optimizer sees only the TTY voice. Piped state varies per invocation — mixing it in would teach the optimizer "sometimes be dry, sometimes be funny" from noise.
-
-Both live in `src/prompt.constants.json`.
+The TTY voice always lives in the system prompt and is shared with the DSPy optimizer. The piped-output override is appended to the per-request context string only when piped. Splitting them keeps the optimizer's view stable: piped state varies per invocation, and mixing it in would teach the optimizer "sometimes be dry, sometimes be funny" from noise.
 
 ## Decisions
 
