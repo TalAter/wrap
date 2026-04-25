@@ -11,7 +11,6 @@ import {
   truncateCommand,
 } from "../src/tui/response-dialog.tsx";
 import { ThemeProvider } from "../src/tui/theme-context.tsx";
-import { seedTestConfig, waitFor } from "./helpers.ts";
 import {
   makeComposing,
   makeConfirming,
@@ -20,6 +19,7 @@ import {
   makeProcessing,
   makeResponse,
 } from "./helpers/state-fixtures.ts";
+import { seedTestConfig, waitFor } from "./helpers.ts";
 
 const clipState: { resolved: "pbcopy" | null; copyCalls: string[] } = {
   resolved: "pbcopy",
