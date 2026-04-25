@@ -46,3 +46,4 @@
 - src/core/output.ts
 - src/core/logo.ts
 - src/core/clipboard.ts
+- src/core/paths.ts
