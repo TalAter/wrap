@@ -15,19 +15,9 @@ export function supportsColor(): boolean {
   return isTTY();
 }
 
-/**
- * 0 = no color, 1 = 16-color ANSI, 2 = 256-color, 3 = 24-bit truecolor.
- *
- * COLORTERM is the de-facto signal for truecolor but is dropped by
- * ssh/sudo/tmux/docker; we sniff known emulator env vars too. TERM is
- * unreliable — modern terminals routinely report bare "xterm" while actually
- * supporting 256+ colors (esp. inside docker), so we promote modern bare
- * TERMs to 256 and only treat genuine 8/16-color types (linux, vt100) as 1.
- */
+/** 0 = no color, 1 = 16-color ANSI, 2 = 256-color, 3 = 24-bit truecolor. */
 export type ColorLevel = 0 | 1 | 2 | 3;
 
-// Modern terminal-emulator env vars that imply truecolor support. None of
-// these are set except by the emulator itself, so no false positives.
 const TRUECOLOR_ENV_VARS = [
   "KITTY_WINDOW_ID",
   "WT_SESSION",
@@ -37,18 +27,27 @@ const TRUECOLOR_ENV_VARS = [
   "WEZTERM_EXECUTABLE",
 ];
 const TRUECOLOR_TERM_PROGRAMS = new Set(["iTerm.app", "vscode", "ghostty", "WezTerm", "Hyper"]);
-// TERM types that are genuinely 8/16-color even on modern systems.
 const LOW_COLOR_TERMS = new Set(["linux", "vt100", "vt220", "vt320", "ansi", "cons25"]);
 
+let cachedLevel: ColorLevel | null = null;
+
 export function colorLevel(): ColorLevel {
-  // NO_COLOR always wins (no-color.org)
+  if (cachedLevel !== null) return cachedLevel;
+  cachedLevel = computeColorLevel();
+  return cachedLevel;
+}
+
+/** Test-only. Resets the memoized level so per-test env mutations take effect. */
+export function __resetColorLevelCache(): void {
+  cachedLevel = null;
+}
+
+function computeColorLevel(): ColorLevel {
   if ("NO_COLOR" in process.env) return 0;
 
-  // FORCE_COLOR overrides TTY detection. Values: 0=off, 1=16, 2=256, 3=truecolor.
-  // Numeric values are clamped to [0,3]. Empty / non-numeric → 1.
+  // FORCE_COLOR clamps to [0,3]; empty/non-numeric → 1 (chalk convention).
   if ("FORCE_COLOR" in process.env) {
-    const raw = process.env.FORCE_COLOR ?? "";
-    const n = Number.parseInt(raw, 10);
+    const n = Number.parseInt(process.env.FORCE_COLOR ?? "", 10);
     if (Number.isFinite(n)) {
       if (n <= 0) return 0;
       if (n >= 3) return 3;
@@ -69,14 +68,11 @@ export function colorLevel(): ColorLevel {
   const tp = process.env.TERM_PROGRAM;
   if (tp && TRUECOLOR_TERM_PROGRAMS.has(tp)) return 3;
 
-  // gnome-terminal / tilix / etc set VTE_VERSION; truecolor since ~3600.
   const vte = Number.parseInt(process.env.VTE_VERSION ?? "", 10);
   if (Number.isFinite(vte) && vte >= 3600) return 3;
 
   if (/-256(color)?/.test(term)) return 2;
   if (LOW_COLOR_TERMS.has(term)) return 1;
-  // Bare modern TERMs (xterm, screen, tmux, rxvt, alacritty, kitty, ghostty,
-  // foot, wezterm) commonly omit -256color but still support it.
   return 2;
 }
 

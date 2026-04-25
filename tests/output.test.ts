@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
+  __resetColorLevelCache,
   chrome,
   chromeRaw,
   colorLevel,
@@ -7,7 +8,7 @@ import {
   shouldAnimate,
   supportsColor,
 } from "../src/core/output.ts";
-import { seedTestConfig } from "./helpers.ts";
+import { isolateEnv, isolateTTY, seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 
 describe("chrome", () => {
@@ -46,17 +47,8 @@ describe("chromeRaw", () => {
 });
 
 describe("shouldAnimate", () => {
-  let origIsTTY: boolean | undefined;
-
-  beforeEach(() => {
-    origIsTTY = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
-    seedTestConfig();
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
-  });
+  isolateTTY(true);
+  beforeEach(() => seedTestConfig());
 
   test("true when stdout is a TTY and config.noAnimation is unset", () => {
     expect(shouldAnimate()).toBe(true);
@@ -74,7 +66,7 @@ describe("shouldAnimate", () => {
 });
 
 describe("colorLevel", () => {
-  const envKeys = [
+  isolateEnv([
     "NO_COLOR",
     "COLORTERM",
     "TERM",
@@ -87,24 +79,9 @@ describe("colorLevel", () => {
     "KONSOLE_VERSION",
     "WEZTERM_EXECUTABLE",
     "VTE_VERSION",
-  ];
-  let saved: Record<string, string | undefined>;
-  let origIsTTY: boolean | undefined;
-
-  beforeEach(() => {
-    saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
-    for (const k of envKeys) delete process.env[k];
-    origIsTTY = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
-  });
-
-  afterEach(() => {
-    for (const k of envKeys) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
-  });
+  ]);
+  isolateTTY(true);
+  beforeEach(__resetColorLevelCache);
 
   test("0 (mono) when NO_COLOR", () => {
     process.env.NO_COLOR = "1";
@@ -280,24 +257,8 @@ describe("colorLevel", () => {
 });
 
 describe("supportsColor", () => {
-  const envKeys = ["NO_COLOR", "FORCE_COLOR"];
-  let saved: Record<string, string | undefined>;
-  let origIsTTY: boolean | undefined;
-
-  beforeEach(() => {
-    saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
-    for (const k of envKeys) delete process.env[k];
-    origIsTTY = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
-  });
-
-  afterEach(() => {
-    for (const k of envKeys) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
-  });
+  isolateEnv(["NO_COLOR", "FORCE_COLOR"]);
+  isolateTTY(true);
 
   test("true when stdout is a TTY and no opt-out env vars", () => {
     expect(supportsColor()).toBe(true);

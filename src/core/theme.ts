@@ -2,13 +2,8 @@ import { ANSI16, type Color, colorHex, quantizeColor } from "./ansi.ts";
 import type { Appearance } from "./detect-appearance.ts";
 import { colorLevel } from "./output.ts";
 
-/**
- * A theme color authored in truecolor, optionally with hand-tuned overrides
- * for low color depths. `ansi16` and `ansi256` are still authored as truecolor
- * RGB — the renderer quantizes them. Use overrides only when the auto-snap
- * lands on a harsh palette entry (e.g. yellow [245,186,74] snaps to bright
- * yellow [255,255,85] at ANSI16, which reads as nuclear on dark backgrounds).
- */
+/** Theme color: truecolor RGB, optionally with overrides for when the
+ *  auto-snap to ansi16/256 lands on a harsh palette slot. */
 export type ColorRef = Color | { base: Color; ansi16?: Color; ansi256?: Color };
 
 export type BadgeColors = { fg: ColorRef; bg: ColorRef };
@@ -204,22 +199,16 @@ export function resolveTheme(appearance: Appearance): ThemeTokens {
   return appearance === "light" ? LIGHT_THEME : DARK_THEME;
 }
 
-/**
- * Hex string for Ink, quantized to the current terminal's color level.
- * Use this for every theme color handed to an Ink <Text color> / <Box> prop —
- * Ink always emits truecolor escapes otherwise, bypassing FORCE_COLOR.
- *
- * For `ColorRef` with overrides: the matching override (if any) replaces the
- * base before quantizing. Otherwise the base is quantized as usual.
- */
+/** Hex for Ink color props. Pre-quantize because Ink emits truecolor escapes
+ *  regardless of `FORCE_COLOR`. */
 export function themeHex(c: ColorRef): string {
   const level = colorLevel();
-  return colorHex(quantizeColor(themeRgb(c, level), level));
+  return colorHex(quantizeColor(themeColor(c, level), level));
 }
 
-/** Resolve a `ColorRef` to its truecolor tuple for the given level (no quantize).
- *  For consumers that need an RGB triple — e.g. `fgCode(...rgb, level)`. */
-export function themeRgb(c: ColorRef, level: number = colorLevel()): Color {
+/** Pick the RGB tuple for `level` — override if matching, else base. For
+ *  callers that need a tuple (e.g. `fgCode(...rgb, level)`), not a hex. */
+export function themeColor(c: ColorRef, level: number = colorLevel()): Color {
   if (Array.isArray(c)) return c;
   if (level === 1 && c.ansi16) return c.ansi16;
   if (level === 2 && c.ansi256) return c.ansi256;

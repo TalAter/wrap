@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { __resetColorLevelCache } from "../src/core/output.ts";
 import {
   DARK_THEME,
   getTheme,
@@ -7,6 +8,7 @@ import {
   setTheme,
   themeHex,
 } from "../src/core/theme.ts";
+import { isolateEnv, isolateTTY } from "./helpers.ts";
 
 afterEach(() => {
   // Reset to dark so other test files aren't affected
@@ -33,24 +35,9 @@ describe("theme store", () => {
 });
 
 describe("themeHex with ColorRef overrides", () => {
-  const envKeys = ["NO_COLOR", "COLORTERM", "TERM", "FORCE_COLOR"];
-  let saved: Record<string, string | undefined>;
-  let origIsTTY: boolean | undefined;
-
-  beforeEach(() => {
-    saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
-    for (const k of envKeys) delete process.env[k];
-    origIsTTY = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
-  });
-
-  afterEach(() => {
-    for (const k of envKeys) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-    Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });
-  });
+  isolateEnv(["NO_COLOR", "COLORTERM", "TERM", "FORCE_COLOR"]);
+  isolateTTY(true);
+  beforeEach(__resetColorLevelCache);
 
   test("plain Color tuple resolves at truecolor unchanged", () => {
     process.env.FORCE_COLOR = "3";

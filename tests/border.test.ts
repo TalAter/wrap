@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
+import { __resetColorLevelCache } from "../src/core/output.ts";
 import {
   bottomBorderSegments,
   fitTop,
@@ -15,11 +16,13 @@ let savedForceColor: string | undefined;
 beforeAll(() => {
   savedForceColor = process.env.FORCE_COLOR;
   process.env.FORCE_COLOR = "3";
+  __resetColorLevelCache();
   seedTestConfig();
 });
 afterAll(() => {
   if (savedForceColor === undefined) delete process.env.FORCE_COLOR;
   else process.env.FORCE_COLOR = savedForceColor;
+  __resetColorLevelCache();
 });
 
 function plainText(segments: { text: string }[]): string {

@@ -1,9 +1,37 @@
+import { afterEach, beforeEach } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/config/config.ts";
 import { resolveSettings } from "../src/config/resolve.ts";
 import { setConfig } from "../src/config/store.ts";
+
+/** Save/clear/restore env keys around each test in the surrounding describe. */
+export function isolateEnv(keys: string[]): void {
+  let saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    for (const k of keys) delete process.env[k];
+  });
+  afterEach(() => {
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+}
+
+/** Force `process.stdout.isTTY` to `value` around each test, restoring after. */
+export function isolateTTY(value = true): void {
+  let orig: boolean | undefined;
+  beforeEach(() => {
+    orig = process.stdout.isTTY;
+    Object.defineProperty(process.stdout, "isTTY", { value, configurable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process.stdout, "isTTY", { value: orig, configurable: true });
+  });
+}
 
 /**
  * Seed the global config store through the resolver so SETTINGS-declared

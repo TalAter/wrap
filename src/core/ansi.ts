@@ -91,17 +91,9 @@ export function interpolate(stops: readonly Color[], t: number): Color {
 
 const WHITE_OKLAB: Oklab = rgbToOklab([255, 255, 255]);
 
-/**
- * Named map of canonical xterm 16-color RGB tuples. Use these as `ansi16`
- * overrides on `ColorRef`s — passing the canonical tuple guarantees an exact
- * snap to the matching SGR code, and the name documents intent at the
- * authoring site (e.g. `ANSI16.yellow` rather than the opaque `[170, 85, 0]`).
- *
- * Terminals remap these codes via the user's palette — that's the point of
- * indexed color, so `ANSI16.yellow` may render olive in Solarized, mustard in
- * Dracula, etc. Use overrides only when the auto-snap of a base RGB lands on
- * a harsh palette entry (e.g. yellow → bright-yellow on dark).
- */
+/** Default xterm-16 RGB per slot. Terminals remap via the user's palette, so
+ *  `ANSI16.yellow` may render as olive/mustard/etc. — use as an `ansi16`
+ *  override to pin to a slot. */
 export const ANSI16 = {
   black: [0, 0, 0],
   red: [170, 0, 0],
