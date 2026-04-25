@@ -2,7 +2,7 @@
 name: theme
 description: Color tokens, dark/light appearances, color depth detection, graceful degradation
 Source: src/core/theme.ts, src/core/detect-appearance.ts, src/core/ansi.ts, src/tui/theme-context.tsx
-Last-synced: 0a22f2a
+Last-synced: b4d3829
 ---
 
 # Theme
@@ -12,6 +12,8 @@ One central palette, two appearances (dark/light), graceful degradation across c
 ## Tokens
 
 Authored as 24-bit RGB tuples in a single role-organized type (text / chrome / interactive / select / badge / gradient). Downsampling happens at render time. Adding a token = adding a field and filling it in both the dark and light themes.
+
+A token may carry hand-tuned overrides for ANSI16 and ANSI256 alongside its truecolor base. Auto-snap of mid hues lands on jarring entries (yellow → bright-yellow on dark, mid-grey → bright-black) — the override is the escape hatch when the snap is wrong. Authors pick from a named map of canonical xterm-16 RGBs so the chosen palette slot is obvious at the call site.
 
 No cross-theme derivation — light is never computed from dark. Within a theme, two roles pointing at the same token is fine (semantic reuse).
 
@@ -31,6 +33,8 @@ OSC 11 asks the terminal for background color and computes WCAG luminance. **Pro
 
 Standard precedence: `NO_COLOR` always wins → `FORCE_COLOR` → TTY check → `TERM`/`COLORTERM` heuristics. Output renderer picks truecolor / 256 / ANSI16 / none from the resolved level.
 
+Bare modern `TERM` values (xterm, screen, tmux, kitty, alacritty, ghostty…) are promoted to 256 — `COLORTERM` is dropped by ssh/sudo/docker, so trusting `TERM=xterm` literally would punish anyone running inside a container down to 16 colors despite the host emulator supporting more. Genuine 8/16-color terminals (linux console, vt100, ansi) stay at 1. Truecolor-capable emulators are sniffed via their own env vars (`KITTY_WINDOW_ID`, `WT_SESSION`, `VTE_VERSION ≥ 3600`, `TERM_PROGRAM`).
+
 Below truecolor, gradients short-circuit to a solid color — quantizing interpolated colors to 16/256 produces chunky banding worse than no gradient.
 
 ## Decisions
@@ -40,3 +44,5 @@ Below truecolor, gradients short-circuit to a solid color — quantizing interpo
 - **Two-stop OKLAB gradients.** Simple to author, smooth result.
 - **OSC 11 probe is synchronous.** Must finish before any Ink dialog mounts — raw-mode cleanup races with Ink's stdin claim on the same tty.
 - **`NO_COLOR` always wins.** No exceptions.
+- **Per-level overrides on tokens, not separate level themes.** Override sits next to the base; one source of truth per token. Almost no tokens need them — only those whose nearest-palette snap reads as harsh.
+- **Modern bare `TERM` → 256, not 16.** Reality across docker/ssh/tmux. Genuine low-color terminals are listed explicitly.
