@@ -87,13 +87,12 @@ jobs:
         run: bun run build
 
       # Strip before signing — strip invalidates signatures.
+      # Linux binaries are NOT stripped: GNU strip discards the trailer
+      # Bun appends past the ELF image, leaving a binary that boots as
+      # bare bun instead of running the embedded entrypoint.
       - name: Strip (macOS)
         if: matrix.os == 'macos'
         run: strip -x wrap
-
-      - name: Strip (Linux)
-        if: matrix.os == 'linux'
-        run: strip --strip-unneeded wrap
 
       - name: Ad-hoc sign (macOS)
         if: matrix.os == 'macos'
