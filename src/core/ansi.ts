@@ -91,32 +91,59 @@ export function interpolate(stops: readonly Color[], t: number): Color {
 
 const WHITE_OKLAB: Oklab = rgbToOklab([255, 255, 255]);
 
-// Standard xterm 16-color palette as rendered by most terminals.
-// Individual themes remap these, which is exactly the point — users
-// who picked a palette get their palette back.
-const ANSI16: Array<[Color, number]> = [
-  [[0, 0, 0], 30],
-  [[170, 0, 0], 31],
-  [[0, 170, 0], 32],
-  [[170, 85, 0], 33],
-  [[0, 0, 170], 34],
-  [[170, 0, 170], 35],
-  [[0, 170, 170], 36],
-  [[170, 170, 170], 37],
-  [[85, 85, 85], 90],
-  [[255, 85, 85], 91],
-  [[85, 255, 85], 92],
-  [[255, 255, 85], 93],
-  [[85, 85, 255], 94],
-  [[255, 85, 255], 95],
-  [[85, 255, 255], 96],
-  [[255, 255, 255], 97],
+/**
+ * Named map of canonical xterm 16-color RGB tuples. Use these as `ansi16`
+ * overrides on `ColorRef`s — passing the canonical tuple guarantees an exact
+ * snap to the matching SGR code, and the name documents intent at the
+ * authoring site (e.g. `ANSI16.yellow` rather than the opaque `[170, 85, 0]`).
+ *
+ * Terminals remap these codes via the user's palette — that's the point of
+ * indexed color, so `ANSI16.yellow` may render olive in Solarized, mustard in
+ * Dracula, etc. Use overrides only when the auto-snap of a base RGB lands on
+ * a harsh palette entry (e.g. yellow → bright-yellow on dark).
+ */
+export const ANSI16 = {
+  black: [0, 0, 0],
+  red: [170, 0, 0],
+  green: [0, 170, 0],
+  yellow: [170, 85, 0],
+  blue: [0, 0, 170],
+  magenta: [170, 0, 170],
+  cyan: [0, 170, 170],
+  white: [170, 170, 170],
+  brightBlack: [85, 85, 85],
+  brightRed: [255, 85, 85],
+  brightGreen: [85, 255, 85],
+  brightYellow: [255, 255, 85],
+  brightBlue: [85, 85, 255],
+  brightMagenta: [255, 85, 255],
+  brightCyan: [85, 255, 255],
+  brightWhite: [255, 255, 255],
+} as const satisfies Record<string, Color>;
+
+const ANSI16_TABLE: Array<[Color, number]> = [
+  [ANSI16.black, 30],
+  [ANSI16.red, 31],
+  [ANSI16.green, 32],
+  [ANSI16.yellow, 33],
+  [ANSI16.blue, 34],
+  [ANSI16.magenta, 35],
+  [ANSI16.cyan, 36],
+  [ANSI16.white, 37],
+  [ANSI16.brightBlack, 90],
+  [ANSI16.brightRed, 91],
+  [ANSI16.brightGreen, 92],
+  [ANSI16.brightYellow, 93],
+  [ANSI16.brightBlue, 94],
+  [ANSI16.brightMagenta, 95],
+  [ANSI16.brightCyan, 96],
+  [ANSI16.brightWhite, 97],
 ];
 
 function nearest16(r: number, g: number, b: number): number {
   let best = 37;
   let bestDist = Infinity;
-  for (const [[pr, pg, pb], code] of ANSI16) {
+  for (const [[pr, pg, pb], code] of ANSI16_TABLE) {
     const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
     if (d < bestDist) {
       bestDist = d;
@@ -173,7 +200,7 @@ function idx256ToRgb(idx: number): Color {
 }
 
 function code16ToRgb(code: number): Color {
-  for (const [rgb, c] of ANSI16) {
+  for (const [rgb, c] of ANSI16_TABLE) {
     if (c === code) return rgb;
   }
   return [0, 0, 0];

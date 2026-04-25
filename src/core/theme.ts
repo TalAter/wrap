@@ -1,33 +1,42 @@
-import { type Color, colorHex, quantizeColor } from "./ansi.ts";
+import { ANSI16, type Color, colorHex, quantizeColor } from "./ansi.ts";
 import type { Appearance } from "./detect-appearance.ts";
 import { colorLevel } from "./output.ts";
 
-export type BadgeColors = { fg: Color; bg: Color };
+/**
+ * A theme color authored in truecolor, optionally with hand-tuned overrides
+ * for low color depths. `ansi16` and `ansi256` are still authored as truecolor
+ * RGB — the renderer quantizes them. Use overrides only when the auto-snap
+ * lands on a harsh palette entry (e.g. yellow [245,186,74] snaps to bright
+ * yellow [255,255,85] at ANSI16, which reads as nuclear on dark backgrounds).
+ */
+export type ColorRef = Color | { base: Color; ansi16?: Color; ansi256?: Color };
+
+export type BadgeColors = { fg: ColorRef; bg: ColorRef };
 
 export type ThemeTokens = {
   text: {
-    primary: Color;
-    secondary: Color;
-    muted: Color;
-    disabled: Color;
-    accent: Color;
+    primary: ColorRef;
+    secondary: ColorRef;
+    muted: ColorRef;
+    disabled: ColorRef;
+    accent: ColorRef;
   };
   chrome: {
-    border: Color;
-    surface: Color;
-    accent: Color;
-    dim: Color;
+    border: ColorRef;
+    surface: ColorRef;
+    accent: ColorRef;
+    dim: ColorRef;
   };
   interactive: {
-    cursor: Color;
-    selection: Color;
-    highlight: Color;
+    cursor: ColorRef;
+    selection: ColorRef;
+    highlight: ColorRef;
     /** Brighter variant of `highlight` used for the focused primary item
      *  in an ActionBar, so the selection reads as an active pill. */
-    highlightBright: Color;
+    highlightBright: ColorRef;
   };
   select: {
-    selected: Color;
+    selected: ColorRef;
   };
   badge: {
     wizard: BadgeColors;
@@ -69,8 +78,10 @@ export const DARK_THEME: ThemeTokens = {
   interactive: {
     cursor: [102, 153, 255],
     selection: [26, 42, 77],
-    highlight: [245, 186, 74],
-    highlightBright: [245, 186, 74],
+    // Auto-snap of [245,186,74] at ANSI16 lands on bright yellow — reads as
+    // nuclear on dark backgrounds. Override to dim yellow.
+    highlight: { base: [245, 186, 74], ansi16: ANSI16.brightYellow },
+    highlightBright: { base: [245, 186, 74], ansi16: ANSI16.brightYellow },
   },
   select: {
     selected: [120, 230, 160],
@@ -199,7 +210,20 @@ export function resolveTheme(appearance: Appearance): ThemeTokens {
  * Hex string for Ink, quantized to the current terminal's color level.
  * Use this for every theme color handed to an Ink <Text color> / <Box> prop —
  * Ink always emits truecolor escapes otherwise, bypassing FORCE_COLOR.
+ *
+ * For `ColorRef` with overrides: the matching override (if any) replaces the
+ * base before quantizing. Otherwise the base is quantized as usual.
  */
-export function themeHex(c: Color): string {
-  return colorHex(quantizeColor(c, colorLevel()));
+export function themeHex(c: ColorRef): string {
+  const level = colorLevel();
+  return colorHex(quantizeColor(themeRgb(c, level), level));
+}
+
+/** Resolve a `ColorRef` to its truecolor tuple for the given level (no quantize).
+ *  For consumers that need an RGB triple — e.g. `fgCode(...rgb, level)`. */
+export function themeRgb(c: ColorRef, level: number = colorLevel()): Color {
+  if (Array.isArray(c)) return c;
+  if (level === 1 && c.ansi16) return c.ansi16;
+  if (level === 2 && c.ansi256) return c.ansi256;
+  return c.base;
 }

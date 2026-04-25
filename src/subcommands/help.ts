@@ -8,7 +8,7 @@ import {
   shouldAnimate,
   supportsColor,
 } from "../core/output.ts";
-import { getTheme } from "../core/theme.ts";
+import { getTheme, themeRgb } from "../core/theme.ts";
 import type { CLIFlag, Command } from "./types.ts";
 
 // ZX Spectrum rainbow — decorative, stays the same in both themes
@@ -67,7 +67,7 @@ export function renderStyled(
   options: CLIFlag[],
   level: ColorLevel = colorLevel(),
 ): string {
-  const flagColor = getTheme().text.accent;
+  const flagColor = themeRgb(getTheme().text.accent, level);
   const flagPrefix = fgCode(...flagColor, level);
   const flagReset = flagPrefix ? "\x1b[0m" : "";
   const colorizeFlag = (f: string) => `${flagPrefix}${f}${flagReset}`;

@@ -74,7 +74,20 @@ describe("shouldAnimate", () => {
 });
 
 describe("colorLevel", () => {
-  const envKeys = ["NO_COLOR", "COLORTERM", "TERM", "FORCE_COLOR"];
+  const envKeys = [
+    "NO_COLOR",
+    "COLORTERM",
+    "TERM",
+    "FORCE_COLOR",
+    "TERM_PROGRAM",
+    "KITTY_WINDOW_ID",
+    "WT_SESSION",
+    "ALACRITTY_LOG",
+    "ALACRITTY_SOCKET",
+    "KONSOLE_VERSION",
+    "WEZTERM_EXECUTABLE",
+    "VTE_VERSION",
+  ];
   let saved: Record<string, string | undefined>;
   let origIsTTY: boolean | undefined;
 
@@ -119,14 +132,93 @@ describe("colorLevel", () => {
     expect(colorLevel()).toBe(2);
   });
 
-  test("1 (16) when TERM=xterm with no extras", () => {
+  test("2 (256) when TERM=xterm (modern emulator lying about capability)", () => {
     process.env.TERM = "xterm";
-    expect(colorLevel()).toBe(1);
+    expect(colorLevel()).toBe(2);
+  });
+
+  test("2 for other modern bare TERMs (screen, tmux, rxvt, alacritty, kitty, etc.)", () => {
+    for (const t of [
+      "screen",
+      "tmux",
+      "rxvt",
+      "alacritty",
+      "wezterm",
+      "kitty",
+      "ghostty",
+      "foot",
+    ]) {
+      process.env.TERM = t;
+      expect(colorLevel()).toBe(2);
+    }
+  });
+
+  test("1 (16) for genuine 8/16-color terminals (linux console, vt100, ansi)", () => {
+    for (const t of ["linux", "vt100", "vt220", "ansi"]) {
+      process.env.TERM = t;
+      expect(colorLevel()).toBe(1);
+    }
   });
 
   test("0 when TERM=dumb", () => {
     process.env.TERM = "dumb";
     expect(colorLevel()).toBe(0);
+  });
+
+  test("3 when KITTY_WINDOW_ID set", () => {
+    process.env.TERM = "xterm";
+    process.env.KITTY_WINDOW_ID = "1";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("3 when WT_SESSION set (Windows Terminal)", () => {
+    process.env.TERM = "xterm";
+    process.env.WT_SESSION = "abc";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("3 when ALACRITTY_LOG set", () => {
+    process.env.TERM = "xterm";
+    process.env.ALACRITTY_LOG = "/tmp/x";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("3 when KONSOLE_VERSION set", () => {
+    process.env.TERM = "xterm";
+    process.env.KONSOLE_VERSION = "230400";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("3 when WEZTERM_EXECUTABLE set", () => {
+    process.env.TERM = "xterm";
+    process.env.WEZTERM_EXECUTABLE = "/usr/bin/wezterm";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("3 when VTE_VERSION >= 3600", () => {
+    process.env.TERM = "xterm";
+    process.env.VTE_VERSION = "6800";
+    expect(colorLevel()).toBe(3);
+  });
+
+  test("VTE_VERSION < 3600 does not promote", () => {
+    process.env.TERM = "xterm";
+    process.env.VTE_VERSION = "3000";
+    expect(colorLevel()).toBe(2);
+  });
+
+  test("3 for truecolor TERM_PROGRAM (iTerm.app, vscode, ghostty, WezTerm, Hyper)", () => {
+    for (const p of ["iTerm.app", "vscode", "ghostty", "WezTerm", "Hyper"]) {
+      process.env.TERM = "xterm";
+      process.env.TERM_PROGRAM = p;
+      expect(colorLevel()).toBe(3);
+    }
+  });
+
+  test("Apple_Terminal stays at 2 (256-only, not truecolor)", () => {
+    process.env.TERM = "xterm";
+    process.env.TERM_PROGRAM = "Apple_Terminal";
+    expect(colorLevel()).toBe(2);
   });
 
   test("FORCE_COLOR=0 returns 0", () => {
