@@ -113,36 +113,23 @@ export const ANSI16 = {
   brightWhite: [255, 255, 255],
 } as const satisfies Record<string, Color>;
 
-const ANSI16_TABLE: Array<[Color, number]> = [
-  [ANSI16.black, 30],
-  [ANSI16.red, 31],
-  [ANSI16.green, 32],
-  [ANSI16.yellow, 33],
-  [ANSI16.blue, 34],
-  [ANSI16.magenta, 35],
-  [ANSI16.cyan, 36],
-  [ANSI16.white, 37],
-  [ANSI16.brightBlack, 90],
-  [ANSI16.brightRed, 91],
-  [ANSI16.brightGreen, 92],
-  [ANSI16.brightYellow, 93],
-  [ANSI16.brightBlue, 94],
-  [ANSI16.brightMagenta, 95],
-  [ANSI16.brightCyan, 96],
-  [ANSI16.brightWhite, 97],
-];
+// Relies on ANSI16 insertion order: black..white = 30..37, brightBlack..brightWhite = 90..97.
+const ANSI16_RGBS: Color[] = Object.values(ANSI16);
+const idxToCode = (i: number): number => (i < 8 ? 30 + i : 82 + i);
 
 function nearest16(r: number, g: number, b: number): number {
-  let best = 37;
+  let bestIdx = 7;
   let bestDist = Infinity;
-  for (const [[pr, pg, pb], code] of ANSI16_TABLE) {
+  let i = 0;
+  for (const [pr, pg, pb] of ANSI16_RGBS) {
     const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
     if (d < bestDist) {
       bestDist = d;
-      best = code;
+      bestIdx = i;
     }
+    i++;
   }
-  return best;
+  return idxToCode(bestIdx);
 }
 
 // The real xterm 6×6×6 cube levels, not an even split of 0–255.
@@ -192,10 +179,8 @@ function idx256ToRgb(idx: number): Color {
 }
 
 function code16ToRgb(code: number): Color {
-  for (const [rgb, c] of ANSI16_TABLE) {
-    if (c === code) return rgb;
-  }
-  return [0, 0, 0];
+  const idx = code < 90 ? code - 30 : code - 82;
+  return ANSI16_RGBS[idx] ?? [0, 0, 0];
 }
 
 /**

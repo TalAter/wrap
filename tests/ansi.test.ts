@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  ANSI16,
   bold,
   dim,
   fg,
@@ -206,22 +207,17 @@ describe("gradientCells", () => {
 });
 
 describe("quantizeColor", () => {
-  // Exact ANSI16 palette colors round-trip through level=1:
-  // nearest16 picks the matching code, code16ToRgb maps back. Removing any
-  // one palette entry (or neutering the code lookup) shifts the result.
-  const palette: Array<[[number, number, number], number]> = [
-    [[0, 170, 0], 32],
-    [[170, 85, 0], 33],
-    [[0, 170, 170], 36],
-    [[170, 170, 170], 37],
-    [[255, 255, 85], 93],
-  ];
-  for (const [rgb, code] of palette) {
-    test(`level 1 round-trips ANSI16 entry ${rgb.join(",")}`, () => {
+  test("all 16 ANSI16 entries round-trip through fgCode + quantizeColor at level 1", () => {
+    const expectedCodes = [30, 31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97];
+    const rgbs = Object.values(ANSI16);
+    expect(rgbs).toHaveLength(expectedCodes.length);
+    for (let i = 0; i < rgbs.length; i++) {
+      const rgb = rgbs[i] as [number, number, number];
+      const code = expectedCodes[i] as number;
       expect(fgCode(rgb[0], rgb[1], rgb[2], 1)).toBe(`${ESC}${code}m`);
       expect(quantizeColor(rgb, 1)).toEqual(rgb);
-    });
-  }
+    }
+  });
 
   test("level 1 snaps pure red to ANSI16 red (not black)", () => {
     // Nearest in the xterm palette is [170,0,0] (code 31), not [0,0,0].
