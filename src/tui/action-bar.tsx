@@ -13,7 +13,8 @@ export type ActionItem = {
   label: string;
   /** Highlight color on the glyph/letter — marks a first-tier action. */
   primary?: boolean;
-  /** Approve-style only; tints both head and tail (e.g. flash `Copied` green). */
+  /** Approve-style only; tints head + tail uniformly and drops the head's
+   *  hotkey underline (e.g. flash `Copied` green as a status, not a hint). */
   flashColor?: string;
 };
 
@@ -76,12 +77,15 @@ export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps)
           const tail = item.flashColor ?? defaultTail;
           const head = item.label[0] as string;
           const rest = item.label.slice(1);
+          // Underline marks the hotkey; during a flash the label is a status,
+          // not a hint, so the underline becomes noise.
+          const headUnderline = item.flashColor === undefined;
           return (
             <Text key={`${item.glyph}:${item.label}`}>
               {dividerNode}
               <Text backgroundColor={bg}>
                 {" "}
-                <Text bold underline color={accent}>
+                <Text bold underline={headUnderline} color={accent}>
                   {head}
                 </Text>
                 <Text color={tail} bold={isFocused}>
