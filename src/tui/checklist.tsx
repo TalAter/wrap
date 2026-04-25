@@ -32,7 +32,7 @@ export function Checklist({
   const t = getTheme();
   const CHECKED_COLOR = themeHex(t.select.selected);
   const DIM_COLOR = themeHex(t.text.muted);
-  const CURSOR_COLOR = themeHex(t.interactive.cursor);
+  const PRIMARY_COLOR = themeHex(t.text.primary);
   const CURSOR_BG = themeHex(t.interactive.selection);
 
   const selectableIndices = items
@@ -68,17 +68,17 @@ export function Checklist({
         const tick = isChecked ? "[✓]" : "[ ]";
         const icon = item.icon ? resolveIcon(`${item.icon} `) : "";
         const checkbox = icon ? `${tick} ${icon}` : tick;
-        const checkboxColor = isChecked ? CHECKED_COLOR : DIM_COLOR;
         const pointer = isFocused ? " ❯" : "  ";
         const rowText = `${pointer} ${checkbox} ${item.label}`;
         const pad = width ? Math.max(0, width - stringWidth(rowText)) : 0;
+        // Single color for the whole row — pointer, checkbox, icon, label all
+        // share it. Focused beats checked beats neither.
+        const rowColor = isFocused ? PRIMARY_COLOR : isChecked ? CHECKED_COLOR : DIM_COLOR;
 
         return (
           <Text key={item.value} backgroundColor={isFocused ? CURSOR_BG : undefined}>
-            <Text color={isFocused ? CURSOR_COLOR : undefined}>{pointer} </Text>
-            <Text color={isFocused ? CURSOR_COLOR : checkboxColor}>{checkbox} </Text>
-            <Text color={isFocused ? CURSOR_COLOR : isChecked ? CHECKED_COLOR : undefined}>
-              {item.label}
+            <Text color={rowColor}>
+              {pointer} {checkbox} {item.label}
             </Text>
             {isFocused && pad > 0 ? <Text>{" ".repeat(pad)}</Text> : null}
           </Text>

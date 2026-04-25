@@ -65,7 +65,7 @@ export const DARK_THEME: ThemeTokens = {
   text: {
     primary: [210, 210, 225],
     secondary: [170, 170, 195],
-    muted: [115, 115, 140],
+    muted: { base: [115, 115, 140], ansi16: ANSI16.white },
     disabled: [65, 65, 80],
     accent: [120, 180, 255],
   },
@@ -78,13 +78,11 @@ export const DARK_THEME: ThemeTokens = {
   interactive: {
     cursor: [102, 153, 255],
     selection: [26, 42, 77],
-    // Auto-snap of [245,186,74] at ANSI16 lands on bright yellow — reads as
-    // nuclear on dark backgrounds. Override to dim yellow.
     highlight: { base: [245, 186, 74], ansi16: ANSI16.brightYellow },
     highlightBright: { base: [245, 186, 74], ansi16: ANSI16.brightYellow },
   },
   select: {
-    selected: [120, 230, 160],
+    selected: { base: [120, 230, 160], ansi16: ANSI16.green },
   },
   badge: {
     wizard: { fg: [210, 210, 225], bg: [30, 50, 90] },

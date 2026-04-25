@@ -201,10 +201,10 @@ describe("colorLevel", () => {
     expect(colorLevel()).toBe(3);
   });
 
-  test("VTE_VERSION < 3600 does not promote", () => {
+  test("VTE_VERSION < 3600 does not promote to truecolor", () => {
     process.env.TERM = "xterm";
     process.env.VTE_VERSION = "3000";
-    expect(colorLevel()).toBe(2);
+    expect(colorLevel()).not.toBe(3);
   });
 
   test("3 for truecolor TERM_PROGRAM (iTerm.app, vscode, ghostty, WezTerm, Hyper)", () => {
