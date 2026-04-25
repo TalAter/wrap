@@ -952,3 +952,15 @@
   mutated: 'true'
   reason: same as the paired guard — `_setClipboardTestHooks` callers always set `copy` explicitly, so the absent-key path is never produced.
   added: 2026-04-25
+- file: src/core/paths.ts
+  mutator: StringLiteral
+  original: '"~"'
+  mutated: '""'
+  reason: 'first arg of `p.startsWith("~")` on line 13 — equivalent on realistic inputs. startsWith("") is always true, so the mutant always runs replace("~", homedir()). For inputs without "~" the replace is a no-op; for inputs starting with "~" the original takes the same branch. Divergence only on paths containing "~" mid-string, which no caller produces — main.ts passes process.cwd() (absolute, no "~"), and memory/runner pass LLM-supplied scopes that the prompt schema requires to be absolute directory paths.'
+  added: 2026-04-25
+- file: src/core/paths.ts
+  mutator: MethodExpression
+  original: 'expanded.startsWith("/")'
+  mutated: 'expanded.endsWith("/")'
+  reason: equivalent on realistic inputs — divergence only on relative paths ending with "/" (e.g. "rel/"), which no caller produces. For absolute paths node's resolve() returns the absolute argument unchanged, and for normal relative paths (no trailing slash) startsWith("/") and endsWith("/") agree (both false → resolve runs).
+  added: 2026-04-25
