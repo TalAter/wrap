@@ -964,3 +964,75 @@
   mutated: 'expanded.endsWith("/")'
   reason: equivalent on realistic inputs — divergence only on relative paths ending with "/" (e.g. "rel/"), which no caller produces. For absolute paths node's resolve() returns the absolute argument unchanged, and for normal relative paths (no trailing slash) startsWith("/") and endsWith("/") agree (both false → resolve runs).
   added: 2026-04-25
+- file: src/core/spinner.ts
+  mutator: BooleanLiteral
+  original: 'let listenersInstalled = false;'
+  mutated: 'let listenersInstalled = true;'
+  reason: module-level init for installListeners' once-guard. The cursor-leak tests reset via resetExitGuard() before observing, so they pass either way; the other tests don't observe whether listeners are installed. Differs only on the very first import of the module, which the test harness can't reproduce after the file has loaded.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: BlockStatement
+  original: 'process.on("SIGINT", () => { restore(); process.exit(130); });'
+  mutated: 'process.on("SIGINT", () => {});'
+  reason: SIGINT handler body. The cursor-leak test asserts the handler is registered, not what it does — observing the body requires sending a real SIGINT, which would kill the test runner.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: BlockStatement
+  original: 'process.on("SIGTERM", () => { restore(); process.exit(143); });'
+  mutated: 'process.on("SIGTERM", () => {});'
+  reason: same as the paired SIGINT entry above — registration is asserted, body execution is not, because triggering SIGTERM would kill the runner.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ConditionalExpression
+  original: 'if (cursorTeardownUnregister) return;'
+  mutated: 'if (false) return;'
+  reason: equivalent — registerExitTeardown adds SHOW_CURSOR to a Set (idempotent re-add) and returns a fresh unregister closure. Without the guard, ensureCursorTeardown reassigns cursorTeardownUnregister to a new closure; the old closure is never called by anything, so reassignment is unobservable.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ConditionalExpression
+  original: 'if (stopped) return;'
+  mutated: 'if (false) return;'
+  reason: noAnimation stop closure idempotency guard (line 104). Removing it makes a second stop() write the erase string again to an already-empty row — visually identical, no caller-observable difference. The "stop is idempotent" doc note refers to safety, not write count.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: BooleanLiteral
+  original: 'stopped = true;'
+  mutated: 'stopped = false;'
+  reason: noAnimation stop closure idempotency latch (line 105). Same rationale as the paired guard above — without latching, repeated stop() calls re-erase an empty row; not user-observable.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ArithmeticOperator
+  original: 'index = (index + 1) % lines.length;'
+  mutated: 'index = (index + 1) * lines.length;'
+  reason: frame-cycling math inside setInterval. Killing this requires asserting an exact tick → frame mapping, which binds implementation detail (specific frames at specific tick counts). The visible contract is "spinner moves" — already covered by the existing "advances frames" test; tightening that further would be timing-flaky on slow CI.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ArithmeticOperator
+  original: 'index = (index + 1) % lines.length;'
+  mutated: 'index = (index - 1) % lines.length;'
+  reason: same frame-cycling math as the paired entry — direction flip lands on lines[-1] = undefined within 2 ticks. Killing this requires binding a precise frame sequence, which is implementation detail.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ArithmeticOperator
+  original: 'index = 1 % lines.length;'
+  mutated: 'index = 1 * lines.length;'
+  reason: initial index after the synchronous first frame write. With the mutant, first tick reads lines[8] = undefined; subsequent ticks recover via the modulo on line 120. Killing this requires asserting an exact frame at an exact tick (implementation detail) and would be timing-flaky.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ConditionalExpression
+  original: 'if (stopped) return;'
+  mutated: 'if (false) return;'
+  reason: defensive guard inside the setInterval tick (line 128). clearInterval is called synchronously inside stop() before returning, so no further ticks fire — the in-tick stopped check is unreachable in practice.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: ConditionalExpression
+  original: 'if (stopped) return;'
+  mutated: 'if (false) return;'
+  reason: animated stop closure idempotency guard (line 132). Without it, a second stop() calls clearInterval on a stopped handle (no-op) and writes the erase + show-cursor string a second time to an already-restored row — not user-observable.
+  added: 2026-04-26
+- file: src/core/spinner.ts
+  mutator: BooleanLiteral
+  original: 'stopped = true;'
+  mutated: 'stopped = false;'
+  reason: animated stop closure idempotency latch (line 133). Same rationale as the paired guard above — without latching, repeated stop() calls re-write the cursor-restore sequence; not user-observable.
+  added: 2026-04-26
