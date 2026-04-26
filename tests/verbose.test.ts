@@ -8,6 +8,11 @@ beforeEach(() => {
   seedTestConfig();
 });
 
+function parseElapsed(line: string): number {
+  const match = line.match(/\[\+(\d+\.\d+)s\]/);
+  return match?.[1] ? Number.parseFloat(match[1]) : 0;
+}
+
 describe("verbose module", () => {
   test("verbose is a no-op when disabled", () => {
     verbose("should not appear");
@@ -55,10 +60,18 @@ describe("verbose module", () => {
     await new Promise((r) => setTimeout(r, 50));
     verbose("second");
     const lines = stderr.text.trim().split("\n");
-    const parseElapsed = (line: string) => {
-      const match = line.match(/\[\+(\d+\.\d+)s\]/);
-      return match?.[1] ? Number.parseFloat(match[1]) : 0;
-    };
     expect(parseElapsed(lines[1] ?? "")).toBeGreaterThan(parseElapsed(lines[0] ?? ""));
+  });
+
+  test("elapsed time is reported in seconds, not milliseconds", async () => {
+    seedTestConfig({ verbose: true });
+    verbose("first");
+    await new Promise((r) => setTimeout(r, 100));
+    verbose("second");
+    const lines = stderr.text.trim().split("\n");
+    // 100ms wait → ~0.10s delta. Without the /1000 divisor (or with *1000),
+    // the displayed delta would be ~100 instead.
+    const delta = parseElapsed(lines[1] ?? "") - parseElapsed(lines[0] ?? "");
+    expect(delta).toBeLessThan(1);
   });
 });
