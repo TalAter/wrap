@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
-import { HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
+import { ERASE_LINE, HIDE_CURSOR, SHOW_CURSOR } from "../src/core/ansi.ts";
 import {
   resetExitGuard,
   SPINNER_FRAMES,
@@ -97,6 +97,23 @@ describe("startChromeSpinner", () => {
       expect(seenFrames).toEqual([]);
       // Status text still shown.
       expect(stderr.lines.some((w) => w.includes(SPINNER_TEXT))).toBe(true);
+    } finally {
+      stderr.restore();
+    }
+  });
+
+  test("stop clears the line in noAnimation mode", () => {
+    seedTestConfig({ noAnimation: true });
+    const stderr = mockStderr({ isTTY: true });
+    try {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      stop();
+      // Last write must contain a CR + erase-in-line so the status row is
+      // empty after stop — without it, the text would linger on the user's
+      // terminal once the LLM call returns.
+      const tail = stderr.lines[stderr.lines.length - 1] ?? "";
+      expect(tail).toContain("\r");
+      expect(tail).toContain(ERASE_LINE);
     } finally {
       stderr.restore();
     }
