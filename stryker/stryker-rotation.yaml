@@ -50,3 +50,4 @@
 - src/core/spinner.ts
 - src/core/theme.ts
 - src/core/verbose.ts
+- src/fs/home.ts
