@@ -1342,3 +1342,9 @@
   mutated: "[]"
   reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
   added: 2026-04-26
+- file: src/core/verbose.ts
+  mutator: BooleanLiteral
+  original: "!startTime"
+  mutated: "startTime"
+  reason: lazy-init guard for startTime. Without it, elapsed = performance.now()/1000 = process uptime instead of "time since first verbose call". Wrap is a CLI where verbose() fires within ms of process start, so the user-visible difference is a sub-second offset on the first line — practically equivalent.
+  added: 2026-04-26
