@@ -48,3 +48,4 @@
 - src/core/clipboard.ts
 - src/core/paths.ts
 - src/core/spinner.ts
+- src/core/theme.ts
