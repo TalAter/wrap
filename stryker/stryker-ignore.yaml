@@ -1360,3 +1360,9 @@
   mutated: "performance.now() + startTime"
   reason: deltas between successive verbose lines are unchanged (startTime is constant), only the baseline shifts by 2*startTime. In a wrap CLI run startTime is set within ms of process start, so every line is offset by a small constant — visually indistinguishable from the original output.
   added: 2026-04-26
+- file: src/core/verbose.ts
+  mutator: BlockStatement
+  original: "{ startTime = 0; }"
+  mutated: "{}"
+  reason: resetVerboseTimer is documented as "for tests only" and only called from tests/verbose.test.ts and tests/round.test.ts. No production caller; mutating the body has no runtime impact.
+  added: 2026-04-26
