@@ -1348,3 +1348,9 @@
   mutated: "startTime"
   reason: lazy-init guard for startTime. Without it, elapsed = performance.now()/1000 = process uptime instead of "time since first verbose call". Wrap is a CLI where verbose() fires within ms of process start, so the user-visible difference is a sub-second offset on the first line — practically equivalent.
   added: 2026-04-26
+- file: src/core/verbose.ts
+  mutator: ConditionalExpression
+  original: "!startTime"
+  mutated: "false"
+  reason: same effect as the BooleanLiteral mutant on this branch — disables the lazy-init reset so startTime stays 0. Sub-second offset on the first verbose line in a CLI run; not user-observable.
+  added: 2026-04-26
