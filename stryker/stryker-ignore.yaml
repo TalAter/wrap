@@ -1036,3 +1036,309 @@
   mutated: 'stopped = false;'
   reason: animated stop closure idempotency latch (line 133). Same rationale as the paired guard above — without latching, repeated stop() calls re-write the cursor-restore sequence; not user-observable.
   added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[60, 60, 100]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[102, 153, 255]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{ fg: [210, 210, 225], bg: [60, 60, 100] }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[210, 210, 225]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[130, 220, 160]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[40, 90, 60]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[180, 200, 255]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[60, 80, 160]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{ fg: [100, 100, 140], bg: [50, 50, 80] }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[100, 100, 140]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[50, 50, 80]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [120, 180, 255],\n      [60, 60, 100],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[120, 180, 255]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [245, 186, 74],\n      [206, 114, 255],\n      [94, 214, 255],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[245, 186, 74]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[206, 114, 255]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[105, 105, 130]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[25, 90, 190]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{\n    border: [170, 170, 195],\n    surface: [218, 232, 250],\n    accent: [220, 215, 238],\n    dim: [170, 170, 195],\n  }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[170, 170, 195]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[218, 232, 250]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[255, 165, 50]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{\n    selected: [15, 125, 55],\n  }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[15, 125, 55]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{\n    wizard: { fg: [10, 20, 90], bg: [150, 175, 220] },\n    riskLow: { fg: [15, 125, 55], bg: [215, 238, 220] },\n    riskMedium: { fg: [160, 95, 0], bg: [248, 232, 200] },\n    riskHigh: { fg: [190, 25, 45], bg: [248, 218, 218] },\n    fold: { fg: [45, 45, 70], bg: [210, 215, 230] },\n    stepDone: { fg: [15, 110, 55], bg: [210, 240, 215] },\n    stepActive: { fg: [30, 75, 190], bg: [210, 225, 250] },\n    stepPending: { fg: [130, 130, 155], bg: [220, 220, 230] },\n  }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{ fg: [10, 20, 90], bg: [150, 175, 220] }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[160, 95, 0]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[45, 45, 70]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[210, 215, 230]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{ fg: [15, 110, 55], bg: [210, 240, 215] }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{ fg: [30, 75, 190], bg: [210, 225, 250] }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[210, 240, 215]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[30, 75, 190]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[210, 225, 250]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{ fg: [130, 130, 155], bg: [220, 220, 230] }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[130, 130, 155]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[220, 220, 230]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: "{\n    wizard: [\n      [25, 90, 190],\n      [170, 170, 195],\n    ],\n    welcomeLogo: [\n      [160, 121, 191],\n      [79, 94, 133],\n    ],\n    welcomeBrain: [\n      [211, 76, 243],\n      [29, 227, 235],\n    ],\n    riskLow: [\n      [15, 150, 130],\n      [170, 170, 195],\n    ],\n    riskMedium: [\n      [175, 35, 115],\n      [170, 170, 195],\n    ],\n    riskHigh: [\n      [190, 25, 45],\n      [170, 170, 195],\n    ],\n    dim: [170, 170, 195],\n  }"
+  mutated: "{}"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [25, 90, 190],\n      [170, 170, 195],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [160, 121, 191],\n      [79, 94, 133],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[79, 94, 133]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[160, 121, 191]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [211, 76, 243],\n      [29, 227, 235],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[211, 76, 243]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[29, 227, 235]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [15, 150, 130],\n      [170, 170, 195],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[15, 150, 130]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [175, 35, 115],\n      [170, 170, 195],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[175, 35, 115]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[\n      [190, 25, 45],\n      [170, 170, 195],\n    ]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: "[190, 25, 45]"
+  mutated: "[]"
+  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
+  added: 2026-04-26
