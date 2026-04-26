@@ -1354,3 +1354,9 @@
   mutated: "false"
   reason: same effect as the BooleanLiteral mutant on this branch — disables the lazy-init reset so startTime stays 0. Sub-second offset on the first verbose line in a CLI run; not user-observable.
   added: 2026-04-26
+- file: src/core/verbose.ts
+  mutator: ArithmeticOperator
+  original: "performance.now() - startTime"
+  mutated: "performance.now() + startTime"
+  reason: deltas between successive verbose lines are unchanged (startTime is constant), only the baseline shifts by 2*startTime. In a wrap CLI run startTime is set within ms of process start, so every line is offset by a small constant — visually indistinguishable from the original output.
+  added: 2026-04-26
