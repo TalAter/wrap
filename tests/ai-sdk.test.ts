@@ -197,4 +197,12 @@ describe("buildModel routing", () => {
   test("throws when model missing", () => {
     expect(() => buildModel({ name: "openai" })).toThrow(/has no model/);
   });
+
+  test("throws when openai-compat has no baseURL", () => {
+    expect(() => buildModel({ name: "openrouter", model: "x", apiKey: "k" })).toThrow(/baseURL/);
+  });
+
+  test("throws when called with claude-code (CLI provider)", () => {
+    expect(() => buildModel({ name: "claude-code", model: "x" })).toThrow(/CLI provider/);
+  });
 });
