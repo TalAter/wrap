@@ -51,6 +51,13 @@ describe("initProvider factory", () => {
     });
     expect(typeof provider.runPrompt).toBe("function");
   });
+
+  test("non-test names do not route to the test provider", () => {
+    // The `name === "test"` guard is the only thing keeping non-test entries
+    // from short-circuiting to testProvider. testProvider accepts any
+    // ResolvedProvider; ai-sdk factories reject entries without a model.
+    expect(() => initProvider({ name: "anthropic" })).toThrow();
+  });
 });
 
 describe("testProvider error simulation", () => {
