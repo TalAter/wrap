@@ -52,3 +52,4 @@
 - src/core/verbose.ts
 - src/fs/home.ts
 - src/fs/temp.ts
+- src/llm/index.ts
