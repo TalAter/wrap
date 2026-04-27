@@ -1366,3 +1366,453 @@
   mutated: "{}"
   reason: resetVerboseTimer is documented as "for tests only" and only called from tests/verbose.test.ts and tests/round.test.ts. No production caller; mutating the body has no runtime impact.
   added: 2026-04-26
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ try { const r = result as { request?: { body?: unknown }; response?: { body?: unknown }; usage?: unknown;...'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ const r = result as { request?: { body?: unknown }; response?: { body?: unknown }; usage?: unknown; finis...'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: OptionalChaining
+  original: 'r.request?.body'
+  mutated: 'r.request.body'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: '!rawRequestWire || rawRequestWire.kind !== "http"'
+  mutated: 'false'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: '!rawRequestWire || rawRequestWire.kind !== "http"'
+  mutated: 'true'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: LogicalOperator
+  original: '!rawRequestWire || rawRequestWire.kind !== "http"'
+  mutated: '!rawRequestWire && rawRequestWire.kind !== "http"'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BooleanLiteral
+  original: '!rawRequestWire'
+  mutated: 'rawRequestWire'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'rawRequestWire.kind !== "http"'
+  mutated: 'false'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: EqualityOperator
+  original: 'rawRequestWire.kind !== "http"'
+  mutated: 'rawRequestWire.kind === "http"'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"http"'
+  mutated: '""'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ return { raw_response, wire_capture_error: "ai-sdk result.request.body is missing or not an object", }; }'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ raw_response, wire_capture_error: "ai-sdk result.request.body is missing or not an object", }'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"ai-sdk result.request.body is missing or not an object"'
+  mutated: '""'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ kind: "http" as const, body: scrubApiKey(rawRequestWire.body, apiKey) }'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ request_wire: requestWire, response_wire: { kind: "http", body: scrubApiKey(r.response?.body, apiKey), us...'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ kind: "http", body: scrubApiKey(r.response?.body, apiKey), usage: r.usage, finishReason: r.finishReason, }'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: OptionalChaining
+  original: 'r.response?.body'
+  mutated: 'r.response.body'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"http"'
+  mutated: '""'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ return { wire_capture_error: e instanceof Error ? e.message : String(e) }; }'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ wire_capture_error: e instanceof Error ? e.message : String(e) }'
+  mutated: '{}'
+  reason: log-only observability shim — populates wire_capture for log entries; mutations affect logged content only, not user-facing behavior
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ apiKey: resolveApiKey(resolved.apiKey), baseURL: resolved.baseURL, }'
+  mutated: '{}'
+  reason: createAnthropic auth args; mutating to {} loses apiKey/baseURL but SDK falls back to env vars and only fails on a real network call. Not catchable without binding to SDK construction shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ apiKey: resolveApiKey(resolved.apiKey), baseURL: resolved.baseURL, }'
+  mutated: '{}'
+  reason: createOpenAI auth args; same as anthropic — SDK falls back to env vars, mutation only catchable by binding to SDK construction shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: LogicalOperator
+  original: 'resolveApiKey(resolved.apiKey) ?? "nokey"'
+  mutated: 'resolveApiKey(resolved.apiKey) && "nokey"'
+  reason: placeholder apiKey for keyless local endpoints (Ollama, LM Studio); placeholder string isn't catchable without inspecting the SDK construction args.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"nokey"'
+  mutated: '""'
+  reason: placeholder apiKey for keyless local endpoints (Ollama, LM Studio); placeholder string isn't catchable without inspecting the SDK construction args.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ const raw = structuredClone(z.toJSONSchema(zodSchema)) as Record<string, unknown>; addAllToRequired(raw);...'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ validate: (value) => { const result = zodSchema.safeParse(value); if (result.success) return { success: t...'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ const result = zodSchema.safeParse(value); if (result.success) return { success: true as const, value: re...'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'result.success'
+  mutated: 'true'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'result.success'
+  mutated: 'false'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ success: true as const, value: result.data }'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ success: false as const, error: result.error as Error }'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ if (node.type === "object" && node.properties) { const props = node.properties as Record<string, Record<s...'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'node.type === "object" && node.properties'
+  mutated: 'true'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'node.type === "object" && node.properties'
+  mutated: 'false'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: LogicalOperator
+  original: 'node.type === "object" && node.properties'
+  mutated: 'node.type === "object" || node.properties'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'node.type === "object"'
+  mutated: 'true'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: EqualityOperator
+  original: 'node.type === "object"'
+  mutated: 'node.type !== "object"'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"object"'
+  mutated: '""'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ const props = node.properties as Record<string, Record<string, unknown>>; node.required = Object.keys(pro...'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'node.items'
+  mutated: 'true'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'node.items'
+  mutated: 'false'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ArrayDeclaration
+  original: '["anyOf", "oneOf", "allOf"]'
+  mutated: '[]'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"anyOf"'
+  mutated: '""'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"oneOf"'
+  mutated: '""'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"allOf"'
+  mutated: '""'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ if (Array.isArray(node[key])) { for (const child of node[key] as Record<string, unknown>[]) addAllToRequi...'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'Array.isArray(node[key])'
+  mutated: 'true'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ for (const child of node[key] as Record<string, unknown>[]) addAllToRequired(child); }'
+  mutated: '{}'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'Array.isArray(node[key])'
+  mutated: 'false'
+  reason: addAllToRequired/toOpenAIStrictSchema are internal helpers; covering mutants would require exporting them or mocking generateText to inspect the wrapped schema — both bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'reg.supportsStructuredOutputs === true'
+  mutated: 'true'
+  reason: wraps the schema for OpenAI-strict-mode providers in aiSdkProvider; mutations only observable by mocking generateText and inspecting the schema passed in — would bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'reg.supportsStructuredOutputs === true'
+  mutated: 'false'
+  reason: wraps the schema for OpenAI-strict-mode providers in aiSdkProvider; mutations only observable by mocking generateText and inspecting the schema passed in — would bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: EqualityOperator
+  original: 'reg.supportsStructuredOutputs === true'
+  mutated: 'reg.supportsStructuredOutputs !== true'
+  reason: wraps the schema for OpenAI-strict-mode providers in aiSdkProvider; mutations only observable by mocking generateText and inspecting the schema passed in — would bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: wraps the schema for OpenAI-strict-mode providers in aiSdkProvider; mutations only observable by mocking generateText and inspecting the schema passed in — would bind to AI SDK internals.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ if (schema) { const outputSchema = strictSchema ? toOpenAIStrictSchema(schema) : schema; const result = a...'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'schema'
+  mutated: 'true'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'schema'
+  mutated: 'false'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ const outputSchema = strictSchema ? toOpenAIStrictSchema(schema) : schema; const result = await generateT...'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ model, system: input.system, messages: input.messages, output: Output.object({ schema: outputSchema }), }'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ schema: outputSchema }'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ kind: "llm-wire", wire: captureFromResult(result, rawResponse, resolvedKey), }'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"llm-wire"'
+  mutated: '""'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'result.output === undefined'
+  mutated: 'false'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'result.output === undefined'
+  mutated: 'true'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: EqualityOperator
+  original: 'result.output === undefined'
+  mutated: 'result.output !== undefined'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ throw new Error("LLM returned no structured output."); }'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"LLM returned no structured output."'
+  mutated: '""'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ model, system: input.system, messages: input.messages, }'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ObjectLiteral
+  original: '{ kind: "llm-wire", wire: captureFromResult(result, result.text, resolvedKey), }'
+  mutated: '{}'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: StringLiteral
+  original: '"llm-wire"'
+  mutated: '""'
+  reason: runPrompt integrates with @ai-sdk generateText; mutants only catchable by mocking the SDK and binding to its construction or output shape.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ if (value === undefined) return undefined; try { return JSON.stringify(value); } catch { return undefined...'
+  mutated: '{}'
+  reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'value === undefined'
+  mutated: 'true'
+  reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: ConditionalExpression
+  original: 'value === undefined'
+  mutated: 'false'
+  reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: EqualityOperator
+  original: 'value === undefined'
+  mutated: 'value !== undefined'
+  reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ return JSON.stringify(value); }'
+  mutated: '{}'
+  reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
+  added: 2026-04-27
+- file: src/llm/providers/ai-sdk.ts
+  mutator: BlockStatement
+  original: '{ return undefined; }'
+  mutated: '{}'
+  reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
+  added: 2026-04-27
