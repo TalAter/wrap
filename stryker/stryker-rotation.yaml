@@ -56,3 +56,4 @@
 - src/llm/providers/ai-sdk.ts
 - src/llm/types.ts
 - src/llm/utils.ts
+- src/logging/writer.ts
