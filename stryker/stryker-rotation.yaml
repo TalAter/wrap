@@ -57,3 +57,4 @@
 - src/llm/types.ts
 - src/llm/utils.ts
 - src/logging/writer.ts
+- src/main.ts
