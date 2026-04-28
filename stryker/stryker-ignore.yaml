@@ -1816,3 +1816,125 @@
   mutated: '{}'
   reason: log-only — return value populates raw_response field on the wire capture used for logging traces; mutations don't affect user-facing behavior.
   added: 2026-04-27
+
+# src/main.ts (added 2026-04-28)
+- file: src/main.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: fallback for `o.aliases ?? []` when an option has no aliases. Only observable if a user passes "Stryker was here" as a CLI arg, which no real caller does.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: justCreated && input.type === "none" && !attachedInputBytes
+  mutated: 'false'
+  reason: justCreated=true requires the wizard to have just written config — all tests inject WRAP_CONFIG so justCreated is always false. The early-exit branch is the wizard-completed-then-no-args path, only reachable from a TTY without WRAP_CONFIG.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: LogicalOperator
+  original: justCreated && input.type === "none"
+  mutated: justCreated || input.type === "none"
+  reason: same — gates the post-wizard early-exit, which all tests bypass via WRAP_CONFIG. Operator-precedence mutation only matters when justCreated is true, never the case in the test harness.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: input.type === "none"
+  mutated: 'true'
+  reason: same — gates the post-wizard early-exit, only reachable when justCreated is true (TTY without WRAP_CONFIG).
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: EqualityOperator
+  original: input.type === "none"
+  mutated: input.type !== "none"
+  reason: same — gates the post-wizard early-exit, only reachable when justCreated is true (TTY without WRAP_CONFIG).
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"none"'
+  mutated: '""'
+  reason: same — gates the post-wizard early-exit, only reachable when justCreated is true (TTY without WRAP_CONFIG).
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: BooleanLiteral
+  original: '!attachedInputBytes'
+  mutated: attachedInputBytes
+  reason: same — gates the post-wizard early-exit, only reachable when justCreated is true (TTY without WRAP_CONFIG).
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: BlockStatement
+  original: 'chrome("✓ wrap configured — run w again to start wrapping"); return;'
+  mutated: '{}'
+  reason: body of the post-wizard early-exit; only runs when justCreated is true, never in the test harness.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"✓ wrap configured — run w again to start wrapping"'
+  mutated: '""'
+  reason: cosmetic chrome message printed only after the first-run wizard completes. No test asserts the exact text; equivalent for observable behavior.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: initial value of `attachedInputTruncated`. Overwritten on line 105 when attached input is present; when absent, the field is unused (format-context.ts only reads it inside `if (attachedInputPreview !== undefined)`). Truly equivalent.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ObjectLiteral
+  original: '{ mode: 0o600 }'
+  mutated: '{}'
+  reason: mode option to writeFile is defense-in-depth — the explicit chmod on the next line still pins the file to 0o600. Observable mode after both calls is identical; the only diff is a microscopic TOCTOU window between writeFile and chmod, which is not testable from userland.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`'
+  mutated: '``'
+  reason: verbose-mode log line printed to stderr only when --verbose is on. No test asserts the exact text.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ArrowFunction
+  original: (e) => e.tool
+  mutated: () => undefined
+  reason: maps watchlist entries to tool names for probeTools. Watchlist is empty by default in the test harness, so the map is a no-op either way. Effective tool list (PROBED_TOOLS minus invalid names) is unchanged for the empty-watchlist case.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: tools
+  mutated: 'true'
+  reason: gates a verbose-mode stderr line that summarizes tool counts. No test asserts this output.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: LogicalOperator
+  original: resolvePath(process.cwd()) ?? process.cwd()
+  mutated: resolvePath(process.cwd()) && process.cwd()
+  reason: resolvePath returns a canonical (symlink-resolved) path; `??` returns it on truthy, `&&` returns process.cwd() on truthy. On Linux, process.cwd() is already canonical so both branches return the same string. Only observable on macOS where /private/var differs from /var, and tests run on Linux.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: cwdFiles
+  mutated: 'true'
+  reason: gates a verbose-mode stderr line summarizing cwd file count. No test asserts this output.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: cwdFiles
+  mutated: 'false'
+  reason: same — gates a verbose-mode stderr line; not asserted.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: BlockStatement
+  original: 'verbose(`CWD: ${countCwdFiles(cwdFiles)} files listed`);'
+  mutated: '{}'
+  reason: body of a verbose-mode stderr log; no test asserts this output.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '`CWD: ${countCwdFiles(cwdFiles)} files listed`'
+  mutated: '``'
+  reason: verbose-mode log content; not asserted by any test.
+  added: 2026-04-28
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"argv"'
+  mutated: '""'
+  reason: the second `"argv"` on line 130 — the `: "argv"` fallback when input.type !== "prompt" and !attachedInputBytes. Only reached in TTY interactive-composer mode (otherwise line 55 already returned with --help). The interactive composer overrides inputSource to "tui" on submit (session.ts:182), so this fallback value is never observed.
+  added: 2026-04-28
