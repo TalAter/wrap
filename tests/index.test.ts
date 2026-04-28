@@ -603,4 +603,27 @@ describe("piped input", () => {
     const entry = JSON.parse(readFileSync(logPath, "utf-8").trim());
     expect("attached_input" in entry).toBe(false);
   });
+
+  test("log records prompt and input_source by invocation shape", async () => {
+    const reply = { type: "reply" as const, content: "ok", risk_level: "low" as const };
+    const [argvOnly, argvPipe, pipeOnly] = await Promise.all([
+      wrapMock("say hi", reply),
+      wrapMock("explain this", reply, undefined, "stdin data"),
+      wrapMock("", reply, undefined, "stdin data"),
+    ]);
+    const read = (wrapHome: string) =>
+      JSON.parse(readFileSync(join(wrapHome, "logs", "wrap.jsonl"), "utf-8").trim());
+
+    const e1 = read(argvOnly.wrapHome);
+    expect(e1.prompt).toBe("say hi");
+    expect(e1.input_source).toBe("argv");
+
+    const e2 = read(argvPipe.wrapHome);
+    expect(e2.prompt).toBe("explain this");
+    expect(e2.input_source).toBe("argv");
+
+    const e3 = read(pipeOnly.wrapHome);
+    expect(e3.prompt).toBe("");
+    expect(e3.input_source).toBe("pipe");
+  });
 });
