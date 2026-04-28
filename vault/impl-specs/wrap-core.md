@@ -71,9 +71,9 @@ Intra-core couplings (e.g. `tui` imports `ansi`) are normal — not surprises.
 - **Module surface = `src/<module>/index.ts`.** Only paths listed in `package.json` `exports` are importable. Sibling files inside `src/<module>/` are private.
 - **Intra-core imports use relative paths with `.ts` extensions** (mirrors wrap's convention; `tsconfig` enables `allowImportingTsExtensions`). Form: `../theme/index.ts`, not `wrap-core/theme`. Avoids self-referential resolution.
 - **TypeScript 5.** Locked. Consumers don't track 6 yet.
-- **Tooling mirrors wrap.** Same biome, same tsconfig strictness, same `.bun-version`. Bun for everything; never npm/pnpm. wrap-core's `.bun-version` and `bunfig.toml` already exist (empty); the first I/O-touching migration adds the `[test] preload` config and brings `tests/preload.ts`.
+- **Tooling mirrors wrap.** Same biome, same tsconfig strictness, same `.bun-version`. Bun for everything; never npm/pnpm. wrap-core's `.bun-version` and `bunfig.toml` are in place; bunfig has the `[test] preload` config wired. The first I/O-touching migration brings `tests/preload.ts` from wrap.
 - **Deps installed per-module on first need.** No pre-emptive installs.
-- **Tests + their helpers move with the module.** Core has its own `tests/`. A helper used only by moving tests moves with them; a helper shared with stays-in-wrap tests is copied (not moved) and the duplication is noted in the commit body. `tests/preload.ts` and the `[test] preload` config arrive with the first I/O-touching migration.
+- **Tests + their helpers move with the module.** Core has its own `tests/`. A helper used only by moving tests moves with them; a helper shared with stays-in-wrap tests is copied (not moved) and the duplication is noted in the commit body. `tests/preload.ts` arrives with the first I/O-touching migration; the `[test] preload` config is already in `wrap-core/bunfig.toml`.
 - **History preserved selectively.** `git filter-repo` for modules >300 LOC with meaningful commit history; smaller or just-rewritten files accept blame loss with `Originating-sha: <sha>` in the commit body.
 - **Single-agent dispatch.** Each migration runs as one agent with shell access to both repos (wrap work in the worktree, wrap-core work in canonical). Sequential — one agent finishes (or pauses) before the next.
 - **wrap-core ships its own `CLAUDE.md` and `vault/`.** Designed for LLM consumption.
@@ -105,7 +105,7 @@ Intra-core couplings (e.g. `tui` imports `ansi`) are normal — not surprises.
 
 Two layers in wrap-core's vault:
 
-- `wrap-core/vault/<concept>.md` — **internals**. Why decisions made, design rationale, deep notes. For LLMs working *inside* wrap-core. Standard concept-note style (terse, what+why-not-how, decisions inline). Write one when the migration involved a non-obvious refactor (lifted deps, surface reshape, or a rejected alternative). Pure copy-with-rename gets no internals note.
+- `wrap-core/vault/<concept>.md` — **internals**. Why decisions made, design rationale, deep notes. For LLMs working *inside* wrap-core. Standard concept-note style (terse, what+why-not-how, decisions inline) — see `../wrap/vault/vault-maintenance.md` for the full style rules. Write one when the migration involved a non-obvious refactor (lifted deps, surface reshape, or a rejected alternative). Pure copy-with-rename gets no internals note.
 
 - `wrap-core/vault/wrap-core-api/<concept>.md` — **usage surface**. For LLMs in consumer tools. Compact: frontmatter (`name`, `description`, `package`) → one-paragraph purpose → table of public symbols (Symbol | Shape | Note) → pointer to internals at the bottom. No additional sections.
 
@@ -124,6 +124,19 @@ Once modules and their vault notes leave wrap, wrap-side LLM sessions stay aware
 - The `wrap-core-api` symlink in wrap's vault (resolving through `node_modules/wrap-core`) gives consumer-side LLMs direct access to usage docs as if they were native to the wrap vault.
 - Public exports carry minimal TSDoc for IDE-hover surface lookup.
 
+## Picking and planning
+
+**No prescribed migration order.** The agent picks a candidate from the boundary list using judgement — typically leaf-first (modules whose import-graph closure pulls in nothing else from the candidate list). The boundary section's tightly-coupled-clusters note is the canonical guidance for what migrates as a unit.
+
+**Plan first, implement second.** Before executing the TDD recipe, the agent produces a brief plan and pauses for human review. The plan covers:
+- Candidate module + import-graph closure (the full migration unit, after running the closure check)
+- Wrap-specific deps anticipated to be lifted to parameters
+- Test files moving to wrap-core / staying in wrap / new tests to write
+- Surface shape (factory or namespace per the conventions; what `index.ts` exports)
+- Anticipated surprises or open questions
+
+The plan is a conversation artifact, not a commit. Human reviews; implementation begins on approval.
+
 ## Per-migration discipline (TDD)
 
 For each module:
@@ -131,7 +144,7 @@ For each module:
 1. **Tests in (failing).**
    - Copy unit tests for the module into `wrap-core/tests/`. Bring helpers + fixtures the tests depend on into `wrap-core/tests/helpers/` (or `tests/fixtures/` for fixture data).
    - Run an import-graph closure check on each helper. If a helper transitively imports unmigrated wrap-only modules (memory, discovery, session, etc.), narrow the helper or include the missing deps in this migration unit.
-   - **First I/O-touching migration only:** add `[test] preload = ["./tests/preload.ts"]` to the existing `wrap-core/bunfig.toml`, and bring `tests/preload.ts` from wrap.
+   - **First I/O-touching migration only:** bring `tests/preload.ts` from wrap. `wrap-core/bunfig.toml` already has the `[test] preload` config in place.
    - **No tests in wrap?** Write them now against the intended pure-framework interface (per the no-untested-module rule).
    - Tests should import from the final path (`wrap-core/<module>` once wired, or relative `../src/<module>` for now). Run `bun test`. Acceptable failure modes at this stage: import-resolution error, type error, or assertion failure. Confirm at least one before proceeding.
 
