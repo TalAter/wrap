@@ -2430,3 +2430,41 @@
   mutated: '{}'
   reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
   added: 2026-04-29
+- file: src/session/session.ts
+  mutator: ObjectLiteral
+  original: '{ mode: "inherit" }'
+  mutated: '{}'
+  reason: equivalent on the inherit path — executeShellCommand only branches on mode === "capture"; an empty options object falls through to inherit and returns the same {exitCode, exec_ms, shell}
+  added: 2026-04-29
+- file: src/session/session.ts
+  mutator: StringLiteral
+  original: '"inherit"'
+  mutated: '""'
+  reason: equivalent — executeShellCommand only branches on mode === "capture"; any non-capture mode value falls through to the inherit branch and returns the same observable result
+  added: 2026-04-29
+- file: src/session/session.ts
+  mutator: ConditionalExpression
+  original: |-
+    default: {
+          const _exhaustive: never = outcome;
+          throw new Error(`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`);
+        }
+  mutated: 'default:'
+  reason: unreachable — SessionOutcome is a closed discriminated union with all 6 variants handled in the switch; the default case is a TypeScript exhaustiveness guard that runtime never enters
+  added: 2026-04-29
+- file: src/session/session.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          const _exhaustive: never = outcome;
+          throw new Error(`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`);
+        }
+  mutated: '{}'
+  reason: unreachable — the default block in finaliseOutcome's switch is an exhaustiveness guard; runtime never reaches it because all SessionOutcome variants are handled
+  added: 2026-04-29
+- file: src/session/session.ts
+  mutator: StringLiteral
+  original: '`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`'
+  mutated: '``'
+  reason: unreachable — the error message is built only inside the default branch of the SessionOutcome switch, which a closed discriminated union never reaches at runtime
+  added: 2026-04-29
