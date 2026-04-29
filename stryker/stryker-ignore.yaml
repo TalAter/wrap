@@ -1938,3 +1938,18 @@
   mutated: '""'
   reason: the second `"argv"` on line 130 — the `: "argv"` fallback when input.type !== "prompt" and !attachedInputBytes. Only reached in TTY interactive-composer mode (otherwise line 55 already returned with --help). The interactive composer overrides inputSource to "tui" on submit (session.ts:182), so this fallback value is never observed.
   added: 2026-04-28
+- file: src/memory/init-prompt.ts
+  mutator: StringLiteral
+  original: |-
+    `You are analyzing raw output from system probe commands. Parse the results into concise, human-readable facts about the user's environment.
+
+    Rules:
+    - Return one fact per line, plain text (not JSON, not markdown)
+    - Infer implicit facts (e.g., Darwin → macOS, arm64 → Apple Silicon)
+    - Include: OS + version + architecture, shell + config file location
+    - Be concise — each fact should be a single short line
+    - Do not include facts that cannot be determined from the probe output
+    - Do not add bullet points or numbering`
+  mutated: '``'
+  reason: the entire export is the LLM system prompt for memory init (passed verbatim to provider.runPrompt as the `system` field in memory.ts). Mutating to `` only changes downstream LLM behavior; there is no deterministic unit-testable observable. Any test that asserts substring content of the prompt would bind implementation detail of the prompt engineering.
+  added: 2026-04-29
