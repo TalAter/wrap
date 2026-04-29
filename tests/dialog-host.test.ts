@@ -8,6 +8,18 @@ describe("chooseDialogStdin", () => {
     expect(fd).toBeNull();
   });
 
+  test("does not attempt to open /dev/tty when parent has a TTY", () => {
+    let opened = false;
+    chooseDialogStdin({
+      isTTY: true,
+      tryOpenTty: () => {
+        opened = true;
+        return 99;
+      },
+    });
+    expect(opened).toBe(false);
+  });
+
   test("opens /dev/tty and returns a ReadStream with isTTY=true when piped", () => {
     let opened = false;
     const { stream, fd } = chooseDialogStdin({
