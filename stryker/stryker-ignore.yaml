@@ -1953,3 +1953,480 @@
   mutated: '``'
   reason: the entire export is the LLM system prompt for memory init (passed verbatim to provider.runPrompt as the `system` field in memory.ts). Mutating to `` only changes downstream LLM behavior; there is no deterministic unit-testable observable. Any test that asserts substring content of the prompt would bind implementation detail of the prompt engineering.
   added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: OptionalChaining
+  original: 'deps?.tryOpenTty'
+  mutated: 'deps.tryOpenTty'
+  reason: 'deps?.tryOpenTty defensive: production callers (mountResponseDialog, mountConfigWizardDialog) call chooseDialogStdin() with no args (deps undefined), so the optional chain is needed; tests always pass deps with isTTY set, so deps is always defined when this expression evaluates — the optional chain is unobservable on every realized call'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: StringLiteral
+  original: '"/dev/tty"'
+  mutated: '""'
+  reason: 'openSync("", "r") throws ENOENT, the catch returns process.stdin/null — observably identical to the open-fails branch already exercised by the existing test'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ArrowFunction
+  original: '() => openSync("/dev/tty", "r")'
+  mutated: '() => undefined'
+  reason: 'default tryOpenTty returning undefined: new ReadStream(undefined) throws, falls into catch — same effective branch as the open-fails test path'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: StringLiteral
+  original: '"r"'
+  mutated: '""'
+  reason: 'openSync flag "" defaults to read mode on POSIX; equivalent on every supported platform'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      if (responseCached) return;
+      const [ink, react, responseDialogModule, themeModule] = await Promise.all([
+        import("ink"),
+        import("react"),
+        import("../tui/response-dialog.tsx"),
+        import("../tui/theme-context.tsx"),
+      ]);
+      responseCached = {
+        ink,
+        react,
+        ResponseDialog: responseDialogModule.ResponseDialog,
+        ThemeProvider: themeModule.ThemeProvider,
+      };
+    }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'responseCached'
+  mutated: 'true'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'responseCached'
+  mutated: 'false'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+        ink,
+        react,
+        ResponseDialog: responseDialogModule.ResponseDialog,
+        ThemeProvider: themeModule.ThemeProvider,
+      }
+  mutated: '{}'
+  reason: 'options/props object passed into ink.render or assigned to lazy cache: alt-screen Ink output is not captured in tests, so dropping options (alternateScreen, exitOnCtrlC, patchConsole, stdin override) or React props affects only what the user sees on a real terminal — invisible to the test harness'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      if (!responseCached) {
+        throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
+      }
+      const { ink, react, ResponseDialog, ThemeProvider: TP } = responseCached;
+      const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
+      const app = ink.render(
+        react.createElement(TP, null, react.createElement(ResponseDialog, props)),
+        {
+          ...DIALOG_INK_OPTIONS,
+          stdin,
+        },
+      );
+      return {
+        rerender(nextProps) {
+          app.rerender(react.createElement(TP, null, react.createElement(ResponseDialog, nextProps)));
+        },
+        unmount() {
+          app.unmount();
+          if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+            (stdin as { destroy: () => void }).destroy();
+          }
+        },
+      };
+    }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BooleanLiteral
+  original: '!responseCached'
+  mutated: 'responseCached'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: '!responseCached'
+  mutated: 'true'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: '!responseCached'
+  mutated: 'false'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
+      }
+  mutated: '{}'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: StringLiteral
+  original: '"mountResponseDialog: preloadResponseDialogModules() must resolve first"'
+  mutated: '""'
+  reason: 'error message text: tests assert the throw, not the message contents — cosmetic'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          ...DIALOG_INK_OPTIONS,
+          stdin,
+        }
+  mutated: '{}'
+  reason: 'options/props object passed into ink.render or assigned to lazy cache: alt-screen Ink output is not captured in tests, so dropping options (alternateScreen, exitOnCtrlC, patchConsole, stdin override) or React props affects only what the user sees on a real terminal — invisible to the test harness'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+        rerender(nextProps) {
+          app.rerender(react.createElement(TP, null, react.createElement(ResponseDialog, nextProps)));
+        },
+        unmount() {
+          app.unmount();
+          if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+            (stdin as { destroy: () => void }).destroy();
+          }
+        },
+      }
+  mutated: '{}'
+  reason: 'DialogHost return object: callers only invoke .rerender/.unmount and never assert on shape — replacing with {} breaks production but no test observes it'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          app.rerender(react.createElement(TP, null, react.createElement(ResponseDialog, nextProps)));
+        }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          app.unmount();
+          if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+            (stdin as { destroy: () => void }).destroy();
+          }
+        }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: 'true'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: 'false'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: LogicalOperator
+  original: 'ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: |-
+    ownedFd !== null || typeof (stdin as {
+      destroy?: () => void;
+    }).destroy === "function"
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'ownedFd !== null'
+  mutated: 'true'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: EqualityOperator
+  original: 'ownedFd !== null'
+  mutated: 'ownedFd === null'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: 'true'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: EqualityOperator
+  original: 'typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: |-
+    typeof (stdin as {
+      destroy?: () => void;
+    }).destroy !== "function"
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: StringLiteral
+  original: '"function"'
+  mutated: '""'
+  reason: 'typeof comparison value "function" → "": typeof never returns the empty string, so the conditional becomes always-false; the destroy() call only runs when /dev/tty was opened (ownedFd !== null) and tests do not assert on stdin destruction'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            (stdin as { destroy: () => void }).destroy();
+          }
+  mutated: '{}'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      await preloadResponseDialogModules();
+      if (!wizardCached) {
+        const m = await import("../tui/config-wizard-dialog.tsx");
+        wizardCached = { ConfigWizardDialog: m.ConfigWizardDialog };
+      }
+      // biome-ignore lint/style/noNonNullAssertion: populated by the awaits above
+      const { ink, react, ThemeProvider: TP } = responseCached!;
+      const { ConfigWizardDialog } = wizardCached;
+    
+      return new Promise<WizardResult | null>((resolve) => {
+        const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
+        const cleanup = () => {
+          app.unmount();
+          if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+            (stdin as { destroy: () => void }).destroy();
+          }
+        };
+        const props: WizardCallbacks = {
+          ...callbacks,
+          onDone: (result) => {
+            cleanup();
+            resolve(result);
+          },
+          onCancel: () => {
+            cleanup();
+            resolve(null);
+          },
+        };
+        const app = ink.render(
+          react.createElement(TP, null, react.createElement(ConfigWizardDialog, props)),
+          { ...DIALOG_INK_OPTIONS, stdin },
+        );
+      });
+    }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BooleanLiteral
+  original: '!wizardCached'
+  mutated: 'wizardCached'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: '!wizardCached'
+  mutated: 'true'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: '!wizardCached'
+  mutated: 'false'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        const m = await import("../tui/config-wizard-dialog.tsx");
+        wizardCached = { ConfigWizardDialog: m.ConfigWizardDialog };
+      }
+  mutated: '{}'
+  reason: 'module-level lazy-import cache check: tests reset the cache via resetDialogHostCache before each run, so the cached/uncached branches both exercise import code; mutating the guard either short-circuits a fresh load (dynamic imports are cached by the runtime so this still works) or skips an idempotent re-cache assignment — no observable difference'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ObjectLiteral
+  original: '{ ConfigWizardDialog: m.ConfigWizardDialog }'
+  mutated: '{}'
+  reason: 'options/props object passed into ink.render or assigned to lazy cache: alt-screen Ink output is not captured in tests, so dropping options (alternateScreen, exitOnCtrlC, patchConsole, stdin override) or React props affects only what the user sees on a real terminal — invisible to the test harness'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
+        const cleanup = () => {
+          app.unmount();
+          if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+            (stdin as { destroy: () => void }).destroy();
+          }
+        };
+        const props: WizardCallbacks = {
+          ...callbacks,
+          onDone: (result) => {
+            cleanup();
+            resolve(result);
+          },
+          onCancel: () => {
+            cleanup();
+            resolve(null);
+          },
+        };
+        const app = ink.render(
+          react.createElement(TP, null, react.createElement(ConfigWizardDialog, props)),
+          { ...DIALOG_INK_OPTIONS, stdin },
+        );
+      }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          app.unmount();
+          if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
+            (stdin as { destroy: () => void }).destroy();
+          }
+        }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: 'false'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: 'true'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: LogicalOperator
+  original: 'ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: |-
+    ownedFd !== null || typeof (stdin as {
+      destroy?: () => void;
+    }).destroy === "function"
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'ownedFd !== null'
+  mutated: 'true'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ConditionalExpression
+  original: 'typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: 'true'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: EqualityOperator
+  original: 'ownedFd !== null'
+  mutated: 'ownedFd === null'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: EqualityOperator
+  original: 'typeof (stdin as { destroy?: () => void }).destroy === "function"'
+  mutated: |-
+    typeof (stdin as {
+      destroy?: () => void;
+    }).destroy !== "function"
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: StringLiteral
+  original: '"function"'
+  mutated: '""'
+  reason: 'typeof comparison value "function" → "": typeof never returns the empty string, so the conditional becomes always-false; the destroy() call only runs when /dev/tty was opened (ownedFd !== null) and tests do not assert on stdin destruction'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            (stdin as { destroy: () => void }).destroy();
+          }
+  mutated: '{}'
+  reason: 'ownedFd !== null && typeof destroy === "function" cleanup guard: the destroy() call only fires when /dev/tty was actually opened by the dialog; integration tests mount via mountResponseDialog/mountConfigWizardDialog with no observable assertion on stream.destroy(), so any rewrite of this guard (always-true, always-false, AND→OR, equality flip) leaves the test outcome unchanged'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          ...callbacks,
+          onDone: (result) => {
+            cleanup();
+            resolve(result);
+          },
+          onCancel: () => {
+            cleanup();
+            resolve(null);
+          },
+        }
+  mutated: '{}'
+  reason: 'options/props object passed into ink.render or assigned to lazy cache: alt-screen Ink output is not captured in tests, so dropping options (alternateScreen, exitOnCtrlC, patchConsole, stdin override) or React props affects only what the user sees on a real terminal — invisible to the test harness'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            cleanup();
+            resolve(result);
+          }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            cleanup();
+            resolve(null);
+          }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: ObjectLiteral
+  original: '{ ...DIALOG_INK_OPTIONS, stdin }'
+  mutated: '{}'
+  reason: 'options/props object passed into ink.render or assigned to lazy cache: alt-screen Ink output is not captured in tests, so dropping options (alternateScreen, exitOnCtrlC, patchConsole, stdin override) or React props affects only what the user sees on a real terminal — invisible to the test harness'
+  added: 2026-04-29
+- file: src/session/dialog-host.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      responseCached = null;
+      wizardCached = null;
+    }
+  mutated: '{}'
+  reason: 'mount-internal block: integration tests (session.test.ts, config-wizard-dialog.test.tsx) drive the dialog through full session flows but do not observe Ink render internals — alt-screen output goes to stderr and is discarded in the test harness; replacing the body with {} breaks production but is invisible to the test environment'
+  added: 2026-04-29
