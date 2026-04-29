@@ -61,3 +61,4 @@
 - src/memory/init-prompt.ts
 - src/memory/types.ts
 - src/session/dialog-host.ts
+- src/session/session.ts
