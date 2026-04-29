@@ -59,3 +59,4 @@
 - src/logging/writer.ts
 - src/main.ts
 - src/memory/init-prompt.ts
+- src/memory/types.ts
