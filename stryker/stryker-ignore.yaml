@@ -2468,3 +2468,9 @@
   mutated: '``'
   reason: unreachable — the error message is built only inside the default branch of the SessionOutcome switch, which a closed discriminated union never reaches at runtime
   added: 2026-04-29
+- file: src/subcommands/forget-delete.ts
+  mutator: BlockStatement
+  original: 'result.errors.push(path);'
+  mutated: '{}'
+  reason: rmDir's outer catch only triggers on rmSync filesystem errors. With force=true and recursive=true, rmSync swallows ENOENT and successfully unlinks symlinks/files/dirs in normal usage; the only realistic triggers are EACCES/EBUSY/EROFS scenarios that require contrived mounts or permission setups not reproducible from any real caller path (deleteCache uses $WRAP_HOME, deleteScratch iterates os.tmpdir()).
+  added: 2026-04-30
