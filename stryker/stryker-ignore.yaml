@@ -2474,3 +2474,231 @@
   mutated: '{}'
   reason: rmDir's outer catch only triggers on rmSync filesystem errors. With force=true and recursive=true, rmSync swallows ENOENT and successfully unlinks symlinks/files/dirs in normal usage; the only realistic triggers are EACCES/EBUSY/EROFS scenarios that require contrived mounts or permission setups not reproducible from any real caller path (deleteCache uses $WRAP_HOME, deleteScratch iterates os.tmpdir()).
   added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: 'Command.kind discriminator; dispatch uses flag, not kind. help/completion only branch on kind===option, so mutating a command''s kind to empty is unobservable.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"forget"'
+  mutated: '""'
+  reason: 'Command.id is metadata; dispatch resolves by flag, no test asserts the id string.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"Delete persisted user data (memory, logs, cache, temp files)"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ArrayDeclaration
+  original: "[\n    \"Interactive multi-select dialog. Select which of the four buckets to wipe:\",\n    \"  Memory        ~/.wrap/memory.json + ~/.wrap/tool-watchlist.json\",\n    \"  Logs          ~/.wrap/logs/wrap.jsonl\",\n    \"  Cache         ~/.wrap/cache/\",\n    \"  Temp files    $TMPDIR/wrap-scratch-*\",\n    \"\",\n    \"--yolo skips the dialog and deletes all four.\",\n    \"config.jsonc is never touched — use `rm` if you want it gone.\",\n  ]"
+  mutated: '[]'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"w --forget [--yolo]"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"Interactive multi-select dialog. Select which of the four buckets to wipe:"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Memory        ~/.wrap/memory.json + ~/.wrap/tool-watchlist.json"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Cache         ~/.wrap/cache/"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Logs          ~/.wrap/logs/wrap.jsonl"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Temp files    $TMPDIR/wrap-scratch-*"'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'blank line in the help-array; only formatting of `--help` output, never asserted.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"--yolo skips the dialog and deletes all four."'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"config.jsonc is never touched — use `rm` if you want it gone."'
+  mutated: '""'
+  reason: 'metadata text shown only by `w --help`; no behavioral test asserts the description, usage, or help-array contents.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'newline used by help.join("\n"); join character is cosmetic, no test asserts the help-output formatting.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ObjectLiteral
+  original: "{\n      memory: memoryFootprint(wrapHome),\n      logs: logsFootprint(wrapHome),\n      cache: cacheFootprint(wrapHome),\n      scratch: scratchFootprint(tmpBase),\n    }"
+  mutated: '{}'
+  reason: 'footprints is consumed only by showDialog (TTY path). yolo path skips it; dialog path is covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: '!process.stdin.isTTY'
+  mutated: 'true'
+  reason: 'tests pipe stdin so process.stdin.isTTY is already falsy and the check is already true; the `true` mutation is only observable in TTY mode, which we deliberately do not exercise here.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values === null || values.length === 0'
+  mutated: 'true'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values === null || values.length === 0'
+  mutated: 'false'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values === null'
+  mutated: 'false'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: LogicalOperator
+  original: 'values === null || values.length === 0'
+  mutated: 'values === null && values.length === 0'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: EqualityOperator
+  original: 'values === null'
+  mutated: 'values !== null'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values.length === 0'
+  mutated: 'false'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: EqualityOperator
+  original: 'values.length === 0'
+  mutated: 'values.length !== 0'
+  reason: 'branches on showDialog return value (cancel vs empty submit). showDialog is gated behind a TTY and is not reached by any forget-cmd test; the dialog itself is covered separately by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: "{\n        chrome(`Forget error: could not remove ${path}.`);\n        anyFailure = true;\n      }"
+  mutated: '{}'
+  reason: 'deletion-failure path: requires unlinkSync/rmSync to throw a non-ENOENT error. Tests run as root in CI, so chmod-based denial does not actually fail. No way to reliably trigger this here.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: 'deletion-failure path: requires unlinkSync/rmSync to throw a non-ENOENT error. Tests run as root in CI, so chmod-based denial does not actually fail. No way to reliably trigger this here.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '`Forget error: could not remove ${path}.`'
+  mutated: '``'
+  reason: 'deletion-failure path: requires unlinkSync/rmSync to throw a non-ENOENT error. Tests run as root in CI, so chmod-based denial does not actually fail. No way to reliably trigger this here.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'anyFailure'
+  mutated: 'false'
+  reason: 'deletion-failure path: requires unlinkSync/rmSync to throw a non-ENOENT error. Tests run as root in CI, so chmod-based denial does not actually fail. No way to reliably trigger this here.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"\uf1f8"'
+  mutated: '""'
+  reason: 'icon glyph picked for the `Forgotten.` line; cosmetic, runtime never reads it back.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"🗑️"'
+  mutated: '""'
+  reason: 'icon glyph picked for the `Forgotten.` line; cosmetic, runtime never reads it back.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: "{\n  const [ink, react, forgetDialog, theme] = await Promise.all([\n    import(\"ink\"),\n    import(\"react\"),\n    import(\"../tui/forget-dialog.tsx\"),\n    import(\"../tui/theme-context.tsx\"),\n  ]);\n  const { ForgetDialog } = forgetDialog;\n  const { ThemeProvider } = theme;\n\n  return new Promise<string[] | null>((resolve) => {\n    const onSubmit = (values: string[]) => {\n      app.unmount();\n      resolve(values);\n    };\n    const onCancel = () => {\n      app.unmount();\n      resolve(null);\n    };\n    const app = ink.render(\n      react.createElement(\n        ThemeProvider,\n        null,\n        react.createElement(ForgetDialog, { footprints, onSubmit, onCancel }),\n      ),\n      {\n        stdout: process.stderr,\n        patchConsole: false,\n        alternateScreen: true,\n      },\n    );\n  });\n}"
+  mutated: '{}'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ArrayDeclaration
+  original: "[\n    import(\"ink\"),\n    import(\"react\"),\n    import(\"../tui/forget-dialog.tsx\"),\n    import(\"../tui/theme-context.tsx\"),\n  ]"
+  mutated: '[]'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: "{\n    const onSubmit = (values: string[]) => {\n      app.unmount();\n      resolve(values);\n    };\n    const onCancel = () => {\n      app.unmount();\n      resolve(null);\n    };\n    const app = ink.render(\n      react.createElement(\n        ThemeProvider,\n        null,\n        react.createElement(ForgetDialog, { footprints, onSubmit, onCancel }),\n      ),\n      {\n        stdout: process.stderr,\n        patchConsole: false,\n        alternateScreen: true,\n      },\n    );\n  }"
+  mutated: '{}'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: "{\n      app.unmount();\n      resolve(values);\n    }"
+  mutated: '{}'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: "{\n      app.unmount();\n      resolve(null);\n    }"
+  mutated: '{}'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ObjectLiteral
+  original: "{\n        stdout: process.stderr,\n        patchConsole: false,\n        alternateScreen: true,\n      }"
+  mutated: '{}'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: ObjectLiteral
+  original: '{ footprints, onSubmit, onCancel }'
+  mutated: '{}'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
+- file: src/subcommands/forget.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
+  added: 2026-04-30
