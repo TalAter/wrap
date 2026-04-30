@@ -182,4 +182,16 @@ describe("deleteScratch", () => {
     expect(existsSync(join(base, "loose-file"))).toBe(true);
     expect(existsSync(join(base, "wrap-scratch-keep-prefix"))).toBe(false);
   });
+
+  test("dangling wrap-scratch- symlink: removed stays false", () => {
+    // A dangling symlink in tmp can happen if a previous run was interrupted.
+    // rmDir reports removed=false (the inner readdirSync throws ENOENT, so
+    // `existed` is false), even though rmSync(force:true) unlinks the symlink.
+    // The outer `if (r.removed)` guard must propagate that false — otherwise
+    // forget would print "Forgotten." on a no-op cleanup.
+    symlinkSync(join(base, "missing-target"), join(base, "wrap-scratch-dangling"));
+    const r = deleteScratch(base);
+    expect(r.removed).toBe(false);
+    expect(r.errors).toEqual([]);
+  });
 });
