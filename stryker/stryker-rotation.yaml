@@ -65,3 +65,4 @@
 - src/session/state.ts
 - src/subcommands/dispatch.ts
 - src/subcommands/forget-delete.ts
+- src/subcommands/forget.ts
