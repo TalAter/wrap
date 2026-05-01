@@ -3564,3 +3564,33 @@
   mutated: /--/
   reason: /^--/ vs /--/; equivalent on real CLI flag names (no flag contains -- mid-string), only diverges on contrived inputs
   added: 2026-05-01
+- file: src/subcommands/registry.ts
+  mutator: ConditionalExpression
+  original: 'entry[1].flag.length > 0'
+  mutated: 'true'
+  reason: defensive guard on SETTINGS entries; no entry ever has flag: [], so the false branch is unreachable
+  added: 2026-05-01
+- file: src/subcommands/registry.ts
+  mutator: EqualityOperator
+  original: 'entry[1].flag.length > 0'
+  mutated: 'entry[1].flag.length >= 0'
+  reason: defensive guard on SETTINGS entries; no entry ever has flag: [], so > 0 vs >= 0 never differs
+  added: 2026-05-01
+- file: src/subcommands/registry.ts
+  mutator: ConditionalExpression
+  original: 'aliases.length > 0 ? aliases : undefined'
+  mutated: 'true ? aliases : undefined'
+  reason: every consumer reads aliases as `aliases ?? []` (main.ts:28, completion.ts:22), so undefined vs [] is unobservable
+  added: 2026-05-01
+- file: src/subcommands/registry.ts
+  mutator: EqualityOperator
+  original: 'aliases.length > 0'
+  mutated: 'aliases.length >= 0'
+  reason: every consumer reads aliases as `aliases ?? []` (main.ts:28, completion.ts:22), so undefined vs [] is unobservable
+  added: 2026-05-01
+- file: src/subcommands/registry.ts
+  mutator: StringLiteral
+  original: '`w ${primary}`'
+  mutated: '``'
+  reason: fallback only runs when a flagged SETTINGS entry omits `usage`; every flagged setting defines usage today, so the fallback string is dead code
+  added: 2026-05-01
