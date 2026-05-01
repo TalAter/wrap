@@ -69,3 +69,4 @@
 - src/subcommands/help.ts
 - src/subcommands/registry.ts
 - src/subcommands/types.ts
+- src/subcommands/version.ts
