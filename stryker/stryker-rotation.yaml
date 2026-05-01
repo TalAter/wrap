@@ -68,3 +68,4 @@
 - src/subcommands/forget.ts
 - src/subcommands/help.ts
 - src/subcommands/registry.ts
+- src/subcommands/types.ts
