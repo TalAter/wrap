@@ -38,6 +38,10 @@ describe("options derived from SETTINGS", () => {
     expect(verbose?.usage).toBe(SETTINGS.verbose.usage);
     const model = byId.get("model");
     expect(model?.help).toBe(SETTINGS.model.help);
+    // model's usage carries the "<provider[:model]>" argument hint, so it
+    // differs from the `w ${primary}` fallback — this catches the fallback
+    // silently replacing a setting's own usage string.
+    expect(model?.usage).toBe(SETTINGS.model.usage);
   });
 
   test("env names from SETTINGS flow through to the Option", () => {
