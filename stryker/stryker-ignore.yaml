@@ -3594,3 +3594,9 @@
   mutated: '``'
   reason: fallback only runs when a flagged SETTINGS entry omits `usage`; every flagged setting defines usage today, so the fallback string is dead code
   added: 2026-05-01
+- file: src/subcommands/version.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: TS-only discriminator on Command; runtime never compares versionCmd.kind, only `kind === "option"` checks elsewhere (help.ts:224, completion.ts:27) which evaluate false for Commands regardless of value
+  added: 2026-05-01
