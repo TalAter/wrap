@@ -266,6 +266,13 @@ describe("buildDiffEscape", () => {
     expect(out).toContain("Y");
   });
 
+  test("emits a cursor column move when the diff starts past column 0", () => {
+    const prev = [["x", "x", "x"]];
+    const curr = [["x", "x", "Y"]];
+    const out = buildDiffEscape(prev, curr);
+    expect(out).toContain("\x1b[2C");
+  });
+
   test("skips unchanged rows entirely, no cursor motion for them", () => {
     const prev = [
       ["a", "b"],
@@ -380,8 +387,9 @@ describe("--help", () => {
   });
 
   test("errors with too many arguments", async () => {
-    const { exitCode } = await wrap("--help --log extra");
+    const { exitCode, stderr } = await wrap("--help --log extra");
     expect(exitCode).toBe(1);
+    expect(stderr).toContain("at most one argument");
   });
 
   test("--no-animation suppresses animation but still prints help", async () => {
