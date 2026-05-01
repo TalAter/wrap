@@ -3600,3 +3600,9 @@
   mutated: '""'
   reason: TS-only discriminator on Command; runtime never compares versionCmd.kind, only `kind === "option"` checks elsewhere (help.ts:224, completion.ts:27) which evaluate false for Commands regardless of value
   added: 2026-05-01
+- file: src/subcommands/version.ts
+  mutator: StringLiteral
+  original: '"version"'
+  mutated: '""'
+  reason: Command.id is never read at runtime; only Option.id is consumed (main.ts:27 maps it to ModifierSpec.name). The id field on Commands is purely an internal label.
+  added: 2026-05-01
