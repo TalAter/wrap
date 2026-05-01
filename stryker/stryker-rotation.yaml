@@ -67,3 +67,4 @@
 - src/subcommands/forget-delete.ts
 - src/subcommands/forget.ts
 - src/subcommands/help.ts
+- src/subcommands/registry.ts
