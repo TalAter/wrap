@@ -2702,3 +2702,865 @@
   mutated: 'false'
   reason: 'internals of showDialog (imports, ink.render, onSubmit/onCancel resolvers, render options). showDialog is the TTY-only path and is not reached by forget-cmd tests; component covered by forget-dialog.test.tsx.'
   added: 2026-04-30
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[255, 136, 0]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[255, 51, 51]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[255, 204, 0]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[51, 204, 51]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[0, 204, 204]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[204, 51, 255]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[51, 102, 255]'
+  mutated: '[]'
+  reason: SPECTRUM rainbow color tuple is decorative; no test asserts exact gradient colors
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"  "'
+  mutated: '""'
+  reason: INDENT is cosmetic visual layout; no test asserts indentation depth
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: Regex
+  original: '/^w\s+/'
+  mutated: '/w\s+/'
+  reason: 'equivalent on real CLIFlag.usage strings — all start with ''w '' (single space) at position 0'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: Regex
+  original: '/^w\s+/'
+  mutated: '/^w\s/'
+  reason: 'equivalent on real CLIFlag.usage strings — all start with ''w '' (single space) at position 0'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: padding fill character is cosmetic; only affects column alignment
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 24 - flag.length
+  mutated: 24 + flag.length
+  reason: padding-width arithmetic is cosmetic; alignment width not asserted by tests
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"      wrap writes the shell command for your request and runs it after"'
+  mutated: '""'
+  reason: 'example body/continuation prose; only headline ''wrap copy...'' and ''launch interactive'' are tested'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"      you confirm"'
+  mutated: '""'
+  reason: 'example body/continuation prose; only headline ''wrap copy...'' and ''launch interactive'' are tested'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"  wrap"'
+  mutated: '""'
+  reason: 'example body/continuation prose; only headline ''wrap copy...'' and ''launch interactive'' are tested'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"      editor"'
+  mutated: '""'
+  reason: 'example body/continuation prose; only headline ''wrap copy...'' and ''launch interactive'' are tested'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap - natural language shell commands"'
+  mutated: '""'
+  reason: 'tagline duplicates the more user-visible ''wrap copy...'' example below; not contract-asserted'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderPlain output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderPlain output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderPlain output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderPlain output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\x1b[0m"'
+  mutated: '""'
+  reason: ANSI reset code at flag-color boundary; cosmetic styling, no test asserts exact reset placement
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'fallback empty-string when color is disabled; only matters at color level 0 which tests don''t exercise'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Usage:")} w <prompt>`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Usage:"'
+  mutated: '""'
+  reason: Usage label in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Examples:")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Examples:"'
+  mutated: '""'
+  reason: Examples label in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`    ${colorizeFlag("wrap copy the contents of my .env file to clipboard, mask any IP addresses")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap copy the contents of my .env file to clipboard, mask any IP addresses"'
+  mutated: '""'
+  reason: example text in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("wrap writes the shell command for your request and runs it after")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap writes the shell command for your request and runs it after"'
+  mutated: '""'
+  reason: example continuation in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("you confirm")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"you confirm"'
+  mutated: '""'
+  reason: example continuation in renderStyled; cosmetic prose
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`    ${colorizeFlag("wrap")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap"'
+  mutated: '""'
+  reason: example word in renderStyled; same content tested via renderPlain (line 43)
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("launch interactive mode — compose a multiline prompt in a friendly")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"launch interactive mode — compose a multiline prompt in a friendly"'
+  mutated: '""'
+  reason: example continuation in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("editor")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"editor"'
+  mutated: '""'
+  reason: example continuation in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Commands:")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Commands:"'
+  mutated: '""'
+  reason: Commands label in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Options:")}`'
+  mutated: '``'
+  reason: template literal wrapping a styled output line; styled-mode chrome is tested in plain mode where the same content lives
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Options:"'
+  mutated: '""'
+  reason: Options label in renderStyled; same content tested via renderPlain
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in renderStyled output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: join-newline literal; tests use toContain, not exact line-count assertions
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[BAR, ...INDENTED_LOGO, BAR]'
+  mutated: '[]'
+  reason: ART_LINES is built once from BAR + INDENTED_LOGO; structure not asserted, contents come from constants
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: terminalRows <= 0
+  mutated: 'false'
+  reason: guard for non-positive terminalRows; process.stdout.rows is always >=0 or undefined, so the boundary never matters in practice
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: terminalRows <= 0
+  mutated: terminalRows < 0
+  reason: guard for non-positive terminalRows; process.stdout.rows is always >=0 or undefined, so the boundary never matters in practice
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+      return t * t * (3 - 2 * t);
+    }
+  mutated: '{}'
+  reason: smoothstep is only used by renderAnimated; animation timing/easing is not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: t * t * (3 - 2 * t)
+  mutated: t * t / (3 - 2 * t)
+  reason: smoothstep easing arithmetic; only affects shine progression in animation, not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: t * t
+  mutated: t / t
+  reason: smoothstep easing arithmetic; only affects shine progression in animation, not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 3 - 2 * t
+  mutated: 3 + 2 * t
+  reason: smoothstep easing arithmetic; only affects shine progression in animation, not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 2 * t
+  mutated: 2 / t
+  reason: smoothstep easing arithmetic; only affects shine progression in animation, not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+      return ART_LINES.map((line) => gradientCells(line, SPECTRUM, shinePos, SHINE_RADIUS, level));
+    }
+  mutated: '{}'
+  reason: buildFrame is only used by renderAnimated; animation frames are not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrowFunction
+  original: (line) => gradientCells(line, SPECTRUM, shinePos, SHINE_RADIUS, level)
+  mutated: () => undefined
+  reason: buildFrame map callback; animation internals not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: UnaryOperator
+  original: -1
+  mutated: +1
+  reason: maxCol initial value is sentinel; equivalent because minCol === -1 short-circuits before maxCol is read
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: c < currLine.length
+  mutated: c <= currLine.length
+  reason: loop bound off-by-one; the extra iteration reads undefined cells but compare with prevLine?.[c] still excludes them from the emitted range
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: row - atRow
+  mutated: row + atRow
+  reason: dy = row - atRow; equivalent on tested cases (only one diff row at a time, atRow stays 0 until diff)
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: dy > 0
+  mutated: 'true'
+  reason: dy > 0 guard; equivalent on tested cases — dy is never negative when reached
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: dy > 0
+  mutated: dy >= 0
+  reason: dy > 0 guard; equivalent on tested cases — dy is never negative when reached
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\r"'
+  mutated: '""'
+  reason: carriage return after dy down; the explicit column-move that follows compensates so visual position is unaffected
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: minCol > 0
+  mutated: 'true'
+  reason: 'minCol > 0 boundary; remaining mutants are equivalent — they only diverge at minCol == 0 where emitting \x1b[0C is a no-op on standard terminals'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: minCol > 0
+  mutated: minCol >= 0
+  reason: 'minCol > 0 boundary; remaining mutants are equivalent — they only diverge at minCol == 0 where emitting \x1b[0C is a no-op on standard terminals'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\x1b[0m"'
+  mutated: '""'
+  reason: ANSI reset after row paint; cosmetic styling, color bleed not asserted by tests
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+      const level = colorLevel();
+      const styled = renderStyled(commands, options, level);
+    
+      // Shine needs truecolor to blend white into the gradient; below that we
+      // render the signature color solidly and there's nothing to animate.
+      if (level < 3) {
+        process.stdout.write(styled);
+        return;
+      }
+    
+      const totalRows = styled.split("\n").length - 1;
+      const artStart = 1;
+    
+      if (!animationFits(totalRows, process.stdout.rows)) {
+        process.stdout.write(styled);
+        return;
+      }
+    
+      process.stdout.write(styled);
+    
+      const showCursor = () => chromeRaw(SHOW_CURSOR);
+      const onSigint = () => {
+        showCursor();
+        process.stdout.write(`\r\x1b[${totalRows - artStart}B\n`);
+        process.exit(130);
+      };
+      process.on("SIGINT", onSigint);
+    
+      chromeRaw("\x1b[?25l");
+      try {
+        process.stdout.write(`\x1b[${totalRows - artStart}A`);
+    
+        // Baseline matches renderStyled's no-shine output, so frame 0 is a
+        // no-op diff but still consumes its delay — keeps total duration
+        // equal to FRAMES * FRAME_DELAY for predictable pacing.
+        let prev = buildFrame(undefined, level);
+        for (let frame = 0; frame < FRAMES; frame++) {
+          const t = smoothstep(frame / (FRAMES - 1));
+          const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+          const curr = buildFrame(shinePos, level);
+          process.stdout.write(buildDiffEscape(prev, curr));
+          prev = curr;
+          await Bun.sleep(FRAME_DELAY);
+        }
+    
+        process.stdout.write(`\x1b[${totalRows - artStart}B`);
+      } finally {
+        showCursor();
+        process.removeListener("SIGINT", onSigint);
+      }
+    }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: level < 3
+  mutated: 'true'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: level < 3
+  mutated: 'false'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: level < 3
+  mutated: level <= 3
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: level < 3
+  mutated: level >= 3
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+        process.stdout.write(styled);
+        return;
+      }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'styled.split("\n").length - 1'
+  mutated: 'styled.split("\n").length + 1'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BooleanLiteral
+  original: '!animationFits(totalRows, process.stdout.rows)'
+  mutated: animationFits(totalRows, process.stdout.rows)
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: '!animationFits(totalRows, process.stdout.rows)'
+  mutated: 'true'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: '!animationFits(totalRows, process.stdout.rows)'
+  mutated: 'false'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+        process.stdout.write(styled);
+        return;
+      }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrowFunction
+  original: () => chromeRaw(SHOW_CURSOR)
+  mutated: () => undefined
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+        showCursor();
+        process.stdout.write(`\r\x1b[${totalRows - artStart}B\n`);
+        process.exit(130);
+      }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`\r\x1b[${totalRows - artStart}B\n`'
+  mutated: '``'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: totalRows - artStart
+  mutated: totalRows + artStart
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"SIGINT"'
+  mutated: '""'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\x1b[?25l"'
+  mutated: '""'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+        process.stdout.write(`\x1b[${totalRows - artStart}A`);
+    
+        // Baseline matches renderStyled's no-shine output, so frame 0 is a
+        // no-op diff but still consumes its delay — keeps total duration
+        // equal to FRAMES * FRAME_DELAY for predictable pacing.
+        let prev = buildFrame(undefined, level);
+        for (let frame = 0; frame < FRAMES; frame++) {
+          const t = smoothstep(frame / (FRAMES - 1));
+          const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+          const curr = buildFrame(shinePos, level);
+          process.stdout.write(buildDiffEscape(prev, curr));
+          prev = curr;
+          await Bun.sleep(FRAME_DELAY);
+        }
+    
+        process.stdout.write(`\x1b[${totalRows - artStart}B`);
+      }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`\x1b[${totalRows - artStart}A`'
+  mutated: '``'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: totalRows - artStart
+  mutated: totalRows + artStart
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: frame < FRAMES
+  mutated: 'false'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: frame < FRAMES
+  mutated: frame <= FRAMES
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: frame < FRAMES
+  mutated: frame >= FRAMES
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: UpdateOperator
+  original: frame++
+  mutated: frame--
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+          const t = smoothstep(frame / (FRAMES - 1));
+          const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+          const curr = buildFrame(shinePos, level);
+          process.stdout.write(buildDiffEscape(prev, curr));
+          prev = curr;
+          await Bun.sleep(FRAME_DELAY);
+        }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: frame / (FRAMES - 1)
+  mutated: frame * (FRAMES - 1)
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: FRAMES - 1
+  mutated: FRAMES + 1
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS
+  mutated: Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) + SHINE_RADIUS
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: t * (LOGO_WIDTH + 2 * SHINE_RADIUS)
+  mutated: t / (LOGO_WIDTH + 2 * SHINE_RADIUS)
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: LOGO_WIDTH + 2 * SHINE_RADIUS
+  mutated: LOGO_WIDTH - 2 * SHINE_RADIUS
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 2 * SHINE_RADIUS
+  mutated: 2 / SHINE_RADIUS
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`\x1b[${totalRows - artStart}B`'
+  mutated: '``'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: totalRows - artStart
+  mutated: totalRows + artStart
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+        showCursor();
+        process.removeListener("SIGINT", onSigint);
+      }
+  mutated: '{}'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"SIGINT"'
+  mutated: '""'
+  reason: renderAnimated is interactive terminal animation (cursor manipulation, frame timing, SIGINT handler); not unit-tested by design
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator in flag help output; visual whitespace, not behavioral
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: flag.help
+  mutated: 'true'
+  reason: flag.help condition; both branches produce well-formed output, only optional extra section text
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator before flag.help section; cosmetic
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'flag.kind === "option"'
+  mutated: 'true'
+  reason: flag.kind === option guard; only options have env vars, but the helper handles empty env array safely
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: flag.env.length > 0
+  mutated: 'true'
+  reason: 'flag.env.length > 0 guard; redundant with the kind === option guard for our schema (no option has env: [])'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: flag.env.length > 0
+  mutated: flag.env.length >= 0
+  reason: 'flag.env.length > 0 guard; redundant with the kind === option guard for our schema (no option has env: [])'
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator before Env section; cosmetic
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: helpCmd.kind discriminator; test fixtures do not assert kind values on registry entries
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"help"'
+  mutated: '""'
+  reason: helpCmd.id is internal identifier; not surfaced in any user-facing output
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: |
+    [
+        "You already know this. You're here.",
+        "",
+        "Run it with a command name for help on that command, e.g. w --help log",
+      ]
+  mutated: '[]'
+  reason: helpCmd.help body array; help text content is informational, only existence is verified
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"You already know this. You''re here."'
+  mutated: '""'
+  reason: helpCmd.help line is flavor text, not contract
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: blank-line separator inside helpCmd.help; cosmetic
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Run it with a command name for help on that command, e.g. w --help log"'
+  mutated: '""'
+  reason: helpCmd.help instruction line; covered by the broader subcommand-help test family at the description level
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: newline join in helpCmd.help; tests use toContain not exact-format assertions
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+            await renderAnimated(commands, options);
+          }
+  mutated: '{}'
+  reason: shouldAnimate() guard; both branches print help, animation path is timing-only and not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: shouldAnimate()
+  mutated: 'false'
+  reason: shouldAnimate() guard; both branches print help, animation path is timing-only and not unit-tested
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: supportsColor()
+  mutated: 'false'
+  reason: supportsColor() guard; both styled and plain paths are tested independently, branch selection is environment-driven
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: |
+    {
+            process.stdout.write(renderStyled(commands, options));
+          }
+  mutated: '{}'
+  reason: supportsColor() guard; both styled and plain paths are tested independently, branch selection is environment-driven
+  added: 2026-05-01
+- file: src/subcommands/help.ts
+  mutator: Regex
+  original: /^--/
+  mutated: /--/
+  reason: /^--/ vs /--/; equivalent on real CLI flag names (no flag contains -- mid-string), only diverges on contrived inputs
+  added: 2026-05-01
