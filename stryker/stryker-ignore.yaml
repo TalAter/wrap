@@ -3813,3 +3813,459 @@
   mutated: '""'
   reason: 'cosmetic Ink key for the plain dash row; key strings are not user-visible'
   added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ObjectLiteral
+  original: "{ granularity: \"grapheme\" }"
+  mutated: "{}"
+  reason: "Intl.Segmenter defaults to grapheme granularity; option object is informative, not behavioral"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset >= this.text.length"
+  mutated: "false"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset >= this.text.length"
+  mutated: "this.offset > this.text.length"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset <= 0"
+  mutated: "false"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset <= 0"
+  mutated: "this.offset < 0"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset >= this.text.length"
+  mutated: "false"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset >= this.text.length"
+  mutated: "this.offset > this.text.length"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset <= 0"
+  mutated: "false"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset <= 0"
+  mutated: "this.offset < 0"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset <= 0"
+  mutated: "false"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset <= 0"
+  mutated: "this.offset < 0"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset >= this.text.length"
+  mutated: "false"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset >= this.text.length"
+  mutated: "this.offset > this.text.length"
+  reason: "guard equivalent: fall-through grapheme/word lookup at boundary returns same offset, unchanged text"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset <= 0"
+  mutated: "false"
+  reason: "deleteWord at start: only difference is killed buffer (undefined vs empty string), no caller distinguishes"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset <= 0"
+  mutated: "this.offset < 0"
+  reason: "deleteWord at start: only difference is killed buffer (undefined vs empty string), no caller distinguishes"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ArithmeticOperator
+  original: "this.offset - 1"
+  mutated: "this.offset + 1"
+  reason: "lastIndexOf/indexOf offset arithmetic only diverges when cursor sits exactly on a newline — not a position normal navigation produces"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "prevNl < 0"
+  mutated: "prevNl <= 0"
+  reason: "lastIndexOf/indexOf offset arithmetic only diverges when cursor sits exactly on a newline — not a position normal navigation produces"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ArithmeticOperator
+  original: "prevNl - prevLineStart"
+  mutated: "prevNl + prevLineStart"
+  reason: "prevLineLen calculation only diverges when prevLineStart > 0; existing snap tests cover the relevant clamping behavior"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "nextNl < 0"
+  mutated: "false"
+  reason: "downLine guard equivalent: fall-through produces same offset for normal cursors; multi-line edge does not occur via standard navigation"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "nextNl < 0"
+  mutated: "nextNl <= 0"
+  reason: "downLine guard equivalent: fall-through produces same offset for normal cursors; multi-line edge does not occur via standard navigation"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ArithmeticOperator
+  original: "this.offset - 1"
+  mutated: "this.offset + 1"
+  reason: "lastIndexOf/indexOf offset arithmetic only diverges when cursor sits exactly on a newline — not a position normal navigation produces"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "afterNext < 0"
+  mutated: "true"
+  reason: "afterNext sentinel handling only matters for 3+ line text with a column overflow, an edge not reachable via standard navigation"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "afterNext < 0"
+  mutated: "afterNext <= 0"
+  reason: "afterNext sentinel handling only matters for 3+ line text with a column overflow, an edge not reachable via standard navigation"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ArithmeticOperator
+  original: "nextLineEnd - nextLineStart"
+  mutated: "nextLineEnd + nextLineStart"
+  reason: "nextLineLen arithmetic only diverges when nextLineStart > 0; clamping in the constructor masks the difference for last-line cases"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset >= this.text.length"
+  mutated: "false"
+  reason: "fallback path produces same value: graphemeAt at end returns undefined, ?? \" \" coalesces to space; mutation cannot diverge"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset >= this.text.length"
+  mutated: "this.offset > this.text.length"
+  reason: "fallback path produces same value: graphemeAt at end returns undefined, ?? \" \" coalesces to space; mutation cannot diverge"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "graphemeAt(this.text, this.offset)?.segment"
+  mutated: "graphemeAt(this.text, this.offset).segment"
+  reason: "fallback path produces same value: graphemeAt at end returns undefined, ?? \" \" coalesces to space; mutation cannot diverge"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: StringLiteral
+  original: "\" \""
+  mutated: "\"\""
+  reason: "fallback path produces same value: graphemeAt at end returns undefined, ?? \" \" coalesces to space; mutation cannot diverge"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "this.offset >= this.text.length"
+  mutated: "false"
+  reason: "fallback path produces same value: graphemeAt at end returns undefined, ?? \" \" coalesces to space; mutation cannot diverge"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "this.offset >= this.text.length"
+  mutated: "this.offset > this.text.length"
+  reason: "fallback path produces same value: graphemeAt at end returns undefined, ?? \" \" coalesces to space; mutation cannot diverge"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: LogicalOperator
+  original: "seg.index >= offset && seg.index + seg.segment.length > offset"
+  mutated: "seg.index >= offset || seg.index + seg.segment.length > offset"
+  reason: "graphemeAt diverges only for mid-grapheme cursor offsets; cursors are always advanced by grapheme, so this is unreachable in practice"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "seg.index >= offset"
+  mutated: "true"
+  reason: "graphemeAt diverges only for mid-grapheme cursor offsets; cursors are always advanced by grapheme, so this is unreachable in practice"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "seg.index + seg.segment.length > offset"
+  mutated: "true"
+  reason: "graphemeAt diverges only for mid-grapheme cursor offsets; cursors are always advanced by grapheme, so this is unreachable in practice"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "seg.index + seg.segment.length > offset"
+  mutated: "seg.index + seg.segment.length >= offset"
+  reason: "graphemeAt diverges only for mid-grapheme cursor offsets; cursors are always advanced by grapheme, so this is unreachable in practice"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "pos <= 0"
+  mutated: "false"
+  reason: "wordBoundaryLeft early return equivalent: backward walk over segments at pos=0 returns 0 anyway"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "pos <= 0"
+  mutated: "pos < 0"
+  reason: "wordBoundaryLeft early return equivalent: backward walk over segments at pos=0 returns 0 anyway"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i >= 0"
+  mutated: "true"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i >= 0"
+  mutated: "i > 0"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.index"
+  mutated: "segments[i].index"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i >= 0 && !segments[i]?.isWordLike"
+  mutated: "false"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i >= 0"
+  mutated: "true"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i >= 0"
+  mutated: "i > 0"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i >= 0"
+  mutated: "i < 0"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.isWordLike"
+  mutated: "segments[i].isWordLike"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i >= 0 && segments[i]?.isWordLike"
+  mutated: "true"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: LogicalOperator
+  original: "i >= 0 && segments[i]?.isWordLike"
+  mutated: "i >= 0 || segments[i]?.isWordLike"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i >= 0"
+  mutated: "true"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i >= 0"
+  mutated: "i > 0"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.isWordLike"
+  mutated: "segments[i].isWordLike"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.index"
+  mutated: "segments[i].index"
+  reason: "wordBoundaryLeft loop bounds: i never reaches a value where the mutation diverges given pos>0 and segments[0].index === 0"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "pos >= text.length"
+  mutated: "false"
+  reason: "wordBoundaryRight early return equivalent: forward walk past text length lands at text.length anyway"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "pos >= text.length"
+  mutated: "pos > text.length"
+  reason: "wordBoundaryRight early return equivalent: forward walk past text length lands at text.length anyway"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i < segments.length - 1 && (segments[i + 1]?.index ?? 0) <= pos"
+  mutated: "false"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i < segments.length - 1"
+  mutated: "true"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i < segments.length - 1"
+  mutated: "i <= segments.length - 1"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i < segments.length - 1"
+  mutated: "i >= segments.length - 1"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ArithmeticOperator
+  original: "segments.length - 1"
+  mutated: "segments.length + 1"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "(segments[i + 1]?.index ?? 0) <= pos"
+  mutated: "(segments[i + 1]?.index ?? 0) < pos"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i + 1]?.index"
+  mutated: "segments[i + 1].index"
+  reason: "wordBoundaryRight first loop: mutated path lands on the same word segment via the subsequent isWordLike skip loops"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "!segments[i]?.isWordLike"
+  mutated: "true"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.isWordLike"
+  mutated: "segments[i].isWordLike"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.isWordLike"
+  mutated: "segments[i].isWordLike"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "segments[i] && pos >= segmentEnd(segments[i])"
+  mutated: "false"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "pos >= segmentEnd(segments[i])"
+  mutated: "pos > segmentEnd(segments[i])"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: BlockStatement
+  original: "{\n    // At or past end of current word — skip to next word\n    i++;\n    while (i < segments.length && !segments[i]?.isWordLike) i++;\n  }"
+  mutated: "{}"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i < segments.length"
+  mutated: "true"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i < segments.length"
+  mutated: "i >= segments.length"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i < segments.length"
+  mutated: "i <= segments.length"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: BooleanLiteral
+  original: "!segments[i]?.isWordLike"
+  mutated: "segments[i]?.isWordLike"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "segments[i]?.isWordLike"
+  mutated: "segments[i].isWordLike"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: UpdateOperator
+  original: "i++"
+  mutated: "i--"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i < segments.length && seg?.isWordLike"
+  mutated: "true"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: LogicalOperator
+  original: "i < segments.length && seg?.isWordLike"
+  mutated: "i < segments.length || seg?.isWordLike"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: ConditionalExpression
+  original: "i < segments.length"
+  mutated: "true"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: EqualityOperator
+  original: "i < segments.length"
+  mutated: "i <= segments.length"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
+- file: src/tui/cursor.ts
+  mutator: OptionalChaining
+  original: "seg?.isWordLike"
+  mutated: "seg.isWordLike"
+  reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
+  added: 2026-05-02
