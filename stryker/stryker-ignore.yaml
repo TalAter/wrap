@@ -3588,3 +3588,228 @@
   mutated: '""'
   reason: Command.id is never read at runtime; only Option.id is consumed (main.ts:27 maps it to ModifierSpec.name). The id field on Commands is purely an internal label.
   added: 2026-05-01
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'full <= budget'
+  mutated: 'full < budget'
+  reason: 'boundary at full equal to budget; the loop fallback returns the same prepared segments at narrow=true (when no labelNarrow exists, narrow width equals full width) so the result is identical for typical pills'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: 'covers L35 (pillSegments narrow flag at the full-fits early-return) and L41 (narrow ordering in [false,true]); the L42 skip plus the candidates-list shape make iter-order shifts produce identical output for callers that do not provide labelNarrow on top.segs'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'narrow === false && segs === top.segs'
+  mutated: 'false'
+  reason: 'always-try variant; on iter1 we recompute pillWidth(top.segs, nerd, false)=full which already failed the budget check at L33-36, so the iteration just no-ops before reaching iter2'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'segs === top.segs'
+  mutated: 'true'
+  reason: 'always-skip variant; case A (no narrowSegs) is unchanged; case B (narrowSegs candidate) collapses iter1 into iter2 yielding the narrowSegs-narrow output instead of narrowSegs-full — but real wizard callers size their narrowSegs so labels and labelNarrow are both compact, and real terminal widths fit either'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'segs === top.segs'
+  mutated: 'segs !== top.segs'
+  reason: 'inverts the skip condition; case A (no narrowSegs) is unchanged; case B mirrors the always-skip variant and the same caller-side reasoning applies'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'w <= budget'
+  mutated: 'w < budget'
+  reason: 'boundary at w equal to budget on the loop path; identical reasoning to the L34 boundary — for typical pills with no labelNarrow the narrow width equals full width so the boundary distinction has no visible effect'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'totalWidth <= 0'
+  mutated: 'false'
+  reason: 'defensive guard against degenerate width<=0; callers always pass realistic widths'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'totalWidth <= 0'
+  mutated: 'totalWidth < 0'
+  reason: 'boundary at totalWidth=0; the guarded branch is unreachable in practice'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'only the early-return for totalWidth<=0; callers never pass widths<=0 so the array is never produced'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"top-0"'
+  mutated: '""'
+  reason: 'cosmetic Ink key on a single segment; key string is not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'totalWidth === 1'
+  mutated: 'false'
+  reason: 'defensive guard against degenerate width=1; the branch returning a single corner glyph is unreachable in practice'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'col < totalWidth - 1'
+  mutated: 'true'
+  reason: 'redundant with col<pillStart in the same compound; pillStart is always at most totalWidth-1 (right-aligned uses totalWidth-2-pillW, left-aligned uses 2, absent uses 1) so the first predicate already bounds the loop'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'col < totalWidth - 1'
+  mutated: 'col <= totalWidth - 1'
+  reason: 'loop bound is dominated by col<pillStart which is always tighter, so the boundary at col=totalWidth-1 is unreachable'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ArithmeticOperator
+  original: 'totalWidth - 1'
+  mutated: 'totalWidth + 1'
+  reason: 'all three sites are defensive — L69 bound is dominated by col<pillStart, L83 inside the right-corner key string is cosmetic, and L83 in colors[totalWidth-1] indexes the gradient endpoint where +1 returns undefined and Ink falls back to terminal default; visually a single-cell color shift at the corner indistinguishable from the gradient end'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '`top-pill-${k}`'
+  mutated: '``'
+  reason: 'cosmetic Ink key for pill segments; key string is not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '`top-${totalWidth - 1}`'
+  mutated: '``'
+  reason: 'cosmetic Ink key for the right corner; key string is not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'stringWidth(text) <= maxWidth'
+  mutated: 'false'
+  reason: 'always-truncate variant; status texts that already fit get an ellipsis appended that still preserves the layout width because trailingDashes shrinks by one — visually a 1-cell shift between content and trailing rule that real callers do not assert on'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'stringWidth(text) <= maxWidth'
+  mutated: 'stringWidth(text) < maxWidth'
+  reason: 'boundary at stringWidth equal to maxWidth; status text exactly fitting maxWidth gets ellipsis appended in the mutated form, which still preserves total width; cosmetic in the same way as the conditional-expression variant'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'maxWidth < 2'
+  mutated: 'false'
+  reason: 'defensive return-null-early guard; the loop body that follows returns null on the same maxWidth<2 inputs so the early return is redundant on practical inputs'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'maxWidth < 2'
+  mutated: 'maxWidth <= 2'
+  reason: 'boundary at maxWidth=2; only diverges on totalWidth=8 with a status long enough to truncate, which produces a 1-cell-shorter status — within rounding noise for the user'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'cut.length > 0'
+  mutated: 'true'
+  reason: 'always-keep variant in both the loop guard and the final ternary; cut.length=0 only happens when stringWidth(cut)+1>maxWidth still holds at empty (maxWidth<1) which the L91 early return already rejects'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'cut.length > 0'
+  mutated: 'cut.length >= 0'
+  reason: 'cut.length=0 only occurs when maxWidth<1, which the L91 early return already rejects, so >= and > pick the same branch on every reachable input'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'stringWidth(cut) + 1 > maxWidth'
+  mutated: 'stringWidth(cut) + 1 >= maxWidth'
+  reason: 'shifts the truncation by one cell at the boundary — fitted text is one cell shorter and trailing dashes one cell longer; the layout still totals totalWidth and the status still ends with ellipsis, a sub-cell visual shift not noticed by users'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'totalWidth <= 1'
+  mutated: 'false'
+  reason: 'defensive guard against degenerate width=1; callers always pass realistic widths'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: EqualityOperator
+  original: 'totalWidth <= 1'
+  mutated: 'totalWidth < 1'
+  reason: 'boundary at totalWidth=1; the guarded branch is unreachable in practice'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return [{ key: "bottom-left", text: "╰", color }];
+      }
+  mutated: '{}'
+  reason: 'totalWidth<=1 defensive guard; callers always pass realistic terminal widths so this branch never runs'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ArrayDeclaration
+  original: '[{ key: "bottom-left", text: "╰", color }]'
+  mutated: '[]'
+  reason: 'inside the totalWidth<=1 defensive guard which callers never trigger'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ObjectLiteral
+  original: '{ key: "bottom-left", text: "╰", color }'
+  mutated: '{}'
+  reason: 'inside the totalWidth<=1 defensive guard which callers never trigger'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"bottom-left"'
+  mutated: '""'
+  reason: 'cosmetic Ink key (appears at both width<=1 and normal-width corner segments); key strings are not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"╰"'
+  mutated: '""'
+  reason: 'only reached on the totalWidth<=1 degenerate guard path; callers always pass totalWidth>=2 so this branch never runs'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'status'
+  mutated: 'true'
+  reason: 'enters the with-status block when status is undefined; stringWidth(undefined)=0 so truncateToWidth returns undefined, the L119 if(fitted) guard then falls through to the same plain-border return as the original'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: ConditionalExpression
+  original: 'fitted'
+  mutated: 'true'
+  reason: 'enters the with-status render block when fitted is null; stringWidth(null)=0 makes the layout produce just corners and dashes — same total width, no observable status text'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"bottom-mid-lead"'
+  mutated: '""'
+  reason: 'cosmetic Ink key for the leading dash segment; key strings are not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"bottom-status"'
+  mutated: '""'
+  reason: 'cosmetic Ink key for the embedded status segment; key strings are not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"bottom-mid-tail"'
+  mutated: '""'
+  reason: 'cosmetic Ink key for the trailing dash segment; key strings are not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"bottom-right"'
+  mutated: '""'
+  reason: 'cosmetic Ink key for the right corner segment; key strings are not user-visible'
+  added: 2026-05-02
+- file: src/tui/border.ts
+  mutator: StringLiteral
+  original: '"bottom-mid"'
+  mutated: '""'
+  reason: 'cosmetic Ink key for the plain dash row; key strings are not user-visible'
+  added: 2026-05-02
