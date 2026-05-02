@@ -191,29 +191,7 @@ export async function runSession(
       startPumpLoop({ isInitialLoop: true, followupText: undefined });
     }
     if (entered && state.tag === "editor-handoff") {
-      // Terminal-owning editor handoff. GUI editors bypass this tag entirely
-      // (dialog-local spawn). Here Ink has already unmounted because the
-      // reducer tag is not in `isDialogTag`. We explicitly drop raw mode —
-      // Ink's unmount doesn't always clear it, and a raw-mode TTY in the
-      // editor child produces wedged input. Kitty disambiguate mode is
-      // popped by the compose useEffect cleanup; we don't also pop it here.
-      const handoffDraft = state.draft;
-      void (async () => {
-        try {
-          if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-            process.stdin.setRawMode(false);
-          }
-          const resolved = resolveEditor();
-          if (!resolved) {
-            dispatch({ type: "editor-done", text: null });
-            return;
-          }
-          const newText = await spawnEditor(resolved, handoffDraft);
-          dispatch({ type: "editor-done", text: newText });
-        } catch {
-          dispatch({ type: "editor-done", text: null });
-        }
-      })();
+      void beginEditorHandoff(state.draft);
     }
     if (entered && state.tag === "executing-step") {
       // submit-step-confirm hook: the user just confirmed a non-final
@@ -250,6 +228,29 @@ export async function runSession(
       if (ctrl.signal.aborted) return;
       const err = e instanceof Error ? e : new Error(String(e));
       dispatch({ type: "loop-error", error: err });
+    }
+  }
+
+  // Terminal-owning editor handoff. GUI editors bypass this tag entirely
+  // (dialog-local spawn). Here Ink has already unmounted because the
+  // reducer tag is not in `isDialogTag`. We explicitly drop raw mode —
+  // Ink's unmount doesn't always clear it, and a raw-mode TTY in the
+  // editor child produces wedged input. Kitty disambiguate mode is
+  // popped by the compose useEffect cleanup; we don't also pop it here.
+  async function beginEditorHandoff(handoffDraft: string): Promise<void> {
+    try {
+      if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
+        process.stdin.setRawMode(false);
+      }
+      const resolved = resolveEditor();
+      if (!resolved) {
+        dispatch({ type: "editor-done", text: null });
+        return;
+      }
+      const newText = await spawnEditor(resolved, handoffDraft);
+      dispatch({ type: "editor-done", text: newText });
+    } catch {
+      dispatch({ type: "editor-done", text: null });
     }
   }
 
