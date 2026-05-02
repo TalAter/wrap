@@ -72,3 +72,4 @@
 - src/subcommands/version.ts
 - src/tui/border.ts
 - src/tui/clamp-buffer.ts
+- src/tui/cursor.ts
