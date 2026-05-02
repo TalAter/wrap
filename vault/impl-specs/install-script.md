@@ -229,7 +229,7 @@ Update `src/subcommands/completion.ts` help-text zsh line to match install.sh's 
 
 `.github/workflows/release.yml` currently has `create-release → build → publish-release → bump-tap`. Updates:
 
-1. **Shellcheck step** at the head of `create-release` (or its own tiny job that everything depends on). Fails the workflow before any tarball ships.
+1. **New job `shellcheck`**, runs `shellcheck scripts/install.sh` and `scripts/test-install.sh`. `build` depends on it so the workflow fails before any tarball ships.
 2. **Expand build matrix** to 6 targets (4 current + 2 musl; see "Build matrix expansion" above).
 3. **New job `checksums`**, depends on `build`: downloads every tarball, computes sha256, writes `checksums.txt`, uploads as release asset, attests.
 4. **Upload `scripts/install.sh` as a release asset** in a tiny job that runs alongside `checksums`. Byte-identical to the repo file — no templating.
@@ -251,7 +251,7 @@ Final shape: `create-release → build (×6) → {checksums, install-asset-uploa
 Three install rows on the website's install section:
 
 1. **Homebrew (macOS, Linux)** — `brew install talater/wrap/wrap`. Recommended for managed environments.
-2. **Install script** — `curl -fsSL https://wrap.talater.com/install.sh | sh`. Recommended for any Unix, CI, Docker. TLS curl flags live inside the script, not the user-facing one-liner.
+2. **Install script** — `curl -fsSL https://wrap.talater.com/install.sh | sh`. Recommended for any Unix, CI, Docker.
 3. **Manual download** — link to release assets. Document the macOS Gatekeeper workaround (`xattr -d com.apple.quarantine wrap` or right-click → Open) on this row only; curl-sh and brew don't trigger it.
 
 ---
