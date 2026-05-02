@@ -73,3 +73,4 @@
 - src/tui/border.ts
 - src/tui/clamp-buffer.ts
 - src/tui/cursor.ts
+- src/tui/gradient.ts
