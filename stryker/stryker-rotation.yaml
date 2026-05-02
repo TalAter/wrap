@@ -70,3 +70,4 @@
 - src/subcommands/registry.ts
 - src/subcommands/types.ts
 - src/subcommands/version.ts
+- src/tui/border.ts
