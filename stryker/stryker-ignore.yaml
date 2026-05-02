@@ -4269,3 +4269,9 @@
   mutated: "seg.isWordLike"
   reason: "wordBoundaryRight skip loops converge on the same word segment regardless of starting i"
   added: 2026-05-02
+- file: src/tui/gradient.ts
+  mutator: ArrayDeclaration
+  original: "new Array<string>(totalWidth)"
+  mutated: "new Array()"
+  reason: "equivalent mutant — gradientRow's for-loop assigns out[0..totalWidth-1] in order, so a sparse array grown via index assignment ends up with the same length and contents as a pre-sized array"
+  added: 2026-05-02
