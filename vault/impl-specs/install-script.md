@@ -84,7 +84,10 @@ GitHub artifact attestations remain enabled per the existing `attest-build-prove
 - `--uninstall` — run uninstall flow (see §Uninstall).
 - `-h`, `--help` — print usage and exit.
 
-No env vars. CLI flags only.
+No env vars.
+
+**Internal-only flag** (undocumented, hidden from `--help`, used by the local docker harness and the CI `verify-install` job):
+- `--base-url <url>` — override the release download base. Defaults to `https://github.com/TalAter/wrap/releases/latest/download`. Tests point this at a local HTTP server serving pre-fetched draft assets (see §Testing). CLI flag, not env var, so it cannot leak into child shells or parent processes from a poisoned environment — the user must type it explicitly to override.
 
 **Output convention**: install.sh follows Wrap's runtime stdout invariant by analogy — all chrome (notes, warnings, errors, success message) goes to **stderr**. Stdout is unused. Reserving stdout means a caller can pipe install.sh into a logger and only see real output (none) without filtering chrome.
 
@@ -101,8 +104,8 @@ No env vars. CLI flags only.
 8. Brew refusal: if `command -v brew` and `brew list talater/wrap/wrap` succeeds, abort with `error: wrap is managed by Homebrew; run 'brew upgrade talater/wrap/wrap'`.
 9. Detect OS+arch via `uname -sm` case → base triple (4 cases + error).
 10. **musl swap (linux-gnu triples only)**: see §Detection logic.
-11. Build URL: `https://github.com/TalAter/wrap/releases/latest/download/wrap-${TRIPLE}.tar.gz`.
-12. `mktemp -d`; `trap 'rm -rf "$tmp"' EXIT INT TERM`. Download tarball + checksums.txt with `curl --proto '=https' --tlsv1.2 -fsSL`.
+11. Build URL: `${BASE_URL:-https://github.com/TalAter/wrap/releases/latest/download}/wrap-${TRIPLE}.tar.gz` where `BASE_URL` is set from the internal-only `--base-url` flag if present.
+12. `mktemp -d`; `trap 'rm -rf "$tmp"' EXIT INT TERM`. Download tarball + checksums.txt with `curl -fsSL`. The default URL is hardcoded `https://...` and there's no user input that affects the URL on the default path, so additional curl flags like `--proto '=https'` would be theater here.
 13. Verify. POSIX `sh` has no `pipefail`, so a naive `grep ... | sha256-tool -c -` would silently pass when the triple is absent from `checksums.txt` (empty grep output → empty stdin → exit 0 from the hasher). Capture grep output first:
     ```sh
     expected="$(grep " wrap-${TRIPLE}.tar.gz$" checksums.txt || true)"
@@ -226,11 +229,20 @@ Update `src/subcommands/completion.ts` help-text zsh line to match install.sh's 
 
 `.github/workflows/release.yml` currently has `create-release → build → publish-release → bump-tap`. Updates:
 
-1. **Expand build matrix** to 6 targets (4 current + 2 musl; see "Build matrix expansion" above).
-2. **New job `checksums`**, depends on `build`: downloads every tarball, computes sha256, writes `checksums.txt`, uploads as release asset, attests.
-3. **Upload `scripts/install.sh` as a release asset** as part of the existing publish step (or a tiny job before `publish-release`). Byte-identical to the repo file — no templating.
-4. **`publish-release` now depends on `checksums`**. Required so `releases/latest` never resolves before all assets are present — otherwise a curl-pipe consumer hitting latest mid-release sees a 404 on `checksums.txt` or the install script.
-5. **`bump-tap` unchanged.** Tap continues consuming the four canonical triples; new musl triples are install-script-only.
+1. **Shellcheck step** at the head of `create-release` (or its own tiny job that everything depends on). Fails the workflow before any tarball ships.
+2. **Expand build matrix** to 6 targets (4 current + 2 musl; see "Build matrix expansion" above).
+3. **New job `checksums`**, depends on `build`: downloads every tarball, computes sha256, writes `checksums.txt`, uploads as release asset, attests.
+4. **Upload `scripts/install.sh` as a release asset** in a tiny job that runs alongside `checksums`. Byte-identical to the repo file — no templating.
+5. **New job `verify-install`**, depends on `checksums` and the install-asset upload. Gates publish on a real install→re-run→uninstall cycle in OS+libc combinations not naturally exercised on the maintainer's Mac dev box. Three matrix legs:
+   - `ubuntu:24.04` container on `ubuntu-24.04` runner (linux/amd64 glibc).
+   - `alpine:3.20` container on `ubuntu-24.04` runner (linux/amd64 musl). `apk add curl python3` to get the test prerequisites.
+   - `macos-14` runner directly (no container; arm64 darwin).
+
+   Each leg downloads the draft release's assets via `gh release download <tag> -D /tmp/r` (uses the workflow's `GH_TOKEN`), starts `python3 -m http.server` over `/tmp/r`, then invokes `scripts/test-install.sh --base-url http://127.0.0.1:8000` — which in turn invokes `install.sh --base-url http://127.0.0.1:8000`. The harness performs the assertions in §Testing — same script, same checks, both locally and in CI. Failure leaves the release in draft for inspection.
+6. **`publish-release` now depends on `verify-install`.** Reason: never publish a release where the install path is broken. `releases/latest` only resolves to non-prereleases, so the gate's purpose is correctness (don't ship a broken installer), not race protection on `latest`.
+7. **`bump-tap` unchanged.** Tap continues consuming the four canonical triples; new musl triples are install-script-only.
+
+Final shape: `create-release → build (×6) → {checksums, install-asset-upload} → verify-install → publish-release → bump-tap`.
 
 ---
 
@@ -256,19 +268,40 @@ Three install rows on the website's install section:
 
 ## Testing
 
-- `shellcheck scripts/install.sh` in CI.
-- Manually validate against the rc release on macOS arm64, macOS x86_64, Linux glibc x86_64, Linux glibc arm64, Linux musl (Alpine container) x86_64.
-- Idempotency: run install.sh twice; rc files should not gain duplicate `. "$HOME/.wrap/env"` lines.
-- Uninstall: `install.sh --uninstall` removes the rc-source line and leaves `~/.wrap/` intact.
+A shell installer has no useful unit-test surface — it's orchestration over real OS state. Two complementary layers, both invoking the same harness script so assertions live in one place.
+
+**1. Static — shellcheck.** Runs as a step in `release.yml` (see §Release pipeline changes). Catches POSIX-portability bugs and quoting mistakes before any tarball ships. No separate PR-CI workflow until the repo gains broader PR-CI ambitions.
+
+**2. The harness — `scripts/test-install.sh`.** Single source of truth for installer correctness. Used both by the maintainer locally and by CI's `verify-install` job.
+
+  Inputs (mutually exclusive):
+  - `--tag <vX.Y.Z-rc.N>` — fetch from `https://github.com/TalAter/wrap/releases/download/<tag>` (anonymous fetch works because `release.yml` already publishes `-rc.N` tags as prereleases). Used locally on the maintainer's Mac.
+  - `--base-url <url>` — fetch from an arbitrary base. Used by CI to point at a local HTTP server serving `gh release download`-staged draft assets.
+
+  The harness passes whichever it received through to `install.sh --base-url <url>` so install.sh has one code path regardless of caller.
+
+  Targets:
+  - On a Mac host: spins up `ubuntu:24.04` + `alpine:3.20` on `linux/arm64` (native on Apple Silicon — fast; amd64 emulation is left to CI).
+  - In CI Linux legs: runs install.sh inside the leg's container directly (no nested docker).
+  - In CI macOS leg: runs install.sh on the runner directly.
+
+  Assertions (same for every target):
+  - `wrap --version` after install prints the tag's version.
+  - Re-running install.sh exits 0 and the relevant rc file contains exactly one `. "$HOME/.wrap/env"` line.
+  - With a pre-existing `~/.wrap/config.jsonc` and `~/.wrap/memory.json`, `install.sh --uninstall` removes the binary, the rc-source line, env scripts, and completion files; `config.jsonc` and `memory.json` are untouched.
+
+**Manual coverage (residual).** Mac x86_64 is not free in CI matrices and not Docker-runnable on a Mac host; maintainer validates manually on an Intel Mac before cutting a real release. Linux glibc/musl arm64 are covered by the local harness during dev; if either becomes a release-blocker concern, add an arm64 leg to `verify-install`.
 
 ---
 ## Implementation order
 
-1. Add musl targets to release matrix; verify they build clean. Tag a `-rc` to test.
-2. Add `checksums.txt` job; verify the file shape and that `shasum -c` accepts it.
-3. Write `scripts/install.sh`. Test against the rc release on a mac, linux-glibc, linux-musl (Alpine container).
-4. Add `install.sh` upload to release workflow.
-5. Set up `wrap.talater.com/install.sh` redirect to GitHub release `latest` asset.
-6. Update website with three install rows.
-7. Update `vault/release.md`.
-8. Cut a real release and validate `wrap.talater.com/install.sh`.
+Sequenced so the tree is green at every commit and so the install.sh dev loop has real tarballs to test against.
+
+1. **Pipeline plumbing.** Expand build matrix to 6 triples (add musl x64, musl arm64). Add `checksums` job. Wire `publish-release` to depend on `checksums` (verify-install comes later).
+2. **Maintainer cuts `vX.Y.Z-rc.0`.** Validates the matrix builds clean and `checksums.txt` shape is what `shasum -c` accepts. Publishes as prerelease (existing behavior). Provides real tarballs the local harness can point at via `--tag`.
+3. **Write `scripts/install.sh` + `scripts/test-install.sh` + sync `src/subcommands/completion.ts`** zsh help-text path to `~/.local/share/zsh/site-functions/_wrap`. Iterate locally until both ubuntu and alpine harness containers pass all assertions against `-rc.0`.
+4. **`release.yml` additions:** shellcheck step, install.sh release-asset upload job, `verify-install` job invoking the harness, wire `publish-release` to depend on `verify-install`. Validate the full pipeline against `-rc.0` by re-running the workflow (idempotent — see existing `Create draft release` step). No new rc tag needed.
+5. **Vault module-map update:** `vault/README.md` adds `scripts/install.sh` reference. (Defer the "channel is live" + Gatekeeper-correction note in `vault/release.md` to step 8.)
+6. **Maintainer cuts a real release.** First non-prerelease that includes `install.sh` and `checksums.txt` as assets — `releases/latest/download/install.sh` now resolves.
+7. Set up `wrap.talater.com/install.sh` redirect to `releases/latest/download/install.sh`. Validate end-to-end (`curl -fsSL https://wrap.talater.com/install.sh | sh` on a clean Mac).
+8. Update website with three install rows. Update `vault/release.md` ("channel live", correct the Gatekeeper note).
