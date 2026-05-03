@@ -4091,3 +4091,9 @@
   mutated: "false"
   reason: "input no real caller produces — no call site uses shift:true in object triggers; the shift exclusion check only matters when a binding requires shift, which the codebase never does"
   added: 2026-05-03
+- file: src/tui/risk-presets.ts
+  mutator: BooleanLiteral
+  original: "true"
+  mutated: "false"
+  reason: "paraphrase of implementation — bold is a visible render attribute but the medium case already asserts bold via the same pillSegments code path; per-case duplicate adds no behavioral coverage (covers both riskLow and riskHigh bold:true survivors)"
+  added: 2026-05-03
