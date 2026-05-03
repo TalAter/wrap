@@ -74,3 +74,4 @@
 - src/tui/clamp-buffer.ts
 - src/tui/cursor.ts
 - src/tui/gradient.ts
+- src/tui/key-bindings.ts
