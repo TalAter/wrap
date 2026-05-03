@@ -150,4 +150,58 @@ describe("useKeyBindings", () => {
     await wait();
     expect(fired).toEqual([]);
   });
+
+  test("bare 'tab' trigger fires on tab key", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(<Harness bindings={[{ on: "tab", do: () => fired.push("tab") }]} />);
+    stdin.write("\t");
+    await waitFor(() => expect(fired).toEqual(["tab"]));
+  });
+
+  test("bare 'down' trigger does not fire on a different arrow key", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(<Harness bindings={[{ on: "down", do: () => fired.push("down") }]} />);
+    await wait();
+    stdin.write("\x1b[A"); // up arrow
+    await wait();
+    expect(fired).toEqual([]);
+  });
+
+  test("bare 'space' trigger does not fire on a non-space character", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(<Harness bindings={[{ on: "space", do: () => fired.push("sp") }]} />);
+    await wait();
+    stdin.write("a");
+    await wait();
+    expect(fired).toEqual([]);
+  });
+
+  test("bare char trigger does not fire on a key that produces no input (arrow)", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(<Harness bindings={[{ on: "y", do: () => fired.push("y") }]} />);
+    await wait();
+    stdin.write("\x1b[A"); // up arrow — input is empty
+    await wait();
+    expect(fired).toEqual([]);
+  });
+
+  test("object trigger with no modifiers fires on plain key", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(
+      <Harness bindings={[{ on: { key: "z" }, do: () => fired.push("z") }]} />,
+    );
+    stdin.write("z");
+    await waitFor(() => expect(fired).toEqual(["z"]));
+  });
+
+  test("object trigger without meta does not fire when meta (alt) is held", async () => {
+    const fired: string[] = [];
+    const { stdin } = render(
+      <Harness bindings={[{ on: { key: "p" }, do: () => fired.push("p") }]} />,
+    );
+    await wait();
+    stdin.write("\x1bp"); // Alt+p: key.meta=true, input="p"
+    await wait();
+    expect(fired).toEqual([]);
+  });
 });
