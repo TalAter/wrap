@@ -4035,3 +4035,59 @@
   mutated: "new Array()"
   reason: "equivalent mutant — gradientRow's for-loop assigns out[0..totalWidth-1] in order, so a sparse array grown via index assignment ends up with the same length and contents as a pre-sized array"
   added: 2026-05-02
+- file: src/tui/key-bindings.ts
+  mutator: ConditionalExpression
+  original: "key.tab === true"
+  mutated: "true"
+  reason: "judge REJECTed fix attempt as paraphrase of switch case; tab-binding negative-match coverage already implied by analogous down/space tests"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: ConditionalExpression
+  original: |-
+    default:
+          return false;
+  mutated: "default:"
+  reason: "unreachable — matchesNamed is only called via NAMED_KEYS.has(trigger) gate, so the switch always hits a named case and default never runs"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: BooleanLiteral
+  original: "false"
+  mutated: "true"
+  reason: "unreachable — default case of matchesNamed switch; NAMED_KEYS.has gate prevents reaching it"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: ConditionalExpression
+  original: "ch.length !== 1"
+  mutated: "false"
+  reason: "equivalent — when ch.length != 1 the early-return is bypassed, but the subsequent input.toLowerCase() === ch.toLowerCase() still returns false for any 1-char input vs a multi-char ch, so observable behavior is identical"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: BooleanLiteral
+  original: "false"
+  mutated: "true"
+  reason: "input no real caller produces — only differs when bare trigger has length != 1, but the documented contract requires single-character bare triggers (named or 1-char)"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: ConditionalExpression
+  original: "input.length !== 1"
+  mutated: "false"
+  reason: "equivalent — when input.length != 1 the early-return is bypassed, but input.toLowerCase() === ch.toLowerCase() still returns false for empty/multi-char input vs a 1-char ch"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: ConditionalExpression
+  original: "trigger.meta === true"
+  mutated: "false"
+  reason: "input no real caller produces — no call site uses meta:true in object triggers; mutation only diverges when a binding sets meta:true, which the codebase never does"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: BooleanLiteral
+  original: "true"
+  mutated: "false"
+  reason: "input no real caller produces — same wantMeta logic as above; no call site uses meta:true in object triggers"
+  added: 2026-05-03
+- file: src/tui/key-bindings.ts
+  mutator: ConditionalExpression
+  original: "key.shift === true"
+  mutated: "false"
+  reason: "input no real caller produces — no call site uses shift:true in object triggers; the shift exclusion check only matters when a binding requires shift, which the codebase never does"
+  added: 2026-05-03
