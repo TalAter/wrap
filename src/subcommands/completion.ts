@@ -242,7 +242,7 @@ export const completionCmd: Command = {
     "second argument to register a different name (e.g. a shell alias).",
     "",
     "Install (zsh):",
-    "  wrap --completion zsh > ~/.zsh/completions/_wrap",
+    "  wrap --completion zsh > ~/.local/share/zsh/site-functions/_wrap",
     "  (ensure the directory is on your $fpath, then run `compinit`)",
     "",
     "Install (bash):",
