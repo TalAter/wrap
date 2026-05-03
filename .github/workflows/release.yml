@@ -62,6 +62,14 @@ jobs:
             bun_target: bun-linux-x64
             runner: ubuntu-24.04
             os: linux
+          - triple: aarch64-unknown-linux-musl
+            bun_target: bun-linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            os: linux
+          - triple: x86_64-unknown-linux-musl
+            bun_target: bun-linux-x64-musl
+            runner: ubuntu-24.04
+            os: linux
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -115,8 +123,33 @@ jobs:
         with:
           subject-path: wrap-${{ matrix.triple }}.tar.gz
 
-  publish-release:
+  # Single checksums.txt for all tarballs. install.sh greps the line for its
+  # triple and pipes to `shasum -a 256 -c -` (GoReleaser-style format).
+  checksums:
     needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download tarballs from draft release
+        run: gh release download "$GITHUB_REF_NAME" --pattern 'wrap-*.tar.gz' --dir dist
+
+      - name: Compute checksums
+        working-directory: dist
+        run: sha256sum wrap-*.tar.gz > checksums.txt
+
+      - name: Upload checksums to draft release
+        run: gh release upload "$GITHUB_REF_NAME" dist/checksums.txt --clobber
+
+      - name: Attest checksums
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/checksums.txt
+
+  publish-release:
+    needs: [build, checksums]
     runs-on: ubuntu-24.04
     steps:
       - name: Publish release
