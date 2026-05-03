@@ -86,8 +86,8 @@ GitHub artifact attestations remain enabled per the existing `attest-build-prove
 
 No env vars.
 
-**Internal-only flag** (undocumented, hidden from `--help`, used by the local docker harness and the CI `verify-install` job):
-- `--base-url <url>` — override the release download base. Defaults to `https://github.com/TalAter/wrap/releases/latest/download`. Tests point this at a local HTTP server serving pre-fetched draft assets (see §Testing). CLI flag, not env var, so it cannot leak into child shells or parent processes from a poisoned environment — the user must type it explicitly to override.
+**Internal-only flag** (undocumented, hidden from `--help`, used by the local docker rig and the CI `verify-install` job):
+- `--base-url <url>` — override the release download base. Defaults to `https://github.com/TalAter/wrap/releases/latest/download`. Tests point this at a local HTTP server serving locally-built tarballs (local rig) or `gh release download`-staged draft assets (CI). See §Testing. CLI flag, not env var, so it cannot leak into child shells or parent processes from a poisoned environment — the user must type it explicitly to override.
 
 **Output convention**: install.sh follows Wrap's runtime stdout invariant by analogy — all chrome (notes, warnings, errors, success message) goes to **stderr**. Stdout is unused. Reserving stdout means a caller can pipe install.sh into a logger and only see real output (none) without filtering chrome.
 
@@ -273,24 +273,34 @@ Catches POSIX-portability bugs, quoting mistakes, and dead-code branches before 
 
 ### 2. `scripts/test-install.sh` — local Docker rig (POSIX shell)
 
-A POSIX shell script the **maintainer runs by hand on their Mac** while iterating on install.sh. It is **not** a test framework; it is a small wrapper around `docker run`. No TypeScript, no Bun, no test runner.
+A POSIX shell script the **maintainer runs by hand on their Mac** while iterating on install.sh. It tests the **working-copy** install.sh against **locally-built** wrap binaries — no need to push a tag or wait for CI to iterate on a fix. It is **not** a test framework; it is a small wrapper around `bun build` + `docker run`. No TypeScript runtime, no test runner.
 
 Usage:
 
 ```sh
-./scripts/test-install.sh --tag vX.Y.Z-rc.N
+./scripts/test-install.sh
 ```
 
 What it does, per invocation:
 
-1. For each container image in `{ubuntu:24.04, alpine:3.20}`:
-   1. `docker run --rm --platform linux/arm64 -v "$PWD/scripts:/scripts" <image> sh -c '...'` — mounts the local `scripts/` directory in.
-   2. Inside the container: `apk add curl ca-certificates` (alpine) or `apt-get install -y curl ca-certificates` (ubuntu); set up a fresh `$HOME` with stub `~/.wrap/config.jsonc` and `~/.wrap/memory.json`; run `sh /scripts/install.sh`.
-   3. Run the assertion checklist (below). Exit non-zero on any failure with a clear message naming the image and which assertion failed.
+1. **Stage assets locally.** Build wrap for both Linux-arm64 triples (`bun-linux-arm64` for glibc, `bun-linux-arm64-musl` for musl) using the existing `scripts/build.ts`. Tar each as `wrap-<triple>.tar.gz`. Compute `checksums.txt` over the tarballs. Copy the working-copy `scripts/install.sh` alongside. Final layout under `/tmp/wrap-test-stage/`:
+   ```
+   install.sh
+   checksums.txt
+   wrap-aarch64-unknown-linux-gnu.tar.gz
+   wrap-aarch64-unknown-linux-musl.tar.gz
+   ```
 
-It targets `linux/arm64` because Apple Silicon runs that natively at full speed; `linux/amd64` via Rosetta is slow and not the maintainer's job. CI covers amd64.
+2. **Per container** in `{ubuntu:24.04, alpine:3.20}`:
+   1. `docker run --rm --platform linux/arm64 -v /tmp/wrap-test-stage:/srv:ro <image> sh -c '<test commands>'`.
+   2. Inside the container, the test commands:
+      - Install prereqs: `apk add curl python3` (alpine) or `apt-get update && apt-get install -y -qq curl python3` (ubuntu).
+      - Start the stage server: `python3 -m http.server -d /srv 8000 &` and wait briefly for it to bind.
+      - Run install: `sh /srv/install.sh --base-url http://127.0.0.1:8000`.
+      - Run the assertion checklist (below).
+   3. On any assertion failure, exit non-zero with a message naming the image and which assertion failed.
 
-The `--tag` argument names a real published prerelease (the existing release.yml emits `-rc.N` tags as prereleases, so anonymous curl works against `releases/download/<tag>/...`). install.sh inside the container fetches that tag's tarballs from GitHub via its default URL — no `--base-url` plumbing needed.
+`linux/arm64` is the only container platform — it runs natively on Apple Silicon at full speed. CI handles `linux/amd64` on real x86_64 runners. Maintainer testing locally on an Intel Mac would need `--platform linux/amd64`; out of scope until somebody is on Intel.
 
 ### 3. `verify-install` job — CI smoke (YAML)
 
@@ -309,15 +319,27 @@ Each leg:
 3. `sh /tmp/r/install.sh --base-url http://127.0.0.1:8000` — runs the just-uploaded install.sh against the local server. The hidden `--base-url` flag is the test escape hatch (see §Script behavior).
 4. Run the same assertion checklist as the local rig. Failure leaves the release in draft for inspection.
 
-The CI smoke does **not** invoke `scripts/test-install.sh` — different orchestration shape (yaml matrix vs shell loop, draft fetch vs published fetch, container-as-leg vs nested docker). Trying to share orchestration code adds complexity for no benefit. The two rigs share install.sh and the assertion checklist; that's the only sharing that matters.
+The CI smoke does **not** invoke `scripts/test-install.sh` — different orchestration shape (yaml matrix vs shell loop, draft-asset download vs local build, container-as-leg vs nested docker). Trying to share orchestration code adds complexity for no benefit. The two rigs share install.sh and the assertion checklist; that's the only sharing that matters.
 
 ### Assertion checklist (local rig and CI both run these)
 
-After running install.sh in a fresh-ish environment with a stub `~/.wrap/config.jsonc` and `~/.wrap/memory.json`:
+The container starts with a clean `$HOME` — no `~/.wrap/` exists. The checklist runs install/use/uninstall in that order:
 
-- `"$HOME/.local/bin/wrap" --version` exits 0 and prints a string containing the expected tag.
-- The relevant rc file (`~/.bashrc` for bash, `~/.zshenv` for zsh, `~/.config/fish/conf.d/wrap.fish` for fish) contains exactly one `. "$HOME/.wrap/env"` source line. Re-running install.sh leaves it at exactly one (idempotent).
-- `install.sh --uninstall` removes the binary at `~/.local/bin/wrap`, the rc source line, `~/.wrap/env`, `~/.wrap/env.fish`, and the completion files; `~/.wrap/config.jsonc` and `~/.wrap/memory.json` are byte-identical to before.
+1. **Install.** Run `install.sh --base-url …`.
+   - `"$HOME/.local/bin/wrap" --version` exits 0 and prints a string containing the expected version (`package.json`'s `version` field for the local rig; the release tag for CI).
+   - The relevant rc file (`~/.bashrc` for bash, `~/.zshenv` for zsh, `~/.config/fish/conf.d/wrap.fish` for fish) contains exactly one `. "$HOME/.wrap/env"` source line.
+
+2. **Re-run = idempotent upgrade.** Run `install.sh --base-url …` again.
+   - Exits 0.
+   - The rc file still contains exactly one `. "$HOME/.wrap/env"` source line (no duplicates).
+
+3. **Simulate user state.** Stub-create `~/.wrap/config.jsonc` and `~/.wrap/memory.json` with arbitrary recognizable content. (These files would normally be created by running wrap; the stub mimics that without needing a real wrap session inside the test container.)
+
+4. **Uninstall.** Run `install.sh --uninstall --base-url …`.
+   - The binary at `~/.local/bin/wrap` is gone.
+   - The rc source line is gone.
+   - `~/.wrap/env`, `~/.wrap/env.fish`, the fish conf.d file, and all completion files written during install are gone.
+   - `~/.wrap/config.jsonc` and `~/.wrap/memory.json` are **byte-identical** to the stubs from step 3.
 
 ### Manual coverage (residual)
 
@@ -326,12 +348,12 @@ Mac x86_64 is not free in CI and not Docker-runnable on a Mac host. Maintainer r
 ---
 ## Implementation order
 
-Sequenced so the tree is green at every commit and so the install.sh dev loop has real tarballs to test against.
+Sequenced so the tree is green at every commit and the install.sh dev loop runs entirely against locally-built artifacts.
 
 1. **Pipeline plumbing.** Expand build matrix to 6 triples (add musl x64, musl arm64). Add `checksums` job. Wire `publish-release` to depend on `checksums` (verify-install comes later).
-2. **Maintainer cuts `vX.Y.Z-rc.0`.** Validates the matrix builds clean and `checksums.txt` shape is what `shasum -c` accepts. Publishes as prerelease (existing behavior). Provides real tarballs the local harness can point at via `--tag`.
-3. **Write `scripts/install.sh` + `scripts/test-install.sh` + sync `src/subcommands/completion.ts`** zsh help-text path to `~/.local/share/zsh/site-functions/_wrap`. Iterate locally until both ubuntu and alpine harness containers pass all assertions against `-rc.0`.
-4. **`release.yml` additions:** shellcheck step, install.sh release-asset upload job, `verify-install` job invoking the harness, wire `publish-release` to depend on `verify-install`. Validate the full pipeline against `-rc.0` by re-running the workflow (idempotent — see existing `Create draft release` step). No new rc tag needed.
+2. **Write the installer + local rig + completion sync.** Add `scripts/install.sh`, `scripts/test-install.sh`, and update `src/subcommands/completion.ts` zsh help-text path to `~/.local/share/zsh/site-functions/_wrap`. Iterate locally — `./scripts/test-install.sh` builds wrap, stages assets, runs install.sh inside ubuntu+alpine containers, runs the assertion checklist. No rc tag needed; the harness uses the working tree.
+3. **`release.yml` additions:** shellcheck job (gates `build`), install.sh release-asset upload job, `verify-install` matrix job, wire `publish-release` to depend on `verify-install`.
+4. **Maintainer cuts `vX.Y.Z-rc.0`.** First end-to-end run of the full pipeline including `verify-install`. Validates that the CI smoke actually catches what it's supposed to catch and the matrix builds clean across all 6 triples. If the rc fails verify-install, fix and re-run (existing `Create draft release` step is idempotent).
 5. **Vault module-map update:** `vault/README.md` adds `scripts/install.sh` reference. (Defer the "channel is live" + Gatekeeper-correction note in `vault/release.md` to step 8.)
 6. **Maintainer cuts a real release.** First non-prerelease that includes `install.sh` and `checksums.txt` as assets — `releases/latest/download/install.sh` now resolves.
 7. Set up `wrap.talater.com/install.sh` redirect to `releases/latest/download/install.sh`. Validate end-to-end (`curl -fsSL https://wrap.talater.com/install.sh | sh` on a clean Mac).
