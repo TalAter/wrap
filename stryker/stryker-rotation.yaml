@@ -76,3 +76,4 @@
 - src/tui/gradient.ts
 - src/tui/key-bindings.ts
 - src/tui/risk-presets.ts
+- src/wizard/write-config.ts
