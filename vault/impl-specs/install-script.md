@@ -233,12 +233,7 @@ Update `src/subcommands/completion.ts` help-text zsh line to match install.sh's 
 2. **Expand build matrix** to 6 targets (4 current + 2 musl; see "Build matrix expansion" above).
 3. **New job `checksums`**, depends on `build`: downloads every tarball, computes sha256, writes `checksums.txt`, uploads as release asset, attests.
 4. **Upload `scripts/install.sh` as a release asset** in a tiny job that runs alongside `checksums`. Byte-identical to the repo file — no templating.
-5. **New job `verify-install`**, depends on `checksums` and the install-asset upload. Gates publish on a real install→re-run→uninstall cycle in OS+libc combinations not naturally exercised on the maintainer's Mac dev box. Three matrix legs:
-   - `ubuntu:24.04` container on `ubuntu-24.04` runner (linux/amd64 glibc).
-   - `alpine:3.20` container on `ubuntu-24.04` runner (linux/amd64 musl). `apk add curl python3` to get the test prerequisites.
-   - `macos-14` runner directly (no container; arm64 darwin).
-
-   Each leg downloads the draft release's assets via `gh release download <tag> -D /tmp/r` (uses the workflow's `GH_TOKEN`), starts `python3 -m http.server` over `/tmp/r`, then invokes `scripts/test-install.sh --base-url http://127.0.0.1:8000` — which in turn invokes `install.sh --base-url http://127.0.0.1:8000`. The harness performs the assertions in §Testing — same script, same checks, both locally and in CI. Failure leaves the release in draft for inspection.
+5. **New job `verify-install`**, depends on `checksums` and the install-asset upload. Gates publish on a real install→re-run→uninstall cycle in OS+libc combinations not naturally exercised on the maintainer's Mac dev box. Full mechanics in §Testing rig 3; in summary: three matrix legs (`ubuntu:24.04` container, `alpine:3.20` container, `macos-14` runner) that each `gh release download` the draft assets, serve them over a local HTTP server, run install.sh via the `--base-url` test escape hatch, then run the assertion checklist. Failure leaves the release in draft.
 6. **`publish-release` now depends on `verify-install`.** Reason: never publish a release where the install path is broken. `releases/latest` only resolves to non-prereleases, so the gate's purpose is correctness (don't ship a broken installer), not race protection on `latest`.
 7. **`bump-tap` unchanged.** Tap continues consuming the four canonical triples; new musl triples are install-script-only.
 
@@ -268,29 +263,65 @@ Three install rows on the website's install section:
 
 ## Testing
 
-A shell installer has no useful unit-test surface — it's orchestration over real OS state. Two complementary layers, both invoking the same harness script so assertions live in one place.
+install.sh is orchestration code that runs against real OS state — file paths, package contents, installed binaries, shell rc files, dynamic-loader behavior. There is **no useful unit-test surface**: every interesting failure mode involves the actual filesystem and OS. Specifically, **do not add Bun tests, Vitest, Jest, or any in-process test harness** for install.sh. The codebase's `tests/` directory is for the TypeScript runtime, not the installer.
 
-**1. Static — shellcheck.** Runs as a step in `release.yml` (see §Release pipeline changes). Catches POSIX-portability bugs and quoting mistakes before any tarball ships. No separate PR-CI workflow until the repo gains broader PR-CI ambitions.
+Three test rigs cover install.sh, each independently runnable:
 
-**2. The harness — `scripts/test-install.sh`.** Single source of truth for installer correctness. Used both by the maintainer locally and by CI's `verify-install` job.
+### 1. shellcheck (static)
 
-  Inputs (mutually exclusive):
-  - `--tag <vX.Y.Z-rc.N>` — fetch from `https://github.com/TalAter/wrap/releases/download/<tag>` (anonymous fetch works because `release.yml` already publishes `-rc.N` tags as prereleases). Used locally on the maintainer's Mac.
-  - `--base-url <url>` — fetch from an arbitrary base. Used by CI to point at a local HTTP server serving `gh release download`-staged draft assets.
+Catches POSIX-portability bugs, quoting mistakes, and dead-code branches before any tarball ships. Runs as a dedicated `shellcheck` job in `release.yml` (see §Release pipeline changes); `build` depends on it. Targets `scripts/install.sh` and `scripts/test-install.sh`.
 
-  The harness passes whichever it received through to `install.sh --base-url <url>` so install.sh has one code path regardless of caller.
+### 2. `scripts/test-install.sh` — local Docker rig (POSIX shell)
 
-  Targets:
-  - On a Mac host: spins up `ubuntu:24.04` + `alpine:3.20` on `linux/arm64` (native on Apple Silicon — fast; amd64 emulation is left to CI).
-  - In CI Linux legs: runs install.sh inside the leg's container directly (no nested docker).
-  - In CI macOS leg: runs install.sh on the runner directly.
+A POSIX shell script the **maintainer runs by hand on their Mac** while iterating on install.sh. It is **not** a test framework; it is a small wrapper around `docker run`. No TypeScript, no Bun, no test runner.
 
-  Assertions (same for every target):
-  - `wrap --version` after install prints the tag's version.
-  - Re-running install.sh exits 0 and the relevant rc file contains exactly one `. "$HOME/.wrap/env"` line.
-  - With a pre-existing `~/.wrap/config.jsonc` and `~/.wrap/memory.json`, `install.sh --uninstall` removes the binary, the rc-source line, env scripts, and completion files; `config.jsonc` and `memory.json` are untouched.
+Usage:
 
-**Manual coverage (residual).** Mac x86_64 is not free in CI matrices and not Docker-runnable on a Mac host; maintainer validates manually on an Intel Mac before cutting a real release. Linux glibc/musl arm64 are covered by the local harness during dev; if either becomes a release-blocker concern, add an arm64 leg to `verify-install`.
+```sh
+./scripts/test-install.sh --tag vX.Y.Z-rc.N
+```
+
+What it does, per invocation:
+
+1. For each container image in `{ubuntu:24.04, alpine:3.20}`:
+   1. `docker run --rm --platform linux/arm64 -v "$PWD/scripts:/scripts" <image> sh -c '...'` — mounts the local `scripts/` directory in.
+   2. Inside the container: `apk add curl ca-certificates` (alpine) or `apt-get install -y curl ca-certificates` (ubuntu); set up a fresh `$HOME` with stub `~/.wrap/config.jsonc` and `~/.wrap/memory.json`; run `sh /scripts/install.sh`.
+   3. Run the assertion checklist (below). Exit non-zero on any failure with a clear message naming the image and which assertion failed.
+
+It targets `linux/arm64` because Apple Silicon runs that natively at full speed; `linux/amd64` via Rosetta is slow and not the maintainer's job. CI covers amd64.
+
+The `--tag` argument names a real published prerelease (the existing release.yml emits `-rc.N` tags as prereleases, so anonymous curl works against `releases/download/<tag>/...`). install.sh inside the container fetches that tag's tarballs from GitHub via its default URL — no `--base-url` plumbing needed.
+
+### 3. `verify-install` job — CI smoke (YAML)
+
+Runs as a job in `release.yml` between `checksums`/install-asset upload and `publish-release`. Three matrix legs:
+
+| Leg | Runner | Container |
+|---|---|---|
+| linux/amd64 glibc | `ubuntu-24.04` | `ubuntu:24.04` |
+| linux/amd64 musl | `ubuntu-24.04` | `alpine:3.20` |
+| macos/arm64 | `macos-14` | none (runs on host) |
+
+Each leg:
+
+1. `gh release download <tag> -D /tmp/r` — fetches the **draft** release's assets (tarballs, `checksums.txt`, `install.sh`) using the workflow's `GH_TOKEN`. Required because `releases/download/<tag>/...` returns 404 to anonymous curl while the release is still draft.
+2. `python3 -m http.server -d /tmp/r 8000 &` — serves the staged assets locally over plain HTTP. Alpine needs `apk add python3 curl` first.
+3. `sh /tmp/r/install.sh --base-url http://127.0.0.1:8000` — runs the just-uploaded install.sh against the local server. The hidden `--base-url` flag is the test escape hatch (see §Script behavior).
+4. Run the same assertion checklist as the local rig. Failure leaves the release in draft for inspection.
+
+The CI smoke does **not** invoke `scripts/test-install.sh` — different orchestration shape (yaml matrix vs shell loop, draft fetch vs published fetch, container-as-leg vs nested docker). Trying to share orchestration code adds complexity for no benefit. The two rigs share install.sh and the assertion checklist; that's the only sharing that matters.
+
+### Assertion checklist (local rig and CI both run these)
+
+After running install.sh in a fresh-ish environment with a stub `~/.wrap/config.jsonc` and `~/.wrap/memory.json`:
+
+- `"$HOME/.local/bin/wrap" --version` exits 0 and prints a string containing the expected tag.
+- The relevant rc file (`~/.bashrc` for bash, `~/.zshenv` for zsh, `~/.config/fish/conf.d/wrap.fish` for fish) contains exactly one `. "$HOME/.wrap/env"` source line. Re-running install.sh leaves it at exactly one (idempotent).
+- `install.sh --uninstall` removes the binary at `~/.local/bin/wrap`, the rc source line, `~/.wrap/env`, `~/.wrap/env.fish`, and the completion files; `~/.wrap/config.jsonc` and `~/.wrap/memory.json` are byte-identical to before.
+
+### Manual coverage (residual)
+
+Mac x86_64 is not free in CI and not Docker-runnable on a Mac host. Maintainer runs install.sh by hand on an Intel Mac before cutting a real release. Linux glibc/musl arm64 are covered by the local Docker rig during dev; promote to a CI leg only if either becomes a release blocker.
 
 ---
 ## Implementation order
