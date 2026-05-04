@@ -3521,3 +3521,9 @@
   mutated: '/^```\w*\s*\n([\s\S]*)\n```/'
   reason: "input no real caller produces — source comment documents that input is pre-trimmed and the closing fence is always at end-of-string; mutation only differs on inputs that violate that contract (trailing prose past the closing fence)"
   added: 2026-05-04
+- file: src/core/parse-response.ts
+  mutator: Regex
+  original: '/^```\w*\s*\n([\s\S]*)\n```$/'
+  mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
+  reason: "input no real caller produces — only differs on inputs with whitespace between the language tag and the newline (e.g. ```json   \\n...); a test for it would bind to a tolerant-parsing detail, not user-visible behavior (judge rejected fix attempt)"
+  added: 2026-05-04
