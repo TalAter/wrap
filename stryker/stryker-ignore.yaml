@@ -1090,7 +1090,7 @@
   mutator: StringLiteral
   original: '"argv"'
   mutated: '""'
-  reason: the second `"argv"` on line 130 — the `: "argv"` fallback when input.type !== "prompt" and !attachedInputBytes. Only reached in TTY interactive-composer mode (otherwise line 55 already returned with --help). The interactive composer overrides inputSource to "tui" on submit (session.ts:182), so this fallback value is never observed.
+  reason: 'the second `"argv"` on line 130 — the `: "argv"` fallback when input.type !== "prompt" and !attachedInputBytes. Only reached in TTY interactive-composer mode (otherwise line 55 already returned with --help). The interactive composer overrides inputSource to "tui" on submit (session.ts:182), so this fallback value is never observed.'
   added: 2026-04-28
 - file: src/memory/init-prompt.ts
   mutator: StringLiteral
@@ -2722,13 +2722,13 @@
   mutator: ConditionalExpression
   original: 'entry[1].flag.length > 0'
   mutated: 'true'
-  reason: defensive guard on SETTINGS entries; no entry ever has flag: [], so the false branch is unreachable
+  reason: 'defensive guard on SETTINGS entries; no entry ever has flag: [], so the false branch is unreachable'
   added: 2026-05-01
 - file: src/subcommands/registry.ts
   mutator: EqualityOperator
   original: 'entry[1].flag.length > 0'
   mutated: 'entry[1].flag.length >= 0'
-  reason: defensive guard on SETTINGS entries; no entry ever has flag: [], so > 0 vs >= 0 never differs
+  reason: 'defensive guard on SETTINGS entries; no entry ever has flag: [], so > 0 vs >= 0 never differs'
   added: 2026-05-01
 - file: src/subcommands/registry.ts
   mutator: ConditionalExpression
@@ -3603,13 +3603,13 @@
   mutator: OptionalChaining
   original: 'round.attempts[round.attempts.length - 1]?.raw_response'
   mutated: 'round.attempts[round.attempts.length - 1].raw_response'
-  reason: `attempts[length-1]` is always defined when this line runs — callOne pushes the attempt to the array before the parse-failure return path. Optional chain is defensive.
+  reason: '`attempts[length-1]` is always defined when this line runs — callOne pushes the attempt to the array before the parse-failure return path. Optional chain is defensive.'
   added: 2026-05-04
 - file: src/core/round.ts
   mutator: ArithmeticOperator
   original: 'round.attempts.length - 1'
   mutated: 'round.attempts.length + 1'
-  reason: `length + 1` indexes out of bounds → undefined → `?.raw_response` is undefined → `?? ""` yields "" — identical observable result to the original's "" raw_response in the producible non-StructuredOutputError test paths.
+  reason: '`length + 1` indexes out of bounds → undefined → `?.raw_response` is undefined → `?? ""` yields "" — identical observable result to the original''s "" raw_response in the producible non-StructuredOutputError test paths.'
   added: 2026-05-04
 - file: src/core/round.ts
   mutator: StringLiteral
@@ -3621,7 +3621,7 @@
   mutator: OptionalChaining
   original: 'last?.error?.message'
   mutated: 'last?.error.message'
-  reason: `last.error` is always set on parse-failure attempts — callOne's catch branch assigns `attempt.error = { kind: "parse", message }` before returning undefined. The inner optional chain is defensive.
+  reason: '`last.error` is always set on parse-failure attempts — callOne''s catch branch assigns `attempt.error = { kind: "parse", message }` before returning undefined. The inner optional chain is defensive.'
   added: 2026-05-04
 - file: src/core/round.ts
   mutator: OptionalChaining
@@ -3633,13 +3633,13 @@
   mutator: StringLiteral
   original: '"LLM parse error"'
   mutated: '""'
-  reason: `last.error.message` is always populated by callOne (set to `e.message` or `String(e)` before returning undefined). The "LLM parse error" `??` fallback is defensive.
+  reason: '`last.error.message` is always populated by callOne (set to `e.message` or `String(e)` before returning undefined). The "LLM parse error" `??` fallback is defensive.'
   added: 2026-05-04
 - file: src/core/round.ts
   mutator: ConditionalExpression
   original: 'response.type === "command"'
   mutated: 'true'
-  reason: realistic LLM responses don't generate `type: "reply"` with `risk_level: "high"` and a null `_scratchpad` — replies are conversational answers, not destructive operations. The type guard is defensive against schema-allowed-but-LLM-never-produces shapes.
+  reason: 'realistic LLM responses don''t generate `type: "reply"` with `risk_level: "high"` and a null `_scratchpad` — replies are conversational answers, not destructive operations. The type guard is defensive against schema-allowed-but-LLM-never-produces shapes.'
   added: 2026-05-04
 - file: src/core/round.ts
   mutator: ObjectLiteral
@@ -3711,7 +3711,7 @@
   mutator: ConditionalExpression
   original: 'last'
   mutated: 'true'
-  reason: `last = attempts[length-1]` is always defined here — callOne pushed at least one attempt before this line. The `if (last)` guard is defensive against an impossible empty array.
+  reason: '`last = attempts[length-1]` is always defined here — callOne pushed at least one attempt before this line. The `if (last)` guard is defensive against an impossible empty array.'
   added: 2026-05-04
 - file: src/core/round.ts
   mutator: StringLiteral
