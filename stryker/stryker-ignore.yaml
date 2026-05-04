@@ -1,591 +1,3 @@
-- file: src/core/truncate.ts
-  mutator: StringLiteral
-  original: 'text.lastIndexOf("\n", headEnd)'
-  mutated: 'text.lastIndexOf("", headEnd)'
-  reason: snap-to-newline for head boundary is readability/cosmetic. With "" the result is headEnd itself (no snap), so head may end mid-line. The output is still truncated correctly and remains parseable by both humans and LLMs; the function's essential contract (head + indicator + tail within budget) is intact.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: EqualityOperator
-  original: 'if (lastNewline > 0) headEnd = lastNewline;'
-  mutated: 'if (lastNewline >= 0) headEnd = lastNewline;'
-  reason: differs only when text starts with "\n" (lastNewline === 0), a defensive edge case; on that input original keeps headEnd while mutant sets headEnd = 0 (empty head). Inputs truncated here are multi-line text bodies that never start with a bare newline.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: StringLiteral
-  original: 'text.indexOf("\n", tailStart)'
-  mutated: 'text.indexOf("", tailStart)'
-  reason: symmetric to the head snap — tail snap-to-newline is cosmetic; without it the tail may start mid-line. Output is still a faithful truncation within budget.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: ConditionalExpression
-  original: 'if (nextNewline !== -1 && nextNewline < total) tailStart = nextNewline + 1;'
-  mutated: 'if (false) tailStart = nextNewline + 1;'
-  reason: disables tail snap-to-newline entirely. Cosmetic — tail begins at the budget-derived position instead of just after a newline. Truncation still produces head + indicator + tail within budget.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: ConditionalExpression
-  original: 'nextNewline !== -1 && nextNewline < total'
-  mutated: 'nextNewline !== -1 && true'
-  reason: equivalent mutant — nextNewline from indexOf is always < total whenever it is not -1, so the `< total` clause is redundant.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: EqualityOperator
-  original: 'nextNewline !== -1 && nextNewline < total'
-  mutated: 'nextNewline !== -1 && nextNewline >= total'
-  reason: nextNewline from indexOf is either -1 or a valid index (< total), so `nextNewline >= total` is always false when the first clause is true — the snap is effectively disabled. Same cosmetic impact as disabling the entire `if`.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: ArithmeticOperator
-  original: 'tailStart = nextNewline + 1'
-  mutated: 'tailStart = nextNewline - 1'
-  reason: off-by-2 on tail boundary — tail begins two chars earlier instead of just after the newline. Cosmetic deviation from the snap-to-newline intent; truncation is still within budget.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: EqualityOperator
-  original: 'if (tailStart <= headEnd) tailStart = total;'
-  mutated: 'if (tailStart < headEnd) tailStart = total;'
-  reason: only differs when tailStart === headEnd exactly. On producible inputs (total > maxChars, budget derived from maxChars) tailStart is either computed to be >= headEnd + 1 or equal to headEnd; in the === case the mutant leaves tail as text.slice(headEnd) — the remainder after head — which yields the full text reassembled around an in-place indicator, a minor cosmetic difference that only surfaces in a narrow parameter band.
-  added: 2026-04-23
-- file: src/core/truncate.ts
-  mutator: EqualityOperator
-  original: 'const tail = tailStart < total ? text.slice(tailStart) : "";'
-  mutated: 'const tail = tailStart <= total ? text.slice(tailStart) : "";'
-  reason: equivalent mutant — when tailStart === total, text.slice(total) returns "" anyway, so both branches produce the same empty tail.
-  added: 2026-04-23
-- file: src/wizard/models-filter.ts
-  mutator: ArrayDeclaration
-  original: 'const outputs = m.modalities?.output ?? [];'
-  mutated: 'const outputs = m.modalities?.output ?? ["Stryker was here"];'
-  reason: equivalent mutant — when modalities.output is nullish the fallback is checked next via `outputs.includes("text")`. Neither [] nor ["Stryker was here"] contains "text", so the model is dropped in both cases. When modalities.output is defined the fallback is not used.
-  added: 2026-04-23
-- file: src/wizard/models-filter.ts
-  mutator: ConditionalExpression
-  original: 'if (!regex || models.length === 0) return models;'
-  mutated: 'if (!regex || false) return models;'
-  reason: equivalent mutant — on empty models the short-circuit returns []; without the short-circuit findIndex returns -1, models[-1] is undefined, pick is falsy, the next line returns models ([]). Same observable result.
-  added: 2026-04-23
-- file: src/core/attached-input.ts
-  mutator: BlockStatement
-  original: 'get isTTY() { return process.stdin.isTTY; }'
-  mutated: 'get isTTY() {}'
-  reason: default stdin getter only used when readAttachedInput is called with no argument. All tests and in-tree callers inject an explicit StdinSource, so this path is only reachable in production at the bin entrypoint — not exercisable in the unit-test harness.
-  added: 2026-04-23
-- file: src/core/attached-input.ts
-  mutator: ConditionalExpression
-  original: 'if (bytes.byteLength === 0) return undefined;'
-  mutated: 'if (false) return undefined;'
-  reason: equivalent — on empty bytes the loop in isAsciiWhitespace does not execute and returns true, so the next check (line 30) returns undefined anyway. Zero-byte input takes the whitespace path instead of the zero-byte path; same observable result.
-  added: 2026-04-23
-- file: src/core/input.ts
-  mutator: EqualityOperator
-  original: 'if (eqIdx > 0) { throw new Error(... does not take a value.) }'
-  mutated: 'if (eqIdx >= 0) { throw ... }'
-  reason: unreachable — eqIdx === 0 means arg starts with "=", so flagName = arg.slice(0,0) = "", flagToSpec.get("") is undefined, the loop breaks at the preceding `if (spec === undefined) break`. This branch is never entered with eqIdx === 0.
-  added: 2026-04-23
-- file: src/discovery/cwd-files.ts
-  mutator: ConditionalExpression
-  original: 'if (names.length === 0) return undefined;'
-  mutated: 'if (false) return undefined;'
-  reason: equivalent — on empty names the subsequent Promise.all returns [], entries.filter returns [], and the next check `if (entries.length === 0) return undefined` returns undefined anyway. The short-circuit is a defensive optimization, not a behavioral branch.
-  added: 2026-04-23
-- file: src/discovery/cwd-files.ts
-  mutator: ConditionalExpression
-  original: 'results.filter((e): e is Entry => e !== null)'
-  mutated: 'results.filter((e): e is Entry => true)'
-  reason: only differs when some lstat call returns null (permission-denied or race between readdir and lstat). Triggering a partial lstat failure reliably in a unit test requires engineering FS state that is fragile and platform-specific; the null filter is defensive coverage for a real but rare failure mode.
-  added: 2026-04-23
-- file: src/discovery/cwd-files.ts
-  mutator: EqualityOperator
-  original: 'if (total <= OLDEST_COUNT + NEWEST_COUNT) { selected = entries; }'
-  mutated: 'if (total < OLDEST_COUNT + NEWEST_COUNT) { selected = entries; }'
-  reason: equivalent at total === 50. Mutant else-branch computes oldest = entries.slice(0,20) and newest = entries.slice(20), which concatenate to the same 50 entries in the same order; the subsequent `if (total > 50)` gate prevents the splice/summary from running. Final output identical.
-  added: 2026-04-23
-- file: src/discovery/watchlist.ts
-  mutator: ConditionalExpression
-  original: 'if (!Array.isArray(parsed)) return [];'
-  mutated: 'if (false) return [];'
-  reason: equivalent — on non-array parsed values, calling parsed.filter throws TypeError (no such method on objects/primitives), which the outer try/catch converts into return []. Same observable result as the short-circuit.
-  added: 2026-04-23
-- file: src/subcommands/forget-footprint.ts
-  mutator: ConditionalExpression
-  original: 'if (memBytes > 0) {'
-  mutated: 'if (true) {'
-  reason: equivalent — loadMemory returns {} when memory.json is missing, so countFacts yields 0 either way; the guard is an optimization, not a behavior switch.
-  added: 2026-04-23
-- file: src/subcommands/forget-footprint.ts
-  mutator: EqualityOperator
-  original: 'memBytes > 0'
-  mutated: 'memBytes >= 0'
-  reason: equivalent — memBytes is a file size (always >= 0), and when it is 0 loadMemory returns {} so countFacts yields 0; same result as the original guard.
-  added: 2026-04-23
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'cn <= 0.04045'
-  mutated: 'cn < 0.04045'
-  reason: equivalent — srgbToLinear boundary. Integer r in [0,255] means cn = r/255, which never equals 0.04045 exactly (would require r=10.31475). The sRGB piecewise branches are also defined to meet continuously at cn=0.04045, so the equality case is both unreachable and mathematically identical.
-  added: 2026-04-23
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'level > 0 && level < 3'
-  mutated: 'level >= 0 && level < 3'
-  reason: equivalent in gradientCells — differs only at level=0, where the earlier `if (level <= 0)` guard short-circuits every iteration to `cells[i] = ch` before the `solid` branch is reached. Mutated value of solid is never observed.
-  added: 2026-04-23
-- file: src/core/detect-appearance.ts
-  mutator: BlockStatement
-  original: '.then((result) => { if (result) cacheAppearance(result); })'
-  mutated: '.then((result) => {})'
-  reason: fire-and-forget cache warmup inside scheduleBackgroundDetection. queryTerminalBackground requires an OSC 11-responsive /dev/tty; in the unit-test harness it always resolves to null (no TTY responder), so `if (result)` is false and cacheAppearance is never called either way. Observable only via a real pty integration, which we deliberately avoid.
-  added: 2026-04-23
-- file: src/core/detect-appearance.ts
-  mutator: ConditionalExpression
-  original: 'if (result) cacheAppearance(result)'
-  mutated: 'if (false) cacheAppearance(result)'
-  reason: same unreachable test-harness path — queryTerminalBackground resolves null in tests, so the truthy branch never fires. Equivalent in the unit-test env.
-  added: 2026-04-23
-- file: src/session/notification-router.ts
-  mutator: ConditionalExpression
-  original: 'if (n) writeNotificationToStderr(n)'
-  mutated: 'if (true) writeNotificationToStderr(n)'
-  reason: defensive guard against shift()'s T|undefined return type; the enclosing `while (buffered.length > 0)` ensures shift always yields a Notification object (always truthy), so `if (n)` vs `if (true)` is equivalent at runtime.
-  added: 2026-04-23
-- file: src/core/notify.ts
-  mutator: ConditionalExpression
-  original: 'case "step-output":'
-  mutated: 'case "step-output":'
-  reason: writeNotificationToStderr's step-output and llm-wire cases are bare `return;` no-ops. Removing the case label makes the value fall through the switch with no default, which also writes nothing — observably identical. The cases exist only to document intent and satisfy exhaustiveness.
-  added: 2026-04-23
-- file: src/core/notify.ts
-  mutator: StringLiteral
-  original: 'case "step-output":'
-  mutated: 'case "":'
-  reason: same as above — changing the case label means "step-output" no longer matches any case and falls out of the switch. Both paths produce no stderr output, so equivalent at runtime.
-  added: 2026-04-23
-- file: src/core/notify.ts
-  mutator: ConditionalExpression
-  original: 'case "llm-wire":'
-  mutated: 'case "llm-wire":'
-  reason: llm-wire case body is `return;` with nothing after it in the switch. Removing the label makes llm-wire fall out of the switch, which also writes nothing. Equivalent — the case exists for exhaustiveness and JSDoc anchoring.
-  added: 2026-04-23
-- file: src/core/notify.ts
-  mutator: StringLiteral
-  original: 'case "llm-wire":'
-  mutated: 'case "":'
-  reason: same as above — mutating the label makes llm-wire fall out of the switch; there's no default and nothing after, so no write happens either way. Equivalent.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'lastSep >= 0'
-  mutated: 'true'
-  reason: equivalent — when no separator, lastSep is -1, and path.slice(-1 + 1) = path.slice(0) = path = basename(path). Both branches produce the same string.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BlockStatement
-  original: 'try { return Bun.which(cmd); } catch { return null; }'
-  mutated: '{}'
-  reason: defaultWhich's try/catch wraps Bun.which. In Bun, `which` is a stable native binding that does not throw for plain command strings; the catch is defensive against future API changes. All tests inject their own `which` function so this default path is lightly exercised.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BlockStatement
-  original: 'return Bun.which(cmd);'
-  mutated: '{}'
-  reason: same as above — try body empty means defaultWhich returns undefined; tests inject their own which so this default path is effectively untested. Bun.which is non-throwing in practice.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BlockStatement
-  original: 'return null;'
-  mutated: '{}'
-  reason: catch body in defaultWhich — unreachable because Bun.which does not throw for plain command strings in current Bun versions.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '(deps.envVisual ?? process.env.VISUAL ?? "")'
-  mutated: '(deps.envVisual ?? process.env.VISUAL ?? "Stryker was here!")'
-  reason: the "" fallback is reached only when BOTH deps.envVisual and process.env.VISUAL are nullish. Every resolveEditor test passes an explicit envVisual string, so this branch is unexercised.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '(deps.envEditor ?? process.env.EDITOR ?? "")'
-  mutated: '(deps.envEditor ?? process.env.EDITOR ?? "Stryker was here!")'
-  reason: mirror of the VISUAL fallback above; tests always pass an explicit envEditor so the literal fallback is unreached.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: EqualityOperator
-  original: 'attempt < maxAttempts'
-  mutated: 'attempt <= maxAttempts'
-  reason: readFileWithRetry's retry loop. In tests, writeFileSync completes before spawnEditor returns and readFileSync always succeeds on the first iteration, so the loop condition upper bound is never reached. ENOENT path is observable only under a real editor's atomic-save race, which unit tests deliberately do not reproduce.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: UpdateOperator
-  original: 'attempt++'
-  mutated: 'attempt--'
-  reason: same as above — readFileSync succeeds first iteration, the update expression never runs a second time, so direction is unobservable. An ENOENT-triggered retry would be the only observable difference and isn't reproduced in unit tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BlockStatement
-  original: 'catch (e) { const code = ...; if (...) throw e; Bun.sleepSync(delayMs); }'
-  mutated: '{}'
-  reason: readFileSync never throws in the test harness (file is synchronously written before spawn), so the catch block is unreachable. Emptying it has no observable effect.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
-  mutated: 'true'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
-  mutated: 'false'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: LogicalOperator
-  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
-  mutated: 'code !== "ENOENT" && attempt === maxAttempts - 1'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'code !== "ENOENT"'
-  mutated: 'false'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: EqualityOperator
-  original: 'code !== "ENOENT"'
-  mutated: 'code === "ENOENT"'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'attempt === maxAttempts - 1'
-  mutated: 'false'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: EqualityOperator
-  original: 'attempt === maxAttempts - 1'
-  mutated: 'attempt !== maxAttempts - 1'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ArithmeticOperator
-  original: 'maxAttempts - 1'
-  mutated: 'maxAttempts + 1'
-  reason: inside unreachable catch block — readFileSync doesn't throw in tests.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '"readFileWithRetry: unreachable"'
-  mutated: '""'
-  reason: the fallback throw is labeled unreachable by design — the for-loop either returns or throws. The string is never surfaced to a user.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: 'join(getWrapHome(), "cache")'
-  mutated: 'join(getWrapHome(), "")'
-  reason: equivalent at spawnEditor-end-to-end level — cacheDir becomes $WRAP_HOME, but mkdirSync operates on dirname(filePath) so still a valid parent, writeFileSync creates the file, and the fake editor round-trips content. Changes only the on-disk directory name, not observable return value.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: 'join(cacheDir, "compose.md")'
-  mutated: 'join(cacheDir, "")'
-  reason: equivalent at spawnEditor-end-to-end level — filePath becomes the cache directory path string, but since the directory does not yet exist the path is treated as a file that gets written, read, and returned. Observable behavior unchanged in the test harness.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: 'writeFileSync(filePath, draft, "utf-8")'
-  mutated: 'writeFileSync(filePath, draft, "")'
-  reason: Bun's writeFileSync accepts an empty-string encoding and silently defaults to utf-8 for plain string `draft`, so the file round-trips identically in both the happy path and the seed-preservation test.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ObjectLiteral
-  original: 'Bun.spawn(argv, { stdio: ["inherit", "inherit", "inherit"] })'
-  mutated: 'Bun.spawn(argv, {})'
-  reason: tests/preload.ts patches Bun.spawn to rewrite stdio:"inherit" → "ignore"; with no options Bun uses its defaults which also don't pollute the test runner. No assertion in the test suite distinguishes these.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ArrayDeclaration
-  original: '["inherit", "inherit", "inherit"]'
-  mutated: '[]'
-  reason: same as above — stdio is silenced by the test preload regardless of the declared array contents.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BlockStatement
-  original: 'if (signal) { ... abort-handling ... } else { await proc.exited; }'
-  mutated: '{}'
-  reason: when `if (signal)` body is empty, the else branch doesn't run either, so spawnEditor falls through to `const exitCode = proc.exitCode` before the process has exited. exitCode is null, `exitCode !== 0` is true, return null — which matches both test assertions (pre-aborted → null, abort during wait → null). Observable return value is unchanged.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'if (signal.aborted)'
-  mutated: 'true'
-  reason: with `true`, pre-aborted branch is always taken for ANY call that passes a signal: proc.unref, return null. Both signal tests assert toBeNull, and the non-signal tests don't pass a signal (this branch is skipped at the outer `if (signal)` guard). No observable test-level difference.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ArrowFunction
-  original: 'proc.exited.then(() => "exited")'
-  mutated: 'proc.exited.then(() => undefined)'
-  reason: the "exited" sentinel is only compared at L202 (`outcome === "aborted"`). Replacing it with undefined still fails that check and falls through to the normal exit-code path, which runs the same read/trim/return logic. No observable difference.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '"exited"'
-  mutated: '""'
-  reason: same as above — outcome sentinel is only compared to "aborted"; any non-aborted value falls through to the same exit-code path.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: 'resolve("aborted")'
-  mutated: 'resolve("")'
-  reason: on abort, resolve(anything) unblocks the Promise.race; the subsequent `outcome === "aborted"` check fails, execution falls through to exitCode check where exitCode is null (proc unref'd but still running) → return null. Both test assertions (toBeNull) still pass.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ObjectLiteral
-  original: '{ once: true }'
-  mutated: '{}'
-  reason: once:true prevents a leak if the signal aborts more than once; tests abort at most once per AbortController, so the difference is unobservable at the test level.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BooleanLiteral
-  original: 'once: true'
-  mutated: 'once: false'
-  reason: same as above — tests abort at most once; listener cleanup vs leak is not observable via spawnEditor's return value.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'if (outcome === "aborted")'
-  mutated: 'true'
-  reason: with `true`, every signal-using call takes the aborted branch: proc.unref, return null. Both signal tests expect null, and the exitCode path below would also return null when proc is still running. Test-level equivalent.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: ConditionalExpression
-  original: 'if (outcome === "aborted")'
-  mutated: 'false'
-  reason: with `false`, the aborted branch is never taken; abort tests fall through to exitCode = null → return null, which matches the toBeNull assertion.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: EqualityOperator
-  original: 'outcome === "aborted"'
-  mutated: 'outcome !== "aborted"'
-  reason: in the exit path (outcome === "exited"), `!==` is true so we take the aborted branch: proc.unref, return null. Exit tests (happy path etc.) don't pass a signal so the `if (signal)` guard skips this entirely. Equivalent at test-observation level.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '"aborted"'
-  mutated: '""'
-  reason: the outcome check becomes `outcome === ""`, always false; equivalent to the ConditionalExpression→false case above — falls through to exitCode path, returns null.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: BlockStatement
-  original: 'if (outcome === "aborted") { proc.unref(); return null; }'
-  mutated: '{}'
-  reason: skipping proc.unref + return null still lands in the exit-code fallback where exitCode is null → return null. Same observable result.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '`${resolved.meta.displayName} exited with code ${exitCode} — keeping current draft`'
-  mutated: '``'
-  reason: cosmetic stderr chrome message when the editor exits non-zero; tests assert only the return value (null) and do not inspect the chrome text.
-  added: 2026-04-23
-- file: src/core/editor.ts
-  mutator: StringLiteral
-  original: '`Editor error: ${e instanceof Error ? e.message : String(e)}`'
-  mutated: '``'
-  reason: cosmetic stderr chrome message in the catch path; tests assert only the return value (null).
-  added: 2026-04-23
-- file: src/config/config.ts
-  mutator: ConditionalExpression
-  original: 'if (envConfig === undefined) return fileConfig;'
-  mutated: 'if (false) return fileConfig;'
-  reason: equivalent — with the guard removed, loadConfig falls through to `{...fileConfig, ...envConfig}`. When envConfig is undefined, object spread of undefined contributes no keys, so the merged result equals fileConfig. Short-circuit is a performance/clarity optimization, not a behavior branch.
-  added: 2026-04-23
-- file: src/subcommands/forget-delete.ts
-  mutator: ConditionalExpression
-  original: 'if (r.removed) result.removed = true;'
-  mutated: 'if (true) result.removed = true;'
-  reason: defensive — every `wrap-scratch-*` entry returned by readdirSync is a directory created via mkdtempSync (ensureTempDir in fs/temp.ts), so rmDir's `existed` is true and r.removed is true whenever this line runs. The guard only differs on unreproducible edge cases (broken symlinks, concurrent removal) where "did we remove something?" is itself ambiguous.
-  added: 2026-04-23
-- file: src/subcommands/forget-delete.ts
-  mutator: BlockStatement
-  original: '} catch { result.errors.push(path); }'
-  mutated: '{}'
-  reason: rmDir outer catch guards against rmSync throwing, but rmSync({recursive:true, force:true}) is effectively non-throwing on permissible paths — `force:true` swallows ENOENT, and recursive walk handles files and dirs uniformly. Reliably triggering a failure requires chmod dance on parents that leaves the fs in a state the test harness cannot clean up cleanly.
-  added: 2026-04-23
-- file: src/fs/temp.ts
-  mutator: ConditionalExpression
-  original: 'if (!dir) return `${header}\n${promptConstants.tempDirEmpty}`;'
-  mutated: 'if (false) return ...;'
-  reason: equivalent — when WRAP_TEMP_DIR is undefined, the mutant falls through to `walk(undefined, "", lines)`; inside walk, `readdirSync(join(undefined, ""))` throws (path.join TypeError), the readdir catch returns, lines stays empty, and formatTempDirSection hits the `lines.length === 0` branch which returns the same empty-state string.
-  added: 2026-04-23
-- file: src/fs/temp.ts
-  mutator: BlockStatement
-  original: 'catch { continue; }'
-  mutated: '{}'
-  reason: dirStats lstatSync catch body. lstatSync describes the link itself (not the target), so it does not throw for broken symlinks — the realistic failure modes (ENOENT from a readdir/lstat race, EACCES) are not reliably reproducible in the unit-test harness without fragile platform-specific chmod setups.
-  added: 2026-04-23
-- file: src/fs/temp.ts
-  mutator: ConditionalExpression
-  original: 'if (info.isSymlink) { files++; bytes += info.size; }'
-  mutated: 'if (false) { ... }'
-  reason: equivalent — `lstat` reports the link itself, so `info.isDirectory` is false for every symlink (link nodes are not directories). The else-if isDir branch is therefore never taken for symlinks; the symlink always falls through to the final else branch which applies the same `files++; bytes += info.size` updates. Observable result identical to the symlink branch.
-  added: 2026-04-23
-- file: src/fs/cache.ts
-  mutator: ConditionalExpression
-  original: 'if (cached !== null && isFresh(path, ttlMs))'
-  mutated: 'if (true && isFresh(path, ttlMs))'
-  reason: equivalent — when cached is null, readWrapFile returned null because the file is missing; isFresh then calls statSync on the same path which also fails with ENOENT and returns false via its catch. The short-circuit guard is a readability optimization, not a behavioral branch.
-  added: 2026-04-23
-- file: src/fs/cache.ts
-  mutator: StringLiteral
-  original: 'throw new Error(`HTTP ${response.status} ${response.statusText}`)'
-  mutated: 'throw new Error(``)'
-  reason: cosmetic — the HTTP error message is only observed internally. On cache hit the error is swallowed (returns stale); on no-cache it propagates to ensureConfig which replaces it with a generic `Config error: could not load model list ...` message. The status string never reaches a user-visible surface.
-  added: 2026-04-23
-- file: src/fs/cache.ts
-  mutator: EqualityOperator
-  original: 'return mtimeMs + ttlMs > Date.now();'
-  mutated: 'return mtimeMs + ttlMs >= Date.now();'
-  reason: equivalent on realistic inputs — the `>` vs `>=` boundary only differs at exact millisecond equality between `mtimeMs + ttlMs` and `Date.now()`, which is unreachable in practice (writes take non-zero time and tests backdate mtimes by seconds, never reaching sub-ms exact equality).
-  added: 2026-04-23
-- file: src/fs/cache.ts
-  mutator: BlockStatement
-  original: 'catch { return false; }'
-  mutated: '{}'
-  reason: equivalent in practice — the catch fires only if statSync throws on a path that readWrapFile just read successfully, which requires a race (file deleted between the two calls) or a permission change mid-flight. With catch emptied, isFresh returns undefined (falsy), which the caller treats the same as false. No caller-observable difference on realistic inputs.
-  added: 2026-04-23
-- file: src/fs/cache.ts
-  mutator: BooleanLiteral
-  original: 'return false;'
-  mutated: 'return true;'
-  reason: same race-only window as the catch-body mutant — isFresh is only called when readWrapFile returned a non-null cached string, so the catch fires only on an unreproducible races/perm-flip between readWrapFile and statSync. Returning true instead of false would disagree with the original only in that tight window.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: StringLiteral
-  original: 'const MODELS_URL = "https://models.dev/api.json";'
-  mutated: '""'
-  reason: fetchModels is only invoked through mountConfigWizardDialog, which every unit test bypasses via the `_testWizardResult` hook. The URL string is unreachable in the test harness; reaching it requires a live Ink wizard run.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: StringLiteral
-  original: 'const MODELS_CACHE_PATH = "cache/models.dev.json";'
-  mutated: '""'
-  reason: fetchModels caller path is bypassed by all tests (see MODELS_URL entry).
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ArithmeticOperator
-  original: '24 * 60 * 60 * 1000'
-  mutated: '24 / 60'
-  reason: TTL only affects fetchModels' cache freshness check; fetchModels is unreachable in unit tests that bypass the wizard via `_testWizardResult`.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ArithmeticOperator
-  original: '24 * 60 * 60 * 1000'
-  mutated: '24 * 60 * 60 / 1000'
-  reason: same — TTL value only matters inside fetchModels, which tests bypass.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ArithmeticOperator
-  original: '24 * 60 * 60 * 1000'
-  mutated: '24 * 60 / 60'
-  reason: same — TTL value only matters inside fetchModels, which tests bypass.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: BlockStatement
-  original: 'async function fetchModels() { ... }'
-  mutated: '{}'
-  reason: fetchModels is wired into mountConfigWizardDialog only, never invoked by unit tests that short-circuit via `_testWizardResult`.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: BlockStatement
-  original: 'try { const { content } = await fetchCached(...); return JSON.parse(content); }'
-  mutated: '{}'
-  reason: fetchModels body — only reachable through the live wizard path, which tests bypass.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ObjectLiteral
-  original: 'await fetchCached({ url: MODELS_URL, path: MODELS_CACHE_PATH, ttlMs: MODELS_TTL_MS })'
-  mutated: '{}'
-  reason: argument to fetchCached inside fetchModels — only reachable through the live wizard path that tests bypass via `_testWizardResult`.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: BlockStatement
-  original: 'catch { throw new Error(`Config error: could not load model list ...`); }'
-  mutated: '{}'
-  reason: fetchModels catch body — only reachable through the wizard path that tests bypass.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: StringLiteral
-  original: '`Config error: could not load model list from ${MODELS_URL}. Check your connection and try again.`'
-  mutated: '``'
-  reason: fetchModels error message — only surfaced through the live wizard path that tests bypass; the string is never observed in the unit-test harness.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: BlockStatement
-  original: 'function probeCliBinaries() { const result = {}; for (...) result[name] = Bun.which(...) !== null; return result; }'
-  mutated: '{}'
-  reason: probeCliBinaries is only called from mountConfigWizardDialog, which every unit test bypasses via `_testWizardResult`.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: BlockStatement
-  original: 'for (const [name, entry] of Object.entries(CLI_PROVIDERS)) { result[name] = Bun.which(entry.probeCmd) !== null; }'
-  mutated: '{}'
-  reason: probeCliBinaries body — only reachable through the live wizard path that tests bypass.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ConditionalExpression
-  original: 'Bun.which(entry.probeCmd) !== null'
-  mutated: 'true'
-  reason: probeCliBinaries return value — only consumed by mountConfigWizardDialog, which tests bypass via `_testWizardResult`.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ConditionalExpression
-  original: 'Bun.which(entry.probeCmd) !== null'
-  mutated: 'false'
-  reason: same — probeCliBinaries is unreachable in the unit-test harness.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: EqualityOperator
-  original: 'Bun.which(entry.probeCmd) !== null'
-  mutated: 'Bun.which(entry.probeCmd) === null'
-  reason: same — probeCliBinaries is unreachable in the unit-test harness.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ConditionalExpression
-  original: 'if ("_testWizardResult" in opts)'
-  mutated: 'true'
-  reason: equivalent in practice — every test either has config.jsonc (early return), sets WRAP_CONFIG (early return), or passes `_testWizardResult` (so the `in` check is already true). No test reaches ensureConfig without one of these, so forcing the check true matches the effective behavior in the test harness.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: BlockStatement
-  original: '} else { result = await mountConfigWizardDialog({ fetchModels, probeCliBinaries }); }'
-  mutated: '{}'
-  reason: the else branch is only reached when a caller passes opts without `_testWizardResult` AND the filesystem is fresh — the production wizard path. Unit tests never take this branch.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: ObjectLiteral
-  original: 'mountConfigWizardDialog({ fetchModels, probeCliBinaries })'
-  mutated: '{}'
-  reason: mountConfigWizardDialog is only called in production runs (no `_testWizardResult`); unit tests bypass it.
-  added: 2026-04-23
-- file: src/config/ensure.ts
-  mutator: StringLiteral
-  original: 'chrome("Configuration saved", "🧠")'
-  mutated: 'chrome("Configuration saved", "")'
-  reason: cosmetic — the emoji/glyph is decorative stderr chrome shown once after the wizard completes; no test inspects it and it carries no runtime behavior.
-  added: 2026-04-23
-- file: src/tui/clamp-buffer.ts
-  mutator: ConditionalExpression
-  original: 'while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;'
-  mutated: 'while (true && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;'
-  reason: equivalent on valid UTF-8 — the backtrack walks over continuation bytes to the nearest code-point leading byte. Since `bytes` comes from TextEncoder, valid UTF-8 guarantees a leading byte within 3 positions, never a run of continuation bytes that spans to index 0. The `end > 0` guard only matters for invalid UTF-8 that TextEncoder cannot produce.
-  added: 2026-04-23
-- file: src/tui/clamp-buffer.ts
-  mutator: EqualityOperator
-  original: 'end > 0'
-  mutated: 'end >= 0'
-  reason: equivalent on valid UTF-8 — at end=0 the byte is necessarily a code-point leading byte (non-continuation) since TextEncoder emits valid UTF-8, so the continuation-byte clause fails and the loop exits regardless of whether the boundary is `> 0` or `>= 0`.
-  added: 2026-04-23
 - file: src/config/store.ts
   mutator: ConditionalExpression
   original: 'if (!store) throw new Error("Config accessed before initialization");'
@@ -1678,7 +1090,7 @@
   mutator: StringLiteral
   original: '"argv"'
   mutated: '""'
-  reason: the second `"argv"` on line 130 — the `: "argv"` fallback when input.type !== "prompt" and !attachedInputBytes. Only reached in TTY interactive-composer mode (otherwise line 55 already returned with --help). The interactive composer overrides inputSource to "tui" on submit (session.ts:182), so this fallback value is never observed.
+  reason: 'the second `"argv"` on line 130 — the `: "argv"` fallback when input.type !== "prompt" and !attachedInputBytes. Only reached in TTY interactive-composer mode (otherwise line 55 already returned with --help). The interactive composer overrides inputSource to "tui" on submit (session.ts:182), so this fallback value is never observed.'
   added: 2026-04-28
 - file: src/memory/init-prompt.ts
   mutator: StringLiteral
@@ -3310,13 +2722,13 @@
   mutator: ConditionalExpression
   original: 'entry[1].flag.length > 0'
   mutated: 'true'
-  reason: defensive guard on SETTINGS entries; no entry ever has flag: [], so the false branch is unreachable
+  reason: 'defensive guard on SETTINGS entries; no entry ever has flag: [], so the false branch is unreachable'
   added: 2026-05-01
 - file: src/subcommands/registry.ts
   mutator: EqualityOperator
   original: 'entry[1].flag.length > 0'
   mutated: 'entry[1].flag.length >= 0'
-  reason: defensive guard on SETTINGS entries; no entry ever has flag: [], so > 0 vs >= 0 never differs
+  reason: 'defensive guard on SETTINGS entries; no entry ever has flag: [], so > 0 vs >= 0 never differs'
   added: 2026-05-01
 - file: src/subcommands/registry.ts
   mutator: ConditionalExpression
@@ -4097,3 +3509,396 @@
   mutated: "false"
   reason: "paraphrase of implementation — bold is a visible render attribute but the medium case already asserts bold via the same pillSegments code path; per-case duplicate adds no behavioral coverage (covers both riskLow and riskHigh bold:true survivors)"
   added: 2026-05-03
+- file: src/core/parse-response.ts
+  mutator: StringLiteral
+  original: '"StructuredOutputError"'
+  mutated: '""'
+  reason: error.name is cosmetic; runtime branches on instanceof StructuredOutputError and message text, never on .name
+  added: 2026-05-04
+- file: src/core/parse-response.ts
+  mutator: Regex
+  original: '/^```\w*\s*\n([\s\S]*)\n```$/'
+  mutated: '/^```\w*\s*\n([\s\S]*)\n```/'
+  reason: "input no real caller produces — source comment documents that input is pre-trimmed and the closing fence is always at end-of-string; mutation only differs on inputs that violate that contract (trailing prose past the closing fence)"
+  added: 2026-05-04
+- file: src/core/parse-response.ts
+  mutator: Regex
+  original: '/^```\w*\s*\n([\s\S]*)\n```$/'
+  mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
+  reason: "input no real caller produces — only differs on inputs with whitespace between the language tag and the newline (e.g. ```json   \\n...); a test for it would bind to a tolerant-parsing detail, not user-visible behavior (judge rejected fix attempt)"
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'NoObjectGeneratedError.isInstance(e)'
+  mutated: 'true'
+  reason: equivalent — both branches of extractFailedText return `e.text` for NoObjectGeneratedError and StructuredOutputError, and "" for plain Errors (mutant via undefined `.text`, original via the trailing `return ""`). No producible Error subclass exposes a different observable result.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"RoundError"'
+  mutated: '""'
+  reason: error.name is cosmetic — set via `this.name`, runtime never reads it. Analogous to the StructuredOutputError name ignore.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ role: "assistant", content: failedText }'
+  mutated: '{}'
+  reason: contract-shape mutation in the json-retry assistant turn. Real LLM SDKs reject malformed messages, but test runners use stub providers that ignore prior turns. Catching it requires binding the precise message-pair structure (assistant role + raw failedText) — implementation detail.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"assistant"'
+  mutated: '""'
+  reason: same shape-binding concern as the paired ObjectLiteral ignore on this line — the role string would only matter to a real SDK, and a test for it would bind the json-retry message-pair structure.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'n.kind === "llm-wire"'
+  mutated: 'true'
+  reason: defensive kind guard. During runPrompt, only the provider itself emits notifications (llm-wire); the spinner uses `chromeRaw` (direct stderr, bypasses the bus), and `verbose()` requires a config flag plus there are no verbose calls inside callOne. With the mutant accepting all kinds, it still only sees llm-wire's wire field.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'performance.now() - t0'
+  mutated: 'performance.now() + t0'
+  reason: produces an inflated llm_ms value (~2*now instead of duration), but `attempt.llm_ms` is observability-only — never used in any decision logic, only logged for audit.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'performance.now() - t0'
+  mutated: 'performance.now() + t0'
+  reason: catch-branch timing — same reasoning as the success-path arithmetic ignore on line 110; observability-only field.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'captured?.wire_capture_error !== undefined'
+  mutated: 'false'
+  reason: log-shape only — `attempt.wire_capture_error` appears in JSONL audit logs but is never user-visible or consumed by runtime logic.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: "{\n    attempt.wire_capture_error = captured.wire_capture_error;\n  }"
+  mutated: '{}'
+  reason: same as the paired ConditionalExpression ignore on this line — the wire_capture_error setter is log-shape only.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'a.llm_ms ?? 0'
+  mutated: 'a.llm_ms && 0'
+  reason: round.llm_ms is observability data — no runtime decision depends on its value. The existing sum test only catches divergence when individual `attempt.llm_ms` values are >0, which fast tests don't always produce; tightening it would require artificial delays.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error, retrying..."'
+  mutated: '""'
+  reason: verbose-mode log message — only shown with --verbose; the exact text is informational, binding it in a test is brittle.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response ?? ""'
+  mutated: 'round.attempts[round.attempts.length - 1]?.raw_response && ""'
+  reason: in tests and production where attempt.raw_response is always set ("" for non-StructuredOutputError, e.text for StructuredOutputError), the values fed to appendJsonRetry only differ when text is truthy non-empty. Catching it requires asserting on the assistant-turn echo content — implementation-detail binding.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response'
+  mutated: 'round.attempts[round.attempts.length - 1].raw_response'
+  reason: '`attempts[length-1]` is always defined when this line runs — callOne pushes the attempt to the array before the parse-failure return path. Optional chain is defensive.'
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'round.attempts.length - 1'
+  mutated: 'round.attempts.length + 1'
+  reason: '`length + 1` indexes out of bounds → undefined → `?.raw_response` is undefined → `?? ""` yields "" — identical observable result to the original''s "" raw_response in the producible non-StructuredOutputError test paths.'
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: the `??` fallback fires only when `attempt.raw_response` is nullish — but callOne always assigns either `extractFailedText(e)` or `captured?.raw_response` before returning; the fallback is defensive.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'last?.error?.message'
+  mutated: 'last?.error.message'
+  reason: '`last.error` is always set on parse-failure attempts — callOne''s catch branch assigns `attempt.error = { kind: "parse", message }` before returning undefined. The inner optional chain is defensive.'
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'last?.error'
+  mutated: 'last.error'
+  reason: by step 2 of the retry ladder, attempts has at least 2 entries (failed initial + failed json-retry); `last = attempts[length-1]` is always defined.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error"'
+  mutated: '""'
+  reason: '`last.error.message` is always populated by callOne (set to `e.message` or `String(e)` before returning undefined). The "LLM parse error" `??` fallback is defensive.'
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'response.type === "command"'
+  mutated: 'true'
+  reason: 'realistic LLM responses don''t generate `type: "reply"` with `risk_level: "high"` and a null `_scratchpad` — replies are conversational answers, not destructive operations. The type guard is defensive against schema-allowed-but-LLM-never-produces shapes.'
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ rejectedResponse: response }'
+  mutated: '{}'
+  reason: contract-shape mutation in the scratchpad-retry directive. Testing it would bind to the exact assistant-turn structure (echoing the rejected response with its null _scratchpad) that buildPromptInput emits — implementation detail.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse === undefined'
+  mutated: 'false'
+  reason: skips the scratchpad-path's parse-retry — only matters when the scratchpad-required call ITSELF parse-fails, requiring three specific provider behaviors in sequence (initial high-risk null-scratchpad parse OK → scratchpad retry parse fail → json retry succeeds). Catching it would require a brittle multi-stage provider stub.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: "{\n        verbose(\"LLM parse error, retrying...\");\n        const failedText = round.attempts[round.attempts.length - 1]?.raw_response ?? \"\";\n        scratchResponse = await callOne(provider, round, appendJsonRetry(scratchInput, failedText));\n      }"
+  mutated: '{}'
+  reason: same as the paired ConditionalExpression ignore on this line — three-stage scratchpad-retry-parse-fail sequence to exercise.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error, retrying..."'
+  mutated: '""'
+  reason: verbose-mode log message in the scratchpad parse-retry path — same reasoning as the line 204 verbose ignore.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response ?? ""'
+  mutated: 'round.attempts[round.attempts.length - 1]?.raw_response && ""'
+  reason: scratchpad-path mirror of the line 205 LogicalOperator ignore — same equivalence reasoning applies.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response'
+  mutated: 'round.attempts[round.attempts.length - 1].raw_response'
+  reason: scratchpad-path mirror of the line 205 OptionalChaining ignore — `attempts` always has entries at this point.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'round.attempts.length - 1'
+  mutated: 'round.attempts.length + 1'
+  reason: scratchpad-path mirror of the line 205 ArithmeticOperator ignore — out-of-bounds index yields the same "" failedText through the optional chain.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: scratchpad-path mirror of the line 205 StringLiteral ignore — the `??` fallback is defensive; raw_response is always assigned before reaching this line.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse !== undefined'
+  mutated: 'true'
+  reason: when scratchResponse is undefined (only after a scratchpad-double-parse-failure), the mutant assigns undefined to `response` and crashes on `response.content.trim()` — but reaching that case requires the same three-stage scratchpad-retry-parse-fail sequence as the line 232 ignore.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse !== undefined'
+  mutated: 'false'
+  reason: keeps the first (null-scratchpad) response as the local `response`; `attempts.at(-1).parsed` still carries the retried response (callOne pushed it before this line), so the round returned to the caller is unchanged. Divergence shows only in `verboseResponse(response)` and the `!response.content.trim()` check — both with same content in producible scenarios.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: EqualityOperator
+  original: 'scratchResponse !== undefined'
+  mutated: 'scratchResponse === undefined'
+  reason: combines the line 238 true/false ignores — for the producible scratchResponse-defined path it behaves like the false ignore (skip assignment); for the undefined-case it behaves like the true ignore (assign undefined). Same scenarios make both branches inert.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'last'
+  mutated: 'true'
+  reason: '`last = attempts[length-1]` is always defined here — callOne pushed at least one attempt before this line. The `if (last)` guard is defensive against an impossible empty array.'
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM returned an empty response."'
+  mutated: '""'
+  reason: log-shape only — this string lives in `attempt.error.message`, a JSONL audit field. The user-visible RoundError throw on the next line uses its own string literal (which is killed by the line 259 fix).
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '`LLM error: ${errMsg}`'
+  mutated: '``'
+  reason: verbose-mode log message — same reasoning as the line 204 verbose ignore.
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: Regex
+  original: '/^\s*(curl|wget)\b[^\n]*https?:\/\//'
+  mutated: '/\s*(curl|wget)\b[^\n]*https?:\/\//'
+  reason: 'cosmetic icon picker — fetchesUrl only chooses 🌐 vs 🔍 for non-final URL-fetching steps in chrome output. Without the ^ anchor, mid-string matches like ''time curl ...'' return true; the only effect is a different emoji.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'response.memory_updates_message'
+  mutated: 'true'
+  reason: 'chrome-only message gate — the if guards a chrome() line that prints the memory-update summary. Mutated to true the runner prints ''(...) undefined'' on memory_updates without a message; chrome side-effect only, no behavioral consequence.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 's !== null'
+  mutated: 'true'
+  reason: 'defensive null filter — resolvePath returns null only when given a non-absolute path that can''t be resolved against cwd; runtime callers pass scopes from realistic LLM responses where null is not produced.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'scopes.sort((a, b) => b.length - a.length)'
+  mutated: 'scopes'
+  reason: 'cosmetic — sort affects only which scope decorates the chrome line on multi-scope memory updates. Removing the sort picks the first scope rather than the deepest-path one — display-only.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ArrowFunction
+  original: '(a, b) => b.length - a.length'
+  mutated: '() => undefined'
+  reason: 'same as the paired sort-removal mutant — comparator returning undefined leaves array order unchanged, only affects the chrome scope-prefix selection.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ArithmeticOperator
+  original: 'b.length - a.length'
+  mutated: 'b.length + a.length'
+  reason: 'same — positive-always comparator produces inconsistent sort order; only affects which scope decorates the chrome line.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.budgetRemaining > 0'
+  mutated: 'state.budgetRemaining >= 0'
+  reason: 'equivalent — when budgetRemaining hits 0 the iteration''s isLastRound is true, and every response shape returns out of the loop before the next while check (line 210 for non-final low; lines 189/203 for reply/final/non-low). The natural while-exit at line 251 is only reachable when the initial budget is 0, which the maxRounds default of 5 never produces.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'state.roundNum > 1'
+  mutated: 'true'
+  reason: 'verbose-mode log gate — line 142 is verbose(''Round X/Y''), only fires under --verbose, no behavioral consequence.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.roundNum > 1'
+  mutated: 'state.roundNum >= 1'
+  reason: 'same — verbose-only log gate.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'isLastRound'
+  mutated: 'true'
+  reason: 'verbose-mode log gate — line 145 is verbose(''Final round: must return command or answer''), only fires under --verbose.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object" && "round" in e'
+  mutated: 'true'
+  reason: 'equivalent given runRound''s contract — runRound (round.ts:212/254/259/266) only ever throws RoundError, which always has a `round` property, so the full chain is true on every error reaching this catch.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object" && "round" in e'
+  mutated: 'e !== null && typeof e === "object" || "round" in e'
+  reason: 'same — RoundError satisfies all three conditions, so swapping && for || at the outer position is unobservable on producible errors.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'true'
+  reason: 'same — first half (e !== null && typeof e === ''object'') is true on RoundError; mutating the pair to true doesn''t change the chain''s outcome.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'e !== null || typeof e === "object"'
+  reason: 'same — RoundError satisfies both inner clauses, so && vs || is unobservable.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null'
+  mutated: 'true'
+  reason: 'same — RoundError is non-null, so e !== null is always true on producible errors.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'typeof e === "object"'
+  mutated: 'true'
+  reason: 'same — RoundError is an object, so typeof e === ''object'' is always true on producible errors.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'partial'
+  mutated: 'true'
+  reason: 'equivalent — partial is e.round and runRound always constructs RoundError with a non-null partial Round (round.ts builds the round object before any throw), so partial is always truthy and the if guard never gates.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: OptionalChaining
+  original: 'round.attempts.at(-1)?.parsed'
+  mutated: 'round.attempts.at(-1).parsed'
+  reason: 'defensive — runRound''s contract guarantees the last attempt is pushed to round.attempts before return on the success path (round.ts:259 success branch), so attempts.at(-1) is never undefined here. The optional chain protects an unreachable null.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: '!response'
+  mutated: 'false'
+  reason: 'defensive guard — runRound''s contract guarantees the last attempt has parsed on the success path. The throw never fires on producible inputs.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          // runRound's contract guarantees the last attempt has parsed on success — defensive.
+          throw new Error("runRound returned a round without a parsed final attempt");
+        }
+  mutated: '{}'
+  reason: 'same defensive guard — block removal makes the runner crash later instead of throwing here, but the path is unreachable on real runRound returns.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"runRound returned a round without a parsed final attempt"'
+  mutated: '""'
+  reason: 'defensive throw message — the error never fires on producible inputs and the message text is not asserted by any test.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          command: response.content,
+          exit_code: exec.exitCode,
+          shell: exec.shell,
+        }
+  mutated: '{}'
+  reason: 'log-shape concern — round.execution is consumed by logging.test.ts at the wire-format level. Mutation produces an empty execution field in JSONL logs but doesn''t affect runtime behavior, transcript, or LLM round-feedback.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'true'
+  reason: 'cosmetic — diverges only when stderr is empty (mutant adds ''\n'' + '''' → trailing newline). Empty-stderr commands produce a one-character difference in the captured output; not behaviorally significant for the LLM round-feedback.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'exec.stderr'
+  reason: 'equivalent on realistic inputs — only diverges when stderr is whitespace-only (raw truthy, trimmed empty). No real shell command produces whitespace-only stderr without intentional setup.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'stepOutput.trim()'
+  mutated: 'stepOutput'
+  reason: 'equivalent on realistic inputs — only diverges when stepOutput is whitespace-only. exec.stdout is either substantively non-empty or empty, not whitespace-only.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'cosmetic — the "" fallback fires only when stepOutput is empty (no stdout). Mutating to a non-empty string produces "<arbitrary><stderr>" instead of "<stderr>"; the fallback intent is "no separator when empty" and binding any specific text is brittle.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: '{ type: "exhausted" }'
+  mutated: '{}'
+  reason: 'unreachable on producible configs — line 251 is the natural while-exit, only reached when initial budgetRemaining is 0. Real callers seed budgetRemaining from getConfig().maxRounds (default 5), so the all-iterations-skipped path is not produced.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"exhausted"'
+  mutated: '""'
+  reason: 'same path as the paired ObjectLiteral ignore — line 251 is unreachable on producible configs.'
+  added: 2026-05-04

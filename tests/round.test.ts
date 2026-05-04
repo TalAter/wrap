@@ -100,6 +100,22 @@ describe("runRound", () => {
     expect(hasLastRound).toBe(true);
   });
 
+  test("with isLastRound: false the LLM does not see lastRoundInstruction", async () => {
+    const { provider, captured } = makeProvider([
+      { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
+    ]);
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    const userMessages = captured.lastInput?.messages.filter((m) => m.role === "user") ?? [];
+    const hasLastRound = userMessages.some(
+      (m) => m.content === promptConstants.lastRoundInstruction,
+    );
+    expect(hasLastRound).toBe(false);
+  });
+
   test("does not mutate the transcript", async () => {
     const { provider } = makeProvider([
       { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
@@ -130,6 +146,7 @@ describe("runRound", () => {
     }
     expect(thrown).toBeInstanceOf(RoundError);
     if (thrown instanceof RoundError) {
+      expect(thrown.message).toBe("LLM returned an empty response.");
       expect(thrown.round.attempts.at(-1)?.parsed).toBeDefined();
       expect(thrown.round.attempts.at(-1)?.error?.kind).toBe("empty");
     }
