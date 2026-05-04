@@ -3515,3 +3515,9 @@
   mutated: '""'
   reason: error.name is cosmetic; runtime branches on instanceof StructuredOutputError and message text, never on .name
   added: 2026-05-04
+- file: src/core/parse-response.ts
+  mutator: Regex
+  original: '/^```\w*\s*\n([\s\S]*)\n```$/'
+  mutated: '/^```\w*\s*\n([\s\S]*)\n```/'
+  reason: "input no real caller produces — source comment documents that input is pre-trimmed and the closing fence is always at end-of-string; mutation only differs on inputs that violate that contract (trailing prose past the closing fence)"
+  added: 2026-05-04
