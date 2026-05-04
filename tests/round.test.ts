@@ -146,6 +146,7 @@ describe("runRound", () => {
     }
     expect(thrown).toBeInstanceOf(RoundError);
     if (thrown instanceof RoundError) {
+      expect(thrown.message).toBe("LLM returned an empty response.");
       expect(thrown.round.attempts.at(-1)?.parsed).toBeDefined();
       expect(thrown.round.attempts.at(-1)?.error?.kind).toBe("empty");
     }
