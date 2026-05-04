@@ -34,7 +34,7 @@ Usage:
 Options:
   --install-dir <path>  Override install location (default: $HOME/.local/bin).
   --no-modify-path      Skip env script and rc file edits.
-  --uninstall           Remove wrap, env scripts, rc-file source line, completions.
+  --uninstall           Remove wrap, env scripts, rc-file source line.
   -h, --help            Show this help.
 EOF
 }
@@ -127,9 +127,7 @@ main() {
     rc_files_modified="$(update_rc_files)"
   fi
 
-  completions_written="$(install_completions "$install_dir/wrap")"
-
-  print_success "$install_dir" "$rc_files_modified" "$completions_written"
+  print_success "$install_dir" "$rc_files_modified"
 }
 
 detect_triple() {
@@ -249,61 +247,21 @@ update_rc_files() {
   printf '%s' "$modified"
 }
 
-# Best-effort per-shell. A failure prints a warning and continues.
-try_completion() {
-  binary="$1"
-  shell="$2"
-  out_path="$3"
-
-  out_dir="$(dirname "$out_path")"
-  if ! mkdir -p "$out_dir" 2>/dev/null; then
-    warn "could not create $out_dir; skipping $shell completion"
-    return 1
-  fi
-  if ! "$binary" --completion "$shell" > "$out_path" 2>/dev/null; then
-    warn "could not install $shell completion at $out_path"
-    rm -f "$out_path" 2>/dev/null || true
-    return 1
-  fi
-  return 0
-}
-
-install_completions() {
-  binary="$1"
-  written=""
-
-  bash_path="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/wrap"
-  zsh_path="${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions/_wrap"
-  fish_path="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/wrap.fish"
-
-  try_completion "$binary" bash "$bash_path" && written="${written}${bash_path} "
-  try_completion "$binary" zsh  "$zsh_path"  && written="${written}${zsh_path} "
-  try_completion "$binary" fish "$fish_path" && written="${written}${fish_path} "
-
-  printf '%s' "$written"
-}
-
 print_success() {
   bin_dir="$1"
   rcs="$2"
-  comps="$3"
 
   version="$("$bin_dir/wrap" --version 2>/dev/null || true)"
   [ -n "$version" ] || version='(unknown version)'
 
   note ""
   note "Installed wrap $version → $bin_dir/wrap"
-  [ -z "$rcs" ]   || note "Modified rc files: $rcs"
-  [ -z "$comps" ] || note "Wrote completions: $comps"
+  [ -z "$rcs" ] || note "Modified rc files: $rcs"
 
-  if [ -n "$rcs" ] || [ -n "$comps" ]; then
+  if [ -n "$rcs" ]; then
     note "Open a new shell, or run '. \"\$HOME/.wrap/env\"' to use wrap now."
   fi
-  case "$comps" in
-    *"_wrap"*)
-      note "Zsh: ensure ${XDG_DATA_HOME:-\$HOME/.local/share}/zsh/site-functions is on \$fpath."
-      ;;
-  esac
+  note "Shell completion: run 'wrap --completion <bash|zsh|fish>' to generate."
 }
 
 do_uninstall() {
@@ -319,10 +277,7 @@ do_uninstall() {
   for f in \
     "$HOME/.wrap/env" \
     "$HOME/.wrap/env.fish" \
-    "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish" \
-    "${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/wrap" \
-    "${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions/_wrap" \
-    "${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/wrap.fish"; do
+    "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish"; do
     if [ -e "$f" ]; then
       rm -f "$f"
       removed="${removed}${f} "

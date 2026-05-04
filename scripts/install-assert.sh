@@ -67,7 +67,7 @@ fi
 [ "$(count_line "$RC_ZSH"  "$LINE_BASH")"   = 1 ] || fail "$RC_ZSH has wrong number of source lines"
 [ "$(count_line "$FISH_CONF" "$FISH_LINE")" = 1 ] || fail "$FISH_CONF has wrong number of source lines"
 
-# ---------- 1b. --no-modify-path skips env + rc but keeps completions ----------
+# ---------- 1b. --no-modify-path skips env + rc ----------
 echo "== --no-modify-path" >&2
 SENTINEL_HOME="$(mktemp -d)"
 if [ -z "$SENTINEL_HOME" ] || [ ! -d "$SENTINEL_HOME" ]; then
@@ -81,7 +81,6 @@ HOME="$SENTINEL_HOME" sh "$INSTALL_SCRIPT" --base-url "$BASE_URL" --no-modify-pa
 [ ! -e "$SENTINEL_HOME/.wrap/env.fish" ] || fail "--no-modify-path wrote fish env script"
 [ ! -e "$SENTINEL_HOME/.bashrc" ]        || fail "--no-modify-path wrote .bashrc"
 [ ! -e "$SENTINEL_HOME/.zshenv" ]        || fail "--no-modify-path wrote .zshenv"
-[ -e "$SENTINEL_HOME/.local/share/bash-completion/completions/wrap" ] || fail "--no-modify-path skipped bash completion"
 rm -rf "$SENTINEL_HOME"
 SENTINEL_HOME=""
 
@@ -106,9 +105,6 @@ sh "$INSTALL_SCRIPT" --uninstall
 [ ! -e "$HOME/.wrap/env" ]       || fail "\$HOME/.wrap/env still present"
 [ ! -e "$HOME/.wrap/env.fish" ]  || fail "\$HOME/.wrap/env.fish still present"
 [ ! -e "$FISH_CONF" ]            || fail "fish conf.d/wrap.fish still present"
-[ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/wrap" ] || fail "bash completion still present"
-[ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions/_wrap" ]         || fail "zsh completion still present"
-[ ! -e "${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/wrap.fish" ]          || fail "fish completion still present"
 
 [ "$(count_line "$RC_BASH" "$LINE_BASH")" = 0 ] || fail "$RC_BASH still contains source line"
 [ "$(count_line "$RC_ZSH"  "$LINE_BASH")" = 0 ] || fail "$RC_ZSH still contains source line"

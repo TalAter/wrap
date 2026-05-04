@@ -119,8 +119,7 @@ No env vars.
     - `mv -f "$INSTALL_DIR/wrap.new" "$INSTALL_DIR/wrap"` — same-dir rename is atomic and safe even if the running `wrap` is being replaced.
 15. PATH-shadow check: if another `wrap` is already on PATH at a different path, print a `warning:` naming both.
 16. PATH setup (env-script pattern; see §Env-script).
-17. Install completions (best-effort; see §Completions).
-18. Print success: version, install dir, list of rc files modified (if any), list of completion files written (if any). Always print the "open a new shell" line when rc files were modified or zsh completions were installed.
+17. Print success: version, install dir, list of rc files modified (if any). Print the "open a new shell" line when rc files were modified. Mention `wrap --completion <shell>` for users who want shell completion.
 ```
 
 ### Detection logic
@@ -189,21 +188,7 @@ For fish, just `printf 'source ~/.wrap/env.fish\n' > "$conf_d/wrap.fish"`.
 
 ### Completions
 
-After binary install, run `wrap --completion <shell>` (writes completion script to stdout) and redirect to user-owned paths:
-
-| Shell | Path | Discovery |
-|---|---|---|
-| bash | `${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/wrap` | bash-completion package auto-loads from this dir |
-| zsh | `${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions/_wrap` | user must have this dir on `fpath` (see note below) |
-| fish | `${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/wrap.fish` | fish auto-loads from this dir |
-
-Best-effort: each shell's completion install is wrapped so a failure (path not writable, parent dir missing and uncreatable) prints one stderr `warning:` line and continues. The binary works without completions.
-
-**Zsh fpath note**: install.sh does not modify `fpath`. Users running any zsh completions (oh-my-zsh, prezto, manual) already have XDG dirs on `fpath`. If completions don't load, the success message tells them to add `~/.local/share/zsh/site-functions` to their `fpath`.
-
-The success message reminds the user to open a new shell for completions to take effect.
-
-Update `src/subcommands/completion.ts` help-text zsh line to match install.sh's path (`~/.local/share/zsh/site-functions/_wrap` instead of the current `~/.zsh/completions/_wrap`) so hand-installers and the script point at the same location.
+install.sh does not write completions. The fpath/XDG-paths/per-shell-failure surface area was disproportionate to the value when `wrap --completion <shell>` already lets users opt in with one command. Brew owns completion files for brew users; curl-sh users run `wrap --completion <shell>` themselves. Success message points at the flag.
 
 ### Uninstall
 
@@ -220,8 +205,7 @@ Update `src/subcommands/completion.ts` help-text zsh line to match install.sh's 
    mv "$tmp_rc" "$rc"
    ```
 4. Remove `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish`.
-5. Remove completion files at the paths listed in §Completions.
-6. Print success message including: "Config and memory left at `~/.wrap/` — `rm -rf ~/.wrap` to fully remove, or run `wrap --forget` before next uninstall to wipe data while keeping the dir structure."
+5. Print success message including: "Config and memory left at `~/.wrap/` — `rm -rf ~/.wrap` to fully remove, or run `wrap --forget` before next uninstall to wipe data while keeping the dir structure."
 
 ---
 
@@ -338,7 +322,7 @@ The container starts with a clean `$HOME` — no `~/.wrap/` exists. The checklis
 4. **Uninstall.** Run `install.sh --uninstall --base-url …`.
    - The binary at `~/.local/bin/wrap` is gone.
    - The rc source line is gone.
-   - `~/.wrap/env`, `~/.wrap/env.fish`, the fish conf.d file, and all completion files written during install are gone.
+   - `~/.wrap/env`, `~/.wrap/env.fish`, and the fish conf.d file are gone.
    - `~/.wrap/config.jsonc` and `~/.wrap/memory.json` are **byte-identical** to the stubs from step 3.
 
 ### Manual coverage (residual)
