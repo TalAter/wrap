@@ -3725,3 +3725,180 @@
   mutated: '``'
   reason: verbose-mode log message — same reasoning as the line 204 verbose ignore.
   added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: Regex
+  original: '/^\s*(curl|wget)\b[^\n]*https?:\/\//'
+  mutated: '/\s*(curl|wget)\b[^\n]*https?:\/\//'
+  reason: 'cosmetic icon picker — fetchesUrl only chooses 🌐 vs 🔍 for non-final URL-fetching steps in chrome output. Without the ^ anchor, mid-string matches like ''time curl ...'' return true; the only effect is a different emoji.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'response.memory_updates_message'
+  mutated: 'true'
+  reason: 'chrome-only message gate — the if guards a chrome() line that prints the memory-update summary. Mutated to true the runner prints ''(...) undefined'' on memory_updates without a message; chrome side-effect only, no behavioral consequence.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 's !== null'
+  mutated: 'true'
+  reason: 'defensive null filter — resolvePath returns null only when given a non-absolute path that can''t be resolved against cwd; runtime callers pass scopes from realistic LLM responses where null is not produced.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'scopes.sort((a, b) => b.length - a.length)'
+  mutated: 'scopes'
+  reason: 'cosmetic — sort affects only which scope decorates the chrome line on multi-scope memory updates. Removing the sort picks the first scope rather than the deepest-path one — display-only.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ArrowFunction
+  original: '(a, b) => b.length - a.length'
+  mutated: '() => undefined'
+  reason: 'same as the paired sort-removal mutant — comparator returning undefined leaves array order unchanged, only affects the chrome scope-prefix selection.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ArithmeticOperator
+  original: 'b.length - a.length'
+  mutated: 'b.length + a.length'
+  reason: 'same — positive-always comparator produces inconsistent sort order; only affects which scope decorates the chrome line.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.budgetRemaining > 0'
+  mutated: 'state.budgetRemaining >= 0'
+  reason: 'equivalent — when budgetRemaining hits 0 the iteration''s isLastRound is true, and every response shape returns out of the loop before the next while check (line 210 for non-final low; lines 189/203 for reply/final/non-low). The natural while-exit at line 251 is only reachable when the initial budget is 0, which the maxRounds default of 5 never produces.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'state.roundNum > 1'
+  mutated: 'true'
+  reason: 'verbose-mode log gate — line 142 is verbose(''Round X/Y''), only fires under --verbose, no behavioral consequence.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.roundNum > 1'
+  mutated: 'state.roundNum >= 1'
+  reason: 'same — verbose-only log gate.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'isLastRound'
+  mutated: 'true'
+  reason: 'verbose-mode log gate — line 145 is verbose(''Final round: must return command or answer''), only fires under --verbose.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object" && "round" in e'
+  mutated: 'true'
+  reason: 'equivalent given runRound''s contract — runRound (round.ts:212/254/259/266) only ever throws RoundError, which always has a `round` property, so the full chain is true on every error reaching this catch.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object" && "round" in e'
+  mutated: 'e !== null && typeof e === "object" || "round" in e'
+  reason: 'same — RoundError satisfies all three conditions, so swapping && for || at the outer position is unobservable on producible errors.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'true'
+  reason: 'same — first half (e !== null && typeof e === ''object'') is true on RoundError; mutating the pair to true doesn''t change the chain''s outcome.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'e !== null || typeof e === "object"'
+  reason: 'same — RoundError satisfies both inner clauses, so && vs || is unobservable.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null'
+  mutated: 'true'
+  reason: 'same — RoundError is non-null, so e !== null is always true on producible errors.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'typeof e === "object"'
+  mutated: 'true'
+  reason: 'same — RoundError is an object, so typeof e === ''object'' is always true on producible errors.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'partial'
+  mutated: 'true'
+  reason: 'equivalent — partial is e.round and runRound always constructs RoundError with a non-null partial Round (round.ts builds the round object before any throw), so partial is always truthy and the if guard never gates.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: OptionalChaining
+  original: 'round.attempts.at(-1)?.parsed'
+  mutated: 'round.attempts.at(-1).parsed'
+  reason: 'defensive — runRound''s contract guarantees the last attempt is pushed to round.attempts before return on the success path (round.ts:259 success branch), so attempts.at(-1) is never undefined here. The optional chain protects an unreachable null.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: '!response'
+  mutated: 'false'
+  reason: 'defensive guard — runRound''s contract guarantees the last attempt has parsed on the success path. The throw never fires on producible inputs.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          // runRound's contract guarantees the last attempt has parsed on success — defensive.
+          throw new Error("runRound returned a round without a parsed final attempt");
+        }
+  mutated: '{}'
+  reason: 'same defensive guard — block removal makes the runner crash later instead of throwing here, but the path is unreachable on real runRound returns.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"runRound returned a round without a parsed final attempt"'
+  mutated: '""'
+  reason: 'defensive throw message — the error never fires on producible inputs and the message text is not asserted by any test.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          command: response.content,
+          exit_code: exec.exitCode,
+          shell: exec.shell,
+        }
+  mutated: '{}'
+  reason: 'log-shape concern — round.execution is consumed by logging.test.ts at the wire-format level. Mutation produces an empty execution field in JSONL logs but doesn''t affect runtime behavior, transcript, or LLM round-feedback.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'true'
+  reason: 'cosmetic — diverges only when stderr is empty (mutant adds ''\n'' + '''' → trailing newline). Empty-stderr commands produce a one-character difference in the captured output; not behaviorally significant for the LLM round-feedback.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'exec.stderr'
+  reason: 'equivalent on realistic inputs — only diverges when stderr is whitespace-only (raw truthy, trimmed empty). No real shell command produces whitespace-only stderr without intentional setup.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'stepOutput.trim()'
+  mutated: 'stepOutput'
+  reason: 'equivalent on realistic inputs — only diverges when stepOutput is whitespace-only. exec.stdout is either substantively non-empty or empty, not whitespace-only.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'cosmetic — the "" fallback fires only when stepOutput is empty (no stdout). Mutating to a non-empty string produces "<arbitrary><stderr>" instead of "<stderr>"; the fallback intent is "no separator when empty" and binding any specific text is brittle.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: '{ type: "exhausted" }'
+  mutated: '{}'
+  reason: 'unreachable on producible configs — line 251 is the natural while-exit, only reached when initial budgetRemaining is 0. Real callers seed budgetRemaining from getConfig().maxRounds (default 5), so the all-iterations-skipped path is not produced.'
+  added: 2026-05-04
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"exhausted"'
+  mutated: '""'
+  reason: 'same path as the paired ObjectLiteral ignore — line 251 is unreachable on producible configs.'
+  added: 2026-05-04
