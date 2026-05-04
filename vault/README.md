@@ -99,6 +99,11 @@ src/
   memory/                          scoped facts — [[memory]]
   logging/                         JSONL writer — [[logging]]
   subcommands/                     CLI subcommands — [[subcommands]]
+
+scripts/
+  install.sh                       curl|sh installer; uploaded as a release asset
+  install-assert.sh                shared install/uninstall assertion checklist
+  test-install.sh                  local Mac rig: builds, stages, runs the checklist in containers
 ```
 
 Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memory.json`, `tool-watchlist.json`, `logs/wrap.jsonl`.
