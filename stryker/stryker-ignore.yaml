@@ -3527,3 +3527,201 @@
   mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
   reason: "input no real caller produces — only differs on inputs with whitespace between the language tag and the newline (e.g. ```json   \\n...); a test for it would bind to a tolerant-parsing detail, not user-visible behavior (judge rejected fix attempt)"
   added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'NoObjectGeneratedError.isInstance(e)'
+  mutated: 'true'
+  reason: equivalent — both branches of extractFailedText return `e.text` for NoObjectGeneratedError and StructuredOutputError, and "" for plain Errors (mutant via undefined `.text`, original via the trailing `return ""`). No producible Error subclass exposes a different observable result.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"RoundError"'
+  mutated: '""'
+  reason: error.name is cosmetic — set via `this.name`, runtime never reads it. Analogous to the StructuredOutputError name ignore.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ role: "assistant", content: failedText }'
+  mutated: '{}'
+  reason: contract-shape mutation in the json-retry assistant turn. Real LLM SDKs reject malformed messages, but test runners use stub providers that ignore prior turns. Catching it requires binding the precise message-pair structure (assistant role + raw failedText) — implementation detail.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"assistant"'
+  mutated: '""'
+  reason: same shape-binding concern as the paired ObjectLiteral ignore on this line — the role string would only matter to a real SDK, and a test for it would bind the json-retry message-pair structure.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'n.kind === "llm-wire"'
+  mutated: 'true'
+  reason: defensive kind guard. During runPrompt, only the provider itself emits notifications (llm-wire); the spinner uses `chromeRaw` (direct stderr, bypasses the bus), and `verbose()` requires a config flag plus there are no verbose calls inside callOne. With the mutant accepting all kinds, it still only sees llm-wire's wire field.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'performance.now() - t0'
+  mutated: 'performance.now() + t0'
+  reason: produces an inflated llm_ms value (~2*now instead of duration), but `attempt.llm_ms` is observability-only — never used in any decision logic, only logged for audit.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'performance.now() - t0'
+  mutated: 'performance.now() + t0'
+  reason: catch-branch timing — same reasoning as the success-path arithmetic ignore on line 110; observability-only field.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'captured?.wire_capture_error !== undefined'
+  mutated: 'false'
+  reason: log-shape only — `attempt.wire_capture_error` appears in JSONL audit logs but is never user-visible or consumed by runtime logic.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: "{\n    attempt.wire_capture_error = captured.wire_capture_error;\n  }"
+  mutated: '{}'
+  reason: same as the paired ConditionalExpression ignore on this line — the wire_capture_error setter is log-shape only.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'a.llm_ms ?? 0'
+  mutated: 'a.llm_ms && 0'
+  reason: round.llm_ms is observability data — no runtime decision depends on its value. The existing sum test only catches divergence when individual `attempt.llm_ms` values are >0, which fast tests don't always produce; tightening it would require artificial delays.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error, retrying..."'
+  mutated: '""'
+  reason: verbose-mode log message — only shown with --verbose; the exact text is informational, binding it in a test is brittle.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response ?? ""'
+  mutated: 'round.attempts[round.attempts.length - 1]?.raw_response && ""'
+  reason: in tests and production where attempt.raw_response is always set ("" for non-StructuredOutputError, e.text for StructuredOutputError), the values fed to appendJsonRetry only differ when text is truthy non-empty. Catching it requires asserting on the assistant-turn echo content — implementation-detail binding.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response'
+  mutated: 'round.attempts[round.attempts.length - 1].raw_response'
+  reason: `attempts[length-1]` is always defined when this line runs — callOne pushes the attempt to the array before the parse-failure return path. Optional chain is defensive.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'round.attempts.length - 1'
+  mutated: 'round.attempts.length + 1'
+  reason: `length + 1` indexes out of bounds → undefined → `?.raw_response` is undefined → `?? ""` yields "" — identical observable result to the original's "" raw_response in the producible non-StructuredOutputError test paths.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: the `??` fallback fires only when `attempt.raw_response` is nullish — but callOne always assigns either `extractFailedText(e)` or `captured?.raw_response` before returning; the fallback is defensive.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'last?.error?.message'
+  mutated: 'last?.error.message'
+  reason: `last.error` is always set on parse-failure attempts — callOne's catch branch assigns `attempt.error = { kind: "parse", message }` before returning undefined. The inner optional chain is defensive.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'last?.error'
+  mutated: 'last.error'
+  reason: by step 2 of the retry ladder, attempts has at least 2 entries (failed initial + failed json-retry); `last = attempts[length-1]` is always defined.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error"'
+  mutated: '""'
+  reason: `last.error.message` is always populated by callOne (set to `e.message` or `String(e)` before returning undefined). The "LLM parse error" `??` fallback is defensive.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'response.type === "command"'
+  mutated: 'true'
+  reason: realistic LLM responses don't generate `type: "reply"` with `risk_level: "high"` and a null `_scratchpad` — replies are conversational answers, not destructive operations. The type guard is defensive against schema-allowed-but-LLM-never-produces shapes.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ rejectedResponse: response }'
+  mutated: '{}'
+  reason: contract-shape mutation in the scratchpad-retry directive. Testing it would bind to the exact assistant-turn structure (echoing the rejected response with its null _scratchpad) that buildPromptInput emits — implementation detail.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse === undefined'
+  mutated: 'false'
+  reason: skips the scratchpad-path's parse-retry — only matters when the scratchpad-required call ITSELF parse-fails, requiring three specific provider behaviors in sequence (initial high-risk null-scratchpad parse OK → scratchpad retry parse fail → json retry succeeds). Catching it would require a brittle multi-stage provider stub.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: "{\n        verbose(\"LLM parse error, retrying...\");\n        const failedText = round.attempts[round.attempts.length - 1]?.raw_response ?? \"\";\n        scratchResponse = await callOne(provider, round, appendJsonRetry(scratchInput, failedText));\n      }"
+  mutated: '{}'
+  reason: same as the paired ConditionalExpression ignore on this line — three-stage scratchpad-retry-parse-fail sequence to exercise.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error, retrying..."'
+  mutated: '""'
+  reason: verbose-mode log message in the scratchpad parse-retry path — same reasoning as the line 204 verbose ignore.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response ?? ""'
+  mutated: 'round.attempts[round.attempts.length - 1]?.raw_response && ""'
+  reason: scratchpad-path mirror of the line 205 LogicalOperator ignore — same equivalence reasoning applies.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'round.attempts[round.attempts.length - 1]?.raw_response'
+  mutated: 'round.attempts[round.attempts.length - 1].raw_response'
+  reason: scratchpad-path mirror of the line 205 OptionalChaining ignore — `attempts` always has entries at this point.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'round.attempts.length - 1'
+  mutated: 'round.attempts.length + 1'
+  reason: scratchpad-path mirror of the line 205 ArithmeticOperator ignore — out-of-bounds index yields the same "" failedText through the optional chain.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: scratchpad-path mirror of the line 205 StringLiteral ignore — the `??` fallback is defensive; raw_response is always assigned before reaching this line.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse !== undefined'
+  mutated: 'true'
+  reason: when scratchResponse is undefined (only after a scratchpad-double-parse-failure), the mutant assigns undefined to `response` and crashes on `response.content.trim()` — but reaching that case requires the same three-stage scratchpad-retry-parse-fail sequence as the line 232 ignore.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse !== undefined'
+  mutated: 'false'
+  reason: keeps the first (null-scratchpad) response as the local `response`; `attempts.at(-1).parsed` still carries the retried response (callOne pushed it before this line), so the round returned to the caller is unchanged. Divergence shows only in `verboseResponse(response)` and the `!response.content.trim()` check — both with same content in producible scenarios.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: EqualityOperator
+  original: 'scratchResponse !== undefined'
+  mutated: 'scratchResponse === undefined'
+  reason: combines the line 238 true/false ignores — for the producible scratchResponse-defined path it behaves like the false ignore (skip assignment); for the undefined-case it behaves like the true ignore (assign undefined). Same scenarios make both branches inert.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'last'
+  mutated: 'true'
+  reason: `last = attempts[length-1]` is always defined here — callOne pushed at least one attempt before this line. The `if (last)` guard is defensive against an impossible empty array.
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM returned an empty response."'
+  mutated: '""'
+  reason: log-shape only — this string lives in `attempt.error.message`, a JSONL audit field. The user-visible RoundError throw on the next line uses its own string literal (which is killed by the line 259 fix).
+  added: 2026-05-04
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '`LLM error: ${errMsg}`'
+  mutated: '``'
+  reason: verbose-mode log message — same reasoning as the line 204 verbose ignore.
+  added: 2026-05-04
