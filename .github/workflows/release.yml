@@ -36,8 +36,19 @@ jobs:
                  --title "$GITHUB_REF_NAME" \
                  --notes "Release $GITHUB_REF_NAME"
 
+  # Static analysis on the install scripts. Gates `build` and `install-asset`
+  # so a shellcheck failure prevents any asset from shipping to the release.
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install shellcheck
+        run: sudo apt-get install -y -qq shellcheck
+      - name: Run shellcheck
+        run: shellcheck scripts/install.sh scripts/test-install.sh scripts/install-assert.sh
+
   build:
-    needs: create-release
+    needs: [create-release, shellcheck]
     permissions:
       contents: write
       id-token: write
@@ -148,8 +159,113 @@ jobs:
         with:
           subject-path: dist/checksums.txt
 
+  # Upload scripts/install.sh as a release asset, byte-identical to the repo
+  # file. wrap.talater.com/install.sh redirects to releases/latest/download/...
+  install-asset:
+    needs: [create-release, shellcheck]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Upload install.sh to draft release
+        run: gh release upload "$GITHUB_REF_NAME" scripts/install.sh --clobber
+      - name: Attest install.sh
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: scripts/install.sh
+
+  # End-to-end verify: install / re-run / uninstall against the just-uploaded
+  # draft assets, in libc/OS combinations not covered by the maintainer's Mac.
+  # Failure leaves the release in draft.
+  verify-install-linux:
+    needs: [checksums, install-asset]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: glibc
+            image: ubuntu:24.04
+          - leg: musl
+            image: alpine:3.20
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install prereqs (apt)
+        if: matrix.leg == 'glibc'
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl python3 ca-certificates tar
+
+      - name: Install prereqs (apk)
+        if: matrix.leg == 'musl'
+        # Stock alpine has no bash, so Actions' default `bash {0}` shell
+        # would fail before the step runs. Force sh for this bootstrap step,
+        # then install bash so later steps use the default.
+        shell: sh -e {0}
+        run: apk add --no-cache curl python3 ca-certificates tar bash
+
+      # gh CLI is not preinstalled in stock distro images. Use the static Go
+      # build from gh's own releases — works on glibc and musl.
+      # Bump V manually when refreshing the pin.
+      - name: Install gh CLI
+        run: |
+          ARCH="$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')"
+          V=2.62.0
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${V}/gh_${V}_linux_${ARCH}.tar.gz" | tar -xz -C /tmp
+          install "/tmp/gh_${V}_linux_${ARCH}/bin/gh" /usr/local/bin/gh
+
+      # No actions/checkout in container: alpine + injected-node compat is
+      # fragile. Fetch install-assert.sh from raw github content (the repo
+      # is public; the tag exists at workflow-trigger time).
+      - name: Download install-assert.sh and draft release assets
+        run: |
+          mkdir -p /tmp/r
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/scripts/install-assert.sh" \
+            -o /tmp/install-assert.sh
+          gh release download "$GITHUB_REF_NAME" -D /tmp/r
+
+      - name: Serve assets locally + run assertion checklist
+        run: |
+          cd /tmp/r
+          python3 -m http.server 8000 >/dev/null 2>&1 &
+          trap "kill $! 2>/dev/null || true" EXIT
+          for _ in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8000/install.sh >/dev/null 2>&1 && break
+            sleep 0.1
+          done
+          BASE_URL=http://127.0.0.1:8000 \
+            INSTALL_SCRIPT=/tmp/r/install.sh \
+            EXPECTED_VERSION="${GITHUB_REF_NAME#v}" \
+            sh /tmp/install-assert.sh
+
+  verify-install-macos:
+    needs: [checksums, install-asset]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download draft release assets
+        run: gh release download "$GITHUB_REF_NAME" -D /tmp/r
+
+      - name: Serve assets locally + run assertion checklist
+        run: |
+          cd /tmp/r
+          python3 -m http.server 8000 >/dev/null 2>&1 &
+          trap "kill $! 2>/dev/null || true" EXIT
+          for _ in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8000/install.sh >/dev/null 2>&1 && break
+            sleep 0.1
+          done
+          BASE_URL=http://127.0.0.1:8000 \
+            INSTALL_SCRIPT=/tmp/r/install.sh \
+            EXPECTED_VERSION="${GITHUB_REF_NAME#v}" \
+            sh "$GITHUB_WORKSPACE/scripts/install-assert.sh"
+
   publish-release:
-    needs: [build, checksums]
+    needs: [verify-install-linux, verify-install-macos]
     runs-on: ubuntu-24.04
     steps:
       - name: Publish release
