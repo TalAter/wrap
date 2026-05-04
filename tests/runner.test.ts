@@ -204,6 +204,71 @@ describe("runLoop", () => {
     expect(state.roundNum).toBe(2);
   });
 
+  test("last-round non-final low: returns exhausted without executing the step", async () => {
+    // The last-round guard rejects a non-final response on the final round
+    // (the LLM was told to return command-or-answer). The step must NOT run
+    // and the transcript must NOT gain a step turn.
+    const { provider } = makeProvider([
+      {
+        type: "command",
+        final: false,
+        content: "echo should-not-run",
+        risk_level: "low",
+        explanation: "ignored on last round",
+      },
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const state: LoopState = { budgetRemaining: 1, roundNum: 0 };
+    const { events, final } = await drain(
+      runLoop(provider, transcript, scaffold, state, makeOptions()),
+    );
+    expect(final.type).toBe("exhausted");
+    expect(events.some((e) => e.type === "step-running")).toBe(false);
+    expect(events.some((e) => e.type === "step-output")).toBe(false);
+    expect(transcript.map((t) => t.kind)).toEqual(["user"]);
+  });
+
+  test("inline-step output inserts a newline boundary between stdout and stderr", async () => {
+    // Pin SHELL so stderr capture is predictable across platforms; runner
+    // forwards process.env to executeShellCommand. Use printf (no trailing
+    // newline) so the only "\n" between OUT and the stderr half comes from
+    // the runner's own separator — a missing-separator mutant runs OUT into
+    // the stderr content with no newline.
+    const savedShell = process.env.SHELL;
+    process.env.SHELL = "/bin/sh";
+    try {
+      const { provider } = makeProvider([
+        {
+          type: "command",
+          final: false,
+          content: "printf OUT; printf ERR >&2",
+          risk_level: "low",
+          explanation: "stderr-merge",
+        },
+        { type: "command", final: true, content: "true", risk_level: "low" },
+      ]);
+      const transcript: Transcript = [{ kind: "user", text: "hi" }];
+      const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+      const { events } = await drain(
+        runLoop(provider, transcript, scaffold, state, makeOptions()),
+      );
+      const stepOutputs = events.filter(
+        (e): e is Extract<LoopEvent, { type: "step-output" }> => e.type === "step-output",
+      );
+      expect(stepOutputs).toHaveLength(1);
+      const text = stepOutputs[0]?.text ?? "";
+      // Boundary "\n" right after stdout ("OUT") — without the runner's
+      // separator, "OUT" would butt up against the stderr content.
+      expect(text).toMatch(/^OUT\n/);
+      // stderr content is preserved (substring — sh -i may prepend a "no job
+      // control" warning before "ERR").
+      expect(text).toContain("ERR");
+    } finally {
+      if (savedShell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = savedShell;
+    }
+  });
+
   test("aborted at top of iteration when signal already aborted", async () => {
     const { provider, calls } = makeProvider([]);
     const ctrl = new AbortController();
