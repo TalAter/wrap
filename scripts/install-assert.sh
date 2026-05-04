@@ -23,7 +23,10 @@ set -eu
 HOME="$(mktemp -d)"
 # POSIX shells exempt assignment from `set -e`, so a failed mktemp would
 # silently leave HOME empty and then $HOME/foo would resolve to /foo.
-[ -n "$HOME" ] && [ -d "$HOME" ] || { echo "error: mktemp -d failed" >&2; exit 1; }
+if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
+  echo "error: mktemp -d failed" >&2
+  exit 1
+fi
 export HOME
 SENTINEL_HOME=""
 trap 'rm -rf "$HOME" "$SENTINEL_HOME"' EXIT INT TERM
@@ -67,7 +70,10 @@ fi
 # ---------- 1b. --no-modify-path skips env + rc but keeps completions ----------
 echo "== --no-modify-path" >&2
 SENTINEL_HOME="$(mktemp -d)"
-[ -n "$SENTINEL_HOME" ] && [ -d "$SENTINEL_HOME" ] || { echo "error: mktemp -d failed" >&2; exit 1; }
+if [ -z "$SENTINEL_HOME" ] || [ ! -d "$SENTINEL_HOME" ]; then
+  echo "error: mktemp -d failed" >&2
+  exit 1
+fi
 HOME="$SENTINEL_HOME" sh "$INSTALL_SCRIPT" --base-url "$BASE_URL" --no-modify-path
 
 [ -x "$SENTINEL_HOME/.local/bin/wrap" ] || fail "--no-modify-path did not install binary"
