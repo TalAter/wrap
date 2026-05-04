@@ -249,9 +249,7 @@ describe("runLoop", () => {
       ]);
       const transcript: Transcript = [{ kind: "user", text: "hi" }];
       const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
-      const { events } = await drain(
-        runLoop(provider, transcript, scaffold, state, makeOptions()),
-      );
+      const { events } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
       const stepOutputs = events.filter(
         (e): e is Extract<LoopEvent, { type: "step-output" }> => e.type === "step-output",
       );
