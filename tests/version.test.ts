@@ -5,14 +5,14 @@ describe("--version", () => {
   test("prints version to stdout and exits 0", async () => {
     const { exitCode, stdout, stderr } = await wrap("--version");
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
     expect(stderr).toBe("");
   });
 
   test("-v alias prints version", async () => {
     const { exitCode, stdout } = await wrap("-v");
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
   });
 
   test("does not accept an argument", async () => {
