@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/core/parse-response.ts
 - src/core/round.ts
 - src/core/runner.ts
 - src/core/transcript.ts
@@ -77,3 +76,4 @@
 - src/tui/risk-presets.ts
 - src/wizard/write-config.ts
 - src/command-response.schema.ts
+- src/core/parse-response.ts
