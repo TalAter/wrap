@@ -3509,3 +3509,9 @@
   mutated: "false"
   reason: "paraphrase of implementation — bold is a visible render attribute but the medium case already asserts bold via the same pillSegments code path; per-case duplicate adds no behavioral coverage (covers both riskLow and riskHigh bold:true survivors)"
   added: 2026-05-03
+- file: src/core/parse-response.ts
+  mutator: StringLiteral
+  original: '"StructuredOutputError"'
+  mutated: '""'
+  reason: error.name is cosmetic; runtime branches on instanceof StructuredOutputError and message text, never on .name
+  added: 2026-05-04
