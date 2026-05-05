@@ -3926,3 +3926,9 @@
   mutated: '{}'
   reason: line 27 catch body in `loadMemory`. Equivalent — with the catch swallowed, `parsed` stays undefined and `MemoryFileSchema.safeParse(undefined)` then fails, throwing the same memoryError on line 33. Observable behavior is identical.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: Regex
+  original: '/^[-•]\s*/'
+  mutated: '/[-•]\s*/'
+  reason: line 80 in `parseInitResponse`. Bullet stripping is defensive cleanup for LLM init output; the system prompt explicitly tells the LLM "Do not add bullet points or numbering". Real LLM output is one fact per line without internal bullets, so dropping the leading anchor only matters when a line contains a `-` or `•` mid-content with no leading bullet — atypical and the contract isn't "preserve internal dashes through this regex".
+  added: 2026-05-05
