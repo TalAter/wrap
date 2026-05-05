@@ -43,6 +43,7 @@ Below truecolor, gradients short-circuit to a solid color — quantizing interpo
 - **No cross-theme derivation.** Explicit values prevent cascading surprises.
 - **Two-stop OKLAB gradients.** Simple to author, smooth result.
 - **OSC 11 probe is synchronous.** Must finish before any Ink dialog mounts — raw-mode cleanup races with Ink's stdin claim on the same tty.
+- **Skip the OSC 11 probe on non-themed code paths** (e.g. `--version`). Slow TTYs reply after the 50ms timeout fires and wrap exits; the orphan reply leaks into the parent shell as `^[]11;rgb:…^G`. Don't probe unless something is about to render with a theme.
 - **`NO_COLOR` always wins.** No exceptions.
 - **Per-level overrides on tokens, not separate level themes.** Override sits next to the base; one source of truth per token. Almost no tokens need them — only those whose nearest-palette snap reads as harsh.
 - **Modern bare `TERM` → 256, not 16.** Reality across docker/ssh/tmux. Genuine low-color terminals are listed explicitly.

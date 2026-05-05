@@ -31,11 +31,17 @@ const MODIFIER_SPECS: readonly ModifierSpec[] = options.map((o) => ({
 
 export async function main() {
   try {
+    const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
+
+    // --version writes plain stdout — no themed chrome. Skip the OSC 11
+    // background-color probe so terminals that reply slowly (e.g. Ubuntu
+    // over SSH) don't leak the orphan reply into the parent shell as
+    // "^[]11;rgb:...^G" after wrap exits.
+    const isVersion = input.type === "flag" && (input.flag === "--version" || input.flag === "-v");
+
     // Early theme: WRAP_THEME env + cache work before config is loaded.
     // Covers --help, the wizard, and any other pre-config code path.
-    setTheme(resolveTheme(await resolveAppearance(undefined)));
-
-    const { modifiers, input } = parseArgs(process.argv, MODIFIER_SPECS);
+    if (!isVersion) setTheme(resolveTheme(await resolveAppearance(undefined)));
 
     // Seed config from CLI + env + defaults so we have an initial state
     // even before reading config file. The session path re-resolves with
