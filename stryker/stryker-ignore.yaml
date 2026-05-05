@@ -3962,3 +3962,9 @@
   mutated: 'total + globalCount'
   reason: line 91 in `ensureMemory`. Computes the "scoped facts" count for the verbose log line. Diagnostic output only — the program does not branch on this value.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: StringLiteral
+  original: '"✨"'
+  mutated: '""'
+  reason: line 95 in `ensureMemory` — chrome icon for the "Learning about your system..." line. Cosmetic decoration; the message text is asserted by tests, the icon is not user-visible behavior.
+  added: 2026-05-05
