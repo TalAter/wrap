@@ -3842,3 +3842,9 @@
   mutated: '{}'
   reason: same default-branch exhaustiveness guard — unreachable on producible TranscriptTurn values. Compile-time check only.
   added: 2026-05-05
+- file: src/core/transcript.ts
+  mutator: StringLiteral
+  original: '`unhandled transcript turn: ${(_exhaustive as { kind: string }).kind}`'
+  mutated: '``'
+  reason: throw message inside the unreachable exhaustiveness default branch. Never read at runtime on producible inputs.
+  added: 2026-05-05
