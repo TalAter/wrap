@@ -3848,3 +3848,39 @@
   mutated: '``'
   reason: throw message inside the unreachable exhaustiveness default branch. Never read at runtime on producible inputs.
   added: 2026-05-05
+- file: src/core/shell.ts
+  mutator: ArrowFunction
+  original: '() => openSync("/dev/tty", "r")'
+  mutated: '() => undefined'
+  reason: defaultTryOpenTty factory passed as the `??` fallback in chooseChildStdin. Tests inject `tryOpenTty`, so the default arrow body is unexercised in the unit-test harness; analogous to the clipboard.ts/editor.ts defaultWhich ignores.
+  added: 2026-05-05
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"/dev/tty"'
+  mutated: '""'
+  reason: first arg to openSync inside the default tryOpenTty factory. Tests inject `tryOpenTty`, so this literal is never read in tests; production-only path.
+  added: 2026-05-05
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"r"'
+  mutated: '""'
+  reason: second arg to openSync inside the default tryOpenTty factory. Tests inject `tryOpenTty`, so this literal is never read in tests; production-only path.
+  added: 2026-05-05
+- file: src/core/shell.ts
+  mutator: BlockStatement
+  original: '{ if (typeof stdin === "number") closeSync(stdin); }'
+  mutated: '{}'
+  reason: finally block that closes the /dev/tty fd opened by chooseChildStdin. The leak is bounded by Wrap's process lifetime (short-lived CLI). Asserting fd cleanup would require either adding DI for closeSync purely for testability or fd-table introspection (env-specific, flaky).
+  added: 2026-05-05
+- file: src/core/shell.ts
+  mutator: ConditionalExpression
+  original: 'typeof stdin === "number"'
+  mutated: 'false'
+  reason: same cleanup-finally as the BlockStatement ignore above — making the condition always false skips closeSync, which only manifests as a bounded fd leak invisible to callers.
+  added: 2026-05-05
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"number"'
+  mutated: '""'
+  reason: same cleanup-finally as above — `typeof stdin === ""` is always false (typeof never returns ""), so the closeSync branch is skipped; manifests only as a bounded fd leak.
+  added: 2026-05-05
