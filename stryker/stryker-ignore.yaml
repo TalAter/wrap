@@ -3938,3 +3938,9 @@
   mutated: '/^[-•]\s/'
   reason: line 80 in `parseInitResponse`. Same defensive bullet-strip — `\s*` → `\s` only differs when a leading bullet has zero whitespace after it (e.g. `-fact`). Init prompt forbids bullets, so this edge case is not a real LLM output shape we need to defend against.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: LogicalOperator
+  original: 'existing["/"] ?? []'
+  mutated: 'existing["/"] && []'
+  reason: line 90 in `ensureMemory`. `globalCount` is consumed only by the verbose log line on line 91 (`Memory: N facts (X global, Y scoped)`). Verbose diagnostic output, not user-visible behavior — the program functions identically with the wrong count printed.
+  added: 2026-05-05
