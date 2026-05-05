@@ -3968,3 +3968,9 @@
   mutated: '""'
   reason: line 95 in `ensureMemory` — chrome icon for the "Learning about your system..." line. Cosmetic decoration; the message text is asserted by tests, the icon is not user-visible behavior.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: StringLiteral
+  original: '"user"'
+  mutated: '""'
+  reason: line 102 in `ensureMemory` — `role: "user"` on the conversation message passed to `provider.runPrompt`. The `role` field is a static, type-enforced provider-call detail (`Provider.runPrompt` types it as `"user" | "assistant"`). Asserting it in a test would paraphrase the call shape rather than verify user-visible behavior; mock providers in the existing tests don't depend on it.
+  added: 2026-05-05
