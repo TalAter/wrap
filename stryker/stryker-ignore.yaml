@@ -3950,3 +3950,9 @@
   mutated: '""'
   reason: line 90 in `ensureMemory` (`existing["/"] ?? []`). Only feeds the verbose log line below — diagnostic output, not user-visible behavior. The `""` lookup misses, gives globalCount=0, but program flow is identical.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: line 90 in `ensureMemory` (`existing["/"] ?? []` fallback). Same as the paired LogicalOperator/StringLiteral entries — only feeds the verbose log line. Changes the printed globalCount when "/" is missing; no user-visible behavior change.
+  added: 2026-05-05
