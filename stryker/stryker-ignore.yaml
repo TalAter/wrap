@@ -3884,3 +3884,39 @@
   mutated: '""'
   reason: same cleanup-finally as above — `typeof stdin === ""` is always false (typeof never returns ""), so the closeSync branch is skipped; manifests only as a bounded fd leak.
   added: 2026-05-05
+- file: src/config/resolve.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: line 78 `setting.env ?? []` fallback. Hits only for settings without `env` (verbose, maxRounds, maxCapturedOutput/AttachedInputChars, defaultProvider). Mutant iterates ["Stryker was here"], looks up env["Stryker was here"] → undefined → continue → falls through unchanged. No real env exposes a key with that exact spaced name.
+  added: 2026-05-05
+- file: src/config/resolve.ts
+  mutator: ConditionalExpression
+  original: 'setting.type === "boolean"'
+  mutated: 'true'
+  reason: line 81 env-value branch. Every SETTINGS entry that declares `env` and isn't the early-skipped `model` (yolo, noAnimation, nerdFonts, logTraces) is type "boolean", so the predicate is unconditionally true on every reachable call. Equivalent until a non-boolean env-having setting is added.
+  added: 2026-05-05
+- file: src/config/resolve.ts
+  mutator: ConditionalExpression
+  original: 'type === "string"'
+  mutated: 'false'
+  reason: line 94 in `coerce`. `coerce` is only ever called with `setting.type` for non-boolean settings via CLI/env. Today the only string-typed setting reaching `coerce` would be defaultProvider — which has no flag and no env, so production never feeds it a CLI/env value. Mutant diverges only when a string CLI/env value is actually passed; no caller produces one.
+  added: 2026-05-05
+- file: src/config/resolve.ts
+  mutator: StringLiteral
+  original: '"string"'
+  mutated: '""'
+  reason: same line 94 as above — `type` is statically `"string" | "number"`, so `=== ""` is always false. Equivalent for the same reason: no caller currently feeds a string CLI/env value through `coerce`.
+  added: 2026-05-05
+- file: src/config/resolve.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: line 167 `SETTINGS.model.env ?? []`. SETTINGS.model.env is statically ["WRAP_MODEL"], so the `??` fallback is unreachable. Defensive guard against a future config change that drops the env array.
+  added: 2026-05-05
+- file: src/config/resolve.ts
+  mutator: ConditionalExpression
+  original: 'v !== undefined'
+  mutated: 'true'
+  reason: line 169 inside `for (const name of SETTINGS.model.env ...)`. SETTINGS.model.env has a single entry ["WRAP_MODEL"], so the loop runs at most once. With the single iteration, both forms return undefined when WRAP_MODEL is unset (original via fall-through, mutant via the early return of `undefined`). Diverges only if SETTINGS.model.env grows to multiple entries — not the current shape.
+  added: 2026-05-05
