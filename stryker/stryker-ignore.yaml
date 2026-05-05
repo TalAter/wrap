@@ -3944,3 +3944,9 @@
   mutated: 'existing["/"] && []'
   reason: line 90 in `ensureMemory`. `globalCount` is consumed only by the verbose log line on line 91 (`Memory: N facts (X global, Y scoped)`). Verbose diagnostic output, not user-visible behavior — the program functions identically with the wrong count printed.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: StringLiteral
+  original: '"/"'
+  mutated: '""'
+  reason: line 90 in `ensureMemory` (`existing["/"] ?? []`). Only feeds the verbose log line below — diagnostic output, not user-visible behavior. The `""` lookup misses, gives globalCount=0, but program flow is identical.
+  added: 2026-05-05
