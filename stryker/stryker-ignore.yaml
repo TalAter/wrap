@@ -3830,3 +3830,9 @@
   mutated: 'if (true) out.plan = response.plan'
   reason: only differs when response.plan is exactly null — original omits plan from the echo, mutant adds "plan":null. Both encode "no plan" to the LLM consumer; the byte-shape difference is cosmetic.
   added: 2026-05-05
+- file: src/core/transcript.ts
+  mutator: ConditionalExpression
+  original: 'default: { const _exhaustive: never = turn; throw new Error(...) }'
+  mutated: 'default:'
+  reason: exhaustiveness guard for the TranscriptTurn discriminated union — the default branch is unreachable on producible inputs (TS enforces all kinds are handled). Removing the body changes nothing at runtime.
+  added: 2026-05-05
