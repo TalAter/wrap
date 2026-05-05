@@ -206,6 +206,28 @@ describe("buildPromptInput", () => {
     expect(out.messages[2]?.content).toBe(promptConstants.lastRoundInstruction);
   });
 
+  test("scratchpadRequiredRetry directive echoes the rejected response as an assistant turn and appends the scratchpad-required instruction", () => {
+    const rejected: CommandResponse = {
+      type: "command",
+      final: true,
+      content: "rm -rf /tmp/x",
+      risk_level: "high",
+    };
+    const transcript: Transcript = [{ kind: "user", text: "clean up" }];
+    const out = buildPromptInput(transcript, sys, {
+      scratchpadRequiredRetry: { rejectedResponse: rejected },
+    });
+    expect(out.messages).toHaveLength(3);
+    expect(out.messages[1]).toEqual({
+      role: "assistant",
+      content: JSON.stringify(rejected),
+    });
+    expect(out.messages[2]).toEqual({
+      role: "user",
+      content: promptConstants.scratchpadRequiredInstruction,
+    });
+  });
+
   test("isLastRound directive appends a final user turn with the constant", () => {
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const directives: AttemptDirectives = { isLastRound: true };
