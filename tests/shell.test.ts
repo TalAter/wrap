@@ -44,6 +44,18 @@ describe("executeShellCommand (capture mode)", () => {
     expect(result.exitCode).toBe(7);
   });
 
+  test("exec_ms reflects wall-clock duration of the command", async () => {
+    // Bound exec_ms by externally-measured wall clock (with a tolerance for
+    // scheduling jitter). A `start + now` regression would produce values in
+    // the thousands of ms even for an instant command.
+    const wallStart = performance.now();
+    const result = await executeShellCommand("true", { mode: "capture" });
+    const wallEnd = performance.now();
+    expect(result.exitCode).toBe(0);
+    expect(result.exec_ms).toBeGreaterThanOrEqual(0);
+    expect(result.exec_ms).toBeLessThanOrEqual(wallEnd - wallStart + 50);
+  });
+
   test("falls back to 'sh' when SHELL env var is unset", async () => {
     const saved = process.env.SHELL;
     delete process.env.SHELL;
@@ -110,5 +122,14 @@ describe("executeShellCommand (inherit mode)", () => {
   test("propagates non-zero exit codes in inherit mode", async () => {
     const result = await executeShellCommand("exit 3", { mode: "inherit" });
     expect(result.exitCode).toBe(3);
+  });
+
+  test("exec_ms reflects wall-clock duration in inherit mode", async () => {
+    const wallStart = performance.now();
+    const result = await executeShellCommand("true", { mode: "inherit" });
+    const wallEnd = performance.now();
+    expect(result.exitCode).toBe(0);
+    expect(result.exec_ms).toBeGreaterThanOrEqual(0);
+    expect(result.exec_ms).toBeLessThanOrEqual(wallEnd - wallStart + 50);
   });
 });
