@@ -3956,3 +3956,9 @@
   mutated: '["Stryker was here"]'
   reason: line 90 in `ensureMemory` (`existing["/"] ?? []` fallback). Same as the paired LogicalOperator/StringLiteral entries — only feeds the verbose log line. Changes the printed globalCount when "/" is missing; no user-visible behavior change.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: ArithmeticOperator
+  original: 'total - globalCount'
+  mutated: 'total + globalCount'
+  reason: line 91 in `ensureMemory`. Computes the "scoped facts" count for the verbose log line. Diagnostic output only — the program does not branch on this value.
+  added: 2026-05-05
