@@ -3932,3 +3932,9 @@
   mutated: '/[-•]\s*/'
   reason: line 80 in `parseInitResponse`. Bullet stripping is defensive cleanup for LLM init output; the system prompt explicitly tells the LLM "Do not add bullet points or numbering". Real LLM output is one fact per line without internal bullets, so dropping the leading anchor only matters when a line contains a `-` or `•` mid-content with no leading bullet — atypical and the contract isn't "preserve internal dashes through this regex".
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: Regex
+  original: '/^[-•]\s*/'
+  mutated: '/^[-•]\s/'
+  reason: line 80 in `parseInitResponse`. Same defensive bullet-strip — `\s*` → `\s` only differs when a leading bullet has zero whitespace after it (e.g. `-fact`). Init prompt forbids bullets, so this edge case is not a real LLM output shape we need to defend against.
+  added: 2026-05-05
