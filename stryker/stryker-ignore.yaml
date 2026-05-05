@@ -3824,3 +3824,9 @@
   mutated: '""'
   reason: 'same path as the paired ObjectLiteral ignore — line 251 is unreachable on producible configs.'
   added: 2026-05-04
+- file: src/core/transcript.ts
+  mutator: ConditionalExpression
+  original: 'if (response.plan != null) out.plan = response.plan'
+  mutated: 'if (true) out.plan = response.plan'
+  reason: only differs when response.plan is exactly null — original omits plan from the echo, mutant adds "plan":null. Both encode "no plan" to the LLM consumer; the byte-shape difference is cosmetic.
+  added: 2026-05-05
