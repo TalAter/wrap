@@ -81,8 +81,7 @@ GitHub artifact attestations remain enabled per the existing `attest-build-prove
 **Flags** (all optional):
 - `--install-dir <path>` — override install location (default: `$HOME/.local/bin`). Tilde **not** expanded; pass an explicit path.
 - `--no-modify-path` — skip env-script writing and rc-file edits.
-- `--uninstall` — run uninstall flow (see §Uninstall).
-- `-h`, `--help` — print usage and exit.
+- `-h`, `--help` — print usage and exit. Help text includes manual-uninstall steps (see §Uninstall).
 
 No env vars.
 
@@ -100,26 +99,25 @@ No env vars.
 4. Require curl.
 5. `$HOME` guard: if unset or empty, abort with `error: HOME is not set`.
 6. Refuse sudo escalation: if `[ "$(id -u)" = 0 ]` AND `$SUDO_USER` is non-empty, abort with a message pointing at re-running as a normal user. Bare root (no `$SUDO_USER`) is allowed — that's the default in containers (Alpine, distroless), which is a primary use case. Files land under `/root/` in that case.
-7. If `--uninstall` was passed: jump to §Uninstall flow.
-8. Brew refusal: if `command -v brew` and `brew list talater/wrap/wrap` succeeds, abort with `error: wrap is managed by Homebrew; run 'brew upgrade talater/wrap/wrap'`.
-9. Detect OS+arch via `uname -sm` case → base triple (4 cases + error).
-10. **musl swap (linux-gnu triples only)**: see §Detection logic.
-11. Build URL: `${BASE_URL:-https://github.com/TalAter/wrap/releases/latest/download}/wrap-${TRIPLE}.tar.gz` where `BASE_URL` is set from the internal-only `--base-url` flag if present.
-12. `mktemp -d`; `trap 'rm -rf "$tmp"' EXIT INT TERM`. Download tarball + checksums.txt with `curl -fsSL`. The default URL is hardcoded `https://...` and there's no user input that affects the URL on the default path, so additional curl flags like `--proto '=https'` would be theater here.
-13. Verify. POSIX `sh` has no `pipefail`, so a naive `grep ... | sha256-tool -c -` would silently pass when the triple is absent from `checksums.txt` (empty grep output → empty stdin → exit 0 from the hasher). Capture grep output first:
+7. Brew refusal: if `command -v brew` and `brew list talater/wrap/wrap` succeeds, abort with `error: wrap is managed by Homebrew; run 'brew upgrade talater/wrap/wrap'`.
+8. Detect OS+arch via `uname -sm` case → base triple (4 cases + error).
+9. **musl swap (linux-gnu triples only)**: see §Detection logic.
+10. Build URL: `${BASE_URL:-https://github.com/TalAter/wrap/releases/latest/download}/wrap-${TRIPLE}.tar.gz` where `BASE_URL` is set from the internal-only `--base-url` flag if present.
+11. `mktemp -d`; `trap 'rm -rf "$tmp"' EXIT INT TERM`. Download tarball + checksums.txt with `curl -fsSL`. The default URL is hardcoded `https://...` and there's no user input that affects the URL on the default path, so additional curl flags like `--proto '=https'` would be theater here.
+12. Verify. POSIX `sh` has no `pipefail`, so a naive `grep ... | sha256-tool -c -` would silently pass when the triple is absent from `checksums.txt` (empty grep output → empty stdin → exit 0 from the hasher). Capture grep output first:
     ```sh
     expected="$(grep " wrap-${TRIPLE}.tar.gz$" checksums.txt || true)"
     [ -n "$expected" ] || err "no checksum entry for wrap-${TRIPLE}.tar.gz"
     printf '%s\n' "$expected" | sha256-tool -c -
     ```
     If neither `shasum` nor `sha256sum` is available, print the warning described in §Verification and skip. If `checksums.txt` itself failed to download, abort.
-14. Extract tarball; install via atomic same-dir rename:
+13. Extract tarball; install via atomic same-dir rename:
     - `mkdir -p "$INSTALL_DIR"`, then `mv` extracted binary to `$INSTALL_DIR/wrap.new`.
     - `chmod +x` **before** the final rename so the swap publishes an already-executable file.
     - `mv -f "$INSTALL_DIR/wrap.new" "$INSTALL_DIR/wrap"` — same-dir rename is atomic and safe even if the running `wrap` is being replaced.
-15. PATH-shadow check: if another `wrap` is already on PATH at a different path, print a `warning:` naming both.
-16. PATH setup (env-script pattern; see §Env-script).
-17. Print success: version, install dir, list of rc files modified (if any). Print the "open a new shell" line when rc files were modified. Mention `wrap --completion <shell>` for users who want shell completion.
+14. PATH-shadow check: if another `wrap` is already on PATH at a different path, print a `warning:` naming both.
+15. PATH setup (env-script pattern; see §Env-script).
+16. Print success: version, install dir, list of rc files modified (if any). Print the "open a new shell" line when rc files were modified. Mention `wrap --completion <shell>` for users who want shell completion.
 ```
 
 ### Detection logic
@@ -192,20 +190,7 @@ install.sh does not write completions. The fpath/XDG-paths/per-shell-failure sur
 
 ### Uninstall
 
-`install.sh --uninstall`. `--install-dir` is honored if the user installed to a non-default location; otherwise default applies.
-
-1. Remove `$INSTALL_DIR/wrap`.
-2. Remove `~/.wrap/env`, `~/.wrap/env.fish`.
-3. Remove the `. "$HOME/.wrap/env"` line from each rc file that contains it. Skip rc files that don't contain the line — avoids any rewrite. Use a temp-file rewrite when present (POSIX-portable; some `sed -i` implementations differ between GNU/BSD). Place the temp file beside `$rc` so the final `mv` is a same-filesystem rename:
-   ```sh
-   line='. "$HOME/.wrap/env"'
-   grep -qxF "$line" "$rc" || continue
-   tmp_rc="$(mktemp "${rc}.XXXXXX")"
-   grep -vxF "$line" "$rc" > "$tmp_rc"
-   mv "$tmp_rc" "$rc"
-   ```
-4. Remove `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish`.
-5. Print success message including: "Config and memory left at `~/.wrap/` — `rm -rf ~/.wrap` to fully remove, or run `wrap --forget` before next uninstall to wipe data while keeping the dir structure."
+install.sh does not implement uninstall. The atomic rc-file rewrite (temp file + grep -v exit-code handling) was disproportionate maintenance for a flag few people use — a curl|sh user can `rm` the four touched paths themselves. `install.sh --help` lists the manual steps; `wrap --forget` handles the `~/.wrap/` data side.
 
 ---
 
@@ -217,7 +202,7 @@ install.sh does not write completions. The fpath/XDG-paths/per-shell-failure sur
 2. **Expand build matrix** to 6 targets (4 current + 2 musl; see "Build matrix expansion" above).
 3. **New job `checksums`**, depends on `build`: downloads every tarball, computes sha256, writes `checksums.txt`, uploads as release asset, attests.
 4. **Upload `scripts/install.sh` as a release asset** in a tiny job that runs alongside `checksums`. Byte-identical to the repo file — no templating.
-5. **New job `verify-install`**, depends on `checksums` and the install-asset upload. Gates publish on a real install→re-run→uninstall cycle in OS+libc combinations not naturally exercised on the maintainer's Mac dev box. Full mechanics in §Testing rig 3; in summary: three matrix legs (`ubuntu:24.04` container, `alpine:3.20` container, `macos-14` runner) that each `gh release download` the draft assets, serve them over a local HTTP server, run install.sh via the `--base-url` test escape hatch, then run the assertion checklist. Failure leaves the release in draft.
+5. **New job `verify-install`**, depends on `checksums` and the install-asset upload. Gates publish on a real install→re-run cycle in OS+libc combinations not naturally exercised on the maintainer's Mac dev box. Full mechanics in §Testing rig 3; in summary: three matrix legs (`ubuntu:24.04` container, `alpine:3.20` container, `macos-14` runner) that each `gh release download` the draft assets, serve them over a local HTTP server, run install.sh via the `--base-url` test escape hatch, then run the assertion checklist. Failure leaves the release in draft.
 6. **`publish-release` now depends on `verify-install`.** Reason: never publish a release where the install path is broken. `releases/latest` only resolves to non-prereleases, so the gate's purpose is correctness (don't ship a broken installer), not race protection on `latest`.
 7. **`bump-tap` unchanged.** Tap continues consuming the four canonical triples; new musl triples are install-script-only.
 
@@ -307,7 +292,7 @@ The CI smoke does **not** invoke `scripts/test-install.sh` — different orchest
 
 ### Assertion checklist (local rig and CI both run these)
 
-The container starts with a clean `$HOME` — no `~/.wrap/` exists. The checklist runs install/use/uninstall in that order:
+The container starts with a clean `$HOME` — no `~/.wrap/` exists. The checklist runs install then re-install:
 
 1. **Install.** Run `install.sh --base-url …`.
    - `"$HOME/.local/bin/wrap" --version` exits 0 and prints a string containing the expected version (`package.json`'s `version` field for the local rig; the release tag for CI).
@@ -316,14 +301,6 @@ The container starts with a clean `$HOME` — no `~/.wrap/` exists. The checklis
 2. **Re-run = idempotent upgrade.** Run `install.sh --base-url …` again.
    - Exits 0.
    - The rc file still contains exactly one `. "$HOME/.wrap/env"` source line (no duplicates).
-
-3. **Simulate user state.** Stub-create `~/.wrap/config.jsonc` and `~/.wrap/memory.json` with arbitrary recognizable content. (These files would normally be created by running wrap; the stub mimics that without needing a real wrap session inside the test container.)
-
-4. **Uninstall.** Run `install.sh --uninstall --base-url …`.
-   - The binary at `~/.local/bin/wrap` is gone.
-   - The rc source line is gone.
-   - `~/.wrap/env`, `~/.wrap/env.fish`, and the fish conf.d file are gone.
-   - `~/.wrap/config.jsonc` and `~/.wrap/memory.json` are **byte-identical** to the stubs from step 3.
 
 ### Manual coverage (residual)
 

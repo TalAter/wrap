@@ -177,8 +177,8 @@ jobs:
         with:
           subject-path: scripts/install.sh
 
-  # End-to-end verify: install / re-run / uninstall against the just-uploaded
-  # draft assets, in libc/OS combinations not covered by the maintainer's Mac.
+  # End-to-end verify: install / re-run against the just-uploaded draft
+  # assets, in libc/OS combinations not covered by the maintainer's Mac.
   # Failure leaves the release in draft.
   verify-install-linux:
     needs: [checksums, install-asset]

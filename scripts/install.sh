@@ -28,14 +28,18 @@ Install wrap (https://github.com/TalAter/wrap).
 
 Usage:
   install.sh [--install-dir <path>] [--no-modify-path]
-  install.sh --uninstall [--install-dir <path>]
   install.sh -h | --help
 
 Options:
   --install-dir <path>  Override install location (default: $HOME/.local/bin).
   --no-modify-path      Skip env script and rc file edits.
-  --uninstall           Remove wrap, env scripts, rc-file source line.
   -h, --help            Show this help.
+
+To uninstall:
+  rm "$HOME/.local/bin/wrap"
+  rm -rf "$HOME/.wrap"
+  rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish"
+  # then delete the line   . "$HOME/.wrap/env"   from ~/.bashrc and ~/.zshenv
 EOF
 }
 
@@ -44,7 +48,6 @@ main() {
 
   install_dir="$HOME/.local/bin"
   modify_path=1
-  uninstall=0
   base_url="$DEFAULT_BASE_URL"
 
   while [ $# -gt 0 ]; do
@@ -56,10 +59,6 @@ main() {
         ;;
       --no-modify-path)
         modify_path=0
-        shift
-        ;;
-      --uninstall)
-        uninstall=1
         shift
         ;;
       --base-url)
@@ -81,11 +80,6 @@ main() {
   # Bare root is allowed (containers); sudo escalation from a normal user is not.
   if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ]; then
     err "do not run with sudo; re-run as $SUDO_USER"
-  fi
-
-  if [ "$uninstall" = 1 ]; then
-    do_uninstall "$install_dir"
-    exit 0
   fi
 
   command -v curl >/dev/null 2>&1 || err "curl is required"
@@ -262,58 +256,6 @@ print_success() {
     note "Open a new shell, or run '. \"\$HOME/.wrap/env\"' to use wrap now."
   fi
   note "Shell completion: run 'wrap --completion <bash|zsh|fish>' to generate."
-}
-
-do_uninstall() {
-  bin_dir="$1"
-  removed=""
-  updated=""
-
-  if [ -e "$bin_dir/wrap" ]; then
-    rm -f "$bin_dir/wrap"
-    removed="${removed}${bin_dir}/wrap "
-  fi
-
-  for f in \
-    "$HOME/.wrap/env" \
-    "$HOME/.wrap/env.fish" \
-    "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish"; do
-    if [ -e "$f" ]; then
-      rm -f "$f"
-      removed="${removed}${f} "
-    fi
-  done
-
-  # shellcheck disable=SC2016  # literal '$HOME' so the rc-file source line resolves at shell startup
-  line='. "$HOME/.wrap/env"'
-  for rc in "$HOME/.bashrc" "${ZDOTDIR:-$HOME}/.zshenv"; do
-    [ -f "$rc" ] || continue
-    grep -qxF "$line" "$rc" || continue
-    # Same-fs temp file → final mv is atomic rename. grep -v exits 1 when the
-    # output is empty (rc had only the source line) — legitimate. Exit ≥2 is
-    # a real error; do NOT mv the partial temp over the user's rc.
-    tmp_rc="$(mktemp "${rc}.XXXXXX")"
-    set +e
-    grep -vxF "$line" "$rc" > "$tmp_rc"
-    gv_status=$?
-    set -e
-    if [ "$gv_status" -gt 1 ]; then
-      rm -f "$tmp_rc"
-      err "failed to rewrite $rc"
-    fi
-    mv "$tmp_rc" "$rc"
-    updated="${updated}${rc} "
-  done
-
-  note ""
-  if [ -z "$removed" ] && [ -z "$updated" ]; then
-    note "Nothing to uninstall."
-  else
-    [ -z "$removed" ] || note "Removed: $removed"
-    [ -z "$updated" ] || note "Updated (source line dropped): $updated"
-  fi
-  note "Config and memory left at ~/.wrap/ — 'rm -rf ~/.wrap' to fully remove,"
-  note "or run 'wrap --forget' before next uninstall to wipe data while keeping the dir."
 }
 
 main "$@"

@@ -1,8 +1,8 @@
 #!/bin/sh
-# Install/uninstall assertion checklist for wrap install.sh.
+# Install assertion checklist for wrap install.sh.
 # Shared between scripts/test-install.sh (local Mac rig) and the
 # release.yml verify-install jobs. Runs install → --no-modify-path →
-# reinstall (idempotent) → uninstall, asserting state at each step.
+# reinstall (idempotent), asserting state at each step.
 #
 # Required env:
 #   BASE_URL          e.g. http://127.0.0.1:8000 — must already be serving
@@ -91,25 +91,5 @@ sh "$INSTALL_SCRIPT" --base-url "$BASE_URL"
 [ "$(count_line "$RC_BASH" "$LINE_BASH")"   = 1 ] || fail "$RC_BASH duplicated source line on re-run"
 [ "$(count_line "$RC_ZSH"  "$LINE_BASH")"   = 1 ] || fail "$RC_ZSH duplicated source line on re-run"
 [ "$(count_line "$FISH_CONF" "$FISH_LINE")" = 1 ] || fail "$FISH_CONF duplicated on re-run"
-
-# ---------- 3. Stub user data ----------
-mkdir -p "$HOME/.wrap"
-printf "stub-config\n" > "$HOME/.wrap/config.jsonc"
-printf "stub-memory\n" > "$HOME/.wrap/memory.json"
-
-# ---------- 4. Uninstall ----------
-echo "== uninstall" >&2
-sh "$INSTALL_SCRIPT" --uninstall
-
-[ ! -e "$HOME/.local/bin/wrap" ] || fail "wrap binary still present"
-[ ! -e "$HOME/.wrap/env" ]       || fail "\$HOME/.wrap/env still present"
-[ ! -e "$HOME/.wrap/env.fish" ]  || fail "\$HOME/.wrap/env.fish still present"
-[ ! -e "$FISH_CONF" ]            || fail "fish conf.d/wrap.fish still present"
-
-[ "$(count_line "$RC_BASH" "$LINE_BASH")" = 0 ] || fail "$RC_BASH still contains source line"
-[ "$(count_line "$RC_ZSH"  "$LINE_BASH")" = 0 ] || fail "$RC_ZSH still contains source line"
-
-[ "$(cat "$HOME/.wrap/config.jsonc")" = "stub-config" ] || fail "config.jsonc not preserved"
-[ "$(cat "$HOME/.wrap/memory.json")"  = "stub-memory" ] || fail "memory.json not preserved"
 
 echo "== all assertions passed" >&2
