@@ -3920,3 +3920,9 @@
   mutated: 'true'
   reason: line 169 inside `for (const name of SETTINGS.model.env ...)`. SETTINGS.model.env has a single entry ["WRAP_MODEL"], so the loop runs at most once. With the single iteration, both forms return undefined when WRAP_MODEL is unset (original via fall-through, mutant via the early return of `undefined`). Diverges only if SETTINGS.model.env grows to multiple entries — not the current shape.
   added: 2026-05-05
+- file: src/memory/memory.ts
+  mutator: BlockStatement
+  original: 'throw memoryError(path);'
+  mutated: '{}'
+  reason: line 27 catch body in `loadMemory`. Equivalent — with the catch swallowed, `parsed` stays undefined and `MemoryFileSchema.safeParse(undefined)` then fails, throwing the same memoryError on line 33. Observable behavior is identical.
+  added: 2026-05-05
