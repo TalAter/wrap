@@ -3836,3 +3836,9 @@
   mutated: 'default:'
   reason: exhaustiveness guard for the TranscriptTurn discriminated union — the default branch is unreachable on producible inputs (TS enforces all kinds are handled). Removing the body changes nothing at runtime.
   added: 2026-05-05
+- file: src/core/transcript.ts
+  mutator: BlockStatement
+  original: '{ const _exhaustive: never = turn; throw new Error(...) }'
+  mutated: '{}'
+  reason: same default-branch exhaustiveness guard — unreachable on producible TranscriptTurn values. Compile-time check only.
+  added: 2026-05-05
