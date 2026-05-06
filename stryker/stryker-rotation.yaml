@@ -7,8 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/discovery/init-probes.ts
-- src/logging/entry.ts
 - src/session/reducer.ts
 - src/llm/providers/registry.ts
 - src/llm/resolve-provider.ts
@@ -77,3 +75,5 @@
 - src/core/shell.ts
 - src/config/resolve.ts
 - src/memory/memory.ts
+- src/discovery/init-probes.ts
+- src/logging/entry.ts
