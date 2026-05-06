@@ -3992,3 +3992,9 @@
   mutated: '""'
   reason: 'Bun.spawnSync arg array literal ''-c''. Mutating to '''' breaks all probes (sh receives no script-mode flag), so every section becomes ''## label\n(no output)''. Catching this requires asserting on probe content, which is environment-dependent (uname/etc-os-release availability) and brittle on minimal CI containers. The ''shell -c'' invocation is implementation detail of how we run probes.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: 'result.stdout.toString().trim()'
+  mutated: 'result.stdout.toString()'
+  reason: 'result.stdout.toString().trim() in runProbes. Removing .trim() leaves trailing whitespace inside each section body — cosmetic chrome difference in LLM context that no behavioral test should pin.'
+  added: 2026-05-06
