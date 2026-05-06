@@ -166,10 +166,11 @@ describe("reduce — confirming", () => {
     const state = makeConfirming();
     const next = reduce(state, { type: "key-action", action: "run" });
     expect(next.tag).toBe("exiting");
-    if (next.tag === "exiting" && next.outcome.kind === "run") {
-      expect(next.outcome.source).toBe("model");
-      expect(next.outcome.command).toBe(state.response.content);
-    }
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("run");
+    if (next.outcome.kind !== "run") throw new Error("unreachable");
+    expect(next.outcome.source).toBe("model");
+    expect(next.outcome.command).toBe(state.response.content);
   });
 
   test("key-action cancel → exiting{cancel}", () => {
@@ -213,6 +214,20 @@ describe("reduce — confirming", () => {
       expect(next.outcome.kind).toBe("cancel");
     }
   });
+
+  test("notification step-output updates outputSlot, preserves response/round", () => {
+    const state = makeConfirming({ outputSlot: "old body" });
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "step-output", text: "fresh body" },
+    });
+    expect(next).not.toBe(state);
+    expect(next.tag).toBe("confirming");
+    if (next.tag !== "confirming") throw new Error("unreachable");
+    expect(next.outputSlot).toBe("fresh body");
+    expect(next.response).toBe(state.response);
+    expect(next.round).toBe(state.round);
+  });
 });
 
 describe("reduce — editing", () => {
@@ -230,12 +245,13 @@ describe("reduce — editing", () => {
     const state = makeEditing();
     const next = reduce(state, { type: "submit-edit", text: "echo overridden" });
     expect(next.tag).toBe("exiting");
-    if (next.tag === "exiting" && next.outcome.kind === "run") {
-      expect(next.outcome.source).toBe("user_override");
-      expect(next.outcome.command).toBe("echo overridden");
-      expect(next.outcome.response).toBe(state.response);
-      expect(next.outcome.command).not.toBe(state.response.content);
-    }
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("run");
+    if (next.outcome.kind !== "run") throw new Error("unreachable");
+    expect(next.outcome.source).toBe("user_override");
+    expect(next.outcome.command).toBe("echo overridden");
+    expect(next.outcome.response).toBe(state.response);
+    expect(next.outcome.command).not.toBe(state.response.content);
   });
 
   test("draft-change → editing with new draft", () => {
@@ -340,9 +356,10 @@ describe("reduce — processing", () => {
       result: { type: "answer", content: "done" },
     });
     expect(next.tag).toBe("exiting");
-    if (next.tag === "exiting" && next.outcome.kind === "answer") {
-      expect(next.outcome.content).toBe("done");
-    }
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("answer");
+    if (next.outcome.kind !== "answer") throw new Error("unreachable");
+    expect(next.outcome.content).toBe("done");
   });
 
   test("loop-final exhausted → exiting{exhausted}", () => {
@@ -373,6 +390,10 @@ describe("reduce — processing", () => {
       error: new Error("boom"),
     });
     expect(next.tag).toBe("exiting");
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("error");
+    if (next.outcome.kind !== "error") throw new Error("unreachable");
+    expect(next.outcome.message).toBe("boom");
   });
 });
 
@@ -588,10 +609,11 @@ describe("reduce — processing-interactive", () => {
       result: { type: "command", response: resp, round },
     });
     expect(next.tag).toBe("exiting");
-    if (next.tag === "exiting" && next.outcome.kind === "run") {
-      expect(next.outcome.command).toBe("echo ok");
-      expect(next.outcome.source).toBe("model");
-    }
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("run");
+    if (next.outcome.kind !== "run") throw new Error("unreachable");
+    expect(next.outcome.command).toBe("echo ok");
+    expect(next.outcome.source).toBe("model");
   });
 
   test("loop-final command medium-risk → confirming (dialog already mounted)", () => {
@@ -620,9 +642,19 @@ describe("reduce — processing-interactive", () => {
       error: new Error("boom"),
     });
     expect(next.tag).toBe("exiting");
-    if (next.tag === "exiting" && next.outcome.kind === "error") {
-      expect(next.outcome.message).toBe("boom");
-    }
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("error");
+    if (next.outcome.kind !== "error") throw new Error("unreachable");
+    expect(next.outcome.message).toBe("boom");
+  });
+
+  test("loop-final aborted from processing-interactive → state by reference (defensive no-op)", () => {
+    const state = makeProcessingInteractive();
+    const next = reduce(state, {
+      type: "loop-final",
+      result: { type: "aborted" },
+    });
+    expect(next).toBe(state);
   });
 
   test("loop-final exhausted → exiting{exhausted}", () => {
