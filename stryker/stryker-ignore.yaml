@@ -3980,3 +3980,9 @@
   mutated: '""'
   reason: 'PROBE_COMMANDS data: shell-config-files probe command. Config data fed to LLM.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'Initial empty array seed for `sections`. Mutation prepends ''Stryker was here'' to the LLM context. Killing it would require asserting `output.startsWith(''## '')` — paraphrase of the loop''s first iteration. Drift in LLM context content, not an observable user/caller break.'
+  added: 2026-05-06
