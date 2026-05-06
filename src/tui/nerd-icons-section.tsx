@@ -37,9 +37,9 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
   ];
 
   const t = getTheme();
-  const active = themeHex(t.interactive.highlight);
-  const muted = themeHex(t.text.muted);
-  const bright = themeHex(t.text.primary);
+  const active = themeHex(t.wizard.nerdChoiceMarker);
+  const muted = themeHex(t.wizard.nerdChoiceLabel);
+  const bright = themeHex(t.wizard.nerdChoiceSelectedLabel);
 
   return (
     <Dialog

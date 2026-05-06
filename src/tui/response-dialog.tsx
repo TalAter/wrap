@@ -187,15 +187,15 @@ function FoldedCommand({
   tail: string;
   theme: ThemeTokens;
 }) {
-  const textColor = themeHex(theme.text.primary);
+  const textColor = themeHex(theme.input.text);
   return (
     <InputFrame>
       <Box flexDirection="column">
         {head ? <Text color={textColor}>{head}</Text> : null}
         <Pill
           label={`${hiddenCount} lines hidden`}
-          fg={theme.badge.fold.fg}
-          bg={theme.badge.fold.bg}
+          fg={theme.dialog.foldIndicator.fg}
+          bg={theme.dialog.foldIndicator.bg}
         />
         {tail ? <Text color={textColor}>{tail}</Text> : null}
       </Box>
@@ -304,7 +304,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       label,
       primary: a.primary,
     };
-    if (flashing) item.flashColor = themeHex(theme.select.selected);
+    if (flashing) item.flashColor = themeHex(theme.actionBar.success);
     return item;
   });
 
@@ -526,7 +526,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       <Dialog
         gradientStops={lowPreset.stops}
         top={{
-          segs: [{ ...composeTheme.badge.riskLow, label: "compose", bold: true }],
+          segs: [{ ...composeTheme.dialog.composePill, label: "compose", bold: true }],
           align: "left",
         }}
         bottomStatus={bottomStatus}
@@ -552,7 +552,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         )}
         {truncatedBanner && (
           <Box paddingLeft={1}>
-            <Text color={themeHex(composeTheme.text.muted)}>
+            <Text color={themeHex(composeTheme.copy.note)}>
               paste truncated — for large input, pipe with cat file | w
             </Text>
           </Box>
@@ -582,10 +582,10 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       {outputSlot !== undefined && (
         <>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.text.muted)}>Output:</Text>
+            <Text color={themeHex(theme.dialog.outputLabel)}>Output:</Text>
           </Box>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.text.secondary)}>{formatOutputSlot(outputSlot)}</Text>
+            <Text color={themeHex(theme.dialog.outputText)}>{formatOutputSlot(outputSlot)}</Text>
           </Box>
           <Text> </Text>
         </>
@@ -614,7 +614,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.text.muted)}>{explanation}</Text>
+            <Text color={themeHex(theme.dialog.explanation)}>{explanation}</Text>
           </Box>
         </>
       )}
@@ -622,7 +622,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.text.accent)}>Plan: {plan}</Text>
+            <Text color={themeHex(theme.dialog.plan)}>Plan: {plan}</Text>
           </Box>
         </>
       )}
@@ -662,7 +662,7 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
           <ActionBar items={EXECUTING_STEP_ACTIONS} />
         ) : (
           <Text>
-            <Text color={themeHex(theme.text.primary)}>{"Run command? "}</Text>
+            <Text color={themeHex(theme.dialog.prompt)}>{"Run command? "}</Text>
             <ActionBar items={confirmingBarItems} focusedIndex={selectedIndex} dividerAfter={[1]} />
           </Text>
         )}

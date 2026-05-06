@@ -30,10 +30,10 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
   ]);
 
   const theme = getTheme();
-  const highlight = themeHex(theme.interactive.highlight);
-  const success = themeHex(theme.select.selected);
+  const highlight = themeHex(theme.copy.pop);
+  const success = themeHex(theme.copy.success);
   const logoRowColor = (i: number): string =>
-    interpolateGradient(i, LOGO.length, theme.gradient.welcomeLogo);
+    interpolateGradient(i, LOGO.length, theme.wizard.welcomeLogo);
 
   const textBlock = (
     <Box flexDirection="column">

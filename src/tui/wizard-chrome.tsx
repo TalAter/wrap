@@ -3,7 +3,7 @@ import type { ProviderScreen } from "../wizard/state.ts";
 import type { PillSegment } from "./pill.tsx";
 
 export function getWizardStops() {
-  return getTheme().gradient.wizard;
+  return getTheme().wizard.frame;
 }
 
 export const WIZARD_CONTENT_WIDTH = 70;
@@ -43,7 +43,7 @@ export function stepIndexFromScreen(tag: ProviderScreen["tag"]): number {
 }
 
 function wizardSeg(t: ThemeTokens): PillSegment {
-  return { ...t.badge.wizard, label: "🧙 Setup Wizard", bold: true };
+  return { ...t.wizard.labelPill, label: "🧙 Setup Wizard", bold: true };
 }
 
 export function wizardLabelPill(): PillSegment[] {
@@ -57,16 +57,16 @@ export function wizardCrumbPillNarrow(stepIndex: number, nerd: boolean): PillSeg
   const segs: PillSegment[] = [];
   WIZARD_STEPS.forEach((step, i) => {
     if (i < stepIndex) {
-      segs.push({ ...t.badge.stepDone, label: nerd ? ICON_CHECK : "✓" });
+      segs.push({ ...t.wizard.stepDone, label: nerd ? ICON_CHECK : "✓" });
     } else if (i === stepIndex) {
       segs.push({
-        ...t.badge.stepActive,
+        ...t.wizard.stepActive,
         label: nerd ? `${step.icon} ${step.label}` : step.label,
         labelNarrow: nerd ? step.icon : step.abbr,
         bold: true,
       });
     } else {
-      segs.push({ ...t.badge.stepPending, label: nerd ? step.icon : step.abbr });
+      segs.push({ ...t.wizard.stepPending, label: nerd ? step.icon : step.abbr });
     }
   });
   return segs;
@@ -96,12 +96,12 @@ export function wizardCrumbPill(
     let label: string;
     if (nerd) label = `${ICON_CHECK} ${stepIcon} ${stepLabel}`;
     else label = useProvider ? stepLabel : `✓ ${stepLabel}`;
-    segs.push({ ...t.badge.stepDone, label, labelNarrow: step.abbr });
+    segs.push({ ...t.wizard.stepDone, label, labelNarrow: step.abbr });
   }
   if (activeStep) {
     const label = nerd ? `${activeStep.icon} ${activeStep.label}` : activeStep.label;
     segs.push({
-      ...t.badge.stepActive,
+      ...t.wizard.stepActive,
       label,
       labelNarrow: activeStep.abbr,
       bold: true,

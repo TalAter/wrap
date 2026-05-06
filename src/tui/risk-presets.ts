@@ -11,18 +11,18 @@ export function getRiskPreset(level: RiskLevel): RiskPreset {
   switch (level) {
     case "low":
       return {
-        stops: t.gradient.riskLow,
-        pill: { ...t.badge.riskLow, label: "✔ low risk", bold: true },
+        stops: t.risk.low.frame,
+        pill: { ...t.risk.low.pill, label: "✔ low risk", bold: true },
       };
     case "medium":
       return {
-        stops: t.gradient.riskMedium,
-        pill: { ...t.badge.riskMedium, label: "⚠ medium risk", bold: true },
+        stops: t.risk.medium.frame,
+        pill: { ...t.risk.medium.pill, label: "⚠ medium risk", bold: true },
       };
     case "high":
       return {
-        stops: t.gradient.riskHigh,
-        pill: { ...t.badge.riskHigh, label: "⚠ high risk", bold: true },
+        stops: t.risk.high.frame,
+        pill: { ...t.risk.high.pill, label: "⚠ high risk", bold: true },
       };
   }
 }

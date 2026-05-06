@@ -103,7 +103,7 @@ export function bottomBorderSegments(
 ): BorderSegment[] {
   // Bottom matches the gradient's end so the four sides read as one frame.
   const color = interpolateGradient(stops.length - 1, stops.length, stops);
-  const statusColor = themeHex(getTheme().text.primary);
+  const statusColor = themeHex(getTheme().dialog.status);
 
   if (totalWidth <= 1) {
     return [{ key: "bottom-left", text: "╰", color }];

@@ -36,7 +36,7 @@ export function WelcomeAnimation() {
     return () => clearTimeout(id);
   }, [frameIndex]);
 
-  const stops = getTheme().gradient.welcomeBrain;
+  const stops = getTheme().wizard.welcomeBrain;
   const frame = FRAMES[frameIndex] ?? FRAMES[0];
   if (!frame) return null;
 

@@ -30,10 +30,10 @@ export function Checklist({
   onSubmit,
 }: Props) {
   const t = getTheme();
-  const CHECKED_COLOR = themeHex(t.select.selected);
-  const DIM_COLOR = themeHex(t.text.muted);
-  const PRIMARY_COLOR = themeHex(t.text.primary);
-  const CURSOR_BG = themeHex(t.interactive.selection);
+  const CHECKED_COLOR = themeHex(t.checklist.rowChecked);
+  const DIM_COLOR = themeHex(t.checklist.row);
+  const PRIMARY_COLOR = themeHex(t.checklist.rowFocused);
+  const CURSOR_BG = themeHex(t.checklist.rowFocusedBg);
 
   const selectableIndices = items
     .map((item, i) => (item.type === "option" ? i : -1))
@@ -98,8 +98,8 @@ function SectionHeader({
   spaceAbove: boolean;
 }) {
   const t = getTheme();
-  const leaderColor = themeHex(t.chrome.dim);
-  const labelColor = themeHex(t.text.secondary);
+  const leaderColor = themeHex(t.checklist.sectionRule);
+  const labelColor = themeHex(t.checklist.sectionLabel);
   const showBraille = !width || width >= label.length + 8;
   const text = showBraille ? ` ${label.toUpperCase()} ` : label.toUpperCase();
   const trailWidth = showBraille && width ? width - text.length - 2 : 0;

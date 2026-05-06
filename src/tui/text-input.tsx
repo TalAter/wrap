@@ -5,7 +5,7 @@ import { clampBufferSize } from "./clamp-buffer.ts";
 import { Cursor } from "./cursor.ts";
 
 export function InputFrame({ children }: { children: ReactNode }) {
-  const bg = themeHex(getTheme().chrome.surface);
+  const bg = themeHex(getTheme().input.surface);
   return (
     <Box width="100%" paddingX={1} backgroundColor={bg}>
       {children}
@@ -216,7 +216,7 @@ function EditableTextInput(
     return (
       <InputFrame>
         <Box width="100%" justifyContent="center">
-          <Text color={themeHex(getTheme().text.muted)}>
+          <Text color={themeHex(getTheme().input.editorStatus)}>
             ... Save and close editor to continue ...
           </Text>
         </Box>
@@ -290,12 +290,12 @@ function EditableTextInput(
     const after = cursorOnNewline ? flat.slice(flatOffset) : flat.slice(flatOffset + 1);
     return (
       <InputFrame>
-        <Text color={themeHex(getTheme().text.primary)} wrap="truncate-end">
+        <Text color={themeHex(getTheme().input.text)} wrap="truncate-end">
           {before}
           <Text inverse>{at}</Text>
           {after}
           {showPlaceholder ? (
-            <Text color={themeHex(getTheme().text.muted)}>{placeholder}</Text>
+            <Text color={themeHex(getTheme().input.placeholder)}>{placeholder}</Text>
           ) : null}
         </Text>
       </InputFrame>
@@ -308,12 +308,12 @@ function EditableTextInput(
 
   return (
     <InputFrame>
-      <Text color={themeHex(getTheme().text.primary)}>
+      <Text color={themeHex(getTheme().input.text)}>
         {renderedBefore}
         <Text inverse>{renderedCursor}</Text>
         {renderedAfter}
         {showPlaceholder ? (
-          <Text color={themeHex(getTheme().text.muted)}>{placeholder}</Text>
+          <Text color={themeHex(getTheme().input.placeholder)}>{placeholder}</Text>
         ) : null}
       </Text>
     </InputFrame>
@@ -325,7 +325,7 @@ export function TextInput(props: TextInputProps) {
     return (
       <InputFrame>
         {/* Empty value would otherwise collapse the row to height 0. */}
-        <Text color={themeHex(getTheme().text.primary)}>{props.value || " "}</Text>
+        <Text color={themeHex(getTheme().input.text)}>{props.value || " "}</Text>
       </InputFrame>
     );
   }

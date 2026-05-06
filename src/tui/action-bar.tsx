@@ -47,13 +47,14 @@ function isApproveStyle(item: ActionItem): boolean {
 
 export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps) {
   const t = getTheme();
-  const primary = themeHex(t.text.primary);
-  const divider = themeHex(t.text.disabled);
-  const highlight = themeHex(t.interactive.highlight);
-  const secondary = themeHex(t.text.secondary);
-  const muted = themeHex(t.text.muted);
-  const accentBg = themeHex(t.chrome.accent);
-  const highlightBright = themeHex(t.interactive.highlightBright);
+  const selected = themeHex(t.actionBar.selected);
+  const divider = themeHex(t.actionBar.separator);
+  const shortcutPrimary = themeHex(t.actionBar.shortcutPrimary);
+  const shortcut = themeHex(t.actionBar.shortcut);
+  const label = themeHex(t.actionBar.label);
+  const selectedBg = themeHex(t.actionBar.selectedBg);
+  const selectedShortcut = themeHex(t.actionBar.selectedShortcut);
+  const selectedShortcutPrimary = themeHex(t.actionBar.selectedShortcutPrimary);
   const hasDivider = (i: number): boolean =>
     i > 0 && (dividerAfter === undefined ? true : dividerAfter.includes(i - 1));
 
@@ -61,18 +62,18 @@ export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps)
     <Text>
       {items.map((item, i) => {
         const isFocused = focusedIndex === i;
-        const bg = isFocused ? accentBg : undefined;
+        const bg = isFocused ? selectedBg : undefined;
         const dividerNode = hasDivider(i) ? <Text color={divider}>{" │ "}</Text> : null;
 
         if (isApproveStyle(item)) {
           const defaultAccent = item.primary
             ? isFocused
-              ? highlightBright
-              : highlight
+              ? selectedShortcutPrimary
+              : shortcutPrimary
             : isFocused
-              ? primary
-              : secondary;
-          const defaultTail = isFocused ? primary : muted;
+              ? selectedShortcut
+              : shortcut;
+          const defaultTail = isFocused ? selected : label;
           const accent = item.flashColor ?? defaultAccent;
           const tail = item.flashColor ?? defaultTail;
           const head = item.label[0] as string;
@@ -96,7 +97,7 @@ export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps)
           );
         }
 
-        const glyphColor = item.primary ? highlightBright : secondary;
+        const glyphColor = item.primary ? shortcutPrimary : shortcut;
         return (
           <Text key={`${item.glyph}:${item.label}`}>
             {dividerNode}
@@ -104,7 +105,7 @@ export function ActionBar({ items, focusedIndex, dividerAfter }: ActionBarProps)
               <Text bold color={glyphColor}>
                 {item.glyph}
               </Text>
-              <Text color={muted}>{` ${item.label}`}</Text>
+              <Text color={label}>{` ${item.label}`}</Text>
             </Text>
           </Text>
         );

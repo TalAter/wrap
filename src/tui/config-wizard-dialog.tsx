@@ -301,7 +301,7 @@ function ApiKeyScreen({
       <Text bold>{api?.displayName ?? provider} API key</Text>
       {api?.apiKeyUrl && (
         <Text>
-          Get one: <Text color={themeHex(getTheme().text.muted)}>{api.apiKeyUrl}</Text>
+          Get one: <Text color={themeHex(getTheme().wizard.providerLink)}>{api.apiKeyUrl}</Text>
         </Text>
       )}
       <Text> </Text>

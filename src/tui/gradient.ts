@@ -4,7 +4,7 @@ import { getTheme, themeHex } from "../core/theme.ts";
 
 // Below truecolor, per-cell interpolation bands. Collapse to neutral text color.
 function gradientFallback(): string | null {
-  return colorLevel() < 3 ? themeHex(getTheme().text.primary) : null;
+  return colorLevel() < 3 ? themeHex(getTheme().copy.body) : null;
 }
 
 export function interpolateGradient(index: number, total: number, stops: readonly Color[]): string {

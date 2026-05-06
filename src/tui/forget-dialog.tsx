@@ -61,7 +61,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
   };
 
   const t = getTheme();
-  const stops = t.gradient.riskHigh;
+  const stops = t.forget.frame;
 
   return (
     <Dialog gradientStops={stops} naturalContentWidth={CONTENT_WIDTH}>

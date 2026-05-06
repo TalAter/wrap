@@ -5,15 +5,17 @@ import { getTheme, type ThemeTokens, themeHex } from "../core/theme.ts";
 const ThemeContext = createContext<ThemeTokens | null>(null);
 
 function buildInkUITheme(t: ThemeTokens) {
-  const focused = themeHex(t.text.primary);
-  const idle = themeHex(t.text.secondary);
-  const selected = themeHex(t.select.selected);
+  const focused = themeHex(t.picker.optionFocused);
+  const idle = themeHex(t.picker.option);
+  const selected = themeHex(t.picker.optionSelected);
+  const focusIndicator = themeHex(t.picker.focusIndicator);
+  const selectedIndicator = themeHex(t.picker.selectedIndicator);
   return extendTheme(defaultTheme, {
     components: {
       Select: {
         styles: {
-          focusIndicator: () => ({ color: focused }),
-          selectedIndicator: () => ({ color: selected }),
+          focusIndicator: () => ({ color: focusIndicator }),
+          selectedIndicator: () => ({ color: selectedIndicator }),
           label: ({ isFocused, isSelected }: { isFocused: boolean; isSelected: boolean }) => ({
             color: isFocused ? focused : isSelected ? selected : idle,
           }),
