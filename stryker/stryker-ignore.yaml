@@ -3974,3 +3974,9 @@
   mutated: '""'
   reason: 'PROBE_COMMANDS label data: ''Shell config files'' label. Same reasoning as the other label mutants — LLM-section header, paraphrase-only kill.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"ls -la ~/.*shrc ~/.*sh_profile ~/.*profile ~/.config/fish/config.fish 2>/dev/null"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: shell-config-files probe command. Config data fed to LLM.'
+  added: 2026-05-06
