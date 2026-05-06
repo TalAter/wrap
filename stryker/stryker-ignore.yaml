@@ -3944,3 +3944,9 @@
   mutated: '""'
   reason: 'PROBE_COMMANDS data: this is the OS-probe shell command sent to the LLM as init context. Tests verify section structure (label headers present), not the specific shell invocation. Mutating the command produces an empty (no output) section in LLM context — degrading LLM input is data-config drift, not a behavioral regression that a tight test could pin down without paraphrasing the constant.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS label data: the ''Shell'' label string sent to the LLM as a section header. Tests assert ''## Shell'' is present (the constant), so the test would mutate alongside the constant — any kill would paraphrase the implementation. Pure data drift.'
+  added: 2026-05-06
