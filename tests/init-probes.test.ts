@@ -119,4 +119,16 @@ describe("probeTools", () => {
     // valid-tool should be in unavailable (not installed)
     expect(result.unavailable).toContain("valid-tool");
   });
+
+  test("rejects tool names whose prefix contains shell metacharacters", () => {
+    // The validation regex must reject the entire string, not just match
+    // somewhere inside it. A name like "; legit" has an alphanumeric suffix
+    // but a leading shell metacharacter — letting it through would interpolate
+    // `;` directly into `which $tools 2>&1`, ending the `which` call and
+    // running an attacker-controlled command after it.
+    const result = probeTools(["; legit"]);
+    if (!result) throw new Error("probeTools() returned null unexpectedly");
+    const all = [...result.available, ...result.unavailable];
+    expect(all).not.toContain("; legit");
+  });
 });
