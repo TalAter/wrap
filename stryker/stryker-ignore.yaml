@@ -4010,3 +4010,9 @@
   mutated: 'false'
   reason: 'ConditionalExpression on `output || "(no output)"` → `false`. Same as the `true` mutant — section-body interpolation correctness in LLM context, paraphrase-only kill.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: LogicalOperator
+  original: 'output || "(no output)"'
+  mutated: 'output && "(no output)"'
+  reason: 'LogicalOperator `||` → `&&` in `output || "(no output)"`. With truthy output, returns ''(no output)''; with empty, returns ''''. All probe content vanishes from LLM context. Catching requires asserting probe bodies contain real content — environment-dependent and brittle (host-specific uname output).'
+  added: 2026-05-06
