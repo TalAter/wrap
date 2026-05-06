@@ -3938,3 +3938,9 @@
   mutated: '""'
   reason: line 110 in `ensureMemory` — chrome icon for the "Detected OS and shell" line. Cosmetic decoration; the message text is asserted by tests, the icon is not user-visible behavior.
   added: 2026-05-05
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"uname -a"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: this is the OS-probe shell command sent to the LLM as init context. Tests verify section structure (label headers present), not the specific shell invocation. Mutating the command produces an empty (no output) section in LLM context — degrading LLM input is data-config drift, not a behavioral regression that a tight test could pin down without paraphrasing the constant.'
+  added: 2026-05-06
