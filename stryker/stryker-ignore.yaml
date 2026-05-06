@@ -4131,3 +4131,81 @@
   mutated: 'true'
   reason: 'Equivalent at the JSON output level. With `true`, `entry.input_source = undefined` when inputSource is omitted; JSON.stringify drops undefined values, so the persisted log is identical. Real callers (main.ts:135) always pass a defined inputSource.'
   added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: "case \"exiting\":\n      return state;"
+  mutated: 'case "exiting":'
+  reason: '"exiting" is a terminal state; reduce() never receives events while state.tag === "exiting" because the coordinator stops dispatching once state hits exiting. Removing the case body is unobservable.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: '"exiting"'
+  mutated: '""'
+  reason: 'paired with the ConditionalExpression mutant on the same case — exiting is terminal and never receives events, so the case label is unobservable.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'response.risk_level !== "low"'
+  mutated: 'true'
+  reason: 'isNonFinalConfirm asymmetry. Mutated form differs only on inputs (final:false, risk_level:"low"); non-final low is documented as never reaching the reducer (runLoop handles it inline; see comment at reduceThinking).'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: '"low"'
+  mutated: '""'
+  reason: 'paired with the ConditionalExpression on the same expression — only differs on (final:false, risk_level:"low"), an unreachable input per the documented invariant.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'r.response.final !== false'
+  mutated: 'true'
+  reason: 'asymmetric-dialog invariant in reduceThinking and reduceProcessingInteractive. With autoExec already true, the additional final-check only differs on yolo+non-final or low+non-final — both are unreachable per the comment ("non-final low... runLoop handles those inline"). Yolo+non-final commands always go through the dialog regardless of yolo.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'event.type === "key-action"'
+  mutated: 'true'
+  reason: 'switch fall-through equivalent. With if(true), non-key-action events enter the block; the inner switch on event.action matches no case (action is undefined for those events) and falls through. Execution then continues to the subsequent if(event.type === "key-esc") etc., yielding identical observable behavior.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: "case \"copy\":\n        // Deferred action — no-op for now.\n        return state;"
+  mutated: 'case "copy":'
+  reason: 'copy is a deferred no-op that returns state by reference. Removing the case body falls through to the bottom-of-function `return state;`, yielding the same reference and same state.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: StringLiteral
+  original: '"copy"'
+  mutated: '""'
+  reason: 'paired with the case-clause mutation — copy is a no-op returning state, so changing the case label leads to fall-through to bottom return state, identical observable.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'event.type === "enter-editor"'
+  mutated: 'true'
+  reason: 'editing / composing-followup / composing-interactive defensive purity guards. Only key/draft/submit events reach these states (notifications gated to processing-followup/processing-interactive/executing-step in session.ts; the LLM loop is suspended). All such events match earlier ifs in the reducer; the enter-editor if only ever sees enter-editor events in real flow.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'event.notification.kind === "chrome"'
+  mutated: 'true'
+  reason: 'reduceProcessingInteractive only sees chrome notifications in real flow. step-output is for capture-mode (post-confirming) and verbose is logged elsewhere; neither dispatches to the reducer in processing-interactive. The mutation differs only on notification kinds that never reach this state.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: 'event.type === "loop-error"'
+  mutated: 'true'
+  reason: 'defensive last-if in reduceProcessingInteractive. With if(true), events that don''t match earlier ifs (key-esc, notification, loop-final) would enter loop-error and throw on event.error.message. Real flow only dispatches key-esc/notification/loop-final/loop-error to processing-interactive — other events do not reach this state.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: ConditionalExpression
+  original: '!state.response || !state.round'
+  mutated: 'false'
+  reason: 'editor-handoff defensive guards (composing-followup and editing origins). The guards trip on states missing response/round, which never happens for these origins in real flow — EditorHandoffState makes them optional only because composing-interactive doesn''t carry them. With false, missing fields would propagate but real callers always supply them.'
+  added: 2026-05-06
+- file: src/session/reducer.ts
+  mutator: LogicalOperator
+  original: '!state.response || !state.round'
+  mutated: '!state.response && !state.round'
+  reason: 'paired with the ConditionalExpression mutation on the same guards. Switching || to && weakens the guard so only states missing both fields are caught. Real flow always provides both for these origins, so the mutation is unobservable.'
+  added: 2026-05-06
