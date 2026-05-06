@@ -3986,3 +3986,9 @@
   mutated: '["Stryker was here"]'
   reason: 'Initial empty array seed for `sections`. Mutation prepends ''Stryker was here'' to the LLM context. Killing it would require asserting `output.startsWith(''## '')` — paraphrase of the loop''s first iteration. Drift in LLM context content, not an observable user/caller break.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"-c"'
+  mutated: '""'
+  reason: 'Bun.spawnSync arg array literal ''-c''. Mutating to '''' breaks all probes (sh receives no script-mode flag), so every section becomes ''## label\n(no output)''. Catching this requires asserting on probe content, which is environment-dependent (uname/etc-os-release availability) and brittle on minimal CI containers. The ''shell -c'' invocation is implementation detail of how we run probes.'
+  added: 2026-05-06
