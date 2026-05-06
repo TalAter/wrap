@@ -3962,3 +3962,9 @@
   mutated: '""'
   reason: 'PROBE_COMMANDS label data: ''Distro'' label. Cosmetic LLM-section header; no behavioral assertion would catch this without paraphrasing the constant.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"cat /etc/os-release 2>/dev/null || echo ''Not Linux''"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: cat /etc/os-release fallback command. Config data fed to LLM, behavioral test would paraphrase the literal.'
+  added: 2026-05-06
