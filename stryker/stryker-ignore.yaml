@@ -3968,3 +3968,9 @@
   mutated: '""'
   reason: 'PROBE_COMMANDS data: cat /etc/os-release fallback command. Config data fed to LLM, behavioral test would paraphrase the literal.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell config files"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS label data: ''Shell config files'' label. Same reasoning as the other label mutants — LLM-section header, paraphrase-only kill.'
+  added: 2026-05-06
