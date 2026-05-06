@@ -81,7 +81,7 @@ GitHub artifact attestations remain enabled per the existing `attest-build-prove
 **Flags** (all optional):
 - `--install-dir <path>` — override install location (default: `$HOME/.local/bin`). Tilde **not** expanded; pass an explicit path.
 - `--no-modify-path` — skip env-script writing and rc-file edits.
-- `-h`, `--help` — print usage and exit. Help text includes manual-uninstall steps (see §Uninstall).
+- `-h`, `--help` — print usage and exit.
 
 No env vars.
 
@@ -183,14 +183,6 @@ grep -qxF "$line" "$rc" || printf '\n%s\n' "$line" >> "$rc"
 For fish, just `printf 'source ~/.wrap/env.fish\n' > "$conf_d/wrap.fish"`.
 
 `--no-modify-path` skips env-script writing AND rc edits. Required for managed envs where the user owns rc files.
-
-### Completions
-
-install.sh does not write completions. The fpath/XDG-paths/per-shell-failure surface area was disproportionate to the value when `wrap --completion <shell>` already lets users opt in with one command. Brew owns completion files for brew users; curl-sh users run `wrap --completion <shell>` themselves. Success message points at the flag.
-
-### Uninstall
-
-install.sh does not implement uninstall. The atomic rc-file rewrite (temp file + grep -v exit-code handling) was disproportionate maintenance for a flag few people use — a curl|sh user can `rm` the four touched paths themselves. `install.sh --help` lists the manual steps; `wrap --forget` handles the `~/.wrap/` data side.
 
 ---
 
@@ -312,7 +304,7 @@ Mac x86_64 is not free in CI and not Docker-runnable on a Mac host. Maintainer r
 Sequenced so the tree is green at every commit and the install.sh dev loop runs entirely against locally-built artifacts.
 
 1. **Pipeline plumbing.** Expand build matrix to 6 triples (add musl x64, musl arm64). Add `checksums` job. Wire `publish-release` to depend on `checksums` (verify-install comes later).
-2. **Write the installer + local rig + completion sync.** Add `scripts/install.sh`, `scripts/test-install.sh`, and update `src/subcommands/completion.ts` zsh help-text path to `~/.local/share/zsh/site-functions/_wrap`. Iterate locally — `./scripts/test-install.sh` builds wrap, stages assets, runs install.sh inside ubuntu+alpine containers, runs the assertion checklist. No rc tag needed; the harness uses the working tree.
+2. **Write the installer + local rig.** Add `scripts/install.sh`, `scripts/test-install.sh`. Iterate locally — `./scripts/test-install.sh` builds wrap, stages assets, runs install.sh inside ubuntu+alpine containers, runs the assertion checklist. No rc tag needed; the harness uses the working tree.
 3. **`release.yml` additions:** shellcheck job (gates `build`), install.sh release-asset upload job, `verify-install` matrix job, wire `publish-release` to depend on `verify-install`.
 4. **Maintainer cuts `vX.Y.Z-rc.0`.** First end-to-end run of the full pipeline including `verify-install`. Validates that the CI smoke actually catches what it's supposed to catch and the matrix builds clean across all 6 triples. If the rc fails verify-install, fix and re-run (existing `Create draft release` step is idempotent).
 5. **Vault module-map update:** `vault/README.md` adds `scripts/install.sh` reference. (Defer the "channel is live" + Gatekeeper-correction note in `vault/release.md` to step 8.)

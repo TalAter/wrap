@@ -34,12 +34,6 @@ Options:
   --install-dir <path>  Override install location (default: $HOME/.local/bin).
   --no-modify-path      Skip env script and rc file edits.
   -h, --help            Show this help.
-
-To uninstall:
-  rm "$HOME/.local/bin/wrap"
-  rm -rf "$HOME/.wrap"
-  rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish"
-  # then delete the line   . "$HOME/.wrap/env"   from ~/.bashrc and ~/.zshenv
 EOF
 }
 

@@ -102,7 +102,7 @@ src/
 
 scripts/
   install.sh                       curl|sh installer; uploaded as a release asset
-  install-assert.sh                shared install/uninstall assertion checklist
+  install-assert.sh                shared install assertion checklist
   test-install.sh                  local Mac rig: builds, stages, runs the checklist in containers
 ```
 
