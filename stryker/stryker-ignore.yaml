@@ -4016,3 +4016,9 @@
   mutated: 'output && "(no output)"'
   reason: 'LogicalOperator `||` → `&&` in `output || "(no output)"`. With truthy output, returns ''(no output)''; with empty, returns ''''. All probe content vanishes from LLM context. Catching requires asserting probe bodies contain real content — environment-dependent and brittle (host-specific uname output).'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"(no output)"'
+  mutated: '""'
+  reason: 'Fallback string ''(no output)'' → ''''. Triggers only when a probe produces empty stdout, which doesn''t happen on real systems (uname/cat/ls all emit output, with shell-error fallbacks). Mutated behavior only differs on inputs no real caller produces.'
+  added: 2026-05-06
