@@ -223,14 +223,9 @@ update_rc_files() {
     modified="${modified}${out}"
   done
 
-  fish_conf_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
-  fish_conf="$fish_conf_dir/wrap.fish"
-  fish_line='source ~/.wrap/env.fish'
-  mkdir -p "$fish_conf_dir"
-  if ! [ -f "$fish_conf" ] || ! grep -qxF "$fish_line" "$fish_conf"; then
-    printf '%s\n' "$fish_line" > "$fish_conf"
-    modified="${modified}${fish_conf} "
-  fi
+  fish_conf="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish"
+  out="$(ensure_rc_line "$fish_conf" 'source ~/.wrap/env.fish')"
+  modified="${modified}${out}"
 
   printf '%s' "$modified"
 }

@@ -67,7 +67,7 @@ fi
 [ "$(count_line "$RC_ZSH"  "$LINE_BASH")"   = 1 ] || fail "$RC_ZSH has wrong number of source lines"
 [ "$(count_line "$FISH_CONF" "$FISH_LINE")" = 1 ] || fail "$FISH_CONF has wrong number of source lines"
 
-# ---------- 1b. --no-modify-path skips env + rc ----------
+# ---------- 2. --no-modify-path skips env + rc ----------
 echo "== --no-modify-path" >&2
 SENTINEL_HOME="$(mktemp -d)"
 if [ -z "$SENTINEL_HOME" ] || [ ! -d "$SENTINEL_HOME" ]; then
@@ -84,7 +84,7 @@ HOME="$SENTINEL_HOME" sh "$INSTALL_SCRIPT" --base-url "$BASE_URL" --no-modify-pa
 rm -rf "$SENTINEL_HOME"
 SENTINEL_HOME=""
 
-# ---------- 2. Re-run = idempotent upgrade ----------
+# ---------- 3. Re-run = idempotent upgrade ----------
 echo "== reinstall" >&2
 sh "$INSTALL_SCRIPT" --base-url "$BASE_URL"
 
