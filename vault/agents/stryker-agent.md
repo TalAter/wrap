@@ -80,9 +80,9 @@ All stryker-related files live under `stryker/` at the repo root.
    - **Fix with test when:** the mutation changes behavior a user or caller would notice, and you can write a tight test that catches it without binding implementation detail. Run Fix → Review → Judge stages.
    - **Source-fix when:** the mutant is surfacing a real bug, dead branch, or code that should be removed/changed. Do NOT commit the source change to `main`. Queue it for the PR (step 8).
 
-   **Ignore path:** append to `stryker/stryker-ignore.yaml` with today's date and a one-line reason. Commit on `main`: `stryker-ignore: add <file> <mutator> — <short reason>`. If you fixed and judge overruled, undo your fix.
+   **Ignore path:** append to `stryker/stryker-ignore.yaml` with today's date and a one-line reason. Do NOT commit per-ignore — every ignore appended in this run ships in the single combined commit at step 6. If you fixed and judge overruled, undo your fix.
 
-6. **Rotation update.** After processing all survivors for this run, append the processed file path to the bottom of `stryker/stryker-rotation.yaml` (and, if picked from the top, it was already removed in step 2). Commit on `main`: `stryker-rotation: <file>`.
+6. **Rotation + ignores commit.** After processing all survivors for this run, append the processed file path to the bottom of `stryker/stryker-rotation.yaml` (and, if picked from the top, it was already removed in step 2). Commit the rotation change **together with every new ignore appended in step 5** in a single commit on `main`: `stryker: <file> — <N> ignored, rotated` (or `stryker-rotation: <file>` if N=0). One combined commit per run, not one-per-ignore — it's bookkeeping, not a substantive change.
 
 7. **Push to main.** Fast-forward push:
    ```
@@ -176,8 +176,8 @@ TEST FILE (<PATH>):
 <FULL FILE CONTENTS>
 ```
 
-- **APPROVE:** Run `bun run mutate -- --mutate "<file>"` to verify the mutant is actually killed by the test. If killed, commit: `tests: kill <file>:<line> <mutator> mutant`. If still surviving, discard the draft, add an ignore entry noting the failed attempt, commit the ignore, and include this case in the final-response escalation list.
-- **REJECT:** Undo your uncommitted test changes. Append an ignore entry whose reason reflects the judge's objection. Commit: `stryker-ignore: add <file> <mutator> — <judge's reason>`.
+- **APPROVE:** Run `bun run mutate -- --mutate "<file>"` to verify the mutant is actually killed by the test. If killed, commit on its own: `tests: kill <file>:<line> <mutator> mutant` (kill-tests are substantive — one commit each). If still surviving, discard the draft, append an ignore entry noting the failed attempt (it ships with step 6's combined commit), and include this case in the final-response escalation list.
+- **REJECT:** Undo your uncommitted test changes. Append an ignore entry whose reason reflects the judge's objection. Don't commit per-ignore — it ships with step 6's combined commit.
 
 ## PR stage (source fixes + escalations)
 
@@ -217,7 +217,7 @@ Keep one PR per distinct concern — don't batch unrelated source changes. Do NO
 
 - Commit messages terse and conventional. Subject ≤50 chars when possible.
 - No Co-authored-by trailers.
-- One commit per decision. Never batch unrelated changes.
+- **Routine bookkeeping = one combined commit per run.** All of this run's ignore entries plus the rotation update ship as a single commit (step 6). The stale-ignore prune (step 1) is its own commit because it's a different decision from a different run. Substantive changes — each kill-test, each source-fix on a PR branch — are atomic, one commit per change.
 - Don't add dependencies. Don't reformat files. Don't touch unrelated code.
 
 ## Stop conditions
