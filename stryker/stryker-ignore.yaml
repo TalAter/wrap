@@ -4022,3 +4022,9 @@
   mutated: '""'
   reason: 'Fallback string ''(no output)'' → ''''. Triggers only when a probe produces empty stdout, which doesn''t happen on real systems (uname/cat/ls all emit output, with shell-error fallbacks). Mutated behavior only differs on inputs no real caller produces.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"\n\n"'
+  mutated: '""'
+  reason: 'Section separator ''\n\n'' → ''''. Sections concatenate without blank-line boundaries in the LLM-fed string. The separator is a formatting choice for LLM readability; a behavioral test would have to assert the exact separator (paraphrase) — cosmetic LLM-context formatting.'
+  added: 2026-05-06
