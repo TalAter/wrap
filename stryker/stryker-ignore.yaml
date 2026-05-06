@@ -4004,3 +4004,9 @@
   mutated: 'true'
   reason: 'ConditionalExpression on `output || "(no output)"` → `true`. Mutates section bodies to literal ''true''. The fallback''s purpose is to avoid blank sections in LLM context; killing this requires asserting section bodies aren''t ''true''/''false'', which paraphrases the conditional itself.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ConditionalExpression
+  original: 'output || "(no output)"'
+  mutated: 'false'
+  reason: 'ConditionalExpression on `output || "(no output)"` → `false`. Same as the `true` mutant — section-body interpolation correctness in LLM context, paraphrase-only kill.'
+  added: 2026-05-06
