@@ -4040,3 +4040,9 @@
   mutated: 'false'
   reason: 'ConditionalExpression `!output` → `false` — the `if (!output) return null` guard. Defensive against `which` failing to produce any output at all (binary missing, shell broken). On any normal system `which` emits something for every queried tool, so this branch is unreachable in tests; reproducing it would require mocking Bun.spawnSync, which is invasive.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: 'output.split("\n").filter((line) => line.startsWith("/"))'
+  mutated: 'output.split("\n")'
+  reason: 'filter(line => line.startsWith("/")) call removed. The filter strips shells'' "X: not found" noise lines (zsh/fish on missing tools). On the test env''s `/bin/sh` (dash), missing tools are silently omitted from `which` output, so the filter is a no-op and the mutant is equivalent. Real on zsh-as-sh systems but unreachable from this test runtime.'
+  added: 2026-05-06
