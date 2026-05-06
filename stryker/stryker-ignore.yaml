@@ -3956,3 +3956,9 @@
   mutated: '""'
   reason: 'PROBE_COMMANDS data: shell command for the Shell probe (''echo $SHELL''). Same as the OS command mutant — config data fed to the LLM, no behavioral test can pin it without binding to the specific string.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Distro"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS label data: ''Distro'' label. Cosmetic LLM-section header; no behavioral assertion would catch this without paraphrasing the constant.'
+  added: 2026-05-06
