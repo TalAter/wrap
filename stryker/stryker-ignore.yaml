@@ -4034,3 +4034,9 @@
   mutated: 'result.stdout.toString()'
   reason: 'result.stdout.toString().trim() in probeTools. The downstream `output.split("\n").filter(line => line.startsWith("/"))` already drops the trailing empty line a missing trim() would produce, and the `if (!output)` guard before this line returns null on whitespace — so removing trim() is equivalent on every realistic `which` output (which always emits at least one path or ''X not found'' line).'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ConditionalExpression
+  original: '!output'
+  mutated: 'false'
+  reason: 'ConditionalExpression `!output` → `false` — the `if (!output) return null` guard. Defensive against `which` failing to produce any output at all (binary missing, shell broken). On any normal system `which` emits something for every queried tool, so this branch is unreachable in tests; reproducing it would require mocking Bun.spawnSync, which is invasive.'
+  added: 2026-05-06
