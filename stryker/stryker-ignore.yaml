@@ -1,45 +1,3 @@
-- file: src/core/clipboard.ts
-  mutator: BlockStatement
-  original: 'try { return Bun.which(cmd); } catch { return null; }'
-  mutated: '{}'
-  reason: defaultWhich body. Tests inject their own `which` function so the default path is unexercised in the unit-test harness; analogous to the editor.ts defaultWhich ignores.
-  added: 2026-04-25
-- file: src/core/clipboard.ts
-  mutator: BlockStatement
-  original: 'return Bun.which(cmd);'
-  mutated: '{}'
-  reason: defaultWhich's try body. Tests inject their own `which`, so this default path is unexercised; emptying the body makes it return undefined which only matters in production.
-  added: 2026-04-25
-- file: src/core/clipboard.ts
-  mutator: BlockStatement
-  original: 'return null;'
-  mutated: '{}'
-  reason: defaultWhich's catch body — unreachable because Bun.which does not throw for plain command strings in current Bun versions; the catch is a defensive guard.
-  added: 2026-04-25
-- file: src/core/clipboard.ts
-  mutator: ConditionalExpression
-  original: 'opts.resolve !== undefined'
-  mutated: 'true'
-  reason: '_setClipboardTestHooks is a test-only API; both call sites (response-dialog.test.tsx) pass `resolve` explicitly (function or null), so the absent-key path the guard protects is never exercised. With the mutant, an absent `resolve` would clear resolveOverride to undefined — equivalent on every real caller.'
-  added: 2026-04-25
-- file: src/core/clipboard.ts
-  mutator: ConditionalExpression
-  original: 'opts.copy !== undefined'
-  mutated: 'true'
-  reason: same as the paired guard — `_setClipboardTestHooks` callers always set `copy` explicitly, so the absent-key path is never produced.
-  added: 2026-04-25
-- file: src/core/paths.ts
-  mutator: StringLiteral
-  original: '"~"'
-  mutated: '""'
-  reason: 'first arg of `p.startsWith("~")` on line 13 — equivalent on realistic inputs. startsWith("") is always true, so the mutant always runs replace("~", homedir()). For inputs without "~" the replace is a no-op; for inputs starting with "~" the original takes the same branch. Divergence only on paths containing "~" mid-string, which no caller produces — main.ts passes process.cwd() (absolute, no "~"), and memory/runner pass LLM-supplied scopes that the prompt schema requires to be absolute directory paths.'
-  added: 2026-04-25
-- file: src/core/paths.ts
-  mutator: MethodExpression
-  original: 'expanded.startsWith("/")'
-  mutated: 'expanded.endsWith("/")'
-  reason: equivalent on realistic inputs — divergence only on relative paths ending with "/" (e.g. "rel/"), which no caller produces. For absolute paths node's resolve() returns the absolute argument unchanged, and for normal relative paths (no trailing slash) startsWith("/") and endsWith("/") agree (both false → resolve runs).
-  added: 2026-04-25
 - file: src/core/spinner.ts
   mutator: BooleanLiteral
   original: 'let listenersInstalled = false;'
@@ -3980,3 +3938,196 @@
   mutated: '""'
   reason: line 110 in `ensureMemory` — chrome icon for the "Detected OS and shell" line. Cosmetic decoration; the message text is asserted by tests, the icon is not user-visible behavior.
   added: 2026-05-05
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"uname -a"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: this is the OS-probe shell command sent to the LLM as init context. Tests verify section structure (label headers present), not the specific shell invocation. Mutating the command produces an empty (no output) section in LLM context — degrading LLM input is data-config drift, not a behavioral regression that a tight test could pin down without paraphrasing the constant.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS label data: the ''Shell'' label string sent to the LLM as a section header. Tests assert ''## Shell'' is present (the constant), so the test would mutate alongside the constant — any kill would paraphrase the implementation. Pure data drift.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"echo $SHELL"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: shell command for the Shell probe (''echo $SHELL''). Same as the OS command mutant — config data fed to the LLM, no behavioral test can pin it without binding to the specific string.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Distro"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS label data: ''Distro'' label. Cosmetic LLM-section header; no behavioral assertion would catch this without paraphrasing the constant.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"cat /etc/os-release 2>/dev/null || echo ''Not Linux''"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: cat /etc/os-release fallback command. Config data fed to LLM, behavioral test would paraphrase the literal.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell config files"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS label data: ''Shell config files'' label. Same reasoning as the other label mutants — LLM-section header, paraphrase-only kill.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"ls -la ~/.*shrc ~/.*sh_profile ~/.*profile ~/.config/fish/config.fish 2>/dev/null"'
+  mutated: '""'
+  reason: 'PROBE_COMMANDS data: shell-config-files probe command. Config data fed to LLM.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'Initial empty array seed for `sections`. Mutation prepends ''Stryker was here'' to the LLM context. Killing it would require asserting `output.startsWith(''## '')` — paraphrase of the loop''s first iteration. Drift in LLM context content, not an observable user/caller break.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"-c"'
+  mutated: '""'
+  reason: 'Bun.spawnSync arg array literal ''-c''. Mutating to '''' breaks all probes (sh receives no script-mode flag), so every section becomes ''## label\n(no output)''. Catching this requires asserting on probe content, which is environment-dependent (uname/etc-os-release availability) and brittle on minimal CI containers. The ''shell -c'' invocation is implementation detail of how we run probes.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: 'result.stdout.toString().trim()'
+  mutated: 'result.stdout.toString()'
+  reason: 'result.stdout.toString().trim() in runProbes. Removing .trim() leaves trailing whitespace inside each section body — cosmetic chrome difference in LLM context that no behavioral test should pin.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ConditionalExpression
+  original: 'output || "(no output)"'
+  mutated: 'true'
+  reason: 'ConditionalExpression on `output || "(no output)"` → `true`. Mutates section bodies to literal ''true''. The fallback''s purpose is to avoid blank sections in LLM context; killing this requires asserting section bodies aren''t ''true''/''false'', which paraphrases the conditional itself.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ConditionalExpression
+  original: 'output || "(no output)"'
+  mutated: 'false'
+  reason: 'ConditionalExpression on `output || "(no output)"` → `false`. Same as the `true` mutant — section-body interpolation correctness in LLM context, paraphrase-only kill.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: LogicalOperator
+  original: 'output || "(no output)"'
+  mutated: 'output && "(no output)"'
+  reason: 'LogicalOperator `||` → `&&` in `output || "(no output)"`. With truthy output, returns ''(no output)''; with empty, returns ''''. All probe content vanishes from LLM context. Catching requires asserting probe bodies contain real content — environment-dependent and brittle (host-specific uname output).'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"(no output)"'
+  mutated: '""'
+  reason: 'Fallback string ''(no output)'' → ''''. Triggers only when a probe produces empty stdout, which doesn''t happen on real systems (uname/cat/ls all emit output, with shell-error fallbacks). Mutated behavior only differs on inputs no real caller produces.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"\n\n"'
+  mutated: '""'
+  reason: 'Section separator ''\n\n'' → ''''. Sections concatenate without blank-line boundaries in the LLM-fed string. The separator is a formatting choice for LLM readability; a behavioral test would have to assert the exact separator (paraphrase) — cosmetic LLM-context formatting.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: 'result.stdout.toString().trim()'
+  mutated: 'result.stdout.toString()'
+  reason: 'result.stdout.toString().trim() in probeTools. The downstream `output.split("\n").filter(line => line.startsWith("/"))` already drops the trailing empty line a missing trim() would produce, and the `if (!output)` guard before this line returns null on whitespace — so removing trim() is equivalent on every realistic `which` output (which always emits at least one path or ''X not found'' line).'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: ConditionalExpression
+  original: '!output'
+  mutated: 'false'
+  reason: 'ConditionalExpression `!output` → `false` — the `if (!output) return null` guard. Defensive against `which` failing to produce any output at all (binary missing, shell broken). On any normal system `which` emits something for every queried tool, so this branch is unreachable in tests; reproducing it would require mocking Bun.spawnSync, which is invasive.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: MethodExpression
+  original: 'output.split("\n").filter((line) => line.startsWith("/"))'
+  mutated: 'output.split("\n")'
+  reason: 'filter(line => line.startsWith("/")) call removed. The filter strips shells'' "X: not found" noise lines (zsh/fish on missing tools). On the test env''s `/bin/sh` (dash), missing tools are silently omitted from `which` output, so the filter is a no-op and the mutant is equivalent. Real on zsh-as-sh systems but unreachable from this test runtime.'
+  added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"/"'
+  mutated: '""'
+  reason: 'StringLiteral ''/'' → '''' in startsWith. Same effect as removing the filter (#68): line.startsWith('''') is always true. Equivalent on dash/bash test envs where missing tools don''t emit noise; only matters on shells we don''t run tests under.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: EqualityOperator
+  original: 'provider.apiKey.length >= 4'
+  mutated: 'provider.apiKey.length > 4'
+  reason: 'Boundary at exactly 4 chars in redactProvider. Real apiKeys are 20+ chars (every supported provider); the existing test for length<4 uses "ab" (the < short-key branch). The exact-4 boundary is hypothetical — no real provider emits 4-char keys, so >= 4 vs > 4 differs only on inputs no real caller produces.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'body == null'
+  mutated: 'false'
+  reason: 'Equivalent. With `false`, no early return; but `walk(null)` and `walk(undefined)` both fall through to `return node` (null/undefined miss the string/array/object branches), so the function returns the same value as the early return would.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'apiKey.length >= 4'
+  mutated: 'true'
+  reason: 'Unreachable. The preceding `if (!apiKey || apiKey.length < 8) return body;` guarantees apiKey.length >= 8 here, so `>= 4` is always true. Both branches identical at runtime.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: EqualityOperator
+  original: 'apiKey.length >= 4'
+  mutated: 'apiKey.length > 4'
+  reason: 'Equivalent. The preceding `apiKey.length < 8` guard means length is always >= 8 here, so both `>= 4` and `> 4` evaluate identically. The boundary is never reached.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: StringLiteral
+  original: '"..."'
+  mutated: '""'
+  reason: 'Unreachable. The `: "..."` fallback fires only when `apiKey.length < 4`, but the preceding `apiKey.length < 8` guard already returns body early in that case. Dead code.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: |-
+    params.attachedInputPath !== undefined &&
+        params.attachedInputSize !== undefined
+  mutated: 'true'
+  reason: 'Real callers pass all three attachedInput fields together or none — main.ts:93-110 sets path/size/preview in lockstep when attachedInputBytes is truthy. The partial-fields case (only preview defined while path+size undefined) is not producible.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: LogicalOperator
+  original: |-
+    params.attachedInputPath !== undefined &&
+        params.attachedInputSize !== undefined
+  mutated: 'params.attachedInputPath !== undefined || params.attachedInputSize !== undefined'
+  reason: 'Real callers (main.ts:93-110) pass all three attachedInput fields together or none. The path-vs-size partial cases that would expose && vs || differences are unreachable in production.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: LogicalOperator
+  original: |-
+    params.attachedInputPath !== undefined &&
+        params.attachedInputSize !== undefined &&
+        params.attachedInputPreview !== undefined
+  mutated: 'params.attachedInputPath !== undefined && params.attachedInputSize !== undefined || params.attachedInputPreview !== undefined'
+  reason: 'Real callers (main.ts:93-110) pass all three attachedInput fields together or none. Partial-fields case where preview alone is defined while path+size are missing is not producible.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.attachedInputPath !== undefined'
+  mutated: 'true'
+  reason: 'Same as the other attached_input checks: real callers (main.ts:93-110) pass all three fields together or none. The case where path is undefined while size+preview are defined is not producible.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.attachedInputSize !== undefined'
+  mutated: 'true'
+  reason: 'Same as the other attached_input checks: real callers (main.ts:93-110) pass all three fields together or none. The case where size is undefined while path+preview are defined is not producible.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.attachedInputPreview !== undefined'
+  mutated: 'true'
+  reason: 'Same as the other attached_input checks: real callers (main.ts:93-110) pass all three fields together or none. The case where preview is undefined while path+size are defined is not producible.'
+  added: 2026-05-06
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.inputSource !== undefined'
+  mutated: 'true'
+  reason: 'Equivalent at the JSON output level. With `true`, `entry.input_source = undefined` when inputSource is omitted; JSON.stringify drops undefined values, so the persisted log is identical. Real callers (main.ts:135) always pass a defined inputSource.'
+  added: 2026-05-06
