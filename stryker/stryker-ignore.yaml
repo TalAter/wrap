@@ -4046,3 +4046,9 @@
   mutated: 'output.split("\n")'
   reason: 'filter(line => line.startsWith("/")) call removed. The filter strips shells'' "X: not found" noise lines (zsh/fish on missing tools). On the test env''s `/bin/sh` (dash), missing tools are silently omitted from `which` output, so the filter is a no-op and the mutant is equivalent. Real on zsh-as-sh systems but unreachable from this test runtime.'
   added: 2026-05-06
+- file: src/discovery/init-probes.ts
+  mutator: StringLiteral
+  original: '"/"'
+  mutated: '""'
+  reason: 'StringLiteral ''/'' → '''' in startsWith. Same effect as removing the filter (#68): line.startsWith('''') is always true. Equivalent on dash/bash test envs where missing tools don''t emit noise; only matters on shells we don''t run tests under.'
+  added: 2026-05-06
