@@ -49,7 +49,7 @@ All stryker-related files live under `stryker/` at the repo root.
 
 0. **Setup.** If `node_modules/` is missing or any import fails (`Cannot find package …`), run `bun install` once before doing anything else. Cold checkouts need this.
 
-1. **Sync + prune.** `git fetch origin && git reset --hard origin/main`. Load `stryker/stryker-ignore.yaml` and drop entries where `added + 10 days < today`. If you pruned anything, commit: `stryker-ignore: prune stale entries`.
+1. **Sync + prune.** `git fetch origin && git reset --hard origin/main`. Load `stryker/stryker-ignore.yaml` and drop entries where `added + 10 days < today`. Don't commit yet — the prune ships in step 6's combined commit alongside the new ignores and the rotation update.
 
 2. **Pick file via rotation.** Load `stryker/stryker-rotation.yaml`. Enumerate all eligible src files (see exclude list below). Decision:
    - If any eligible src file is NOT in the rotation list → pick one (any; deterministic by sort order is fine). This is "new work."
@@ -82,7 +82,7 @@ All stryker-related files live under `stryker/` at the repo root.
 
    **Ignore path:** append to `stryker/stryker-ignore.yaml` with today's date and a one-line reason. Do NOT commit per-ignore — every ignore appended in this run ships in the single combined commit at step 6. If you fixed and judge overruled, undo your fix.
 
-6. **Rotation + ignores commit.** After processing all survivors for this run, append the processed file path to the bottom of `stryker/stryker-rotation.yaml` (and, if picked from the top, it was already removed in step 2). Commit the rotation change **together with every new ignore appended in step 5** in a single commit on `main`: `stryker: <file> — <N> ignored, rotated` (or `stryker-rotation: <file>` if N=0). One combined commit per run, not one-per-ignore — it's bookkeeping, not a substantive change.
+6. **Combined bookkeeping commit.** After processing all survivors for this run, append the processed file path to the bottom of `stryker/stryker-rotation.yaml` (and, if picked from the top, it was already removed in step 2). Commit the rotation change **together with every new ignore appended in step 5 and any stale-prune deletions from step 1** in a single commit on `main`: `stryker: <file> — <N> ignored, <P> pruned, rotated` (drop clauses that are zero — e.g. `stryker-rotation: <file>` if N=P=0). One combined commit per run, not one-per-ignore — it's bookkeeping, not a substantive change.
 
 7. **Push to main.** Fast-forward push:
    ```
@@ -217,7 +217,7 @@ Keep one PR per distinct concern — don't batch unrelated source changes. Do NO
 
 - Commit messages terse and conventional. Subject ≤50 chars when possible.
 - No Co-authored-by trailers.
-- **Routine bookkeeping = one combined commit per run.** All of this run's ignore entries plus the rotation update ship as a single commit (step 6). The stale-ignore prune (step 1) is its own commit because it's a different decision from a different run. Substantive changes — each kill-test, each source-fix on a PR branch — are atomic, one commit per change.
+- **Routine bookkeeping = one combined commit per run.** The stale-ignore prune (step 1), every new ignore appended in step 5, and the rotation update (step 6) all ship as a single commit at step 6. Substantive changes — each kill-test, each source-fix on a PR branch — are atomic, one commit per change.
 - Don't add dependencies. Don't reformat files. Don't touch unrelated code.
 
 ## Stop conditions
