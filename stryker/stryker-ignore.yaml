@@ -3957,3 +3957,195 @@
   mutated: '"Stryker was here!"'
   reason: else branch fires only when attachedInputSize is undefined while preview is defined — main.ts (the only caller) always passes them together, so this branch is unreachable.
   added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: OptionalChaining
+  original: 'API_PROVIDERS[provider]?.recommendedModelRegex'
+  mutated: 'API_PROVIDERS[provider].recommendedModelRegex'
+  reason: defensive optional chaining; computeModels is only invoked with provider keys taken from Object.keys(API_PROVIDERS) via orderSelection, so the lookup never returns undefined.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'isCliProvider(provider)'
+  mutated: 'false'
+  reason: dead branch — CLI providers route to the disclaimer screen via firstScreenFor and never reach buildEntry (only submit-key and submit-model call it, neither of which CLI flows hit).
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: OptionalChaining
+  original: 'API_PROVIDERS[provider]?.baseURL'
+  mutated: 'API_PROVIDERS[provider].baseURL'
+  reason: defensive optional chaining; buildEntry for non-CLI providers is only invoked with provider keys present in API_PROVIDERS.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'baseURL'
+  mutated: 'true'
+  reason: equivalent — when baseURL is undefined, setting entry.baseURL = undefined vs not setting it is indistinguishable through deep equality and JSON.stringify (config writer).
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'fields.apiKey'
+  mutated: 'true'
+  reason: equivalent — when fields.apiKey is undefined, setting entry.apiKey = undefined vs not setting it is indistinguishable through deep equality and JSON.stringify.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'fields.model'
+  mutated: 'true'
+  reason: dead branch — buildEntry callers (submit-key and submit-model fallback) never pass fields.model, so the conditional is unreachable in either form.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'fields.model'
+  mutated: 'false'
+  reason: dead branch — buildEntry callers (submit-key and submit-model fallback) never pass fields.model, so the conditional is unreachable in either form.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!nextName || !state.modelsData'
+  mutated: 'false'
+  reason: defensive guard; advanceLoop is only reached after models-fetched and with nextIdx < pickedProviders.length, so both !nextName and !state.modelsData are always false.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: LogicalOperator
+  original: '!nextName || !state.modelsData'
+  mutated: '!nextName && !state.modelsData'
+  reason: defensive guard; both !nextName and !state.modelsData are always false in practice, so || vs && yields the same result.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "selecting-providers"'
+  mutated: 'false'
+  reason: type-narrowing guard against actions dispatched on the wrong screen; the TUI only dispatches toggle-provider while selecting-providers is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "selecting-providers"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches submit-providers while selecting-providers is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "loading-models"'
+  mutated: 'false'
+  reason: type-narrowing guard; models-fetched is only emitted by the loading-models effect.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!first'
+  mutated: 'false'
+  reason: defensive guard; submit-providers requires checked.size > 0, so pickedProviders[0] is always defined when models-fetched runs.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "entering-key"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches key-change while entering-key is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "entering-key"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches submit-key while entering-key is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ObjectLiteral
+  original: '{ ...screen, cursor: clampCursor(screen.cursor + action.delta, screen.models.length) }'
+  mutated: '{}'
+  reason: judge rejected the proposed kill-test as redundant with the existing move-cursor clamp test on picking-model.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag === "picking-default"'
+  mutated: 'true'
+  reason: type-narrowing guard; the TUI only dispatches move-cursor on picking-model or picking-default screens, and the picking-model branch returns earlier in the same case.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "picking-model"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches submit-model while picking-model is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!picked'
+  mutated: 'false'
+  reason: defensive guard; cursor is clamped within [0, models.length - 1] and the wizard only reaches picking-model when models is non-empty, so picked is always defined.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "disclaimer"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches accept-disclaimer while disclaimer is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "disclaimer"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches skip-disclaimer while disclaimer is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'nextIdx >= picked.length'
+  mutated: 'true'
+  reason: with current providers, claude-code is the only CLI provider and orderSelection always places it last, so skip-disclaimer can only fire at the final loop index — the mid-loop branch is unreachable.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ArithmeticOperator
+  original: 'nextIdx - 1'
+  mutated: 'nextIdx + 1'
+  reason: equivalent — finishLoop overwrites loopIndex with its second argument, so the loopIndex spread into state here is discarded immediately.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: BooleanLiteral
+  original: '!state.modelsData'
+  mutated: 'state.modelsData'
+  reason: defensive guard; modelsData is always set by the time skip-disclaimer's mid-loop branch could execute.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!state.modelsData'
+  mutated: 'true'
+  reason: defensive guard; modelsData is always set by the time skip-disclaimer's mid-loop branch could execute (and the branch is otherwise unreachable with current providers).
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!state.modelsData'
+  mutated: 'false'
+  reason: defensive guard; modelsData is always set when this branch is reached, and the branch is unreachable with current providers regardless.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: BooleanLiteral
+  original: '!nextName'
+  mutated: 'nextName'
+  reason: defensive guard; nextIdx < picked.length is checked above, so picked[nextIdx] is always defined.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!nextName'
+  mutated: 'true'
+  reason: defensive guard; nextIdx < picked.length is checked above, so picked[nextIdx] is always defined.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!nextName'
+  mutated: 'false'
+  reason: defensive guard; nextIdx < picked.length is checked above, so picked[nextIdx] is always defined.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ObjectLiteral
+  original: '{ ...state, pickedProviders: picked, screen: firstScreenFor(nextName, state.modelsData) }'
+  mutated: '{}'
+  reason: skip-disclaimer mid-loop branch is unreachable with current providers (claude-code is the only CLI provider and orderSelection always places it last, so skip-disclaimer fires at the final index).
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "picking-default"'
+  mutated: 'false'
+  reason: type-narrowing guard; the TUI only dispatches submit-default while picking-default is rendered.
+  added: 2026-05-07
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!picked'
+  mutated: 'false'
+  reason: defensive guard; cursor is clamped within [0, pickedProviders.length - 1] when reached via move-cursor, so pickedProviders[cursor] is always defined.
+  added: 2026-05-07
