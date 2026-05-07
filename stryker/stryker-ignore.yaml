@@ -3933,3 +3933,9 @@
   mutated: '""'
   reason: claude-code nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
   added: 2026-05-07
+- file: src/llm/resolve-provider.ts
+  mutator: EqualityOperator
+  original: modelMatches.length > 1
+  mutated: modelMatches.length >= 1
+  reason: equivalent mutant — the earlier `if (firstMatch && length === 1)` returns on length===1, so this branch only runs when length is 0 or ≥2, where `>1` and `>=1` agree.
+  added: 2026-05-07
