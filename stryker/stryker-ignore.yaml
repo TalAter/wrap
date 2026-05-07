@@ -3939,3 +3939,21 @@
   mutated: modelMatches.length >= 1
   reason: equivalent mutant — the earlier `if (firstMatch && length === 1)` returns on length===1, so this branch only runs when length is 0 or ≥2, where `>1` and `>=1` agree.
   added: 2026-05-07
+- file: src/llm/format-context.ts
+  mutator: ConditionalExpression
+  original: 'attachedInputPath !== undefined'
+  mutated: 'true'
+  reason: defensive guard on an optional field — main.ts (the only caller) sets attachedInputPath, attachedInputSize, and attachedInputPreview together, so the orphan-preview branch never triggers.
+  added: 2026-05-07
+- file: src/llm/format-context.ts
+  mutator: ConditionalExpression
+  original: 'attachedInputSize !== undefined'
+  mutated: 'true'
+  reason: defensive guard on an optional field — main.ts (the only caller) sets attachedInputPath, attachedInputSize, and attachedInputPreview together, so the size-undefined branch never triggers.
+  added: 2026-05-07
+- file: src/llm/format-context.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: else branch fires only when attachedInputSize is undefined while preview is defined — main.ts (the only caller) always passes them together, so this branch is unreachable.
+  added: 2026-05-07

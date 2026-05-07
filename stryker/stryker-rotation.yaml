@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/llm/format-context.ts
 - src/wizard/state.ts
 - src/core/truncate.ts
 - src/llm/build-prompt.ts
@@ -77,3 +76,4 @@
 - src/session/reducer.ts
 - src/llm/providers/registry.ts
 - src/llm/resolve-provider.ts
+- src/llm/format-context.ts
