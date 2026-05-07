@@ -1,405 +1,3 @@
-- file: src/core/spinner.ts
-  mutator: BooleanLiteral
-  original: 'let listenersInstalled = false;'
-  mutated: 'let listenersInstalled = true;'
-  reason: module-level init for installListeners' once-guard. The cursor-leak tests reset via resetExitGuard() before observing, so they pass either way; the other tests don't observe whether listeners are installed. Differs only on the very first import of the module, which the test harness can't reproduce after the file has loaded.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: BlockStatement
-  original: 'process.on("SIGINT", () => { restore(); process.exit(130); });'
-  mutated: 'process.on("SIGINT", () => {});'
-  reason: SIGINT handler body. The cursor-leak test asserts the handler is registered, not what it does — observing the body requires sending a real SIGINT, which would kill the test runner.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: BlockStatement
-  original: 'process.on("SIGTERM", () => { restore(); process.exit(143); });'
-  mutated: 'process.on("SIGTERM", () => {});'
-  reason: same as the paired SIGINT entry above — registration is asserted, body execution is not, because triggering SIGTERM would kill the runner.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ConditionalExpression
-  original: 'if (cursorTeardownUnregister) return;'
-  mutated: 'if (false) return;'
-  reason: equivalent — registerExitTeardown adds SHOW_CURSOR to a Set (idempotent re-add) and returns a fresh unregister closure. Without the guard, ensureCursorTeardown reassigns cursorTeardownUnregister to a new closure; the old closure is never called by anything, so reassignment is unobservable.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ConditionalExpression
-  original: 'if (stopped) return;'
-  mutated: 'if (false) return;'
-  reason: noAnimation stop closure idempotency guard (line 104). Removing it makes a second stop() write the erase string again to an already-empty row — visually identical, no caller-observable difference. The "stop is idempotent" doc note refers to safety, not write count.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: BooleanLiteral
-  original: 'stopped = true;'
-  mutated: 'stopped = false;'
-  reason: noAnimation stop closure idempotency latch (line 105). Same rationale as the paired guard above — without latching, repeated stop() calls re-erase an empty row; not user-observable.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ArithmeticOperator
-  original: 'index = (index + 1) % lines.length;'
-  mutated: 'index = (index + 1) * lines.length;'
-  reason: frame-cycling math inside setInterval. Killing this requires asserting an exact tick → frame mapping, which binds implementation detail (specific frames at specific tick counts). The visible contract is "spinner moves" — already covered by the existing "advances frames" test; tightening that further would be timing-flaky on slow CI.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ArithmeticOperator
-  original: 'index = (index + 1) % lines.length;'
-  mutated: 'index = (index - 1) % lines.length;'
-  reason: same frame-cycling math as the paired entry — direction flip lands on lines[-1] = undefined within 2 ticks. Killing this requires binding a precise frame sequence, which is implementation detail.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ArithmeticOperator
-  original: 'index = 1 % lines.length;'
-  mutated: 'index = 1 * lines.length;'
-  reason: initial index after the synchronous first frame write. With the mutant, first tick reads lines[8] = undefined; subsequent ticks recover via the modulo on line 120. Killing this requires asserting an exact frame at an exact tick (implementation detail) and would be timing-flaky.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ConditionalExpression
-  original: 'if (stopped) return;'
-  mutated: 'if (false) return;'
-  reason: defensive guard inside the setInterval tick (line 128). clearInterval is called synchronously inside stop() before returning, so no further ticks fire — the in-tick stopped check is unreachable in practice.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: ConditionalExpression
-  original: 'if (stopped) return;'
-  mutated: 'if (false) return;'
-  reason: animated stop closure idempotency guard (line 132). Without it, a second stop() calls clearInterval on a stopped handle (no-op) and writes the erase + show-cursor string a second time to an already-restored row — not user-observable.
-  added: 2026-04-26
-- file: src/core/spinner.ts
-  mutator: BooleanLiteral
-  original: 'stopped = true;'
-  mutated: 'stopped = false;'
-  reason: animated stop closure idempotency latch (line 133). Same rationale as the paired guard above — without latching, repeated stop() calls re-write the cursor-restore sequence; not user-observable.
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[60, 60, 100]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[102, 153, 255]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{ fg: [210, 210, 225], bg: [60, 60, 100] }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[210, 210, 225]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[130, 220, 160]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[40, 90, 60]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[180, 200, 255]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[60, 80, 160]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{ fg: [100, 100, 140], bg: [50, 50, 80] }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[100, 100, 140]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[50, 50, 80]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [120, 180, 255],\n      [60, 60, 100],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[120, 180, 255]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [245, 186, 74],\n      [206, 114, 255],\n      [94, 214, 255],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[245, 186, 74]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[206, 114, 255]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[105, 105, 130]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[25, 90, 190]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{\n    border: [170, 170, 195],\n    surface: [218, 232, 250],\n    accent: [220, 215, 238],\n    dim: [170, 170, 195],\n  }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[170, 170, 195]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[218, 232, 250]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[255, 165, 50]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{\n    selected: [15, 125, 55],\n  }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[15, 125, 55]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{\n    wizard: { fg: [10, 20, 90], bg: [150, 175, 220] },\n    riskLow: { fg: [15, 125, 55], bg: [215, 238, 220] },\n    riskMedium: { fg: [160, 95, 0], bg: [248, 232, 200] },\n    riskHigh: { fg: [190, 25, 45], bg: [248, 218, 218] },\n    fold: { fg: [45, 45, 70], bg: [210, 215, 230] },\n    stepDone: { fg: [15, 110, 55], bg: [210, 240, 215] },\n    stepActive: { fg: [30, 75, 190], bg: [210, 225, 250] },\n    stepPending: { fg: [130, 130, 155], bg: [220, 220, 230] },\n  }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{ fg: [10, 20, 90], bg: [150, 175, 220] }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[160, 95, 0]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[45, 45, 70]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[210, 215, 230]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{ fg: [15, 110, 55], bg: [210, 240, 215] }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{ fg: [30, 75, 190], bg: [210, 225, 250] }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[210, 240, 215]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[30, 75, 190]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[210, 225, 250]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{ fg: [130, 130, 155], bg: [220, 220, 230] }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[130, 130, 155]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[220, 220, 230]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ObjectLiteral
-  original: "{\n    wizard: [\n      [25, 90, 190],\n      [170, 170, 195],\n    ],\n    welcomeLogo: [\n      [160, 121, 191],\n      [79, 94, 133],\n    ],\n    welcomeBrain: [\n      [211, 76, 243],\n      [29, 227, 235],\n    ],\n    riskLow: [\n      [15, 150, 130],\n      [170, 170, 195],\n    ],\n    riskMedium: [\n      [175, 35, 115],\n      [170, 170, 195],\n    ],\n    riskHigh: [\n      [190, 25, 45],\n      [170, 170, 195],\n    ],\n    dim: [170, 170, 195],\n  }"
-  mutated: "{}"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [25, 90, 190],\n      [170, 170, 195],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [160, 121, 191],\n      [79, 94, 133],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[79, 94, 133]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[160, 121, 191]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [211, 76, 243],\n      [29, 227, 235],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[211, 76, 243]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[29, 227, 235]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [15, 150, 130],\n      [170, 170, 195],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[15, 150, 130]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [175, 35, 115],\n      [170, 170, 195],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[175, 35, 115]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[\n      [190, 25, 45],\n      [170, 170, 195],\n    ]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/theme.ts
-  mutator: ArrayDeclaration
-  original: "[190, 25, 45]"
-  mutated: "[]"
-  reason: theme.ts color tuples and badge/gradient objects are pure data — analogous to logo.ts and welcome-animation-frames.ts. No test binds exact RGB values; mutating to [] or {} produces a visually different but functionally identical render (no crash).
-  added: 2026-04-26
-- file: src/core/verbose.ts
-  mutator: BooleanLiteral
-  original: "!startTime"
-  mutated: "startTime"
-  reason: lazy-init guard for startTime. Without it, elapsed = performance.now()/1000 = process uptime instead of "time since first verbose call". Wrap is a CLI where verbose() fires within ms of process start, so the user-visible difference is a sub-second offset on the first line — practically equivalent.
-  added: 2026-04-26
-- file: src/core/verbose.ts
-  mutator: ConditionalExpression
-  original: "!startTime"
-  mutated: "false"
-  reason: same effect as the BooleanLiteral mutant on this branch — disables the lazy-init reset so startTime stays 0. Sub-second offset on the first verbose line in a CLI run; not user-observable.
-  added: 2026-04-26
-- file: src/core/verbose.ts
-  mutator: ArithmeticOperator
-  original: "performance.now() - startTime"
-  mutated: "performance.now() + startTime"
-  reason: deltas between successive verbose lines are unchanged (startTime is constant), only the baseline shifts by 2*startTime. In a wrap CLI run startTime is set within ms of process start, so every line is offset by a small constant — visually indistinguishable from the original output.
-  added: 2026-04-26
-- file: src/core/verbose.ts
-  mutator: BlockStatement
-  original: "{ startTime = 0; }"
-  mutated: "{}"
-  reason: resetVerboseTimer is documented as "for tests only" and only called from tests/verbose.test.ts and tests/round.test.ts. No production caller; mutating the body has no runtime impact.
-  added: 2026-04-26
 - file: src/llm/providers/ai-sdk.ts
   mutator: BlockStatement
   original: '{ try { const r = result as { request?: { body?: unknown }; response?: { body?: unknown }; usage?: unknown;...'
@@ -4209,3 +3807,129 @@
   mutated: '!state.response && !state.round'
   reason: 'paired with the ConditionalExpression mutation on the same guards. Switching || to && weakens the guard so only states missing both fields are caught. Real flow always provides both for these origins, so the mutation is unobservable.'
   added: 2026-05-06
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"sk-ant-api03-"'
+  mutated: '""'
+  reason: anthropic apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX; the input still accepts any value when the placeholder is empty. Tightening tests would bind a literal display string.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/claude-sonnet-\d+-\d+$/'
+  reason: 'recommendedModelRegex anchor for anthropic. Used only by the wizard to pre-pick a recommended model in the picker; user can still choose anything else. Dropping ^ would only matter on a models.dev id with a prefix before "claude-sonnet-" — none currently exist, and the recommendation is a soft preference. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/^claude-sonnet-\d+-\d+/'
+  reason: 'recommendedModelRegex anchor for anthropic. Soft wizard recommendation; dropping $ only matters on a hypothetical id like "claude-sonnet-4-6-preview" which models.dev does not currently publish. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/^claude-sonnet-\d-\d+$/'
+  reason: 'recommendedModelRegex quantifier for anthropic. Soft wizard recommendation; \d+ -> \d only diverges on a double-digit major version (e.g. "claude-sonnet-12-1") which does not exist. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^claude-sonnet-\d+-\d+$/'
+  mutated: '/^claude-sonnet-\d+-\d$/'
+  reason: 'recommendedModelRegex quantifier for anthropic. Soft wizard recommendation; \d+ -> \d only diverges on a double-digit minor version which does not exist. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\ue754"'
+  mutated: '""'
+  reason: anthropic nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Mutating to '' renders without an icon (functionally identical). No test binds the exact glyph; analogous to logo/welcome-animation-frames data ignores.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"sk-proj-"'
+  mutated: '""'
+  reason: openai apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX; input still accepts any value when empty. Tightening tests would bind a literal display string.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^gpt-5(\.\d+)?$/'
+  mutated: '/gpt-5(\.\d+)?$/'
+  reason: 'recommendedModelRegex anchor for openai. Soft wizard recommendation; dropping ^ only matters on a models.dev id with a prefix before "gpt-5" — none exist. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^gpt-5(\.\d+)?$/'
+  mutated: '/^gpt-5(\.\d+)?/'
+  reason: 'recommendedModelRegex anchor for openai. Soft wizard recommendation; dropping $ only matters on a hypothetical id like "gpt-5-preview" which models.dev does not publish. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: Regex
+  original: '/^gpt-5(\.\d+)?$/'
+  mutated: '/^gpt-5(\.\d)?$/'
+  reason: 'recommendedModelRegex quantifier for openai. Soft wizard recommendation; \d+ -> \d only diverges on a double-digit minor version (e.g. "gpt-5.10") which does not exist. Tightening tests would bind regex shape.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\udb80\udd04"'
+  mutated: '""'
+  reason: openai nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty; no test binds the exact glyph.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"sk-or-v1-"'
+  mutated: '""'
+  reason: openrouter apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX; input still accepts any value when empty.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"openrouter"'
+  mutated: '""'
+  reason: 'captured providerName in requiresBaseURL("openrouter") closure, used only to interpolate into the "requires baseURL" error string. validateProviderEntry already receives the same name as a parameter, so the closure capture is effectively redundant; tightening the existing /requires baseURL/ test to assert the literal provider name would bind error-message format.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\uea63"'
+  mutated: '""'
+  reason: openrouter nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"gsk_"'
+  mutated: '""'
+  reason: groq apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"groq"'
+  mutated: '""'
+  reason: 'captured providerName in requiresBaseURL("groq") closure — same rationale as the openrouter entry above. validateProviderEntry already carries the name as a parameter; tightening the error-string test would bind format.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\udb85\udc0b"'
+  mutated: '""'
+  reason: groq nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"mistral"'
+  mutated: '""'
+  reason: 'captured providerName in requiresBaseURL("mistral") closure — same rationale as the openrouter entry above.'
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\uef16"'
+  mutated: '""'
+  reason: mistral nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\udb80\udd9a"'
+  mutated: '""'
+  reason: ollama nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
+  added: 2026-05-07
+- file: src/llm/providers/registry.ts
+  mutator: StringLiteral
+  original: '"\udb82\udfc9"'
+  mutated: '""'
+  reason: claude-code nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
+  added: 2026-05-07
