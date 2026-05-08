@@ -123,8 +123,8 @@ describe("buildPromptScaffold — initial user text", () => {
     expect(result.initialUserText).toBe("context here\n\n## User's request\nquery here");
   });
 
-  test("empty context still includes user request", () => {
+  test("empty context produces no leading separator", () => {
     const result = buildPromptScaffold(config, "", "query here");
-    expect(result.initialUserText).toContain("## User's request\nquery here");
+    expect(result.initialUserText).toBe("## User's request\nquery here");
   });
 });
