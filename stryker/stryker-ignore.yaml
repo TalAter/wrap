@@ -3697,3 +3697,39 @@
   mutated: 'false'
   reason: defensive guard; cursor is clamped within [0, pickedProviders.length - 1] when reached via move-cursor, so pickedProviders[cursor] is always defined.
   added: 2026-05-07
+- file: src/wizard/models-filter.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: equivalent — fallback is checked with .includes("text") which is false for both [] and ["Stryker was here"], so the model is filtered out either way.
+  added: 2026-05-08
+- file: src/wizard/models-filter.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: equivalent — fallback is checked with .includes("text") which is false for both [] and ["Stryker was here"], so the model is filtered out either way.
+  added: 2026-05-08
+- file: src/wizard/models-filter.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: sort fallback for undefined release_date; the contract is "sort by release_date desc" and undated entries' relative position is implementation detail. The 2-element undated-after-dated case is already asserted.
+  added: 2026-05-08
+- file: src/wizard/models-filter.ts
+  mutator: LogicalOperator
+  original: 'm.release_date ?? ""'
+  mutated: 'm.release_date && ""'
+  reason: mutates the output ModelEntry.releaseDate field, which is never read by any caller (wizard/state.ts, config-wizard-dialog.tsx). Cosmetic.
+  added: 2026-05-08
+- file: src/wizard/models-filter.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: ModelEntry.releaseDate fallback for undefined release_date; the field is never read by any caller. Cosmetic.
+  added: 2026-05-08
+- file: src/wizard/models-filter.ts
+  mutator: ConditionalExpression
+  original: 'models.length === 0'
+  mutated: 'false'
+  reason: equivalent — when regex is defined and models is empty, both branches reach findIndex (-1) → pick undefined → return models (the empty array).
+  added: 2026-05-08
