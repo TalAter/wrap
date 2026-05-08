@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/llm/build-prompt.ts
 - src/wizard/models-filter.ts
 - src/core/attached-input.ts
 - src/core/input.ts
@@ -77,3 +76,4 @@
 - src/llm/format-context.ts
 - src/wizard/state.ts
 - src/core/truncate.ts
+- src/llm/build-prompt.ts
