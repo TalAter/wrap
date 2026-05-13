@@ -3614,15 +3614,6 @@
   reason: equivalent — when regex is defined and models is empty, both branches reach findIndex (-1) → pick undefined → return models (the empty array).
   added: 2026-05-08
 - file: src/core/attached-input.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        return process.stdin.isTTY;
-      }
-  mutated: '{}'
-  reason: 'getter on defaultStdin (the production fallback for readAttachedInput''s injected StdinSource). Every unit test injects an explicit StdinSource, so this getter is never invoked in tests by design. Killing it would require an integration test that spawns the binary with a real piped stdin — out of scope.'
-  added: 2026-05-09
-- file: src/core/attached-input.ts
   mutator: ConditionalExpression
   original: 'bytes.byteLength === 0'
   mutated: 'false'
