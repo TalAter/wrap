@@ -77,6 +77,30 @@ describe("readAttachedInput", () => {
     });
     expect(result).toEqual(bytes);
   });
+
+  test("default source short-circuits on a real TTY without reading stdin", async () => {
+    const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    const originalBytes = Bun.stdin.bytes;
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+    let readCalled = false;
+    Bun.stdin.bytes = () => {
+      readCalled = true;
+      return Promise.resolve(new Uint8Array(0));
+    };
+    try {
+      const result = await readAttachedInput();
+      expect(result).toBeUndefined();
+      expect(readCalled).toBe(false);
+    } finally {
+      if (originalIsTTY) {
+        Object.defineProperty(process.stdin, "isTTY", originalIsTTY);
+      } else {
+        // @ts-expect-error reset
+        delete process.stdin.isTTY;
+      }
+      Bun.stdin.bytes = originalBytes;
+    }
+  });
 });
 
 describe("buildAttachedInputPreview", () => {
