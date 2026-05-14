@@ -159,3 +159,19 @@ The user pastes a `curl | sh` one-liner and asks if it's safe. Wrap downloads th
 ```
 
 No code executed. The response isn't generic "be careful with curl | sh" — it tells you exactly what *this* script does, what it touches, and what it means for *your* system.
+
+---
+
+### Pick up where you left off
+
+```
+$ w set up a docker container with jupyter notebook and expose it on port 1234 to me
+```
+
+Wrap pulls the image, names the container, runs it detached, maps the port. User opens the notebook in a browser, plays around, comes back to the terminal an hour later. Done with it. Doesn't remember the container name, doesn't want to look it up.
+
+```
+$ w -c kill the container and delete the images
+```
+
+Wrap remembers — same conversation, just resumed. Knows the container name and image from the previous turn. One command, container down, image gone. No re-explaining context. The previous turn was the context.
