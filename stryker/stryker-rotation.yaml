@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/core/input.ts
 - src/discovery/cwd-files.ts
 - src/discovery/watchlist.ts
 - src/llm/context.ts
@@ -77,3 +76,4 @@
 - src/llm/build-prompt.ts
 - src/wizard/models-filter.ts
 - src/core/attached-input.ts
+- src/core/input.ts
