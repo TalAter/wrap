@@ -157,4 +157,10 @@ describe("addToWatchlist", () => {
     addToWatchlist(dir, []);
     expect(existsSync(join(dir, "tool-watchlist.json"))).toBe(false);
   });
+
+  test("no-op when every tool name is invalid", () => {
+    const dir = tmp();
+    addToWatchlist(dir, ["; rm -rf /", "$(whoami)", ""]);
+    expect(existsSync(join(dir, "tool-watchlist.json"))).toBe(false);
+  });
 });
