@@ -887,3 +887,21 @@
   mutated: 'total < OLDEST_COUNT + NEWEST_COUNT'
   reason: 'line 43 boundary — diverges only at total === 50. At that boundary the else-branch slice arithmetic produces identical output: `slice(0,20)` ∪ `slice(50-30)` covers all 50 entries, and the subsequent `total > 50` marker-insertion check is false (50 > 50), so no marker lines are added. Result identical to the if-branch.'
   added: 2026-05-15
+- file: src/discovery/watchlist.ts
+  mutator: MethodExpression
+  original: 'readWrapFile(WATCHLIST_FILE, wrapHome)?.trim()'
+  mutated: 'readWrapFile(WATCHLIST_FILE, wrapHome)'
+  reason: 'line 13 in loadWatchlist. Equivalent — `?.trim()` only differs from the bare call when the file contents are non-empty whitespace (e.g. "   "). In that case the next-line `!raw` guard no longer fires, but JSON.parse("   ") throws SyntaxError, which the surrounding catch returns [] for. Same return value either way; trim is defensive cleanup.'
+  added: 2026-05-15
+- file: src/discovery/watchlist.ts
+  mutator: ConditionalExpression
+  original: 'if (!raw) return [];'
+  mutated: 'if (false) return [];'
+  reason: 'line 14 in loadWatchlist. Equivalent — without the early return, falsy raw (null from missing file, "" from empty file, undefined from null?.trim()) falls through to JSON.parse, which throws on each (JSON.parse(undefined) → "undefined" → SyntaxError; JSON.parse("") → SyntaxError). The catch returns the same [].'
+  added: 2026-05-15
+- file: src/discovery/watchlist.ts
+  mutator: ConditionalExpression
+  original: 'if (!Array.isArray(parsed)) return [];'
+  mutated: 'if (false) return [];'
+  reason: 'line 17 in loadWatchlist. Equivalent — without the early return, non-array parsed values (object, string, number, null) reach `parsed.filter(...)`, which throws TypeError because .filter is undefined on non-arrays. The surrounding catch returns the same [].'
+  added: 2026-05-15
