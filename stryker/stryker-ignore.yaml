@@ -845,3 +845,45 @@
   mutated: 'first.startsWith'
   reason: 'defensive optional-chain required by noUncheckedIndexedAccess; the early `args.length === 0` return guarantees args[0] is a string at runtime — equivalent'
   added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: MethodExpression
+  original: 'l.startsWith("...")'
+  mutated: 'l.endsWith("...")'
+  reason: 'line 11 in countCwdFiles — gap marker `... (N entries omitted) ...` both starts and ends with `...`, so both forms exclude it. countCwdFiles only feeds the verbose log line (`CWD: N files listed` in main.ts:129), diagnostic output not user-visible behavior. Diverges only on user filenames starting vs ending with `...` — atypical, and miscount in either direction is invisible to callers.'
+  added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: ConditionalExpression
+  original: 'names.length === 0'
+  mutated: 'false'
+  reason: 'line 23 early return in listCwdFiles. Equivalent — when names is empty, Promise.all([]) yields [], the subsequent filter produces an empty entries array, and the line-36 `entries.length === 0` early return fires with the same `return undefined` result.'
+  added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: BlockStatement
+  original: '{ return null; }'
+  mutated: '{}'
+  reason: 'line 30 catch body in listCwdFiles. The catch path guards against lstat failures, but lstat does not throw on broken symlinks in Bun (returns stats of the symlink itself, verified) — only producible via races (file deleted between readdir and lstat) or permission errors, neither tractable in unit tests without invasive mocking.'
+  added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: MethodExpression
+  original: 'results.filter((e): e is Entry => e !== null)'
+  mutated: 'results'
+  reason: 'line 35 in listCwdFiles — strips nulls produced by the unreachable catch path on line 30 (lstat does not throw on broken symlinks in Bun). Filter is defensive against race/permission errors not producible in tests.'
+  added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: ConditionalExpression
+  original: 'e !== null'
+  mutated: 'true'
+  reason: 'line 35 filter predicate — pairs with the MethodExpression mutant on the same line. Same reasoning: the catch path producing nulls is unreachable on real filesystems (lstat does not throw on broken symlinks).'
+  added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: ConditionalExpression
+  original: 'entries.length === 0'
+  mutated: 'false'
+  reason: 'line 36 early return in listCwdFiles. Equivalent on producible inputs — entries can only be empty if names was empty (line-23 early return) or every lstat returned null (unreachable per the catch-path ignores above). In the unreachable case, mutant returns "" instead of undefined; no caller observes the difference.'
+  added: 2026-05-15
+- file: src/discovery/cwd-files.ts
+  mutator: EqualityOperator
+  original: 'total <= OLDEST_COUNT + NEWEST_COUNT'
+  mutated: 'total < OLDEST_COUNT + NEWEST_COUNT'
+  reason: 'line 43 boundary — diverges only at total === 50. At that boundary the else-branch slice arithmetic produces identical output: `slice(0,20)` ∪ `slice(50-30)` covers all 50 entries, and the subsequent `total > 50` marker-insertion check is false (50 > 50), so no marker lines are added. Result identical to the if-branch.'
+  added: 2026-05-15
