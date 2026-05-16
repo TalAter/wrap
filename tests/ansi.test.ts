@@ -258,6 +258,30 @@ describe("fgCode level 2 cube encoding", () => {
     // Boundary: r > 248 returns 231 (cube white); r === 248 stays on the ramp.
     expect(fgCode(248, 248, 248, 2)).toBe(`${ESC}38;5;255m`);
   });
+
+  // Grayscale ramp is only entered when r === g === b. Off-axis colors
+  // must take the 6×6×6 cube path, and the r<8 / r>248 grayscale edges
+  // must redirect to the cube's black (16) and white (231) slots so RGB
+  // round-trip stays in range.
+  test("pure black takes the r<8 grayscale edge to cube slot 16", () => {
+    expect(fgCode(0, 0, 0, 2)).toBe(`${ESC}38;5;16m`);
+  });
+
+  test("pure white takes the r>248 grayscale edge to cube slot 231", () => {
+    expect(fgCode(255, 255, 255, 2)).toBe(`${ESC}38;5;231m`);
+  });
+
+  test("r != g routes through the cube (not the grayscale ramp)", () => {
+    // (50, 0, 0): nearestCubeIndex(50)=1 (closer to 95 than 0),
+    // nearestCubeIndex(0)=0, nearestCubeIndex(0)=0 → 16 + 36 + 0 + 0 = 52.
+    expect(fgCode(50, 0, 0, 2)).toBe(`${ESC}38;5;52m`);
+  });
+
+  test("g != b routes through the cube even when r === g", () => {
+    // (50, 50, 10): same nearestCubeIndex(50)=1 for r and g,
+    // nearestCubeIndex(10)=0 → 16 + 36 + 6 + 0 = 58.
+    expect(fgCode(50, 50, 10, 2)).toBe(`${ESC}38;5;58m`);
+  });
 });
 
 describe("interpolate (OKLAB round-trip)", () => {
