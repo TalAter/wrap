@@ -161,6 +161,11 @@ describe("gradient", () => {
     expect(result).not.toMatch(/\x1b\[38;5;/);
     expect(stripAnsi(result)).toBe("hello");
   });
+
+  test("colorized output terminates with RESET so subsequent output is uncolored", () => {
+    const result = gradient("hello", stops);
+    expect(result.endsWith(`${ESC}0m`)).toBe(true);
+  });
 });
 
 describe("gradientCells", () => {
