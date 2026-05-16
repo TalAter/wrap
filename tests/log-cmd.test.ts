@@ -161,8 +161,8 @@ describe("--log search", () => {
     expect(result.stderr).toContain("Only one search term allowed");
   });
 
-  test("errors on negative number", async () => {
-    const result = await wrap("--log -3");
+  test.each(["-3", "-30"])("errors on negative number %s", async (arg) => {
+    const result = await wrap(`--log ${arg}`);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("non-negative integer");
   });
