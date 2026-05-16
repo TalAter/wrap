@@ -1,159 +1,3 @@
-- file: src/core/transcript.ts
-  mutator: ConditionalExpression
-  original: 'if (response.plan != null) out.plan = response.plan'
-  mutated: 'if (true) out.plan = response.plan'
-  reason: only differs when response.plan is exactly null — original omits plan from the echo, mutant adds "plan":null. Both encode "no plan" to the LLM consumer; the byte-shape difference is cosmetic.
-  added: 2026-05-05
-- file: src/core/transcript.ts
-  mutator: ConditionalExpression
-  original: 'default: { const _exhaustive: never = turn; throw new Error(...) }'
-  mutated: 'default:'
-  reason: exhaustiveness guard for the TranscriptTurn discriminated union — the default branch is unreachable on producible inputs (TS enforces all kinds are handled). Removing the body changes nothing at runtime.
-  added: 2026-05-05
-- file: src/core/transcript.ts
-  mutator: BlockStatement
-  original: '{ const _exhaustive: never = turn; throw new Error(...) }'
-  mutated: '{}'
-  reason: same default-branch exhaustiveness guard — unreachable on producible TranscriptTurn values. Compile-time check only.
-  added: 2026-05-05
-- file: src/core/transcript.ts
-  mutator: StringLiteral
-  original: '`unhandled transcript turn: ${(_exhaustive as { kind: string }).kind}`'
-  mutated: '``'
-  reason: throw message inside the unreachable exhaustiveness default branch. Never read at runtime on producible inputs.
-  added: 2026-05-05
-- file: src/core/shell.ts
-  mutator: ArrowFunction
-  original: '() => openSync("/dev/tty", "r")'
-  mutated: '() => undefined'
-  reason: defaultTryOpenTty factory passed as the `??` fallback in chooseChildStdin. Tests inject `tryOpenTty`, so the default arrow body is unexercised in the unit-test harness; analogous to the clipboard.ts/editor.ts defaultWhich ignores.
-  added: 2026-05-05
-- file: src/core/shell.ts
-  mutator: StringLiteral
-  original: '"/dev/tty"'
-  mutated: '""'
-  reason: first arg to openSync inside the default tryOpenTty factory. Tests inject `tryOpenTty`, so this literal is never read in tests; production-only path.
-  added: 2026-05-05
-- file: src/core/shell.ts
-  mutator: StringLiteral
-  original: '"r"'
-  mutated: '""'
-  reason: second arg to openSync inside the default tryOpenTty factory. Tests inject `tryOpenTty`, so this literal is never read in tests; production-only path.
-  added: 2026-05-05
-- file: src/core/shell.ts
-  mutator: BlockStatement
-  original: '{ if (typeof stdin === "number") closeSync(stdin); }'
-  mutated: '{}'
-  reason: finally block that closes the /dev/tty fd opened by chooseChildStdin. The leak is bounded by Wrap's process lifetime (short-lived CLI). Asserting fd cleanup would require either adding DI for closeSync purely for testability or fd-table introspection (env-specific, flaky).
-  added: 2026-05-05
-- file: src/core/shell.ts
-  mutator: ConditionalExpression
-  original: 'typeof stdin === "number"'
-  mutated: 'false'
-  reason: same cleanup-finally as the BlockStatement ignore above — making the condition always false skips closeSync, which only manifests as a bounded fd leak invisible to callers.
-  added: 2026-05-05
-- file: src/core/shell.ts
-  mutator: StringLiteral
-  original: '"number"'
-  mutated: '""'
-  reason: same cleanup-finally as above — `typeof stdin === ""` is always false (typeof never returns ""), so the closeSync branch is skipped; manifests only as a bounded fd leak.
-  added: 2026-05-05
-- file: src/config/resolve.ts
-  mutator: ArrayDeclaration
-  original: '[]'
-  mutated: '["Stryker was here"]'
-  reason: line 78 `setting.env ?? []` fallback. Hits only for settings without `env` (verbose, maxRounds, maxCapturedOutput/AttachedInputChars, defaultProvider). Mutant iterates ["Stryker was here"], looks up env["Stryker was here"] → undefined → continue → falls through unchanged. No real env exposes a key with that exact spaced name.
-  added: 2026-05-05
-- file: src/config/resolve.ts
-  mutator: ConditionalExpression
-  original: 'setting.type === "boolean"'
-  mutated: 'true'
-  reason: line 81 env-value branch. Every SETTINGS entry that declares `env` and isn't the early-skipped `model` (yolo, noAnimation, nerdFonts, logTraces) is type "boolean", so the predicate is unconditionally true on every reachable call. Equivalent until a non-boolean env-having setting is added.
-  added: 2026-05-05
-- file: src/config/resolve.ts
-  mutator: ConditionalExpression
-  original: 'type === "string"'
-  mutated: 'false'
-  reason: line 94 in `coerce`. `coerce` is only ever called with `setting.type` for non-boolean settings via CLI/env. Today the only string-typed setting reaching `coerce` would be defaultProvider — which has no flag and no env, so production never feeds it a CLI/env value. Mutant diverges only when a string CLI/env value is actually passed; no caller produces one.
-  added: 2026-05-05
-- file: src/config/resolve.ts
-  mutator: StringLiteral
-  original: '"string"'
-  mutated: '""'
-  reason: same line 94 as above — `type` is statically `"string" | "number"`, so `=== ""` is always false. Equivalent for the same reason: no caller currently feeds a string CLI/env value through `coerce`.
-  added: 2026-05-05
-- file: src/config/resolve.ts
-  mutator: ArrayDeclaration
-  original: '[]'
-  mutated: '["Stryker was here"]'
-  reason: line 167 `SETTINGS.model.env ?? []`. SETTINGS.model.env is statically ["WRAP_MODEL"], so the `??` fallback is unreachable. Defensive guard against a future config change that drops the env array.
-  added: 2026-05-05
-- file: src/config/resolve.ts
-  mutator: ConditionalExpression
-  original: 'v !== undefined'
-  mutated: 'true'
-  reason: line 169 inside `for (const name of SETTINGS.model.env ...)`. SETTINGS.model.env has a single entry ["WRAP_MODEL"], so the loop runs at most once. With the single iteration, both forms return undefined when WRAP_MODEL is unset (original via fall-through, mutant via the early return of `undefined`). Diverges only if SETTINGS.model.env grows to multiple entries — not the current shape.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: BlockStatement
-  original: 'throw memoryError(path);'
-  mutated: '{}'
-  reason: line 27 catch body in `loadMemory`. Equivalent — with the catch swallowed, `parsed` stays undefined and `MemoryFileSchema.safeParse(undefined)` then fails, throwing the same memoryError on line 33. Observable behavior is identical.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: Regex
-  original: '/^[-•]\s*/'
-  mutated: '/[-•]\s*/'
-  reason: line 80 in `parseInitResponse`. Bullet stripping is defensive cleanup for LLM init output; the system prompt explicitly tells the LLM "Do not add bullet points or numbering". Real LLM output is one fact per line without internal bullets, so dropping the leading anchor only matters when a line contains a `-` or `•` mid-content with no leading bullet — atypical and the contract isn't "preserve internal dashes through this regex".
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: Regex
-  original: '/^[-•]\s*/'
-  mutated: '/^[-•]\s/'
-  reason: line 80 in `parseInitResponse`. Same defensive bullet-strip — `\s*` → `\s` only differs when a leading bullet has zero whitespace after it (e.g. `-fact`). Init prompt forbids bullets, so this edge case is not a real LLM output shape we need to defend against.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: LogicalOperator
-  original: 'existing["/"] ?? []'
-  mutated: 'existing["/"] && []'
-  reason: line 90 in `ensureMemory`. `globalCount` is consumed only by the verbose log line on line 91 (`Memory: N facts (X global, Y scoped)`). Verbose diagnostic output, not user-visible behavior — the program functions identically with the wrong count printed.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: StringLiteral
-  original: '"/"'
-  mutated: '""'
-  reason: line 90 in `ensureMemory` (`existing["/"] ?? []`). Only feeds the verbose log line below — diagnostic output, not user-visible behavior. The `""` lookup misses, gives globalCount=0, but program flow is identical.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: ArrayDeclaration
-  original: '[]'
-  mutated: '["Stryker was here"]'
-  reason: line 90 in `ensureMemory` (`existing["/"] ?? []` fallback). Same as the paired LogicalOperator/StringLiteral entries — only feeds the verbose log line. Changes the printed globalCount when "/" is missing; no user-visible behavior change.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: ArithmeticOperator
-  original: 'total - globalCount'
-  mutated: 'total + globalCount'
-  reason: line 91 in `ensureMemory`. Computes the "scoped facts" count for the verbose log line. Diagnostic output only — the program does not branch on this value.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: StringLiteral
-  original: '"✨"'
-  mutated: '""'
-  reason: line 95 in `ensureMemory` — chrome icon for the "Learning about your system..." line. Cosmetic decoration; the message text is asserted by tests, the icon is not user-visible behavior.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: StringLiteral
-  original: '"user"'
-  mutated: '""'
-  reason: line 102 in `ensureMemory` — `role: "user"` on the conversation message passed to `provider.runPrompt`. The `role` field is a static, type-enforced provider-call detail (`Provider.runPrompt` types it as `"user" | "assistant"`). Asserting it in a test would paraphrase the call shape rather than verify user-visible behavior; mock providers in the existing tests don't depend on it.
-  added: 2026-05-05
-- file: src/memory/memory.ts
-  mutator: StringLiteral
-  original: '"🧠"'
-  mutated: '""'
-  reason: line 110 in `ensureMemory` — chrome icon for the "Detected OS and shell" line. Cosmetic decoration; the message text is asserted by tests, the icon is not user-visible behavior.
-  added: 2026-05-05
 - file: src/discovery/init-probes.ts
   mutator: StringLiteral
   original: '"uname -a"'
@@ -905,3 +749,15 @@
   mutated: 'if (false) return [];'
   reason: 'line 17 in loadWatchlist. Equivalent — without the early return, non-array parsed values (object, string, number, null) reach `parsed.filter(...)`, which throws TypeError because .filter is undefined on non-arrays. The surrounding catch returns the same [].'
   added: 2026-05-15
+- file: src/subcommands/forget-footprint.ts
+  mutator: ConditionalExpression
+  original: 'memBytes > 0'
+  mutated: 'true'
+  reason: 'line 25 in memoryFootprint. Equivalent — the preceding early return on `memBytes === 0 && wlBytes === 0` means this block is only reached when at least one file exists. When memBytes === 0 (memory.json missing) and wlBytes > 0, the mutant enters the block and calls loadMemory(), which returns `{}` for a missing file; countFacts({}) is 0, so count stays 0 either way. Observable result is identical.'
+  added: 2026-05-16
+- file: src/subcommands/forget-footprint.ts
+  mutator: EqualityOperator
+  original: 'memBytes > 0'
+  mutated: 'memBytes >= 0'
+  reason: 'line 25 in memoryFootprint. Equivalent — diverges only when memBytes === 0, in which case loadMemory() returns `{}` for a missing memory.json and countFacts({}) is 0; same result as skipping the block. Paired with the ConditionalExpression mutant on the same line.'
+  added: 2026-05-16
