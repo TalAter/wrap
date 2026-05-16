@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { searchEntries } from "../src/subcommands/log.ts";
 import { tmpHome, wrap } from "./helpers.ts";
@@ -55,6 +55,16 @@ describe("--log", () => {
 
   test("no log file shows message on stderr, exits 0", async () => {
     const result = await wrap("--log");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("No log entries yet.");
+  });
+
+  test("empty log file shows no-entries message", async () => {
+    const wrapHome = tmpHome();
+    const logPath = seedLog(wrapHome, []);
+    expect(existsSync(logPath)).toBe(true);
+    const result = await wrap("--log", { WRAP_HOME: wrapHome });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("No log entries yet.");
