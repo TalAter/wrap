@@ -228,6 +228,10 @@ describe("formatFootprint", () => {
     expect(formatFootprint("facts", { state: "ok", count: 1, bytes: 10 })).toBe("(1 fact, 10B)");
   });
 
+  test("ok state — dirs singular", () => {
+    expect(formatFootprint("dirs", { state: "ok", count: 1, bytes: 0 })).toBe("(1 dir, 0B)");
+  });
+
   test("ok state — dirs plural", () => {
     expect(formatFootprint("dirs", { state: "ok", count: 3, bytes: 0 })).toBe("(3 dirs, 0B)");
   });
