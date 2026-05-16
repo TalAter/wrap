@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   ANSI16,
   bold,
+  colorHex,
   dim,
   fg,
   fgCode,
@@ -281,6 +282,15 @@ describe("fgCode level 2 cube encoding", () => {
     // (50, 50, 10): same nearestCubeIndex(50)=1 for r and g,
     // nearestCubeIndex(10)=0 → 16 + 36 + 6 + 0 = 58.
     expect(fgCode(50, 50, 10, 2)).toBe(`${ESC}38;5;58m`);
+  });
+});
+
+describe("colorHex", () => {
+  test("pads single-digit hex components to two characters", () => {
+    // Every component <16 must pad to two chars so the result is a valid
+    // #rrggbb string Ink can parse. All three slots in (1,2,3) need
+    // padding, so each .padStart(2, "0") call gets exercised.
+    expect(colorHex([1, 2, 3])).toBe("#010203");
   });
 });
 
