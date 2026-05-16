@@ -162,6 +162,19 @@ describe("gradient", () => {
     expect(stripAnsi(result)).toBe("hello");
   });
 
+  test("at level 1, all non-space cells share the first-stop color (signature collapse)", () => {
+    // Per the function comment: "Below truecolor, the gradient is collapsed
+    // to the signature color (first stop) because quantising an
+    // interpolation across 16 or 256 colors produces chunky banding."
+    const result = gradient("hello", stops, undefined, undefined, 1);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escape
+    const charCodes = [...result.matchAll(/\x1b\[(\d+)m/g)]
+      .map((m) => m[1] as string)
+      .filter((c) => c !== "0");
+    expect(charCodes.length).toBeGreaterThan(0);
+    expect(new Set(charCodes).size).toBe(1);
+  });
+
   test("colorized output terminates with RESET so subsequent output is uncolored", () => {
     const result = gradient("hello", stops);
     expect(result.endsWith(`${ESC}0m`)).toBe(true);
