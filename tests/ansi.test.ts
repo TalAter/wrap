@@ -247,6 +247,14 @@ describe("quantizeColor", () => {
     // to256(8,8,8) === 232; idx256ToRgb(232) must take the grayscale branch.
     expect(quantizeColor([8, 8, 8], 2)).toEqual([8, 8, 8]);
   });
+
+  test("level 2 round-trips a non-boundary grayscale value through the ramp", () => {
+    // to256(88,88,88) === 240; idx256ToRgb(240) = 8 + (240-232)*10 = 88.
+    // The existing idx-232 boundary can't reach the *10 step factor —
+    // (idx-232) is zero there, so the multiplication's contribution
+    // collapses regardless of operand or operator.
+    expect(quantizeColor([88, 88, 88], 2)).toEqual([88, 88, 88]);
+  });
 });
 
 describe("fgCode level 2 cube encoding", () => {
