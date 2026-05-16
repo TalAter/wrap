@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/core/ansi.ts
 - src/subcommands/log.ts
 - src/core/detect-appearance.ts
 - src/subcommands/completion.ts
@@ -77,3 +76,4 @@
 - src/discovery/watchlist.ts
 - src/llm/context.ts
 - src/subcommands/forget-footprint.ts
+- src/core/ansi.ts

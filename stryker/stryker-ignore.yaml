@@ -761,3 +761,147 @@
   mutated: 'memBytes >= 0'
   reason: 'line 25 in memoryFootprint. Equivalent — diverges only when memBytes === 0, in which case loadMemory() returns `{}` for a missing memory.json and countFacts({}) is 0; same result as skipping the block. Paired with the ConditionalExpression mutant on the same line.'
   added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'cn <= 0.04045'
+  mutated: 'cn < 0.04045'
+  reason: 'srgbToLinear boundary at line 38. cn = c/255 with integer c, so cn === 0.04045 requires c === 10.31475 — unreachable. The mutation diverges only at that exact value.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: 'cn / 12.92'
+  mutated: 'cn * 12.92'
+  reason: 'srgbToLinear `cn ≤ 0.04045` branch arithmetic at line 38. Triggered only for very small RGB components (c < 11). Existing endpoint round-trip tests cover c ∈ {0, 128, 255}; c=0 collapses (0/12.92 === 0 === 0*12.92), and 128/255 take the else branch. Adding a small-c case would paraphrase the sRGB→linear curve constants.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'c <= 0.0031308'
+  mutated: 'c < 0.0031308'
+  reason: 'linearToSrgb boundary at line 42. Linear-space input is continuous (from OKLAB inversion), and the exact 0.0031308 value is only reached on contrived inputs — boundary equivalent in practice.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: 'c * 12.92'
+  mutated: 'c / 12.92'
+  reason: 'linearToSrgb `c ≤ 0.0031308` branch arithmetic at line 42. Mirror of the srgbToLinear small-value mutant — only matters at very low linear values; pinning the output would paraphrase the inverse sRGB curve.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ConditionalExpression
+  original: 'stops.length === 1'
+  mutated: 'false'
+  reason: 'interpolateOklab 1-stop guard at line 81. Production callers (theme FrameStops, SPECTRUM in help.ts, welcomeBrain) always pass ≥2 stops; the fallthrough computes segments = 0, seg = -1 (via Math.min(0, -1)), and dereferences stops[-1] (undefined) → TypeError. The guard exists for input-validation completeness but the bad input is not producible.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: 't * segments'
+  mutated: 't / segments'
+  reason: 'interpolateOklab seg index arithmetic at line 83. Diverges only for ≥3-stop arrays at t past the first segment; killing it requires asserting a specific OKLAB-interpolated color at an asymmetric t, which paraphrases the perceptual interpolation algorithm.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: 't * segments - seg'
+  mutated: 't * segments + seg'
+  reason: 'interpolateOklab segT sign mutation at line 84. Same multi-stop interpolation internals as the seg arithmetic mutant — catching this would pin an OKLAB extrapolation past stops[seg+1], paraphrase of the lerp.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: 't * segments'
+  mutated: 't / segments'
+  reason: 'interpolateOklab segT factor mutation at line 84. Same multi-stop interpolation internals — paraphrase-only kill.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'd < bestDist'
+  mutated: 'd <= bestDist'
+  reason: 'nearest16 tie-break at line 126. Diverges only on RGB inputs equidistant from two ANSI16 palette entries; the chosen slot in a tie is a soft preference (either nearest match is equally valid).'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'i < CUBE_LEVELS.length'
+  mutated: 'i <= CUBE_LEVELS.length'
+  reason: 'nearestCubeIndex bound at line 141. The extra iteration reads CUBE_LEVELS[6] (undefined), Math.abs(v - undefined) === NaN, and NaN < bestDist is false, so best is never updated. Equivalent on every input.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'd < bestDist'
+  mutated: 'd <= bestDist'
+  reason: 'nearestCubeIndex tie-break at line 143. Diverges only on values equidistant from two adjacent cube levels (e.g., v=115 between 95 and 135); the chosen index is a soft preference.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArrayDeclaration
+  original: '[0, 0, 0]'
+  mutated: '[]'
+  reason: 'code16ToRgb fallback at line 183. code16ToRgb is only invoked by quantizeColor at level 1, where the input code comes from nearest16 which always returns a valid 30–37/90–97 code → idx ∈ [0, 15]. The fallback for ANSI16_RGBS[idx] === undefined is unreachable.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ConditionalExpression
+  original: 'len === 0'
+  mutated: 'false'
+  reason: 'gradientCells empty-text early return at line 227. Equivalent — without the guard, new Array(0) is [], the for-loop never executes (i < 0 is false), and the function returns the same empty array.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArrayDeclaration
+  original: 'new Array(len)'
+  mutated: 'new Array()'
+  reason: 'gradientCells cells array pre-sizing at line 228. Equivalent — cells[i] = … assignments still build the array; pre-sizing is an implementation hint, not observable in the returned content.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ConditionalExpression
+  original: 'level > 0 && level < 3'
+  mutated: 'true && level < 3'
+  reason: 'gradientCells solid-computation left half at line 229. Diverges only at level=0, where original solid=null and mutated solid=stops[0]; but the loop''s `if (level <= 0)` at line 238 returns before solid is consulted. Equivalent.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'level > 0'
+  mutated: 'level >= 0'
+  reason: 'gradientCells solid-computation boundary at line 229. Only diverges at level=0, where the loop''s `if (level <= 0)` returns first and solid is never consulted. Equivalent.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'gradientCells solidEsc fallback at line 230. Read only when `if (solid)` is true at line 242; when solid is null (levels 0 or 3) the fallback value is never used.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ConditionalExpression
+  original: 'level <= 0'
+  mutated: 'false'
+  reason: 'gradientCells level=0 shortcut at line 238. Without it, level=0 falls through past `if (solid)` (solid is null when level=0) into the interpolation path; fgCode(_, _, _, 0) returns "", so cells[i] = "" + ch = ch. Same observable result as the shortcut.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'level <= 0'
+  mutated: 'level < 0'
+  reason: 'gradientCells level=0 shortcut boundary at line 238. Only diverges at level=0; fallthrough path collapses to cells[i] = ch as above. Equivalent.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: BlockStatement
+  original: '{ cells[i] = ch; continue; }'
+  mutated: '{}'
+  reason: 'gradientCells level=0 shortcut body at line 238. Empty body falls through to the interpolation path, which produces fgCode return "" and cells[i] = ch anyway. Equivalent.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ConditionalExpression
+  original: 'shinePos !== undefined'
+  mutated: 'true'
+  reason: 'gradientCells shine guard at line 249. When shinePos is undefined, the block computes dist = Math.abs(i - undefined) = NaN; NaN < shineRadius is false, so the boost branch never executes and lab is unchanged.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: EqualityOperator
+  original: 'dist < shineRadius'
+  mutated: 'dist <= shineRadius'
+  reason: 'gradientCells shine radius boundary at line 251. Only diverges at dist === shineRadius, where boost = (1 - 1)^2 = 0 and lerpOklab with t=0 is the identity — no-op.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: '1 - dist / shineRadius'
+  mutated: '1 + dist / shineRadius'
+  reason: 'gradientCells shine boost formula (sign mutation) at line 252. Killing this would require asserting an exact rendered color at a non-center shine position — a paraphrase of the boost curve. Shine is documented as a soft visual decoration.'
+  added: 2026-05-16
+- file: src/core/ansi.ts
+  mutator: ArithmeticOperator
+  original: 'dist / shineRadius'
+  mutated: 'dist * shineRadius'
+  reason: 'gradientCells shine boost formula (factor mutation) at line 252. Same as the sign mutant — paraphrase-only kill of the boost curve.'
+  added: 2026-05-16
