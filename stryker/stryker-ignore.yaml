@@ -1646,3 +1646,15 @@
   mutated: "\"\""
   reason: "Help array `.join(\"\\n\")` separator → empty. Help text only (lines concatenate without newlines). Cosmetic."
   added: 2026-05-17
+- file: src/session/notification-router.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: equivalent — buffered's initial contents only surface through flushBuffered → writeNotificationToStderr, whose switch on n.kind drops unknown shapes (a bare string's .kind is undefined). The pre-injected element is silently swallowed; no observable behavior differs.
+  added: 2026-05-17
+- file: src/session/notification-router.ts
+  mutator: ConditionalExpression
+  original: 'n'
+  mutated: 'true'
+  reason: equivalent — `if (n)` is defensive narrowing around `buffered.shift()`'s `T | undefined` return type, but the surrounding `while (buffered.length > 0)` guarantees an element is present and every Notification union member is a truthy object. n is always truthy here; `if (true)` has identical runtime behavior.
+  added: 2026-05-17
