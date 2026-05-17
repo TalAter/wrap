@@ -1,11 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  cacheAppearance,
+  getCachedAppearance,
   parseOsc11Response,
   queryTerminalBackground,
   resolveAppearance,
 } from "../src/core/detect-appearance.ts";
 import { mockStderr } from "./helpers/mock-stderr.ts";
 import { mockStdin } from "./helpers/mock-stdin.ts";
+import { isolateEnv, tmpHome } from "./helpers.ts";
+
+function writeCache(home: string, contents: string): void {
+  mkdirSync(join(home, "cache"), { recursive: true });
+  writeFileSync(join(home, "cache/appearance.json"), contents);
+}
 
 describe("parseOsc11Response", () => {
   test("parses dark background (Ghostty)", () => {
@@ -66,6 +76,59 @@ describe("queryTerminalBackground", () => {
   });
 });
 
+describe("getCachedAppearance / cacheAppearance round-trip", () => {
+  // The cache spares wrap from a 50ms OSC 11 probe (and the raw-mode
+  // dance that comes with it) on every invocation. If write or read
+  // silently breaks, every `w` re-probes — a real perf + UX regression.
+  test("returns dark appearance written by cacheAppearance", () => {
+    const home = tmpHome();
+    cacheAppearance("dark", home);
+    expect(getCachedAppearance(home)).toBe("dark");
+  });
+
+  test("returns light appearance written by cacheAppearance", () => {
+    const home = tmpHome();
+    cacheAppearance("light", home);
+    expect(getCachedAppearance(home)).toBe("light");
+  });
+
+  test("returns null when no cache file exists", () => {
+    expect(getCachedAppearance(tmpHome())).toBeNull();
+  });
+
+  test("returns null for malformed cache JSON", () => {
+    const home = tmpHome();
+    writeCache(home, "not valid json{");
+    expect(getCachedAppearance(home)).toBeNull();
+  });
+
+  test("returns null for unrecognized appearance value", () => {
+    const home = tmpHome();
+    writeCache(home, JSON.stringify({ appearance: "midnight", ts: Date.now() }));
+    expect(getCachedAppearance(home)).toBeNull();
+  });
+
+  test("returns null when ts is the wrong type", () => {
+    const home = tmpHome();
+    writeCache(home, JSON.stringify({ appearance: "dark", ts: "yesterday" }));
+    expect(getCachedAppearance(home)).toBeNull();
+  });
+
+  test("returns null for cache older than the 1h TTL", () => {
+    const home = tmpHome();
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    writeCache(home, JSON.stringify({ appearance: "dark", ts: twoHoursAgo }));
+    expect(getCachedAppearance(home)).toBeNull();
+  });
+
+  test("returns cached value when 30 minutes old (within TTL)", () => {
+    const home = tmpHome();
+    const halfHourAgo = Date.now() - 30 * 60 * 1000;
+    writeCache(home, JSON.stringify({ appearance: "dark", ts: halfHourAgo }));
+    expect(getCachedAppearance(home)).toBe("dark");
+  });
+});
+
 describe("resolveAppearance", () => {
   // Regression: probe used to be fire-and-forget. On cache-miss it raced
   // with Ink dialog mount — probe's setRawMode(false) cleanup fired after
@@ -88,5 +151,46 @@ describe("resolveAppearance", () => {
       else process.env.WRAP_HOME = prevHome;
       if (prevTheme !== undefined) process.env.WRAP_THEME = prevTheme;
     }
+  });
+});
+
+describe("resolveAppearance precedence", () => {
+  // Precedence chain: WRAP_THEME env > explicit config > disk cache >
+  // probe > default-dark. Each test pins one tier dominating a competing
+  // value at the next tier down. (Probe vs default isn't covered here
+  // — see "awaits probe on cache-miss" above.)
+  isolateEnv(["WRAP_HOME", "WRAP_THEME"]);
+
+  test("WRAP_THEME=dark wins over conflicting config", async () => {
+    process.env.WRAP_HOME = tmpHome();
+    process.env.WRAP_THEME = "dark";
+    expect(await resolveAppearance("light")).toBe("dark");
+  });
+
+  test("WRAP_THEME=light wins over conflicting config", async () => {
+    process.env.WRAP_HOME = tmpHome();
+    process.env.WRAP_THEME = "light";
+    expect(await resolveAppearance("dark")).toBe("light");
+  });
+
+  test("config 'dark' wins over conflicting cache", async () => {
+    const home = tmpHome();
+    cacheAppearance("light", home);
+    process.env.WRAP_HOME = home;
+    expect(await resolveAppearance("dark")).toBe("dark");
+  });
+
+  test("config 'light' wins over conflicting cache", async () => {
+    const home = tmpHome();
+    cacheAppearance("dark", home);
+    process.env.WRAP_HOME = home;
+    expect(await resolveAppearance("light")).toBe("light");
+  });
+
+  test("cache hit returns cached value when env + config are absent/auto", async () => {
+    const home = tmpHome();
+    cacheAppearance("light", home);
+    process.env.WRAP_HOME = home;
+    expect(await resolveAppearance("auto")).toBe("light");
   });
 });
