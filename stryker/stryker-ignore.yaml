@@ -1658,3 +1658,35 @@
   mutated: 'true'
   reason: equivalent — `if (n)` is defensive narrowing around `buffered.shift()`'s `T | undefined` return type, but the surrounding `while (buffered.length > 0)` guarantees an element is present and every Notification union member is a truthy object. n is always truthy here; `if (true)` has identical runtime behavior.
   added: 2026-05-17
+- file: src/core/notify.ts
+  mutator: ConditionalExpression
+  original: |-
+    case "step-output":
+          // Dialog-only — no stderr fallback. See JSDoc above.
+          return;
+  mutated: 'case "step-output":'
+  reason: 'equivalent — the step-output case body is just `return;` (intentional drop, dialog-only). Removing the body causes fallthrough to `case "llm-wire":` which also returns; the function exits without writing to stderr either way. No observable difference.'
+  added: 2026-05-17
+- file: src/core/notify.ts
+  mutator: StringLiteral
+  original: '"step-output"'
+  mutated: '""'
+  reason: 'equivalent — renaming the case label to `""` means `n.kind === "step-output"` no longer matches, so the switch falls through to the next case. Same result as the original (no stderr write, since step-output is an intentional drop). n.kind is typed as a discriminated union and is never `""`.'
+  added: 2026-05-17
+- file: src/core/notify.ts
+  mutator: ConditionalExpression
+  original: |-
+    case "llm-wire":
+          // Listener-only. Consumers (like runRound) subscribe to capture wire
+          // bodies; no sensible stderr rendering — would flood the terminal with
+          // raw JSON during thinking. See JSDoc on the Notification union.
+          return;
+  mutated: 'case "llm-wire":'
+  reason: 'equivalent — the llm-wire case body is just `return;` (intentional drop, listener-only). Removing the body falls through past the end of the switch; the function exits without writing to stderr either way. No observable difference.'
+  added: 2026-05-17
+- file: src/core/notify.ts
+  mutator: StringLiteral
+  original: '"llm-wire"'
+  mutated: '""'
+  reason: 'equivalent — renaming the case label to `""` means `n.kind === "llm-wire"` no longer matches, so the switch falls through past the end. Same result as the original (no stderr write, since llm-wire is an intentional drop). n.kind is typed as a discriminated union and is never `""`.'
+  added: 2026-05-17
