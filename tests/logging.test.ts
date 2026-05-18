@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
@@ -329,6 +329,21 @@ describe("appendLogEntry", () => {
       .map((l) => JSON.parse(l).id);
     expect(new Set(ids).size).toBe(2);
   });
+
+  test("sidecar failure does not block jsonl append", () => {
+    const home = makeTmpHome();
+    mkdirSync(join(home, "logs"));
+    // Block sidecar by occupying its parent path with a file.
+    writeFileSync(join(home, "logs", "traces"), "");
+
+    const entry = makeEntry();
+    addRound(entry, { attempts: [{ request_wire: { kind: "test" } }] });
+
+    expect(() => appendLogEntry(home, entry)).toThrow();
+
+    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8").trim();
+    expect(JSON.parse(content).id).toBe(entry.id);
+  });
 });
 
 function readLogEntries(wrapHome: string) {
@@ -526,7 +541,7 @@ describe("log traces — default off", () => {
 });
 
 describe("log traces — enabled", () => {
-  test("successful round captures request + wire + raw_response", async () => {
+  test("trace fields go to sidecar; entry stays lean", async () => {
     const result = await wrapMock(
       "list files",
       { type: "command", content: "echo hi", risk_level: "low" },
@@ -534,14 +549,32 @@ describe("log traces — enabled", () => {
     );
     const entry = readLog(result.wrapHome);
     const attempt = entry.rounds[0].attempts.at(-1);
-    expect(attempt.request).toBeDefined();
-    expect(attempt.request.system).toBeDefined();
-    expect(Array.isArray(attempt.request.messages)).toBe(true);
-    expect(attempt.request_wire).toBeDefined();
-    expect(attempt.request_wire.kind).toBe("test");
-    expect(attempt.response_wire).toBeDefined();
-    expect(attempt.response_wire.kind).toBe("test");
-    // raw_response becomes always-on when logTraces is on
-    expect(typeof attempt.raw_response).toBe("string");
+    expect("request" in attempt).toBe(false);
+    expect("request_wire" in attempt).toBe(false);
+    expect("response_wire" in attempt).toBe(false);
+    expect("raw_response" in attempt).toBe(false);
+
+    const tracePath = join(result.wrapHome, "logs", "traces", `${entry.id}.json`);
+    expect(existsSync(tracePath)).toBe(true);
+    const trace = JSON.parse(readFileSync(tracePath, "utf-8"));
+    expect(trace.entry_id).toBe(entry.id);
+    const traced = trace.rounds[0].attempts[0];
+    expect(traced.request).toBeDefined();
+    expect(traced.request.system).toBeDefined();
+    expect(Array.isArray(traced.request.messages)).toBe(true);
+    expect(traced.request_wire.kind).toBe("test");
+    expect(traced.response_wire.kind).toBe("test");
+    expect(typeof traced.raw_response).toBe("string");
+  });
+
+  test("no sidecar written when logTraces is off", async () => {
+    const result = await wrapMock("list files", {
+      type: "command",
+      content: "echo hi",
+      risk_level: "low",
+    });
+    const entry = readLog(result.wrapHome);
+    const tracePath = join(result.wrapHome, "logs", "traces", `${entry.id}.json`);
+    expect(existsSync(tracePath)).toBe(false);
   });
 });

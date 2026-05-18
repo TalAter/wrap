@@ -15,6 +15,8 @@ Single append-only JSONL at `${WRAP_HOME}/logs/wrap.jsonl`. One line per invocat
 
 Off by default. Toggle via flag, env, or config. When on, every LLM attempt records the full prompt and provider wire bodies. The wire request body is stripped of `system`/`messages` because they duplicate the wrap-built prompt; what remains is the SDK-added delta. Headers and subprocess env are never logged. A defensive apiKey scrub runs on every wire body.
 
+Trace fields are **not** inlined into the main log. They are written to a sidecar at `${WRAP_HOME}/logs/traces/<entry-id>.json`.
+
 ## What gets logged
 
 Successful commands, non-zero exits, answers, malformed JSON, provider crashes, blocked/cancelled commands, non-final steps, round budget exhaustion. Memory-init LLM calls and trivial subcommands (`--help`, `--version`, config errors) are not.
