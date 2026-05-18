@@ -61,7 +61,7 @@ Canonical vocabulary. Use consistently; do not invent synonyms.
 **Response & flow**
 - **Response type** — `command` (terminal or intermediate, depending on `final`) or `reply` (text).
 - **Follow-up** — in-dialog refinement within one invocation. See [[follow-up]].
-- **Continuation** — resuming a previous thread in a new invocation (planned).
+- **Continuation** — resuming a previous thread in a new invocation. See [[continuation]].
 
 **Safety**
 - **Risk level** — low / medium / high. LLM-reported; may be escalated by the local rule engine.
@@ -117,6 +117,7 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 - [[session]] — dialog lifecycle, state machine, notification routing
 - [[multi-step]] — non-final commands and multi-round flows
 - [[follow-up]] — in-dialog refinement
+- [[continuation]] — `-c` resumes the previous conversation in a new invocation
 - [[safety]] — risk classification and execution gates
 - [[piped-input]] — stdin materialization + file-based prompt framing
 

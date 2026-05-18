@@ -9,7 +9,7 @@ Last-synced: 0a22f2a
 
 Refine a command from inside the dialog. The LLM gets the full transcript plus follow-up text as a new round and returns an updated command. Dialog stays mounted, updates in place.
 
-Distinct from **continuation** (planned) — that resumes a previous thread in a new invocation.
+Distinct from [[continuation]] — that resumes a previous thread in a new invocation.
 
 ## Flow
 

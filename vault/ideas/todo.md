@@ -56,7 +56,6 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 ## Thread System
 
 - [ ] Thread storage (user inputs, commands, stdout/stderr, LLM responses)
-- [ ] Thread continuation via new invocation (`wyada` or similar)
 - [ ] Thread TTL expiry
 - [ ] Thread identification — link follow-up to parent (initially: most recent in current terminal)
 - [ ] Large output warning before sending thread with large stored output to LLM
