@@ -1784,3 +1784,175 @@
   mutated: 'return true'
   reason: 'defensive — isFresh runs only when readWrapFile succeeded on the same path, so statSync would only throw on a race (file deleted between read and stat) or sudden permission change. Not producible in unit tests without invasive fs mocking, and not a realistic production scenario.'
   added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: '"https://models.dev/api.json"'
+  mutated: '""'
+  reason: 'MODELS_URL is consumed only by fetchModels, which is passed into mountConfigWizardDialog. All ensure.ts tests bypass the wizard via `_testWizardResult`, so this URL is never fetched in tests. Catching it would require running the actual interactive wizard.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: '"cache/models.dev.json"'
+  mutated: '""'
+  reason: 'MODELS_CACHE_PATH is consumed only by fetchModels, which is passed into mountConfigWizardDialog. All ensure.ts tests bypass the wizard via `_testWizardResult`, so the cache path is never used in tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ArithmeticOperator
+  original: '24 * 60 * 60 * 1000'
+  mutated: '24 * 60 * 60 / 1000'
+  reason: 'MODELS_TTL_MS is consumed only by fetchModels, which is passed into mountConfigWizardDialog. All ensure.ts tests bypass the wizard via `_testWizardResult`, so the TTL value is never used in tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ArithmeticOperator
+  original: '24 * 60 * 60'
+  mutated: '24 * 60 / 60'
+  reason: 'MODELS_TTL_MS is consumed only by fetchModels, which is passed into mountConfigWizardDialog. All ensure.ts tests bypass the wizard via `_testWizardResult`, so the TTL value is never used in tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ArithmeticOperator
+  original: '24 * 60'
+  mutated: '24 / 60'
+  reason: 'MODELS_TTL_MS is consumed only by fetchModels, which is passed into mountConfigWizardDialog. All ensure.ts tests bypass the wizard via `_testWizardResult`, so the TTL value is never used in tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      try {
+        const { content } = await fetchCached({
+          url: MODELS_URL,
+          path: MODELS_CACHE_PATH,
+          ttlMs: MODELS_TTL_MS,
+        });
+        return JSON.parse(content);
+      } catch {
+        throw new Error(
+          `Config error: could not load model list from ${MODELS_URL}. Check your connection and try again.`,
+        );
+      }
+    }
+  mutated: '{}'
+  reason: 'fetchModels body — function is only called via mountConfigWizardDialog. All ensure.ts tests inject `_testWizardResult` to skip the wizard, so this body is never executed in tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        const { content } = await fetchCached({
+          url: MODELS_URL,
+          path: MODELS_CACHE_PATH,
+          ttlMs: MODELS_TTL_MS,
+        });
+        return JSON.parse(content);
+      }
+  mutated: '{}'
+  reason: 'try-block inside fetchModels — fetchModels is only called via mountConfigWizardDialog, which tests bypass via `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          url: MODELS_URL,
+          path: MODELS_CACHE_PATH,
+          ttlMs: MODELS_TTL_MS,
+        }
+  mutated: '{}'
+  reason: 'fetchCached args inside fetchModels — fetchModels is only called via mountConfigWizardDialog, which tests bypass via `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        throw new Error(
+          `Config error: could not load model list from ${MODELS_URL}. Check your connection and try again.`,
+        );
+      }
+  mutated: '{}'
+  reason: 'catch-block inside fetchModels — fetchModels is only called via mountConfigWizardDialog, which tests bypass via `_testWizardResult`. The thrown error message is also user-facing wizard chrome, not behavior tested in unit tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: '`Config error: could not load model list from ${MODELS_URL}. Check your connection and try again.`'
+  mutated: '``'
+  reason: 'fetchModels error message — user-facing wizard error string, surfaced only when the wizard fetch fails. Tests bypass the wizard via `_testWizardResult`, so this is never observed.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      const result: Record<string, boolean> = {};
+      for (const [name, entry] of Object.entries(CLI_PROVIDERS)) {
+        result[name] = Bun.which(entry.probeCmd) !== null;
+      }
+      return result;
+    }
+  mutated: '{}'
+  reason: 'probeCliBinaries body — function is only passed into mountConfigWizardDialog. All ensure.ts tests bypass the wizard via `_testWizardResult`, so this body is never executed in tests.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        result[name] = Bun.which(entry.probeCmd) !== null;
+      }
+  mutated: '{}'
+  reason: 'for-loop body inside probeCliBinaries — function is only passed into mountConfigWizardDialog, which tests bypass via `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ConditionalExpression
+  original: 'Bun.which(entry.probeCmd) !== null'
+  mutated: 'true'
+  reason: 'probeCliBinaries inner check — probeCliBinaries is only passed into mountConfigWizardDialog, which tests bypass via `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ConditionalExpression
+  original: 'Bun.which(entry.probeCmd) !== null'
+  mutated: 'false'
+  reason: 'probeCliBinaries inner check — probeCliBinaries is only passed into mountConfigWizardDialog, which tests bypass via `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: EqualityOperator
+  original: 'Bun.which(entry.probeCmd) !== null'
+  mutated: 'Bun.which(entry.probeCmd) === null'
+  reason: 'probeCliBinaries inner check — probeCliBinaries is only passed into mountConfigWizardDialog, which tests bypass via `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ConditionalExpression
+  original: '"_testWizardResult" in opts'
+  mutated: 'true'
+  reason: 'this conditional IS the test seam — its only purpose is to let tests inject a fake wizard result. Mutating it to `true` makes every call use opts._testWizardResult (undefined → null → exit) instead of mounting the real wizard. Detecting this requires either mocking mountConfigWizardDialog (binds to implementation) or an integration test that spawns the TTY wizard. The branch literally exists only because it cannot be tested any other way.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        result = await mountConfigWizardDialog({
+          fetchModels,
+          probeCliBinaries,
+        });
+      }
+  mutated: '{}'
+  reason: 'else-branch wizard launch — production-only path. All ensure.ts tests inject `_testWizardResult`, so mountConfigWizardDialog is never called. Testing requires mocking the dialog-host module.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          fetchModels,
+          probeCliBinaries,
+        }
+  mutated: '{}'
+  reason: 'args to mountConfigWizardDialog — production-only wizard launch path, never reached in ensure.ts tests which inject `_testWizardResult`.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: '"Configuration saved"'
+  mutated: '""'
+  reason: 'cosmetic — one-time UX confirmation after the wizard succeeds; no caller reads this string for control flow. The user already knows the wizard finished because they just clicked through it.'
+  added: 2026-05-18
+- file: src/config/ensure.ts
+  mutator: StringLiteral
+  original: '"🧠"'
+  mutated: '""'
+  reason: 'cosmetic — chrome icon for the post-wizard confirmation; no caller reads it for control flow.'
+  added: 2026-05-18
