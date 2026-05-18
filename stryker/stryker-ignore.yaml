@@ -1956,3 +1956,9 @@
   mutated: '""'
   reason: 'cosmetic — chrome icon for the post-wizard confirmation; no caller reads it for control flow.'
   added: 2026-05-18
+- file: src/config/config.ts
+  mutator: ConditionalExpression
+  original: 'envConfig === undefined'
+  mutated: 'false'
+  reason: 'equivalent — when envConfig is undefined the mutated branch falls through to `{ ...fileConfig, ...envConfig }`, and spreading undefined is a no-op, so the result is a shallow clone of fileConfig with identical content. No caller observes reference identity.'
+  added: 2026-05-18
