@@ -1,345 +1,3 @@
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"sk-ant-api03-"'
-  mutated: '""'
-  reason: anthropic apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX; the input still accepts any value when the placeholder is empty. Tightening tests would bind a literal display string.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^claude-sonnet-\d+-\d+$/'
-  mutated: '/claude-sonnet-\d+-\d+$/'
-  reason: 'recommendedModelRegex anchor for anthropic. Used only by the wizard to pre-pick a recommended model in the picker; user can still choose anything else. Dropping ^ would only matter on a models.dev id with a prefix before "claude-sonnet-" — none currently exist, and the recommendation is a soft preference. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^claude-sonnet-\d+-\d+$/'
-  mutated: '/^claude-sonnet-\d+-\d+/'
-  reason: 'recommendedModelRegex anchor for anthropic. Soft wizard recommendation; dropping $ only matters on a hypothetical id like "claude-sonnet-4-6-preview" which models.dev does not currently publish. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^claude-sonnet-\d+-\d+$/'
-  mutated: '/^claude-sonnet-\d-\d+$/'
-  reason: 'recommendedModelRegex quantifier for anthropic. Soft wizard recommendation; \d+ -> \d only diverges on a double-digit major version (e.g. "claude-sonnet-12-1") which does not exist. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^claude-sonnet-\d+-\d+$/'
-  mutated: '/^claude-sonnet-\d+-\d$/'
-  reason: 'recommendedModelRegex quantifier for anthropic. Soft wizard recommendation; \d+ -> \d only diverges on a double-digit minor version which does not exist. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\ue754"'
-  mutated: '""'
-  reason: anthropic nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Mutating to '' renders without an icon (functionally identical). No test binds the exact glyph; analogous to logo/welcome-animation-frames data ignores.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"sk-proj-"'
-  mutated: '""'
-  reason: openai apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX; input still accepts any value when empty. Tightening tests would bind a literal display string.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^gpt-5(\.\d+)?$/'
-  mutated: '/gpt-5(\.\d+)?$/'
-  reason: 'recommendedModelRegex anchor for openai. Soft wizard recommendation; dropping ^ only matters on a models.dev id with a prefix before "gpt-5" — none exist. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^gpt-5(\.\d+)?$/'
-  mutated: '/^gpt-5(\.\d+)?/'
-  reason: 'recommendedModelRegex anchor for openai. Soft wizard recommendation; dropping $ only matters on a hypothetical id like "gpt-5-preview" which models.dev does not publish. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: Regex
-  original: '/^gpt-5(\.\d+)?$/'
-  mutated: '/^gpt-5(\.\d)?$/'
-  reason: 'recommendedModelRegex quantifier for openai. Soft wizard recommendation; \d+ -> \d only diverges on a double-digit minor version (e.g. "gpt-5.10") which does not exist. Tightening tests would bind regex shape.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\udb80\udd04"'
-  mutated: '""'
-  reason: openai nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty; no test binds the exact glyph.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"sk-or-v1-"'
-  mutated: '""'
-  reason: openrouter apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX; input still accepts any value when empty.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"openrouter"'
-  mutated: '""'
-  reason: 'captured providerName in requiresBaseURL("openrouter") closure, used only to interpolate into the "requires baseURL" error string. validateProviderEntry already receives the same name as a parameter, so the closure capture is effectively redundant; tightening the existing /requires baseURL/ test to assert the literal provider name would bind error-message format.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\uea63"'
-  mutated: '""'
-  reason: openrouter nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"gsk_"'
-  mutated: '""'
-  reason: groq apiKeyPlaceholder — placeholder hint shown in the wizard's API-key TextInput. Cosmetic UX.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"groq"'
-  mutated: '""'
-  reason: 'captured providerName in requiresBaseURL("groq") closure — same rationale as the openrouter entry above. validateProviderEntry already carries the name as a parameter; tightening the error-string test would bind format.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\udb85\udc0b"'
-  mutated: '""'
-  reason: groq nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"mistral"'
-  mutated: '""'
-  reason: 'captured providerName in requiresBaseURL("mistral") closure — same rationale as the openrouter entry above.'
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\uef16"'
-  mutated: '""'
-  reason: mistral nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\udb80\udd9a"'
-  mutated: '""'
-  reason: ollama nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
-  added: 2026-05-07
-- file: src/llm/providers/registry.ts
-  mutator: StringLiteral
-  original: '"\udb82\udfc9"'
-  mutated: '""'
-  reason: claude-code nerdIcon glyph — pure visual decoration shown only in the wizard when nerdFonts is enabled. Functionally identical when empty.
-  added: 2026-05-07
-- file: src/llm/resolve-provider.ts
-  mutator: EqualityOperator
-  original: modelMatches.length > 1
-  mutated: modelMatches.length >= 1
-  reason: equivalent mutant — the earlier `if (firstMatch && length === 1)` returns on length===1, so this branch only runs when length is 0 or ≥2, where `>1` and `>=1` agree.
-  added: 2026-05-07
-- file: src/llm/format-context.ts
-  mutator: ConditionalExpression
-  original: 'attachedInputPath !== undefined'
-  mutated: 'true'
-  reason: defensive guard on an optional field — main.ts (the only caller) sets attachedInputPath, attachedInputSize, and attachedInputPreview together, so the orphan-preview branch never triggers.
-  added: 2026-05-07
-- file: src/llm/format-context.ts
-  mutator: ConditionalExpression
-  original: 'attachedInputSize !== undefined'
-  mutated: 'true'
-  reason: defensive guard on an optional field — main.ts (the only caller) sets attachedInputPath, attachedInputSize, and attachedInputPreview together, so the size-undefined branch never triggers.
-  added: 2026-05-07
-- file: src/llm/format-context.ts
-  mutator: StringLiteral
-  original: '""'
-  mutated: '"Stryker was here!"'
-  reason: else branch fires only when attachedInputSize is undefined while preview is defined — main.ts (the only caller) always passes them together, so this branch is unreachable.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: OptionalChaining
-  original: 'API_PROVIDERS[provider]?.recommendedModelRegex'
-  mutated: 'API_PROVIDERS[provider].recommendedModelRegex'
-  reason: defensive optional chaining; computeModels is only invoked with provider keys taken from Object.keys(API_PROVIDERS) via orderSelection, so the lookup never returns undefined.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'isCliProvider(provider)'
-  mutated: 'false'
-  reason: dead branch — CLI providers route to the disclaimer screen via firstScreenFor and never reach buildEntry (only submit-key and submit-model call it, neither of which CLI flows hit).
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: OptionalChaining
-  original: 'API_PROVIDERS[provider]?.baseURL'
-  mutated: 'API_PROVIDERS[provider].baseURL'
-  reason: defensive optional chaining; buildEntry for non-CLI providers is only invoked with provider keys present in API_PROVIDERS.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'baseURL'
-  mutated: 'true'
-  reason: equivalent — when baseURL is undefined, setting entry.baseURL = undefined vs not setting it is indistinguishable through deep equality and JSON.stringify (config writer).
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'fields.apiKey'
-  mutated: 'true'
-  reason: equivalent — when fields.apiKey is undefined, setting entry.apiKey = undefined vs not setting it is indistinguishable through deep equality and JSON.stringify.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'fields.model'
-  mutated: 'true'
-  reason: dead branch — buildEntry callers (submit-key and submit-model fallback) never pass fields.model, so the conditional is unreachable in either form.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'fields.model'
-  mutated: 'false'
-  reason: dead branch — buildEntry callers (submit-key and submit-model fallback) never pass fields.model, so the conditional is unreachable in either form.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!nextName || !state.modelsData'
-  mutated: 'false'
-  reason: defensive guard; advanceLoop is only reached after models-fetched and with nextIdx < pickedProviders.length, so both !nextName and !state.modelsData are always false.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: LogicalOperator
-  original: '!nextName || !state.modelsData'
-  mutated: '!nextName && !state.modelsData'
-  reason: defensive guard; both !nextName and !state.modelsData are always false in practice, so || vs && yields the same result.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "selecting-providers"'
-  mutated: 'false'
-  reason: type-narrowing guard against actions dispatched on the wrong screen; the TUI only dispatches toggle-provider while selecting-providers is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "selecting-providers"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches submit-providers while selecting-providers is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "loading-models"'
-  mutated: 'false'
-  reason: type-narrowing guard; models-fetched is only emitted by the loading-models effect.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!first'
-  mutated: 'false'
-  reason: defensive guard; submit-providers requires checked.size > 0, so pickedProviders[0] is always defined when models-fetched runs.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "entering-key"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches key-change while entering-key is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "entering-key"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches submit-key while entering-key is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ObjectLiteral
-  original: '{ ...screen, cursor: clampCursor(screen.cursor + action.delta, screen.models.length) }'
-  mutated: '{}'
-  reason: judge rejected the proposed kill-test as redundant with the existing move-cursor clamp test on picking-model.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag === "picking-default"'
-  mutated: 'true'
-  reason: type-narrowing guard; the TUI only dispatches move-cursor on picking-model or picking-default screens, and the picking-model branch returns earlier in the same case.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "picking-model"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches submit-model while picking-model is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!picked'
-  mutated: 'false'
-  reason: defensive guard; cursor is clamped within [0, models.length - 1] and the wizard only reaches picking-model when models is non-empty, so picked is always defined.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "disclaimer"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches accept-disclaimer while disclaimer is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "disclaimer"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches skip-disclaimer while disclaimer is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'nextIdx >= picked.length'
-  mutated: 'true'
-  reason: with current providers, claude-code is the only CLI provider and orderSelection always places it last, so skip-disclaimer can only fire at the final loop index — the mid-loop branch is unreachable.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ArithmeticOperator
-  original: 'nextIdx - 1'
-  mutated: 'nextIdx + 1'
-  reason: equivalent — finishLoop overwrites loopIndex with its second argument, so the loopIndex spread into state here is discarded immediately.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: BooleanLiteral
-  original: '!state.modelsData'
-  mutated: 'state.modelsData'
-  reason: defensive guard; modelsData is always set by the time skip-disclaimer's mid-loop branch could execute.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!state.modelsData'
-  mutated: 'true'
-  reason: defensive guard; modelsData is always set by the time skip-disclaimer's mid-loop branch could execute (and the branch is otherwise unreachable with current providers).
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!state.modelsData'
-  mutated: 'false'
-  reason: defensive guard; modelsData is always set when this branch is reached, and the branch is unreachable with current providers regardless.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: BooleanLiteral
-  original: '!nextName'
-  mutated: 'nextName'
-  reason: defensive guard; nextIdx < picked.length is checked above, so picked[nextIdx] is always defined.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!nextName'
-  mutated: 'true'
-  reason: defensive guard; nextIdx < picked.length is checked above, so picked[nextIdx] is always defined.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!nextName'
-  mutated: 'false'
-  reason: defensive guard; nextIdx < picked.length is checked above, so picked[nextIdx] is always defined.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ObjectLiteral
-  original: '{ ...state, pickedProviders: picked, screen: firstScreenFor(nextName, state.modelsData) }'
-  mutated: '{}'
-  reason: skip-disclaimer mid-loop branch is unreachable with current providers (claude-code is the only CLI provider and orderSelection always places it last, so skip-disclaimer fires at the final index).
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: 'screen.tag !== "picking-default"'
-  mutated: 'false'
-  reason: type-narrowing guard; the TUI only dispatches submit-default while picking-default is rendered.
-  added: 2026-05-07
-- file: src/wizard/state.ts
-  mutator: ConditionalExpression
-  original: '!picked'
-  mutated: 'false'
-  reason: defensive guard; cursor is clamped within [0, pickedProviders.length - 1] when reached via move-cursor, so pickedProviders[cursor] is always defined.
-  added: 2026-05-07
 - file: src/wizard/models-filter.ts
   mutator: ArrayDeclaration
   original: '[]'
@@ -1690,3 +1348,409 @@
   mutated: '""'
   reason: 'equivalent — renaming the case label to `""` means `n.kind === "llm-wire"` no longer matches, so the switch falls through past the end. Same result as the original (no stderr write, since llm-wire is an intentional drop). n.kind is typed as a discriminated union and is never `""`.'
   added: 2026-05-17
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "VS Code Insiders", waitFlag: "-w", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"VS Code Insiders"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Cursor"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Cursor", waitFlag: "-w", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Windsurf", waitFlag: "-w", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Windsurf"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "VSCodium", waitFlag: "-w", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"VSCodium"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Antigravity", waitFlag: "-w", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Antigravity"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Sublime Text", waitFlag: "--wait", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Sublime Text"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Atom", waitFlag: "--wait", gui: true }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Atom"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Vim" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Neovim" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Vim"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Neovim"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Nano" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Nano"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Emacs" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Emacs"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Helix" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Helix"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Helix" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Helix"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Micro" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ displayName: "Vi" }'
+  mutated: '{}'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Micro"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"Vi"'
+  mutated: '""'
+  reason: 'EDITORS data-record entry mutation. The displayName is cosmetic chrome (e.g. ''VS Code exited with code 2''); waitFlag/gui shape is enforced by the record-level invariants in the ''EDITORS record'' describe block. Mutating an individual entry diverges runtime behavior only when that editor is actually resolved — pinning would bind the test to a specific editor list.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'lastSep >= 0'
+  mutated: 'true'
+  reason: 'editorKey lastSep>=0 mutation is equivalent for paths without separators: slice(-1+1) === basename(noSepString) for any string without ''/'' or ''\''. The only diverging input has a trailing separator, which Bun.which() never produces.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      try {
+        return Bun.which(cmd);
+      } catch {
+        return null;
+      }
+    }
+  mutated: '{}'
+  reason: 'defaultWhich is a try/catch wrapper around Bun.which used only when callers don''t inject `which`; tests always inject a mock. Exercising defaultWhich requires either stubbing Bun.which globally (binds implementation) or relying on the host PATH (flaky).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return Bun.which(cmd);
+      }
+  mutated: '{}'
+  reason: 'defaultWhich is a try/catch wrapper around Bun.which used only when callers don''t inject `which`; tests always inject a mock. Exercising defaultWhich requires either stubbing Bun.which globally (binds implementation) or relying on the host PATH (flaky).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return null;
+      }
+  mutated: '{}'
+  reason: 'defaultWhich is a try/catch wrapper around Bun.which used only when callers don''t inject `which`; tests always inject a mock. Exercising defaultWhich requires either stubbing Bun.which globally (binds implementation) or relying on the host PATH (flaky).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: '?? '''' default-empty fallback is reached only when both deps.envVisual/envEditor AND process.env.VISUAL/EDITOR are nullish; existing tests pass empty-string deps explicitly so the ?? '''' branch is unreachable. Killing it would require clearing process.env mid-suite (fragile).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: '?? '''' default-empty fallback is reached only when both deps.envVisual/envEditor AND process.env.VISUAL/EDITOR are nullish; existing tests pass empty-string deps explicitly so the ?? '''' branch is unreachable. Killing it would require clearing process.env mid-suite (fragile).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'attempt < maxAttempts'
+  mutated: 'attempt <= maxAttempts'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: UpdateOperator
+  original: 'attempt++'
+  mutated: 'attempt--'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          const code = (e as NodeJS.ErrnoException).code;
+          if (code !== "ENOENT" || attempt === maxAttempts - 1) throw e;
+          Bun.sleepSync(delayMs);
+        }
+  mutated: '{}'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'true'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: LogicalOperator
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'code !== "ENOENT" && attempt === maxAttempts - 1'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'false'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT"'
+  mutated: 'false'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'code !== "ENOENT"'
+  mutated: 'code === "ENOENT"'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'attempt === maxAttempts - 1'
+  mutated: 'false'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"ENOENT"'
+  mutated: '""'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'attempt === maxAttempts - 1'
+  mutated: 'attempt !== maxAttempts - 1'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ArithmeticOperator
+  original: 'maxAttempts - 1'
+  mutated: 'maxAttempts + 1'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"readFileWithRetry: unreachable"'
+  mutated: '""'
+  reason: 'readFileWithRetry mutation. The retry exists to cover VS Code''s atomic-rename ENOENT window; the catch path is impossible to trigger reliably from the fake-editor scripts (they writeFileSync synchronously). Adding a test would bind to fs internals (intercept readFileSync) or be timing-flaky.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"cache"'
+  mutated: '""'
+  reason: 'Internal path component. The exact location of the compose buffer is an implementation detail; spawning still works (mkdirSync is recursive, writeFile creates the file). Asserting on ''$WRAP_HOME/cache/compose.md'' would bind tests to the path layout.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"compose.md"'
+  mutated: '""'
+  reason: 'Internal path component. The exact location of the compose buffer is an implementation detail; spawning still works (mkdirSync is recursive, writeFile creates the file). Asserting on ''$WRAP_HOME/cache/compose.md'' would bind tests to the path layout.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"utf-8"'
+  mutated: '""'
+  reason: 'writeFileSync encoding '''' is treated as utf-8 by Bun (lenient default); the file round-trips correctly under tests. No user-observable divergence.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ stdio: ["inherit", "inherit", "inherit"] }'
+  mutated: '{}'
+  reason: 'stdio: ''inherit'' matters for terminal-owning editors needing a real TTY; tests use shell-script fakes that don''t need TTY, so the inherit shape isn''t exercised. Killing would require a TTY-dependent test (impractical in CI).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ArrayDeclaration
+  original: '["inherit", "inherit", "inherit"]'
+  mutated: '[]'
+  reason: 'stdio: ''inherit'' matters for terminal-owning editors needing a real TTY; tests use shell-script fakes that don''t need TTY, so the inherit shape isn''t exercised. Killing would require a TTY-dependent test (impractical in CI).'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ArrowFunction
+  original: '() => "exited"'
+  mutated: '() => undefined'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"exited"'
+  mutated: '""'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"aborted"'
+  mutated: '""'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ once: true }'
+  mutated: '{}'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'outcome === "aborted"'
+  mutated: 'false'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"aborted"'
+  mutated: '""'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            proc.unref();
+            return null;
+          }
+  mutated: '{}'
+  reason: 'Signal-handling sub-path that doesn''t diverge spawnEditor''s return value. The Promise.race outcome labels (''exited''/''aborted''), the {once:true} listener flag, and the inner block''s proc.unref() call are internal lifecycle plumbing — both original and mutated paths return null (or the buffer) the same way under all reachable test inputs.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '`${resolved.meta.displayName} exited with code ${exitCode} — keeping current draft`'
+  mutated: '``'
+  reason: 'Chrome error-message template — wording is cosmetic. The behavioral contract (return null on non-zero exit / catch) is already tested. Capturing chrome content would require plumbing the notification router into the test (heavyweight) and would bind tests to message wording.'
+  added: 2026-05-18
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '`Editor error: ${e instanceof Error ? e.message : String(e)}`'
+  mutated: '``'
+  reason: 'Chrome error-message template — wording is cosmetic. The behavioral contract (return null on non-zero exit / catch) is already tested. Capturing chrome content would require plumbing the notification router into the test (heavyweight) and would bind tests to message wording.'
+  added: 2026-05-18
