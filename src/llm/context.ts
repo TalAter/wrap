@@ -48,6 +48,7 @@ export function assemblePromptScaffold(ctx: QueryContext): PromptScaffold {
       voiceInstructions: promptConstants.voiceInstructions,
       tempDirPrinciple: promptConstants.tempDirPrinciple,
       finalFlagInstruction: promptConstants.finalFlagInstruction,
+      wrapNoteInstruction: promptConstants.wrapNoteInstruction,
       attachedInputInstruction:
         ctx.attachedInputPreview !== undefined
           ? promptConstants.attachedInputInstruction

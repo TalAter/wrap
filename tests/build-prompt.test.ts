@@ -10,6 +10,7 @@ const config: PromptConfig = {
   voiceInstructions: "Be concise.",
   tempDirPrinciple: "Use $WRAP_TEMP_DIR for intermediate artifacts.",
   finalFlagInstruction: "Set final: false for non-terminal discovery steps.",
+  wrapNoteInstruction: "<wrap-note> tags are session metadata.",
   fewShotExamples: [{ input: "list files", output: '{"type":"command","content":"ls"}' }],
   fewShotSeparator: "Now handle the following request.",
   sectionUserRequest: "## User's request",
@@ -39,6 +40,11 @@ describe("buildPromptScaffold — system message", () => {
   test("contains voice instructions", () => {
     const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("Be concise.");
+  });
+
+  test("contains wrap-note instruction", () => {
+    const result = buildPromptScaffold(config, "");
+    expect(result.system).toContain("<wrap-note> tags are session metadata.");
   });
 
   test("contains schema instruction + schema text", () => {

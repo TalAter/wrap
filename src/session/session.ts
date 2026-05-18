@@ -17,7 +17,7 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { getWrapHome } from "../fs/home.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
 import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
-import { createLogEntry, type LogEntry } from "../logging/entry.ts";
+import { createLogEntry, type LogEntry, type Turn } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
@@ -45,6 +45,22 @@ export type SessionOptions = {
    *  the session, so callers that want "tui" for interactive bootstrap
    *  must pass it explicitly. */
   inputSource?: "argv" | "pipe" | "tui";
+  /**
+   * Set on a `-c` invocation. `assembledTurns` is the chronological
+   * concat of every ancestor entry's `turns[]`, plus a synthetic
+   * `cwd_change` turn if the child's cwd differs from the parent's.
+   * `parentPrompt` is the chain root's original user prompt (drives the
+   * `↳ Continuing` UX badge; unused outside the dialog).
+   *
+   * The session seeds `entry.turns` with `assembledTurns`, stamps
+   * `entry.parent_id`, and lets the normal user-turn push from `prompt`
+   * land at the tail of the seeded chain.
+   */
+  continuationParent?: {
+    parentId: string;
+    assembledTurns: Turn[];
+    parentPrompt: string;
+  };
 };
 
 /**
@@ -72,6 +88,10 @@ export async function runSession(
     promptHash: PROMPT_HASH,
     inputSource: options.inputSource,
   });
+  if (options.continuationParent) {
+    entry.parent_id = options.continuationParent.parentId;
+    entry.turns.push(...options.continuationParent.assembledTurns);
+  }
 
   const buildScaffold = () =>
     assemblePromptScaffold({
@@ -336,6 +356,14 @@ export async function runSession(
   } finally {
     unsubscribe();
     router.teardownDialog();
+    // Continuation storage rule: the child's entry persists ONLY its own
+    // invocation's turns. The seeded ancestor chain lives on disk in the
+    // parent entries already — re-storing it here is O(D²) and the replay
+    // path doesn't need it. Slice off the leading ancestor turns before
+    // serialization. See [[continuation]] § Replay model.
+    if (options.continuationParent) {
+      entry.turns = entry.turns.slice(options.continuationParent.assembledTurns.length);
+    }
     appendLogEntryIgnoreErrors(wrapHome, entry);
   }
 

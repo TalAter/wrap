@@ -19,6 +19,8 @@ export type Config = {
   nerdFonts?: boolean;
   yolo?: boolean;
   logTraces?: boolean;
+  /** Per-invocation only: resume the previous wrap conversation. */
+  continue?: boolean;
   appearance?: "auto" | "dark" | "light";
 };
 
@@ -32,6 +34,7 @@ export type ResolvedConfig = Config & {
   nerdFonts: boolean;
   yolo: boolean;
   logTraces: boolean;
+  continue: boolean;
   maxRounds: number;
   maxCapturedOutputChars: number;
   maxAttachedInputChars: number;

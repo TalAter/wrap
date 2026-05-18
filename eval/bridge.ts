@@ -56,6 +56,7 @@ const scaffold = buildPromptScaffold(
     voiceInstructions: promptConstants.voiceInstructions,
     tempDirPrinciple: promptConstants.tempDirPrinciple,
     finalFlagInstruction: promptConstants.finalFlagInstruction,
+    wrapNoteInstruction: promptConstants.wrapNoteInstruction,
     attachedInputInstruction:
       input.attachedInputPreview !== undefined
         ? promptConstants.attachedInputInstruction

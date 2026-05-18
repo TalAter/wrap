@@ -336,6 +336,7 @@ def build_prompt_hash_manifest(
         ["MEMORY_RECENCY_INSTRUCTION", CONSTANTS["memoryRecencyInstruction"]],
         ["TOOLS_SCOPE_INSTRUCTION", CONSTANTS["toolsScopeInstruction"]],
         ["VOICE_INSTRUCTIONS", CONSTANTS["voiceInstructions"]],
+        ["WRAP_NOTE_INSTRUCTION", CONSTANTS["wrapNoteInstruction"]],
         ["SCHEMA_INSTRUCTION", CONSTANTS["schemaInstruction"]],
         ["SCHEMA_TEXT", (schema_text or "").strip()],
         ["FEW_SHOT_SEPARATOR", CONSTANTS["fewShotSeparator"]],

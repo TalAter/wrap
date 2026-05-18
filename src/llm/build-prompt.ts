@@ -9,6 +9,7 @@ export type PromptConfig = {
   voiceInstructions: string;
   tempDirPrinciple: string;
   finalFlagInstruction: string;
+  wrapNoteInstruction: string;
   attachedInputInstruction?: string;
   fewShotExamples: ReadonlyArray<{ readonly input: string; readonly output: string }>;
   fewShotSeparator: string;
@@ -50,6 +51,7 @@ export function buildPromptScaffold(config: PromptConfig, contextString: string)
     config.voiceInstructions,
     config.tempDirPrinciple,
     config.finalFlagInstruction,
+    config.wrapNoteInstruction,
   ];
   if (config.attachedInputInstruction) {
     systemParts.push(config.attachedInputInstruction);

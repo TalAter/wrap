@@ -44,6 +44,13 @@ export const SETTINGS = {
     env: ["WRAP_YOLO"],
     default: false,
   },
+  continue: {
+    type: "boolean",
+    description: "Resume the previous wrap conversation in this invocation.",
+    usage: "w -c <prompt>",
+    flag: ["-c", "--continue"],
+    default: false,
+  },
   noAnimation: {
     type: "boolean",
     description: "Disable animations",

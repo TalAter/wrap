@@ -9,12 +9,12 @@ describe("SETTINGS registry", () => {
     }
   });
 
-  test("flag arrays are non-empty when present and start with --", () => {
+  test("flag arrays are non-empty when present, and entries are short (-x) or long (--name) form", () => {
     for (const [key, s] of Object.entries(SETTINGS) as [string, Setting][]) {
       if (!s.flag) continue;
       expect(s.flag.length, `${key}.flag`).toBeGreaterThan(0);
       for (const f of s.flag) {
-        expect(f.startsWith("--"), `${key}.flag ${f}`).toBe(true);
+        expect(f, `${key}.flag ${f}`).toMatch(/^(--[a-z][a-z0-9-]+|-[a-z])$/);
       }
     }
   });
@@ -110,6 +110,7 @@ describe("SETTINGS registry", () => {
       .sort();
     expect(withDefaults).toEqual(
       [
+        "continue",
         "logTraces",
         "maxCapturedOutputChars",
         "maxAttachedInputChars",

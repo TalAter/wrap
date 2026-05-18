@@ -237,6 +237,7 @@ describe("applyModelOverride", () => {
     nerdFonts: false,
     yolo: false,
     logTraces: false,
+    continue: false,
     maxRounds: 5,
     maxCapturedOutputChars: 200_000,
     maxAttachedInputChars: 200_000,

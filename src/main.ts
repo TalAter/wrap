@@ -18,6 +18,12 @@ import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
 import { formatProvider } from "./llm/types.ts";
+import type { Turn } from "./logging/entry.ts";
+import {
+  assembleContinuationChain,
+  findContinuationParent,
+  readLogEntries,
+} from "./logging/lookup.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { runSession } from "./session/session.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
@@ -52,6 +58,10 @@ export async function main() {
       await dispatch(input.flag, input.args);
       return;
     }
+
+    // Resolve continuation BEFORE materializing stdin or loading config so
+    // failures (no log, parent had a pipe) exit fast without side effects.
+    const continuation = getConfig().continue ? resolveContinuation() : undefined;
 
     const attachedInputBytes = await readAttachedInput();
 
@@ -146,9 +156,41 @@ export async function main() {
       attachedInputPreview,
       attachedInputTruncated,
       inputSource,
+      continuationParent: continuation,
     });
   } catch (e) {
     chrome(e instanceof Error ? e.message : String(e));
     process.exitCode = 1;
   }
+}
+
+/**
+ * `-c` was set on argv. Look up the parent entry, refuse if the parent's
+ * stdin can't be replayed, walk the chain, and return the bundle the session
+ * needs to seed its transcript. Throws `Error("Continue error: …")` on
+ * failure — surfaced via main()'s top-level catch.
+ */
+function resolveContinuation(): {
+  parentId: string;
+  assembledTurns: Turn[];
+  parentPrompt: string;
+} {
+  const wrapHome = getWrapHome();
+  const entries = readLogEntries(wrapHome);
+  const parent = findContinuationParent(entries, process.ppid);
+  if (parent === null) {
+    throw new Error("Continue error: no previous wrap run found.");
+  }
+  if (parent.attached_input) {
+    throw new Error("Continue error: previous run had piped input that's no longer available.");
+  }
+  const assembledTurns = assembleContinuationChain(entries, parent);
+  const cwdNow = process.cwd();
+  if (parent.cwd !== cwdNow) {
+    assembledTurns.push({ kind: "cwd_change", from: parent.cwd, to: cwdNow });
+  }
+  const firstUserTurn = parent.turns.find(
+    (t): t is Extract<Turn, { kind: "user" }> => t.kind === "user",
+  );
+  return { parentId: parent.id, assembledTurns, parentPrompt: firstUserTurn?.text ?? "" };
 }
