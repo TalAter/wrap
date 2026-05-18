@@ -285,11 +285,13 @@ export async function runSession(
 
     if (wantsDialog && mountInProgress) return;
 
+    const continuationPrompt = options.continuationParent?.parentPrompt;
+
     if (wantsDialog && !mounted) {
       mountInProgress = true;
       try {
         if (inkReady) await inkReady;
-        router.setDialog(mountResponseDialog({ state, dispatch }));
+        router.setDialog(mountResponseDialog({ state, dispatch, continuationPrompt }));
       } finally {
         mountInProgress = false;
       }
@@ -300,7 +302,7 @@ export async function runSession(
     }
 
     if (wantsDialog && mounted) {
-      router.getDialog()?.rerender({ state, dispatch });
+      router.getDialog()?.rerender({ state, dispatch, continuationPrompt });
       return;
     }
 

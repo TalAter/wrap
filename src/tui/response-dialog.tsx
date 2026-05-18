@@ -9,6 +9,7 @@ import type { ThemeTokens } from "../core/theme.ts";
 import { themeHex } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import { ActionBar, type ActionItem } from "./action-bar.tsx";
+import { formatContinuationBadge } from "./continuation-badge.ts";
 import { Dialog, dialogInnerWidth } from "./dialog.tsx";
 import { type KeyBinding, useKeyBindings } from "./key-bindings.ts";
 import { Pill } from "./pill.tsx";
@@ -19,6 +20,13 @@ import { useTheme } from "./theme-context.tsx";
 type ResponseDialogProps = {
   state: AppState;
   dispatch: (event: AppEvent) => void;
+  /**
+   * Parent prompt for a `-c` invocation. When set, the composer and the
+   * processing-dialog header render a single-line `↳ Continuing: …` badge
+   * so the user can see which thread they're resuming. Empty/undefined
+   * outside continuation.
+   */
+  continuationPrompt?: string;
 };
 
 // `id` is the stable handle for dispatch — labels are presentation only.
@@ -203,7 +211,7 @@ function FoldedCommand({
   );
 }
 
-export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
+export function ResponseDialog({ state, dispatch, continuationPrompt }: ResponseDialogProps) {
   const theme = useTheme();
   // Local presentation state. Pure UI — no application state depends on it.
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -359,6 +367,8 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
   // Compute rows consumed by non-command content so we know max command rows.
   // Borders (2) + padding (2) + blank lines before action bar (2) + action bar (1) = 7
   let chromeRows = 7;
+  // Continuation badge declared below is one extra row when rendered.
+  if (continuationPrompt && formatContinuationBadge(continuationPrompt, termCols)) chromeRows += 1;
   if (explanation) chromeRows += 1 + Math.max(1, Math.ceil(stringWidth(explanation) / textWidth));
   if (plan) chromeRows += 1 + Math.max(1, Math.ceil(stringWidth(`Plan: ${plan}`) / textWidth));
   if (outputSlot !== undefined) {
@@ -509,11 +519,16 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
 
   const preset = getRiskPreset(riskLevel);
 
+  // Continuation badge: shown above the composer and during processing of a
+  // `-c` invocation. Empty string when not a continuation, the prompt is
+  // blank, or the terminal is too narrow — render nothing in those cases.
+  const badge = continuationPrompt ? formatContinuationBadge(continuationPrompt, termCols) : "";
+
   if (isInteractive) {
     const lowPreset = getRiskPreset("low");
     // Chrome rows: 2 borders + 2 padding + 2 blank spacers + 1 action bar.
     // We cap maxRows below termRows - chromeRows so the dialog fits the screen.
-    const interactiveChromeRows = 7 + (truncatedBanner ? 1 : 0);
+    const interactiveChromeRows = 7 + (truncatedBanner ? 1 : 0) + (badge ? 1 : 0);
     const maxRows = Math.max(3, termRows - interactiveChromeRows);
     const interactiveInnerWidth = dialogInnerWidth(termCols, MIN_INNER_WIDTH);
     // InputFrame adds paddingX={1} on both sides; the TextInput's body has
@@ -532,6 +547,11 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
         bottomStatus={bottomStatus}
         naturalContentWidth={MIN_INNER_WIDTH}
       >
+        {badge && (
+          <Box paddingLeft={1}>
+            <Text color={themeHex(composeTheme.copy.note)}>{badge}</Text>
+          </Box>
+        )}
         {state.tag === "composing-interactive" ? (
           <TextInput
             value={state.draft}
@@ -579,6 +599,11 @@ export function ResponseDialog({ state, dispatch }: ResponseDialogProps) {
       bottomStatus={bottomStatus}
       naturalContentWidth={naturalContentWidth}
     >
+      {badge && (
+        <Box paddingLeft={1}>
+          <Text color={themeHex(theme.copy.note)}>{badge}</Text>
+        </Box>
+      )}
       {outputSlot !== undefined && (
         <>
           <Box paddingLeft={1}>

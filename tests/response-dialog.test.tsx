@@ -13,10 +13,12 @@ import {
 import { ThemeProvider } from "../src/tui/theme-context.tsx";
 import {
   makeComposing,
+  makeComposingInteractive,
   makeConfirming,
   makeEditing,
   makeExecutingStep,
   makeProcessing,
+  makeProcessingInteractive,
   makeResponse,
 } from "./helpers/state-fixtures.ts";
 import { seedTestConfig, waitFor } from "./helpers.ts";
@@ -401,6 +403,56 @@ describe("Dialog — composing", () => {
       </ThemeProvider>,
     );
     expect(stripAnsi(lastFrame() ?? "")).toContain("actually...");
+  });
+});
+
+describe("Dialog — continuation badge", () => {
+  test("composing-interactive renders ↳ Continuing badge when continuationPrompt is set", () => {
+    const state = makeComposingInteractive({ draft: "" });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog
+          state={state}
+          dispatch={dispatch}
+          continuationPrompt="how do I deploy this project"
+        />
+      </ThemeProvider>,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).toContain("↳ Continuing: how do I deploy this project");
+  });
+
+  test("composing-interactive without continuationPrompt does NOT render badge", () => {
+    const state = makeComposingInteractive({ draft: "" });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} />
+      </ThemeProvider>,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).not.toContain("Continuing");
+  });
+
+  test("processing-interactive renders badge while the LLM call runs", () => {
+    const state = makeProcessingInteractive({ draft: "ok do it" });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} continuationPrompt="how do I deploy" />
+      </ThemeProvider>,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).toContain("↳ Continuing: how do I deploy");
+  });
+
+  test("confirming renders badge so users see they're in a -c thread", () => {
+    const state = makeConfirming({ response: makeResponse({ content: "ls", risk_level: "low" }) });
+    const { dispatch } = captureDispatch();
+    const { lastFrame } = render(
+      <ThemeProvider>
+        <ResponseDialog state={state} dispatch={dispatch} continuationPrompt="how do I deploy" />
+      </ThemeProvider>,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).toContain("↳ Continuing: how do I deploy");
   });
 });
 

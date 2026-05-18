@@ -6,7 +6,11 @@ import type { ModelsDevData } from "../wizard/models-filter.ts";
 import type { AppEvent, AppState } from "./state.ts";
 
 export type DialogHost = {
-  rerender(props: { state: AppState; dispatch: (e: AppEvent) => void }): void;
+  rerender(props: {
+    state: AppState;
+    dispatch: (e: AppEvent) => void;
+    continuationPrompt?: string;
+  }): void;
   unmount(): void;
 };
 
@@ -97,6 +101,7 @@ export async function preloadResponseDialogModules(): Promise<void> {
 export function mountResponseDialog(props: {
   state: AppState;
   dispatch: (e: AppEvent) => void;
+  continuationPrompt?: string;
 }): DialogHost {
   if (!responseCached) {
     throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
