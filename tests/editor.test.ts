@@ -232,6 +232,16 @@ describe("spawnEditor", () => {
     expect(Date.now() - start).toBeLessThan(1500);
   });
 
+  test("signal passed but never aborted → editor runs to completion and buffer is returned", async () => {
+    // The signal branch must wait for the editor to exit before reading the
+    // buffer. Skipping the await (or treating any signal as aborted) returns
+    // null because proc.exitCode is unset at read time.
+    const editor = makeFakeEditor(`#!/bin/sh\nprintf 'edited' > "$1"\n`);
+    const ctrl = new AbortController(); // never aborted
+    const r = await spawnEditor(terminalMeta(editor), "seed", ctrl.signal);
+    expect(r).toBe("edited");
+  });
+
   test("file contains only a newline after trim → returns null (empty boundary)", async () => {
     const editor = makeFakeEditor(`#!/bin/sh\nprintf '\\n' > "$1"\n`);
     const r = await spawnEditor(terminalMeta(editor), "seed");
