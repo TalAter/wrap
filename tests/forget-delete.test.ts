@@ -87,6 +87,16 @@ describe("deleteLogs", () => {
     expect(r).toEqual({ removed: true, errors: [] });
     expect(existsSync(join(home, "logs", "wrap.jsonl"))).toBe(false);
   });
+
+  test("removes trace sidecars under logs/traces/", () => {
+    mkdirSync(join(home, "logs", "traces"), { recursive: true });
+    writeFileSync(join(home, "logs", "wrap.jsonl"), "{}\n");
+    writeFileSync(join(home, "logs", "traces", "abc.json"), "{}");
+    writeFileSync(join(home, "logs", "traces", "def.json"), "{}");
+    const r = deleteLogs(home);
+    expect(r).toEqual({ removed: true, errors: [] });
+    expect(existsSync(join(home, "logs"))).toBe(false);
+  });
 });
 
 describe("deleteCache", () => {

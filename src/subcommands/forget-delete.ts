@@ -18,9 +18,7 @@ export function deleteMemory(wrapHome: string): DeleteResult {
 }
 
 export function deleteLogs(wrapHome: string): DeleteResult {
-  const result: DeleteResult = { removed: false, errors: [] };
-  unlinkIfPresent(join(wrapHome, "logs", "wrap.jsonl"), result);
-  return result;
+  return rmDir(join(wrapHome, "logs"));
 }
 
 export function deleteCache(wrapHome: string): DeleteResult {

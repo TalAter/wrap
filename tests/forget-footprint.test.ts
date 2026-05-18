@@ -106,6 +106,18 @@ describe("logsFootprint", () => {
     writeFileSync(join(home, "logs", "wrap.jsonl"), "\n");
     expect(logsFootprint(home)).toEqual({ state: "empty" });
   });
+
+  test("trace sidecar bytes are included in the total", () => {
+    mkdirSync(join(home, "logs", "traces"), { recursive: true });
+    const jsonl = `${JSON.stringify({ a: 1 })}\n`;
+    const traceBody = "x".repeat(500);
+    writeFileSync(join(home, "logs", "wrap.jsonl"), jsonl);
+    writeFileSync(join(home, "logs", "traces", "abc.json"), traceBody);
+    const fp = logsFootprint(home);
+    if (fp.state !== "ok") throw new Error();
+    expect(fp.count).toBe(1);
+    expect(fp.bytes).toBe(jsonl.length + traceBody.length);
+  });
 });
 
 describe("cacheFootprint", () => {

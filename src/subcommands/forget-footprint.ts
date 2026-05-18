@@ -32,16 +32,21 @@ export function memoryFootprint(wrapHome: string): Footprint {
   return { state: "ok", count, bytes: memBytes + wlBytes };
 }
 
-/** Footprint of ~/.wrap/logs/wrap.jsonl — streamed line count + byte size. */
+// Count is jsonl lines (invocation entries); bytes cover sidecars too so the
+// number matches what `--forget` Logs actually removes.
 export function logsFootprint(wrapHome: string): Footprint {
-  const path = join(wrapHome, "logs", "wrap.jsonl");
-  const bytes = fileBytes(path);
-  if (bytes === 0) return { state: "empty" };
-  const content = readFileSync(path, "utf-8");
-  const trimmed = content.endsWith("\n") ? content.slice(0, -1) : content;
-  const count = trimmed.length === 0 ? 0 : trimmed.split("\n").length;
-  if (count === 0) return { state: "empty" };
-  return { state: "ok", count, bytes };
+  const logsDir = join(wrapHome, "logs");
+  const jsonlPath = join(logsDir, "wrap.jsonl");
+  const jsonlBytes = fileBytes(jsonlPath);
+  const traceBytes = dirStats(join(logsDir, "traces")).bytes;
+  let count = 0;
+  if (jsonlBytes > 0) {
+    const content = readFileSync(jsonlPath, "utf-8");
+    const trimmed = content.endsWith("\n") ? content.slice(0, -1) : content;
+    count = trimmed.length === 0 ? 0 : trimmed.split("\n").length;
+  }
+  if (count === 0 && traceBytes === 0) return { state: "empty" };
+  return { state: "ok", count, bytes: jsonlBytes + traceBytes };
 }
 
 /** Footprint of ~/.wrap/cache/ — recursive file count + total bytes. */

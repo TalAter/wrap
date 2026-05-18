@@ -29,7 +29,7 @@ export const forgetCmd: Command = {
   help: [
     "Interactive multi-select dialog. Select which of the four buckets to wipe:",
     "  Memory        ~/.wrap/memory.json + ~/.wrap/tool-watchlist.json",
-    "  Logs          ~/.wrap/logs/wrap.jsonl",
+    "  Logs          ~/.wrap/logs/ (wrap.jsonl + trace sidecars)",
     "  Cache         ~/.wrap/cache/",
     "  Temp files    $TMPDIR/wrap-scratch-*",
     "",
