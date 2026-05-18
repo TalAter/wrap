@@ -1754,3 +1754,33 @@
   mutated: '``'
   reason: 'Chrome error-message template — wording is cosmetic. The behavioral contract (return null on non-zero exit / catch) is already tested. Capturing chrome content would require plumbing the notification router into the test (heavyweight) and would bind tests to message wording.'
   added: 2026-05-18
+- file: src/fs/cache.ts
+  mutator: ConditionalExpression
+  original: 'cached !== null && isFresh(path, ttlMs)'
+  mutated: 'true && isFresh(path, ttlMs)'
+  reason: 'equivalent — the `cached !== null` guard prevents returning `content: null` on a cache miss; when cached is null, statSync on the same path also throws ENOENT so isFresh returns false and we fall through to fetch anyway. No observable divergence.'
+  added: 2026-05-18
+- file: src/fs/cache.ts
+  mutator: StringLiteral
+  original: '`HTTP ${response.status} ${response.statusText}`'
+  mutated: '``'
+  reason: 'cosmetic — the only caller (config/ensure.ts:23) catches this error and replaces it with a friendly "Config error: could not load model list…" message. The HTTP status text is never surfaced to the user or read for control flow.'
+  added: 2026-05-18
+- file: src/fs/cache.ts
+  mutator: EqualityOperator
+  original: 'mtimeMs + ttlMs > Date.now()'
+  mutated: 'mtimeMs + ttlMs >= Date.now()'
+  reason: 'equivalent in practice — diverges only when mtimeMs + ttlMs equals Date.now() at millisecond precision, a coincidence with no realistic cache-behavior consequence.'
+  added: 2026-05-18
+- file: src/fs/cache.ts
+  mutator: BlockStatement
+  original: '{ return false; }'
+  mutated: '{}'
+  reason: 'equivalent — isFresh is used only in `if (cached !== null && isFresh(...))`. Returning undefined (no return) is falsy in that boolean context, identical to `return false`.'
+  added: 2026-05-18
+- file: src/fs/cache.ts
+  mutator: BooleanLiteral
+  original: 'return false'
+  mutated: 'return true'
+  reason: 'defensive — isFresh runs only when readWrapFile succeeded on the same path, so statSync would only throw on a race (file deleted between read and stat) or sudden permission change. Not producible in unit tests without invasive fs mocking, and not a realistic production scenario.'
+  added: 2026-05-18
