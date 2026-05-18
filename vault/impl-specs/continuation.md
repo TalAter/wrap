@@ -22,76 +22,15 @@ Real flows from the design conversation:
 - Boolean. No id-targeting, no N-back. Always means "the most recent continuable parent" per the lookup rule below.
 - Registered in `SETTINGS` (`src/config/settings.ts`) as `{ type: "boolean", flag: ["-c", "--continue"], default: false, description: "..." }`. The existing modifier-registry derivation in `src/subcommands/registry.ts` picks it up automatically. Read at runtime via `getConfig().continue`. Per-invocation only — not persisted to `config.jsonc`. See [[subcommands]] and [[config]].
 
-## Build order
+## Data model (what continuation reads and writes)
 
-The unified log shape and `ppid` / `parent_id` fields are **implemented**. Continuation proper — `findContinuationParent`, chain walk, `cwd_change` injection, refusal, `-c` flag wiring, UX badges, system prompt instruction — is the remaining work and lands as one push.
+`LogEntry.turns[]` is the runtime transcript and the durable log — one shape, two consumers (the JSONL writer and the LLM projector). Continuation walks the `parent_id` chain to assemble ancestor `turns[]` and projects through the same `buildPromptInput` the rest of the loop uses.
 
-## Unified log shape
+The relevant fields:
 
-> **Status:** Implemented (commit `e1d4265`).
-
-### Why
-
-The old `LogEntry.rounds[]` and runtime `Transcript` carried largely the same data in two shapes; continuation needs the data in transcript form for replay. Snapshotting transcripts per entry would have added a third concept and duplicated fields between log and snapshot. Cleaner: one shape. The log IS the transcript. Forensic-mode consumers (`--log`, eval) and replay-mode consumers (continuation) read the same `turns[]`.
-
-### Shape
-
-```ts
-type LogEntry = {
-  id: string;
-  timestamp: string;
-  version: string;
-  cwd: string;
-  ppid: number;                            // process.ppid at start
-  parent_id?: string;                      // continuation parent's id; absent until continuation
-  attached_input?: { path; size; preview };
-  memory?: Memory;
-  provider: ResolvedProvider;
-  prompt_hash: string;
-  turns: Turn[];
-  outcome: "success" | "error" | "blocked" | "cancelled" | "max_rounds";
-  input_source?: "argv" | "pipe" | "tui";
-};
-
-type Turn =
-  | { kind: "user"; text: string }
-  | { kind: "assistant"; response?: CommandResponse; attempts: AttemptMeta[]; llm_ms?: number }
-  | { kind: "step"; command: string; exit_code: number; output: string; shell: string;
-      source: "model" | "user_override"; exec_ms?: number }
-  | { kind: "final"; command: string; exit_code: number | null; shell?: string;
-      source: "model" | "user_override" | "cancelled" | "blocked" | "exhausted" | "error";
-      exec_ms?: number }
-  | { kind: "cwd_change"; from: string; to: string };
-```
-
-`user` turns store **bare prompt text** — context-string framing and `sectionUserRequest` are applied at projection time, not storage.
-
-`assistant` turns carry the canonical response plus per-attempt detail (retries, errors, timing). `response` is optional: a fully-failed round (every attempt errored) has no response but the `attempts[]` still record the failures for forensic use. The projection function skips response-less assistant turns.
-
-`step` turns capture non-final executions — both inline low-risk steps and user-confirmed med/high steps. `source` distinguishes model-authored from user-edited. `output` is the post-truncation captured stdout+stderr.
-
-`final` turns capture the session's final outcome. One per session, pushed at session end:
-- `model` / `user_override`: actual execution; `exit_code` set.
-- `cancelled` / `blocked`: user cancelled or rule blocked; `command` is proposed bytes, `exit_code` null.
-- `exhausted` / `error`: budget hit or unrecoverable error; `command` is the last LLM-proposed bytes if any (else empty), `exit_code` null.
-
-Pure-answer sessions (LLM returned `reply` with `final: true`) have **no** `final` turn — the last assistant turn carries the answer.
-
-`cwd_change` turns appear only on continuation entries (see Replay model), as the first turn.
-
-### Trace sidecar
-
-The logTraces sidecar still strips `request` / `request_wire` / `response_wire` / `raw_response` from assistant attempts at write time and persists them to `logs/traces/<entry-id>.json`. Shape is `{ entry_id, turn_attempts: { [turnIndex]: TracedAttempt[] } }` — keyed by turn index since only assistant turns have attempts.
-
-### Framing at projection time
-
-The first `user` turn needs `${contextString}\n\n${sectionUserRequest}\n${text}` framing before going to the LLM. Storage stays bare; framing is per-invocation.
-
-`AttemptDirectives.requestFraming?: { contextString; sectionUserRequest }` is the carrier. `buildPromptInput` applies it to the first `user` turn it encounters. Subsequent `user` turns (follow-ups, continuation appends) project bare. Same pattern as the existing `liveContext` directive.
-
-### Migration
-
-Breaking. Old `logs/wrap.jsonl` and `logs/traces/` are not migrated — users delete them.
+- **`ppid`** — `process.ppid` at session start. Used by the lookup rule below.
+- **`parent_id`** — the continuation parent's `id`. Absent outside the continuation path.
+- **`turns`** — `user | assistant | step | final | cwd_change`. `user` turns store bare prompt text; framing (context + `sectionUserRequest`) is applied at projection time via `AttemptDirectives.requestFraming`. `final` turns mark session end with `source: model | user_override | cancelled | blocked | exhausted | error`; pure-answer sessions skip the `final` turn (the assistant turn carries the answer). `cwd_change` turns appear only in continuation chains.
 
 ## Lookup: which parent to continue
 
@@ -254,7 +193,6 @@ No custom rendering. New `ppid` / `parent_id` fields appear in JSON output autom
 
 ## Decisions
 
-- **Single unified log shape.** Replaces both `LogEntry.rounds[]` and the runtime `Transcript`. Eliminates duplication and ongoing derivation-sync cost. The log IS the transcript.
 - **Chain walk on replay, not snapshot.** Each entry stores only its own invocation's turns. O(D) storage instead of O(D²). Truncation by a missing parent reduces the chain but doesn't break replay.
 - **Fresh memory + cwd discovery + provider.** Continuation inherits *conversation*, not environment. Memory mutations from parent already on disk.
 - **Round budget resets per `-c`.** Matches [[follow-up]] semantics — each user push gets a fresh budget.
