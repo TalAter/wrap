@@ -307,6 +307,64 @@ describe("buildPromptInput", () => {
     expect(out.messages[0]?.content).toContain("git push heroku main");
   });
 
+  test("final turn user_override echoes executed bytes and exit code", () => {
+    const transcript: Transcript = [
+      {
+        kind: "final",
+        command: "cat <<EOF > foo.txt\nhello\nEOF",
+        exit_code: 0,
+        shell: "/bin/sh",
+        source: "user_override",
+        exec_ms: 5,
+      },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toContain(
+      "user ran the following instead of the proposal; exited 0",
+    );
+    expect(out.messages[0]?.content).toContain("cat <<EOF > foo.txt");
+    expect(out.messages[0]?.content).toContain("hello");
+  });
+
+  test("final turn blocked source emits a short generic note", () => {
+    const transcript: Transcript = [
+      { kind: "final", command: "rm -rf /", exit_code: null, source: "blocked" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toBe(
+      "<wrap-note>\nprevious command was blocked\n</wrap-note>",
+    );
+  });
+
+  test("final turn exhausted source includes the last proposed command", () => {
+    const transcript: Transcript = [
+      { kind: "final", command: "git push heroku main", exit_code: null, source: "exhausted" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toContain("hit the round budget");
+    expect(out.messages[0]?.content).toContain("git push heroku main");
+  });
+
+  test("final turn exhausted with no proposal emits the short variant", () => {
+    const transcript: Transcript = [
+      { kind: "final", command: "", exit_code: null, source: "exhausted" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toBe(
+      "<wrap-note>\nprevious run hit the round budget without completing\n</wrap-note>",
+    );
+  });
+
+  test("final turn error source emits a generic error note", () => {
+    const transcript: Transcript = [
+      { kind: "final", command: "anything", exit_code: null, source: "error" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toBe(
+      "<wrap-note>\nprevious run ended in an error before completing\n</wrap-note>",
+    );
+  });
+
   test("cwd_change turn projects as a <wrap-note> user message", () => {
     const transcript: Transcript = [
       { kind: "cwd_change", from: "/Users/tal/proj-a", to: "/Users/tal/proj-b" },

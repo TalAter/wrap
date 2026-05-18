@@ -67,14 +67,12 @@ function readEntries(wrapHome: string): Array<Record<string, unknown>> {
 describe("continuation — basic chain", () => {
   test("child's parent_id points at parent; child's own turns are not duplicated", async () => {
     const wrapHome = freshHome();
-    // Parent: answer mode.
     const parent = await run("how do I deploy", {
       wrapHome,
       responses: [{ type: "reply", content: "you run deploy.sh", risk_level: "low" }],
     });
     expect(parent.exitCode).toBe(0);
 
-    // Child: low-risk command.
     const child = await run("-c ok do it", {
       wrapHome,
       responses: [{ type: "command", content: "echo deploying", risk_level: "low" }],
@@ -85,9 +83,37 @@ describe("continuation — basic chain", () => {
     expect(parentEntry).toBeDefined();
     expect(childEntry?.parent_id).toBe(parentEntry?.id as string);
     // Child stores only its own invocation's turns — chain walk is at replay
-    // time, not write time. user → assistant → final.
+    // time, not write time.
     const kinds = (childEntry?.turns as Array<{ kind: string }>).map((t) => t.kind);
     expect(kinds).toEqual(["user", "assistant", "final"]);
+  });
+
+  test("3-deep chain: each link stores only its own turns, parent_id walks the chain", async () => {
+    const wrapHome = freshHome();
+    await run("how do I deploy", {
+      wrapHome,
+      responses: [{ type: "reply", content: "deploy.sh", risk_level: "low" }],
+    });
+    await run("-c ok do it", {
+      wrapHome,
+      responses: [{ type: "command", content: "echo go", risk_level: "low" }],
+    });
+    await run("-c what about staging", {
+      wrapHome,
+      responses: [{ type: "command", content: "echo staging", risk_level: "low" }],
+    });
+
+    const entries = readEntries(wrapHome);
+    expect(entries).toHaveLength(3);
+    const [a, b, c] = entries;
+    expect(b?.parent_id).toBe(a?.id as string);
+    expect(c?.parent_id).toBe(b?.id as string);
+    // Each link's own turns[] is only its invocation's turns — never accumulates.
+    const turnCounts = entries.map((e) => (e.turns as unknown[]).length);
+    // Parent (answer): user + assistant — 2.
+    // Child 1 (command): user + assistant + final — 3.
+    // Child 2 (command): user + assistant + final — 3.
+    expect(turnCounts).toEqual([2, 3, 3]);
   });
 });
 
@@ -135,10 +161,6 @@ describe("continuation — cwd change", () => {
     const child = await run("-c do it", {
       wrapHome,
       cwd: cwdB,
-      // Two-call response array: the test provider is asked for the assistant
-      // turn(s) the LLM would have produced. We're only verifying the wire
-      // capture downstream, but one response is enough for a single low-risk
-      // command + final turn.
       responses: [{ type: "command", content: "echo ok", risk_level: "low" }],
     });
     expect(child.exitCode).toBe(0);
