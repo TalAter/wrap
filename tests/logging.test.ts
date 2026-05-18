@@ -279,6 +279,39 @@ describe("serializeEntry", () => {
     });
     expect(serializeEntry(entry)).not.toContain("\n");
   });
+
+  test("ppid is preserved in the serialized JSON", () => {
+    const entry = createLogEntry({
+      cwd: "/tmp",
+      provider: TEST_RESOLVED_PROVIDER,
+      promptHash: "abc",
+      ppid: 4242,
+    });
+    const parsed = JSON.parse(serializeEntry(entry));
+    expect(parsed.ppid).toBe(4242);
+  });
+
+  test("response-less assistant turn (fully-failed round) is preserved in JSONL", () => {
+    const entry = createLogEntry({
+      cwd: "/tmp",
+      provider: TEST_RESOLVED_PROVIDER,
+      promptHash: "abc",
+    });
+    entry.turns.push({
+      kind: "assistant",
+      attempts: [
+        { error: { kind: "provider", message: "rate limit" }, llm_ms: 12 },
+        { error: { kind: "parse", message: "bad json" }, raw_response: "oops" },
+      ],
+    });
+    const parsed = JSON.parse(serializeEntry(entry));
+    const turn = parsed.turns[0];
+    expect(turn.kind).toBe("assistant");
+    expect("response" in turn).toBe(false);
+    expect(turn.attempts).toHaveLength(2);
+    expect(turn.attempts[0].error.message).toBe("rate limit");
+    expect(turn.attempts[1].raw_response).toBe("oops");
+  });
 });
 
 describe("appendLogEntry", () => {
@@ -336,6 +369,37 @@ describe("appendLogEntry", () => {
       .split("\n")
       .map((l) => JSON.parse(l).id);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  test("trace sidecar keys turn_attempts by the assistant turn's actual index", () => {
+    // Sanity that the writer doesn't off-by-one when non-assistant turns come
+    // first/in-between. Two user turns + an assistant + a step + another
+    // assistant: the traced indices must be 2 and 4, not 0 and 1.
+    const home = makeTmpHome();
+    const entry = makeEntry();
+    entry.turns.push({ kind: "user", text: "first" });
+    entry.turns.push({ kind: "user", text: "second" });
+    entry.turns.push({
+      kind: "assistant",
+      attempts: [{ request_wire: { kind: "test" } }],
+    });
+    entry.turns.push({
+      kind: "step",
+      command: "echo x",
+      exit_code: 0,
+      output: "",
+      shell: "/bin/sh",
+      source: "model",
+    });
+    entry.turns.push({
+      kind: "assistant",
+      attempts: [{ request_wire: { kind: "test" } }],
+    });
+    appendLogEntry(home, entry);
+    const trace = JSON.parse(
+      readFileSync(join(home, "logs", "traces", `${entry.id}.json`), "utf-8"),
+    );
+    expect(Object.keys(trace.turn_attempts).sort()).toEqual(["2", "4"]);
   });
 
   test("sidecar failure does not block jsonl append", () => {

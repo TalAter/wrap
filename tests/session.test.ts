@@ -177,9 +177,7 @@ describe("runSession — multi-round step → reply", () => {
     const { readFileSync } = await import("node:fs");
     const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
-    const assistants = entry.turns.filter(
-      (t: { kind: string }) => t.kind === "assistant",
-    );
+    const assistants = entry.turns.filter((t: { kind: string }) => t.kind === "assistant");
     expect(assistants).toHaveLength(2);
     expect(assistants[0].response.type).toBe("command");
     expect(assistants[0].response.final).toBe(false);

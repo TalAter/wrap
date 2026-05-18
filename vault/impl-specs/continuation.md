@@ -24,127 +24,74 @@ Real flows from the design conversation:
 
 ## Build order
 
-Two refactors land first as standalone green commits, then continuation proper:
+The unified log shape and `ppid` / `parent_id` fields are **implemented**. Continuation proper — `findContinuationParent`, chain walk, `cwd_change` injection, refusal, `-c` flag wiring, UX badges, system prompt instruction — is the remaining work and lands as one push.
 
-1. **Unified log shape** (next section). Collapse `LogEntry.rounds[]` and the runtime `Transcript` into one `turns[]` array of semantic kinds. Breaking change to `logs/wrap.jsonl` and `logs/traces/` shape; no migration. Eliminates the "log shape vs replay shape" duplication before continuation builds on it.
-2. **`ppid` + `parent_id` on `LogEntry`.** Stamp `process.ppid` on every entry. Reserve `parent_id` for continuation use (always optional in the type, always absent until continuation lands). Tiny additive change.
+## Unified log shape
 
-Then continuation proper — `findContinuationParent`, chain walk, `cwd_change` turn, refusal, `-c` flag wiring, UX badges, `<wrap-note>` projection, system prompt instruction — lands as one push.
-
-## Unified log shape (prerequisite refactor)
+> **Status:** Implemented (commit `e1d4265`).
 
 ### Why
 
-Today's `LogEntry.rounds[]` and the runtime `Transcript` carry largely the same information in two different shapes:
-
-| What | In `Round[]`? | In `Transcript`? |
-|---|---|---|
-| User text | `LogEntry.prompt` + `Round.followup_text` | `user` turns |
-| LLM responses | `Round.attempts[last].parsed` | `candidate_command` / `answer` / `step` turns |
-| Step output | nowhere | `step` turn |
-| Step/final command + exit | `Round.execution` | partially (`step` turn carries it; final-command exec doesn't make it into the transcript) |
-
-Continuation needs the data in *transcript* form (semantic conversation turns), to replay through `buildPromptInput`. Going the route of "snapshot the transcript per entry" adds a third concept and duplicates fields between log and snapshot — every change to either shape has to think about the other.
-
-Cleaner: there's only one shape. The log itself is the transcript. Forensic-mode consumers (`--log`, eval) and replay-mode consumers (continuation) read the same `turns[]`.
+The old `LogEntry.rounds[]` and runtime `Transcript` carried largely the same data in two shapes; continuation needs the data in transcript form for replay. Snapshotting transcripts per entry would have added a third concept and duplicated fields between log and snapshot. Cleaner: one shape. The log IS the transcript. Forensic-mode consumers (`--log`, eval) and replay-mode consumers (continuation) read the same `turns[]`.
 
 ### Shape
 
 ```ts
 type LogEntry = {
   id: string;
-  timestamp: string;                       // session start
+  timestamp: string;
   version: string;
   cwd: string;
+  ppid: number;                            // process.ppid at start
+  parent_id?: string;                      // continuation parent's id; absent until continuation
+  attached_input?: { path; size; preview };
   memory?: Memory;
   provider: ResolvedProvider;
   prompt_hash: string;
-  ppid: number;                            // process.ppid at start
-  parent_id?: string;                      // continuation parent's id; absent on non-continuation
-  attached_input?: { path; size; preview };
-  input_source: "argv" | "pipe" | "tui";
-  outcome: "success" | "error" | "blocked" | "cancelled" | "max_rounds";
   turns: Turn[];
+  outcome: "success" | "error" | "blocked" | "cancelled" | "max_rounds";
+  input_source?: "argv" | "pipe" | "tui";
 };
 
 type Turn =
   | { kind: "user"; text: string }
-  | { kind: "assistant"; response: CommandResponse; attempts: AttemptMeta[]; llm_ms?: number }
+  | { kind: "assistant"; response?: CommandResponse; attempts: AttemptMeta[]; llm_ms?: number }
   | { kind: "step"; command: string; exit_code: number; output: string; shell: string;
       source: "model" | "user_override"; exec_ms?: number }
   | { kind: "final"; command: string; exit_code: number | null; shell?: string;
       source: "model" | "user_override" | "cancelled" | "blocked" | "exhausted" | "error";
       exec_ms?: number }
   | { kind: "cwd_change"; from: string; to: string };
-
-type AttemptMeta = {
-  error?: { kind: "parse" | "provider" | "empty"; message: string };
-  llm_ms?: number;
-  // logTraces fields (request, request_wire, response_wire, raw_response) live here
-  // and are extracted to sidecar at write time per commit 7a28241.
-};
 ```
 
-`user` turns store **bare prompt text** — no context-string framing, no `sectionUserRequest` wrapper. Framing is applied at projection time (see below). This subsumes the standalone framing refactor that was previously listed; bare user turns come naturally from the shape.
+`user` turns store **bare prompt text** — context-string framing and `sectionUserRequest` are applied at projection time, not storage.
 
-`assistant` turns carry the canonical response plus per-attempt detail (retries, errors, timing). The `response` is the last successful `parsed`; `attempts[]` enumerates every physical LLM call including failures, for forensic use.
+`assistant` turns carry the canonical response plus per-attempt detail (retries, errors, timing). `response` is optional: a fully-failed round (every attempt errored) has no response but the `attempts[]` still record the failures for forensic use. The projection function skips response-less assistant turns.
 
-`step` turns capture non-final executions: command, output, exit, plus `source` distinguishing model-authored from user-edited. `output` is the full captured stdout+stderr (post-truncation).
+`step` turns capture non-final executions — both inline low-risk steps and user-confirmed med/high steps. `source` distinguishes model-authored from user-edited. `output` is the post-truncation captured stdout+stderr.
 
-`final` turns capture the session's final command outcome (or non-outcome). One per session — pushed at session end whenever a final response was reached (or attempted). Source covers all variants:
-- `model` / `user_override`: actual execution happened; `command` is executed bytes, `exit_code` is set.
-- `cancelled` / `blocked`: user cancelled or rule blocked; `command` is proposed bytes, `exit_code` is null.
-- `exhausted` / `error`: round budget hit / unrecoverable error; `command` is the last LLM-proposed bytes if any (else empty), `exit_code` is null.
+`final` turns capture the session's final outcome. One per session, pushed at session end:
+- `model` / `user_override`: actual execution; `exit_code` set.
+- `cancelled` / `blocked`: user cancelled or rule blocked; `command` is proposed bytes, `exit_code` null.
+- `exhausted` / `error`: budget hit or unrecoverable error; `command` is the last LLM-proposed bytes if any (else empty), `exit_code` null.
 
-Pure-answer sessions (LLM returned `reply` with `final: true`) have no `final` turn — the last `assistant` turn carries the answer.
+Pure-answer sessions (LLM returned `reply` with `final: true`) have **no** `final` turn — the last assistant turn carries the answer.
 
 `cwd_change` turns appear only on continuation entries (see Replay model), as the first turn.
 
-### What goes away
+### Trace sidecar
 
-- `Round` / `LogEntry.rounds[]`
-- `Round.attempts[]` — moves inside `assistant` turns
-- `Round.execution` — split into `step` / `final` kinds
-- `Round.followup_text` — just a `user` turn at position N>0
-- `LogEntry.prompt` — `= turns[0].text` when `turns[0].kind === "user"`
-- Runtime `Transcript` type — becomes an alias for `Turn[]`, or removed in favor of `LogEntry["turns"]`
-- `candidate_command` / `answer` transcript turn kinds — folded into `assistant`
-- The whole "snapshot transcript per entry" / "transcript sidecar" idea — never built
-
-### What stays
-
-- `outcome` field — kept for fast filter without parsing all turns; derivable from the last turn but used as a hot field by `--log` and friends
-- `input_source` — entry-level (first user turn's origin)
-- `prompt_hash`, `memory`, `provider`, `attached_input` — session-level metadata, unchanged
-- logTraces sidecar pattern (commit 7a28241) — still applies; per-attempt trace fields are stripped from `turns[].attempts[]` (assistant turns only) at write time and persisted to `logs/traces/<entry-id>.json`. Trace file shape updates from `{ rounds: [{ attempts: [...] }] }` to `{ turn_attempts: { [turnIndex: number]: TracedAttempt[] } }` — keyed by turn index since only assistant turns have attempts.
+The logTraces sidecar still strips `request` / `request_wire` / `response_wire` / `raw_response` from assistant attempts at write time and persists them to `logs/traces/<entry-id>.json`. Shape is `{ entry_id, turn_attempts: { [turnIndex]: TracedAttempt[] } }` — keyed by turn index since only assistant turns have attempts.
 
 ### Framing at projection time
 
-The first `user` turn needs `${contextString}\n\n${sectionUserRequest}\n${text}` framing wrapped around it before going to the LLM. This can't be baked into storage — each invocation has its own context.
+The first `user` turn needs `${contextString}\n\n${sectionUserRequest}\n${text}` framing before going to the LLM. Storage stays bare; framing is per-invocation.
 
-`AttemptDirectives` (`src/core/transcript.ts:60-77`) gains:
-
-```ts
-requestFraming?: { contextString: string; sectionUserRequest: string };
-```
-
-The projection function (today's `buildPromptInput`, renamed to e.g. `projectTurnsToMessages`) applies `requestFraming` to wrap the **first** `user` turn it encounters. Subsequent `user` turns (follow-ups, continuation appends) project bare. Same pattern as the existing `liveContext` directive.
+`AttemptDirectives.requestFraming?: { contextString; sectionUserRequest }` is the carrier. `buildPromptInput` applies it to the first `user` turn it encounters. Subsequent `user` turns (follow-ups, continuation appends) project bare. Same pattern as the existing `liveContext` directive.
 
 ### Migration
 
-Breaking. Old `logs/wrap.jsonl` and `logs/traces/` files are not migrated. Users delete them. Spec says "fuck the old logs."
-
-### Touch list
-
-- `src/logging/entry.ts` — new `LogEntry` and `Turn` types; `createLogEntry` no longer takes `prompt` separately
-- `src/logging/writer.ts` — `extractTraces` updated to walk `turns[]` and pull trace fields from assistant attempts; trace file shape updated
-- `src/core/transcript.ts` — `Transcript` aliased to `Turn[]` (or removed); `buildPromptInput` projects new Turn kinds; `AttemptDirectives.requestFraming` added
-- `src/core/runner.ts` / `src/core/round.ts` — append `user` / `assistant` / `step` turns directly instead of building round+attempts shape
-- `src/session/session.ts` — `transcript` is just `entry.turns`; first-user-turn push uses bare text; framing built from current context and passed as directive
-- `src/session/state.ts` / `src/session/reducer.ts` — types referring to `Round` / `RoundResult` reshape to turn-based
-- `src/subcommands/log.ts` — reads `turns[]` (still a JSON dump; no rendering change)
-- `eval/` — pipeline migration to read `turns[]`
-- Tests across all of the above
+Breaking. Old `logs/wrap.jsonl` and `logs/traces/` are not migrated — users delete them.
 
 ## Lookup: which parent to continue
 

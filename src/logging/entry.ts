@@ -145,9 +145,9 @@ export type Turn =
       exec_ms?: number;
     }
   /**
-   * Session's final outcome. One per session — pushed at session end
-   * whenever a final response was reached or attempted. Pure-answer
-   * sessions have no `final` turn (the answer is the last assistant turn).
+   * Session's final outcome. Exactly one per session, pushed at session end
+   * for every outcome other than pure-answer. Pure-answer sessions have no
+   * `final` turn (the answer is the last assistant turn).
    *
    * - `model` / `user_override`: actual execution; `exit_code` set.
    * - `cancelled` / `blocked`: user cancelled or rule blocked; `command`

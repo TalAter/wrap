@@ -91,7 +91,7 @@ export async function runSession(
   // transcript stays empty until submit so we don't send an unqualified
   // context blurb to the LLM.
   const isInteractiveBootstrap = prompt === "" && process.stdin.isTTY === true;
-  let scaffold = buildScaffold();
+  const scaffold = buildScaffold();
 
   // The transcript IS entry.turns — one shape, two consumers.
   const transcript: Transcript = entry.turns;
@@ -100,7 +100,10 @@ export async function runSession(
   }
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const model = formatProvider(options.resolvedProvider);
-  const baseLoopOptions = (): Omit<LoopOptions, "signal" | "showSpinner"> => ({
+  // Thunk — `scaffold` is reassigned on interactive bootstrap, so each pump
+  // captures the current scaffold's contextString rather than the one that
+  // existed at session start.
+  const makeBaseLoopOptions = (): Omit<LoopOptions, "signal" | "showSpinner"> => ({
     cwd: options.cwd,
     wrapHome,
     model,
@@ -176,7 +179,6 @@ export async function runSession(
       // transcript with a bare user turn (framing is applied per-call by
       // `requestFraming`). The chrome spinner is suppressed automatically
       // because startPumpLoop reads isDialogTag(state.tag) — dialog is up.
-      scaffold = buildScaffold();
       transcript.push({ kind: "user", text: state.draft });
       entry.input_source = "tui";
       // --verbose buffers lines through the notification bus while the dialog
@@ -295,13 +297,16 @@ export async function runSession(
     // other. If a dialog is mounted for the current state, the dialog owns
     // the spinner. `isDialogTag(state.tag)` is the single source of truth.
     const showSpinner = !isDialogTag(state.tag);
-    const isInitialLoop = !isDialogTag(state.tag) && state.tag === "thinking";
+    // `thinking` is the only non-dialog tag that pumps the loop, so equality
+    // with it is the initial-loop signal (post-followup/interactive states are
+    // dialog tags and never produce the initial loop).
+    const isInitialLoop = state.tag === "thinking";
     void pumpLoop({
       provider,
       transcript,
       scaffold,
       loopState,
-      baseLoopOptions: baseLoopOptions(),
+      baseLoopOptions: makeBaseLoopOptions(),
       signal: ctrl.signal,
       isInitialLoop,
       showSpinner,
@@ -429,7 +434,10 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
  * Pull the last LLM-proposed command bytes out of the transcript. Used by
  * `finaliseOutcome` to populate the `final` turn's `command` field for
  * outcomes that didn't have an explicit command (cancelled/exhausted/error).
- * Empty string if the LLM never produced a command.
+ * Walks assistant turns only — `step.command` may carry user-override bytes
+ * from a confirmed step, and the spec wants the model's last proposal here,
+ * not what the user actually ran. Empty string if the LLM never proposed a
+ * command.
  */
 function lastProposedCommand(entry: LogEntry): string {
   for (let i = entry.turns.length - 1; i >= 0; i--) {
