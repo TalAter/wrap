@@ -11,7 +11,6 @@ import {
   makeProcessing,
   makeProcessingInteractive,
   makeResponse,
-  makeRound,
 } from "./helpers/state-fixtures.ts";
 import { seedTestConfig } from "./helpers.ts";
 
@@ -26,40 +25,35 @@ const highCommand = makeResponse({ risk_level: "high", content: "echo rm-rf-fake
 describe("reduce — thinking", () => {
   test("loop-final command low → exiting{run, source: model}", () => {
     const state: AppState = { tag: "thinking" };
-    const round = makeRound(lowCommand);
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: lowCommand, round },
+      result: { type: "command", response: lowCommand },
     });
     expect(next.tag).toBe("exiting");
     if (next.tag === "exiting" && next.outcome.kind === "run") {
       expect(next.outcome.command).toBe("echo hi");
       expect(next.outcome.source).toBe("model");
       expect(next.outcome.response).toBe(lowCommand);
-      expect(next.outcome.round).toBe(round);
     }
   });
 
   test("loop-final command medium → confirming", () => {
     const state: AppState = { tag: "thinking" };
-    const round = makeRound(mediumCommand);
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: mediumCommand, round },
+      result: { type: "command", response: mediumCommand },
     });
     expect(next.tag).toBe("confirming");
     if (next.tag === "confirming") {
       expect(next.response).toBe(mediumCommand);
-      expect(next.round).toBe(round);
     }
   });
 
   test("loop-final command high → confirming", () => {
     const state: AppState = { tag: "thinking" };
-    const round = makeRound(highCommand);
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: highCommand, round },
+      result: { type: "command", response: highCommand },
     });
     expect(next.tag).toBe("confirming");
   });
@@ -102,7 +96,11 @@ describe("reduce — thinking", () => {
 
   test("block command → exiting{blocked}", () => {
     const state: AppState = { tag: "thinking" };
-    const next = reduce(state, { type: "block", command: "echo rm-a-fake" });
+    const next = reduce(state, {
+      type: "block",
+      command: "echo rm-a-fake",
+      response: mediumCommand,
+    });
     expect(next.tag).toBe("exiting");
     if (next.tag === "exiting" && next.outcome.kind === "blocked") {
       expect(next.outcome.command).toBe("echo rm-a-fake");
@@ -122,10 +120,9 @@ describe("reduce — thinking", () => {
     test("yolo + medium final command → exiting{run, source: model}", () => {
       seedTestConfig({ yolo: true });
       const state: AppState = { tag: "thinking" };
-      const round = makeRound(mediumCommand);
       const next = reduce(state, {
         type: "loop-final",
-        result: { type: "command", response: mediumCommand, round },
+        result: { type: "command", response: mediumCommand },
       });
       expect(next.tag).toBe("exiting");
       if (next.tag === "exiting" && next.outcome.kind === "run") {
@@ -137,10 +134,9 @@ describe("reduce — thinking", () => {
     test("yolo + high final command → exiting{run, source: model}", () => {
       seedTestConfig({ yolo: true });
       const state: AppState = { tag: "thinking" };
-      const round = makeRound(highCommand);
       const next = reduce(state, {
         type: "loop-final",
-        result: { type: "command", response: highCommand, round },
+        result: { type: "command", response: highCommand },
       });
       expect(next.tag).toBe("exiting");
       if (next.tag === "exiting" && next.outcome.kind === "run") {
@@ -151,10 +147,9 @@ describe("reduce — thinking", () => {
     test("yolo + low final command → exiting{run} (same path as default)", () => {
       seedTestConfig({ yolo: true });
       const state: AppState = { tag: "thinking" };
-      const round = makeRound(lowCommand);
       const next = reduce(state, {
         type: "loop-final",
-        result: { type: "command", response: lowCommand, round },
+        result: { type: "command", response: lowCommand },
       });
       expect(next.tag).toBe("exiting");
     });
@@ -215,7 +210,7 @@ describe("reduce — confirming", () => {
     }
   });
 
-  test("notification step-output updates outputSlot, preserves response/round", () => {
+  test("notification step-output updates outputSlot, preserves response", () => {
     const state = makeConfirming({ outputSlot: "old body" });
     const next = reduce(state, {
       type: "notification",
@@ -226,18 +221,16 @@ describe("reduce — confirming", () => {
     if (next.tag !== "confirming") throw new Error("unreachable");
     expect(next.outputSlot).toBe("fresh body");
     expect(next.response).toBe(state.response);
-    expect(next.round).toBe(state.round);
   });
 });
 
 describe("reduce — editing", () => {
-  test("key-esc → confirming with the original response/round", () => {
+  test("key-esc → confirming with the original response", () => {
     const state = makeEditing({ draft: "echo rm-rf-wrong-fake" });
     const next = reduce(state, { type: "key-esc" });
     expect(next.tag).toBe("confirming");
     if (next.tag === "confirming") {
       expect(next.response).toBe(state.response);
-      expect(next.round).toBe(state.round);
     }
   });
 
@@ -324,24 +317,21 @@ describe("reduce — processing", () => {
 
   test("loop-final command low → confirming (low-risk asymmetry — opens dialog instead of skipping)", () => {
     const state = makeProcessing();
-    const round = makeRound(lowCommand);
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: lowCommand, round },
+      result: { type: "command", response: lowCommand },
     });
     expect(next.tag).toBe("confirming");
     if (next.tag === "confirming") {
       expect(next.response).toBe(lowCommand);
-      expect(next.round).toBe(round);
     }
   });
 
   test("loop-final command medium → confirming with new command", () => {
     const state = makeProcessing();
-    const round = makeRound(mediumCommand);
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: mediumCommand, round },
+      result: { type: "command", response: mediumCommand },
     });
     expect(next.tag).toBe("confirming");
     if (next.tag === "confirming") {
@@ -405,12 +395,13 @@ describe("reduce — executing-step", () => {
     plan: "stash, test, pop",
   });
 
-  test("confirming + key-action run on non-final med → executing-step", () => {
+  test("confirming + key-action run on non-final med → executing-step{source: model}", () => {
     const state = makeConfirming({ response: nonFinalMed });
     const next = reduce(state, { type: "key-action", action: "run" });
     expect(next.tag).toBe("executing-step");
     if (next.tag === "executing-step") {
       expect(next.response).toBe(nonFinalMed);
+      expect(next.source).toBe("model");
     }
   });
 
@@ -462,7 +453,7 @@ describe("reduce — executing-step", () => {
     const nextResponse = makeResponse({ final: true, content: "echo done" });
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: nextResponse, round: makeRound(nextResponse) },
+      result: { type: "command", response: nextResponse },
     });
     if (next.tag === "confirming") {
       expect(next.response).toBe(nextResponse);
@@ -528,12 +519,13 @@ describe("reduce — executing-step", () => {
     }
   });
 
-  test("editing + submit-edit on non-final med → executing-step with edited content", () => {
+  test("editing + submit-edit on non-final med → executing-step{source: user_override} with edited content", () => {
     const state = makeEditing({ response: nonFinalMed });
     const next = reduce(state, { type: "submit-edit", text: "echo git-stash-u-fake" });
     if (next.tag === "executing-step") {
       expect(next.response.content).toBe("echo git-stash-u-fake");
       expect(next.response.final).toBe(false);
+      expect(next.source).toBe("user_override");
     } else {
       throw new Error(`expected executing-step, got ${next.tag}`);
     }
@@ -544,7 +536,7 @@ describe("reduce — executing-step", () => {
     const finalLow = makeResponse({ risk_level: "low", final: true, content: "ls" });
     const next = reduce(state, {
       type: "loop-final",
-      result: { type: "command", response: finalLow, round: makeRound(finalLow) },
+      result: { type: "command", response: finalLow },
     });
     expect(next.tag).toBe("confirming");
   });
@@ -603,10 +595,9 @@ describe("reduce — processing-interactive", () => {
 
   test("loop-final command low-risk → auto-exec (mirrors thinking path)", () => {
     const resp = makeResponse({ risk_level: "low", content: "echo ok" });
-    const round = makeRound(resp);
     const next = reduce(makeProcessingInteractive(), {
       type: "loop-final",
-      result: { type: "command", response: resp, round },
+      result: { type: "command", response: resp },
     });
     expect(next.tag).toBe("exiting");
     if (next.tag !== "exiting") throw new Error("unreachable");
@@ -618,10 +609,9 @@ describe("reduce — processing-interactive", () => {
 
   test("loop-final command medium-risk → confirming (dialog already mounted)", () => {
     const resp = makeResponse({ risk_level: "medium", content: "rm -rf /tmp/x" });
-    const round = makeRound(resp);
     const next = reduce(makeProcessingInteractive(), {
       type: "loop-final",
-      result: { type: "command", response: resp, round },
+      result: { type: "command", response: resp },
     });
     expect(next.tag).toBe("confirming");
     if (next.tag === "confirming") expect(next.response).toBe(resp);
@@ -682,14 +672,12 @@ describe("reduce — editor-handoff round-trip", () => {
     if (next.tag === "composing-interactive") expect(next.draft).toBe("kept");
   });
 
-  test("origin=composing-followup + editor-done{text} restores composing-followup with response+round", () => {
+  test("origin=composing-followup + editor-done{text} restores composing-followup with response", () => {
     const response = makeResponse();
-    const round = makeRound(response);
     const state = makeEditorHandoff({
       origin: "composing-followup",
       draft: "old",
       response,
-      round,
       outputSlot: "out",
     });
     const next = reduce(state, { type: "editor-done", text: "refined" });
@@ -697,19 +685,16 @@ describe("reduce — editor-handoff round-trip", () => {
     if (next.tag === "composing-followup") {
       expect(next.draft).toBe("refined");
       expect(next.response).toBe(response);
-      expect(next.round).toBe(round);
       expect(next.outputSlot).toBe("out");
     }
   });
 
   test("origin=editing + editor-done{text} restores editing with new draft", () => {
     const response = makeResponse();
-    const round = makeRound(response);
     const state = makeEditorHandoff({
       origin: "editing",
       draft: "rm -rf",
       response,
-      round,
     });
     const next = reduce(state, { type: "editor-done", text: "safer command" });
     expect(next.tag).toBe("editing");
@@ -734,7 +719,6 @@ describe("reduce — enter-editor from every origin", () => {
     if (next.tag === "editor-handoff") {
       expect(next.origin).toBe("composing-followup");
       expect(next.response).toBe(state.response);
-      expect(next.round).toBe(state.round);
     }
   });
 

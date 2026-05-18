@@ -162,7 +162,7 @@ describe("runSession — no TTY for medium command", () => {
 });
 
 describe("runSession — multi-round step → reply", () => {
-  test("step followed by reply logs both rounds and exits 0", async () => {
+  test("step followed by reply logs both assistant turns and exits 0", async () => {
     const { provider } = makeProvider([
       { type: "command", final: false, content: "echo hi", risk_level: "low" },
       { type: "reply", final: true, content: "the answer", risk_level: "low" },
@@ -173,14 +173,17 @@ describe("runSession — multi-round step → reply", () => {
     });
     expect(exit).toBe(0);
     expect(stdout.text).toContain("the answer");
-    // Verify the log entry has BOTH rounds (the step and the reply)
+    // Verify the log entry has both assistant turns (step response + reply)
     const { readFileSync } = await import("node:fs");
     const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
-    expect(entry.rounds).toHaveLength(2);
-    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("command");
-    expect(entry.rounds[0].attempts.at(-1).parsed.final).toBe(false);
-    expect(entry.rounds[1].attempts.at(-1).parsed.type).toBe("reply");
+    const assistants = entry.turns.filter(
+      (t: { kind: string }) => t.kind === "assistant",
+    );
+    expect(assistants).toHaveLength(2);
+    expect(assistants[0].response.type).toBe("command");
+    expect(assistants[0].response.final).toBe(false);
+    expect(assistants[1].response.type).toBe("reply");
   });
 
   test("captured step output never lands on stderr (only the chrome explanation does)", async () => {

@@ -1,6 +1,6 @@
 import { appendWrapFile, writeWrapFile } from "../fs/home.ts";
 import type { PromptInput } from "../llm/types.ts";
-import type { Attempt, LogEntry, WireRequest, WireResponse } from "./entry.ts";
+import type { AttemptMeta, LogEntry, WireRequest, WireResponse } from "./entry.ts";
 import { serializeEntry } from "./entry.ts";
 
 type TracedAttempt = {
@@ -12,10 +12,11 @@ type TracedAttempt = {
 
 type TraceFile = {
   entry_id: string;
-  rounds: { attempts: TracedAttempt[] }[];
+  /** Keyed by turn index — only assistant turns carry attempts. */
+  turn_attempts: Record<number, TracedAttempt[]>;
 };
 
-function isTraced(attempt: Attempt): boolean {
+function isTraced(attempt: AttemptMeta): boolean {
   return (
     attempt.request !== undefined ||
     attempt.request_wire !== undefined ||
@@ -25,7 +26,7 @@ function isTraced(attempt: Attempt): boolean {
 
 // Parse-failure `raw_response` (no request, no wire) stays inline — that's
 // the default-config debugging breadcrumb for malformed LLM output.
-function extractAttemptTraces(attempt: Attempt): TracedAttempt | null {
+function extractAttemptTraces(attempt: AttemptMeta): TracedAttempt | null {
   if (!isTraced(attempt)) return null;
   const traced: TracedAttempt = {};
   if (attempt.request !== undefined) {
@@ -48,28 +49,25 @@ function extractAttemptTraces(attempt: Attempt): TracedAttempt | null {
 }
 
 function extractTraces(entry: LogEntry): TraceFile | null {
+  const turn_attempts: Record<number, TracedAttempt[]> = {};
   let hasAny = false;
-  for (const round of entry.rounds) {
-    for (const attempt of round.attempts) {
-      if (isTraced(attempt)) {
-        hasAny = true;
-        break;
-      }
-    }
-    if (hasAny) break;
+  for (let i = 0; i < entry.turns.length; i++) {
+    const turn = entry.turns[i];
+    if (turn?.kind !== "assistant") continue;
+    const turnHasTraced = turn.attempts.some(isTraced);
+    if (!turnHasTraced) continue;
+    hasAny = true;
+    turn_attempts[i] = turn.attempts.map((a) => extractAttemptTraces(a) ?? {});
   }
   if (!hasAny) return null;
-  const rounds = entry.rounds.map((round) => ({
-    attempts: round.attempts.map((a) => extractAttemptTraces(a) ?? {}),
-  }));
-  return { entry_id: entry.id, rounds };
+  return { entry_id: entry.id, turn_attempts };
 }
 
 /**
- * Appends the entry to wrap.jsonl, then writes a trace sidecar if any attempt
- * carried `logTraces`-mode fields. Mutates `entry` to strip those fields
- * before serialization. JSONL is written first so a sidecar-write failure
- * never costs us the durable record.
+ * Appends the entry to wrap.jsonl, then writes a trace sidecar if any
+ * assistant turn's attempts carried `logTraces`-mode fields. Mutates `entry`
+ * to strip those fields before serialization. JSONL is written first so a
+ * sidecar-write failure never costs us the durable record.
  */
 export function appendLogEntry(wrapHome: string, entry: LogEntry): void {
   const trace = extractTraces(entry);

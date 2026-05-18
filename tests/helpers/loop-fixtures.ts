@@ -33,7 +33,6 @@ export function makeProvider(responses: CommandResponse[]): {
 
 export function makeEntry(): LogEntry {
   return createLogEntry({
-    prompt: "test",
     cwd: "/tmp",
     provider: TEST_RESOLVED_PROVIDER,
     promptHash: "h",

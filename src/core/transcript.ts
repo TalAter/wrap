@@ -1,57 +1,22 @@
 import type { CommandResponse } from "../command-response.schema.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import type { ConversationMessage, PromptInput } from "../llm/types.ts";
+import type { Turn } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
 
 /**
- * The conversation between the user and the LLM, recorded as semantic turns
- * rather than as a provider-shaped `PromptInput`. This is the durable state
- * that the session, the runner, and the coordinator all read and write.
+ * The conversation between the user and the LLM. Same array as the durable
+ * `LogEntry.turns[]` — one shape, two consumers (the JSONL writer and this
+ * projector). The session, runner, and round.ts all push directly onto it.
  *
- * Why semantic turns instead of `input.messages`:
- *   - Meta-instructions (`lastRoundInstruction`, live temp-dir context) never
- *     enter the persistent state — they live only in the local scope of one
- *     `runRound` call, applied during `buildPromptInput` and discarded.
- *   - The transcript is the natural place to add new turn kinds for
- *     multi-step. The transcript IS the projection.
+ * Why semantic turns rather than provider-shaped `input.messages`:
+ *   - Meta-instructions (`lastRoundInstruction`, live temp-dir context, the
+ *     first-user-turn framing) never enter the persistent state — they live
+ *     only in the local scope of one `runRound` call, applied during
+ *     `buildPromptInput` and discarded.
+ *   - The transcript IS the projection target. Any new turn kind goes here.
  */
-export type Transcript = TranscriptTurn[];
-
-export type TranscriptTurn =
-  /**
-   * A user turn — the initial query (first in the transcript) OR a follow-up
-   * typed into the dialog. The two are not distinguished at the data layer
-   * because they render identically. The "first turn is the initial query"
-   * convention is positional.
-   */
-  | { kind: "user"; text: string }
-  /**
-   * A non-final low-risk command the loop executed inline without user
-   * confirmation. Carries the full LLM response (so subsequent rounds can
-   * echo it as an assistant turn) plus the captured output and exit code
-   * (rendered as a user turn).
-   */
-  | { kind: "step"; response: CommandResponse; output: string; exitCode: number }
-  /**
-   * A non-final medium/high-risk command the user confirmed via the dialog.
-   * Shape identical to `step` and rendered the same way — the LLM does not
-   * need to distinguish model-authored from user-confirmed steps. The round
-   * audit log keeps the `source` distinction separately.
-   */
-  | { kind: "confirmed_step"; response: CommandResponse; output: string; exitCode: number }
-  /**
-   * A final-form command the LLM proposed. Pushed by the loop just before
-   * returning. Subsequent calls (e.g., after a follow-up) need it as an
-   * assistant turn so the LLM sees its own previous answer.
-   */
-  | { kind: "candidate_command"; response: CommandResponse }
-  /**
-   * A final-form reply. Pushed by the loop just before returning. Rarely
-   * needed in subsequent calls (replies usually exit the session) but
-   * included for completeness. The turn kind stays `answer` — it is
-   * decoupled from the schema's `reply` discriminator.
-   */
-  | { kind: "answer"; response: CommandResponse };
+export type Transcript = Turn[];
 
 /**
  * Ephemeral attempt-scoped directives that the builder applies for ONE call
@@ -67,6 +32,13 @@ export type AttemptDirectives = {
    * every decision without polluting the persistent transcript.
    */
   liveContext?: string;
+  /**
+   * Wraps the FIRST `user` turn encountered with `${contextString}\n\n${
+   * sectionUserRequest}\n${text}`. Storage is bare; each invocation applies
+   * its own framing. Continuation reuses the same directive with the
+   * child's current context.
+   */
+  requestFraming?: { contextString: string; sectionUserRequest: string };
   /**
    * For the in-round high-risk scratchpad retry: echo the rejected response
    * (with its null `_scratchpad` preserved) as an assistant turn and append
@@ -117,14 +89,41 @@ function projectResponseForEcho(response: CommandResponse): Record<string, unkno
 }
 
 /**
+ * Render a `final` Turn as a `<wrap-note>` body. Only meaningful inside a
+ * continuation chain — within a single invocation, the final turn is the
+ * last thing pushed and no projection happens after it.
+ */
+function formatFinalNote(turn: Extract<Turn, { kind: "final" }>): string {
+  switch (turn.source) {
+    case "model":
+      return `previous command exited ${turn.exit_code}`;
+    case "user_override":
+      return `user ran the following instead of the proposal; exited ${turn.exit_code}:\n${turn.command}`;
+    case "cancelled":
+      return `user cancelled the previous command: ${turn.command}`;
+    case "blocked":
+      return "previous command was blocked";
+    case "exhausted":
+      return turn.command
+        ? `previous run hit the round budget without completing or executing the proposed command; last proposal was: ${turn.command}`
+        : "previous run hit the round budget without completing";
+    case "error":
+      return "previous run ended in an error before completing";
+  }
+}
+
+function wrapNote(body: string): string {
+  return `<wrap-note>\n${body}\n</wrap-note>`;
+}
+
+/**
  * Build a `PromptInput` (provider-shaped messages array) from a transcript
  * plus the session-static `PromptScaffold` plus optional ephemeral
  * directives. Pure function: does not mutate the transcript or the scaffold.
  *
  * The scaffold's `system` and `prefixMessages` are produced once at session
  * start and reused on every round; the directives are applied for ONE call
- * only. `scaffold.initialUserText` is unused here — the session pushes that
- * text into the transcript as the first `user` turn before any rounds run.
+ * only.
  */
 export function buildPromptInput(
   transcript: Transcript,
@@ -133,32 +132,48 @@ export function buildPromptInput(
 ): PromptInput {
   const messages: ConversationMessage[] = [];
   for (const m of scaffold.prefixMessages) messages.push(m);
+  let firstUserSeen = false;
   for (const turn of transcript) {
     switch (turn.kind) {
-      case "user":
-        messages.push({ role: "user", content: turn.text });
+      case "user": {
+        const framing = directives?.requestFraming;
+        if (!firstUserSeen && framing) {
+          firstUserSeen = true;
+          const parts: string[] = [];
+          if (framing.contextString) parts.push(framing.contextString);
+          parts.push(`${framing.sectionUserRequest}\n${turn.text}`);
+          messages.push({ role: "user", content: parts.join("\n\n") });
+        } else {
+          firstUserSeen = true;
+          messages.push({ role: "user", content: turn.text });
+        }
+        break;
+      }
+      case "assistant":
+        // A fully-failed round (no parsed response) is preserved in the log
+        // for forensic use but contributes nothing to the replay conversation.
+        if (!turn.response) break;
+        messages.push({
+          role: "assistant",
+          content: JSON.stringify(projectResponseForEcho(turn.response)),
+        });
         break;
       case "step":
-      case "confirmed_step":
-        messages.push({
-          role: "assistant",
-          content: JSON.stringify(projectResponseForEcho(turn.response)),
-        });
         messages.push({
           role: "user",
-          content: formatStepBody(turn.output, turn.exitCode),
+          content: formatStepBody(turn.output, turn.exit_code),
         });
         break;
-      case "candidate_command":
-      case "answer":
+      case "final":
+        messages.push({ role: "user", content: wrapNote(formatFinalNote(turn)) });
+        break;
+      case "cwd_change":
         messages.push({
-          role: "assistant",
-          content: JSON.stringify(projectResponseForEcho(turn.response)),
+          role: "user",
+          content: wrapNote(`cwd changed from ${turn.from} to ${turn.to}`),
         });
         break;
       default: {
-        // Exhaustiveness — adding a new turn kind without handling it here
-        // becomes a compile error.
         const _exhaustive: never = turn;
         throw new Error(`unhandled transcript turn: ${(_exhaustive as { kind: string }).kind}`);
       }

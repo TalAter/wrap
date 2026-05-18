@@ -3,24 +3,17 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
-import {
-  addRound,
-  createLogEntry,
-  type Round,
-  scrubApiKey,
-  serializeEntry,
-} from "../src/logging/entry.ts";
+import { createLogEntry, scrubApiKey, serializeEntry } from "../src/logging/entry.ts";
 import { appendLogEntry } from "../src/logging/writer.ts";
 import { wrap, wrapMock } from "./helpers.ts";
 
-describe("createLogEntry", () => {
-  const defaults = {
-    prompt: "find all ts files",
-    cwd: "/Users/tal/projects",
-    provider: { name: "claude-code", model: "haiku" },
-    promptHash: "abc123",
-  };
+const defaults = {
+  cwd: "/Users/tal/projects",
+  provider: { name: "claude-code", model: "haiku" },
+  promptHash: "abc123",
+};
 
+describe("createLogEntry", () => {
   test("generates a valid UUID for id", () => {
     const entry = createLogEntry(defaults);
     expect(entry.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -31,18 +24,32 @@ describe("createLogEntry", () => {
     expect(new Date(entry.timestamp).toISOString()).toBe(entry.timestamp);
   });
 
-  test("captures prompt, cwd, provider, prompt_hash", () => {
+  test("captures cwd, provider, prompt_hash", () => {
     const entry = createLogEntry(defaults);
-    expect(entry.prompt).toBe("find all ts files");
     expect(entry.cwd).toBe("/Users/tal/projects");
     expect(entry.provider).toEqual({ name: "claude-code", model: "haiku" });
     expect(entry.prompt_hash).toBe("abc123");
   });
 
-  test("starts with empty rounds and outcome 'error'", () => {
+  test("starts with empty turns and outcome 'error'", () => {
     const entry = createLogEntry(defaults);
-    expect(entry.rounds).toEqual([]);
+    expect(entry.turns).toEqual([]);
     expect(entry.outcome).toBe("error");
+  });
+
+  test("stamps ppid from process.ppid by default", () => {
+    const entry = createLogEntry(defaults);
+    expect(entry.ppid).toBe(process.ppid);
+  });
+
+  test("ppid override takes precedence (for tests)", () => {
+    const entry = createLogEntry({ ...defaults, ppid: 4242 });
+    expect(entry.ppid).toBe(4242);
+  });
+
+  test("parent_id is absent by default", () => {
+    const entry = createLogEntry(defaults);
+    expect("parent_id" in entry).toBe(false);
   });
 
   test("includes version string", () => {
@@ -114,7 +121,6 @@ describe("createLogEntry", () => {
 describe("createLogEntry redacts apiKey", () => {
   test("redacts apiKey to last 4 chars", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: {
         name: "anthropic",
@@ -128,7 +134,6 @@ describe("createLogEntry redacts apiKey", () => {
 
   test("fully masks keys shorter than 4 chars", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: { name: "openai", model: "gpt-4o-mini", apiKey: "ab" },
       promptHash: "abc",
@@ -138,7 +143,6 @@ describe("createLogEntry redacts apiKey", () => {
 
   test("no apiKey field left unchanged", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: { name: "anthropic", model: "haiku" },
       promptHash: "abc",
@@ -148,7 +152,6 @@ describe("createLogEntry redacts apiKey", () => {
 
   test("test sentinel provider unchanged", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
@@ -157,41 +160,48 @@ describe("createLogEntry redacts apiKey", () => {
   });
 });
 
-describe("addRound", () => {
-  test("appends a round to the entry", () => {
+describe("turns push directly onto entry.turns", () => {
+  test("appends a user turn", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    const round: Round = { attempts: [{ raw_response: '{"type":"answer"}' }] };
-    addRound(entry, round);
-    expect(entry.rounds).toHaveLength(1);
-    const saved = entry.rounds[0];
-    if (!saved) throw new Error("expected a round");
-    expect(saved.attempts[0]?.raw_response).toBe('{"type":"answer"}');
+    entry.turns.push({ kind: "user", text: "find all ts files" });
+    expect(entry.turns).toHaveLength(1);
+    const first = entry.turns[0];
+    if (first?.kind !== "user") throw new Error("expected a user turn");
+    expect(first.text).toBe("find all ts files");
   });
 
-  test("accumulates multiple rounds", () => {
+  test("accumulates user + assistant + step turns", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    addRound(entry, {
-      attempts: [{ raw_response: "first", error: { kind: "parse", message: "bad json" } }],
+    entry.turns.push({ kind: "user", text: "list files" });
+    entry.turns.push({
+      kind: "assistant",
+      response: { type: "command", content: "ls", risk_level: "low", final: true },
+      attempts: [{ llm_ms: 12 }],
+      llm_ms: 12,
     });
-    addRound(entry, { attempts: [{ raw_response: '{"type":"command"}' }] });
-    expect(entry.rounds).toHaveLength(2);
+    entry.turns.push({
+      kind: "final",
+      command: "ls",
+      exit_code: 0,
+      shell: "/bin/zsh",
+      source: "model",
+      exec_ms: 4,
+    });
+    expect(entry.turns.map((t) => t.kind)).toEqual(["user", "assistant", "final"]);
   });
 });
 
 describe("serializeEntry", () => {
   test("produces valid JSON", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
@@ -202,18 +212,17 @@ describe("serializeEntry", () => {
 
   test("omits undefined fields", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
     const parsed = JSON.parse(serializeEntry(entry));
     expect("attached_input" in parsed).toBe(false);
+    expect("parent_id" in parsed).toBe(false);
   });
 
   test("includes all present fields", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       attachedInputPath: "/tmp/wrap-scratch-abc/input",
       attachedInputSize: 10,
@@ -222,48 +231,48 @@ describe("serializeEntry", () => {
       promptHash: "abc",
     });
     entry.outcome = "success";
-    addRound(entry, {
-      attempts: [
-        {
-          parsed: {
-            type: "command",
-            content: "ls",
-            risk_level: "low",
-            final: true,
-          },
-        },
-      ],
-      execution: { command: "ls", exit_code: 0, shell: "/bin/zsh" },
+    entry.turns.push({ kind: "user", text: "list" });
+    entry.turns.push({
+      kind: "assistant",
+      response: { type: "command", content: "ls", risk_level: "low", final: true },
+      attempts: [{ llm_ms: 5 }],
+      llm_ms: 5,
+    });
+    entry.turns.push({
+      kind: "final",
+      command: "ls",
+      exit_code: 0,
+      shell: "/bin/zsh",
+      source: "model",
+      exec_ms: 3,
     });
     const parsed = JSON.parse(serializeEntry(entry));
     expect(parsed.attached_input?.preview).toBe("stdin data");
     expect(parsed.outcome).toBe("success");
-    expect(parsed.rounds[0].attempts[0].parsed.content).toBe("ls");
-    expect(parsed.rounds[0].execution.exit_code).toBe(0);
-    expect("raw_response" in parsed.rounds[0].attempts[0]).toBe(false);
+    expect(parsed.turns[1].response.content).toBe("ls");
+    expect(parsed.turns[2].command).toBe("ls");
+    expect(parsed.turns[2].exit_code).toBe(0);
   });
 
   test("omits null-valued attempt fields on parse failure", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
     });
-    addRound(entry, {
+    entry.turns.push({
+      kind: "assistant",
       attempts: [{ raw_response: "garbage", error: { kind: "parse", message: "bad json" } }],
     });
     const parsed = JSON.parse(serializeEntry(entry));
-    const attempt = parsed.rounds[0].attempts[0];
-    expect("raw_response" in attempt).toBe(true);
-    expect(attempt.error.kind).toBe("parse");
-    expect("parsed" in attempt).toBe(false);
-    expect("execution" in parsed.rounds[0]).toBe(false);
+    const turn = parsed.turns[0];
+    expect("response" in turn).toBe(false);
+    expect(turn.attempts[0].raw_response).toBe("garbage");
+    expect(turn.attempts[0].error.kind).toBe("parse");
   });
 
   test("does not contain newlines (single JSONL line)", () => {
     const entry = createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
@@ -279,7 +288,6 @@ describe("appendLogEntry", () => {
 
   function makeEntry() {
     return createLogEntry({
-      prompt: "test",
       cwd: "/tmp",
       provider: TEST_RESOLVED_PROVIDER,
       promptHash: "abc",
@@ -337,7 +345,10 @@ describe("appendLogEntry", () => {
     writeFileSync(join(home, "logs", "traces"), "");
 
     const entry = makeEntry();
-    addRound(entry, { attempts: [{ request_wire: { kind: "test" } }] });
+    entry.turns.push({
+      kind: "assistant",
+      attempts: [{ request_wire: { kind: "test" } }],
+    });
 
     expect(() => appendLogEntry(home, entry)).toThrow();
 
@@ -362,8 +373,18 @@ function seedMemoryIn(home: string) {
   writeFileSync(join(home, "memory.json"), '{"/":[{"fact":"test"}]}');
 }
 
+/** Pull the first / nth / last turn of a given kind. */
+function turnOfKind<K extends string>(
+  entry: { turns: { kind: string }[] },
+  kind: K,
+  index = 0,
+): Record<string, unknown> | undefined {
+  const matches = entry.turns.filter((t) => t.kind === kind);
+  return matches[index] as Record<string, unknown> | undefined;
+}
+
 describe("logging integration", () => {
-  test("successful command: outcome, execution, and timing", async () => {
+  test("successful command: outcome, turns, final-turn execution, and timing", async () => {
     const result = await wrapMock("list files", {
       type: "command",
       content: "echo hello",
@@ -371,18 +392,26 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("success");
-    expect(entry.prompt).toBe("list files");
-    expect(entry.rounds).toHaveLength(1);
-    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("command");
-    expect(entry.rounds[0].execution.command).toBe("echo hello");
-    expect(entry.rounds[0].execution.exit_code).toBe(0);
-    expect(entry.rounds[0].execution.shell).toBe(process.env.SHELL || "sh");
-    // Timing
-    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
-    expect(entry.rounds[0].exec_ms).toBeGreaterThanOrEqual(0);
+    // user → assistant → final
+    expect(entry.turns.map((t: { kind: string }) => t.kind)).toEqual([
+      "user",
+      "assistant",
+      "final",
+    ]);
+    const userTurn = turnOfKind(entry, "user");
+    expect(userTurn?.text).toBe("list files");
+    const assistant = turnOfKind(entry, "assistant");
+    expect((assistant?.response as { type: string }).type).toBe("command");
+    expect(assistant?.llm_ms).toBeGreaterThanOrEqual(0);
+    const final = turnOfKind(entry, "final");
+    expect(final?.command).toBe("echo hello");
+    expect(final?.exit_code).toBe(0);
+    expect(final?.shell).toBe(process.env.SHELL || "sh");
+    expect(final?.source).toBe("model");
+    expect(final?.exec_ms).toBeGreaterThanOrEqual(0);
   });
 
-  test("successful answer: outcome, fields, timing, no execution", async () => {
+  test("successful answer: no final turn; assistant carries the reply", async () => {
     const result = await wrapMock("what is 2+2", {
       type: "reply",
       content: "4",
@@ -390,24 +419,23 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("success");
-    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("reply");
-    expect(entry.rounds[0].execution).toBeUndefined();
+    expect(entry.turns.map((t: { kind: string }) => t.kind)).toEqual(["user", "assistant"]);
+    const assistant = turnOfKind(entry, "assistant");
+    expect((assistant?.response as { type: string }).type).toBe("reply");
     // Invocation-level fields
     expect(entry.id).toMatch(/^[0-9a-f]{8}-/);
     expect(entry.timestamp).toBeDefined();
-    expect(entry.prompt).toBe("what is 2+2");
     expect(entry.cwd).toBeDefined();
     expect(entry.provider).toEqual(TEST_RESOLVED_PROVIDER);
     expect(entry.prompt_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(typeof entry.version).toBe("string");
     expect(entry.version.length).toBeGreaterThan(0);
-    // Timing: llm_ms present, exec_ms absent
-    expect(entry.rounds[0].llm_ms).toBeGreaterThanOrEqual(0);
-    expect(typeof entry.rounds[0].llm_ms).toBe("number");
-    expect("exec_ms" in entry.rounds[0]).toBe(false);
-    // Successful parse omits raw_response
-    expect(entry.rounds[0].attempts.at(-1).parsed).toBeDefined();
-    expect("raw_response" in entry.rounds[0].attempts.at(-1)).toBe(false);
+    expect(entry.ppid).toBeNumber();
+    // Timing: llm_ms on the assistant turn
+    expect(assistant?.llm_ms).toBeGreaterThanOrEqual(0);
+    // Successful parse omits raw_response on the attempt
+    const attempt = (assistant?.attempts as { raw_response?: string }[])[0];
+    expect("raw_response" in (attempt ?? {})).toBe(false);
   });
 
   test("empty content logs with outcome 'error'", async () => {
@@ -418,10 +446,13 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("error");
-    expect(entry.rounds[0].attempts.at(-1).parsed.type).toBe("reply");
+    // The assistant turn carries the empty response on its attempt's error.
+    const assistant = turnOfKind(entry, "assistant");
+    const attempts = assistant?.attempts as { error?: { kind: string } }[];
+    expect(attempts[0]?.error?.kind).toBe("empty");
   });
 
-  test("parse error logs provider_error", async () => {
+  test("parse error logs provider_error on the failed attempt", async () => {
     const home = mkdtempSync(join(tmpdir(), "wrap-log-test-"));
     seedMemoryIn(home);
     const result = await wrap("test prompt", {
@@ -432,13 +463,14 @@ describe("logging integration", () => {
     expect(result.exitCode).not.toBe(0);
     const entry = readLog(home);
     expect(entry.outcome).toBe("error");
-    expect(entry.rounds).toHaveLength(1);
+    const assistant = turnOfKind(entry, "assistant");
+    expect(assistant).toBeDefined();
     // The test provider throws a raw JSON SyntaxError from its own JSON.parse,
     // which is not recognized as a structured-output error by the retry
     // ladder — so it surfaces on the first attempt as a provider-kind error.
-    const firstAttempt = entry.rounds[0].attempts[0];
-    expect(firstAttempt.error.kind).toBe("provider");
-    expect(firstAttempt.error.message).toBeDefined();
+    const attempts = assistant?.attempts as { error?: { kind: string; message?: string } }[];
+    expect(attempts[0]?.error?.kind).toBe("provider");
+    expect(attempts[0]?.error?.message).toBeDefined();
   });
 
   test("non-low risk command logs with outcome 'blocked' (no TTY)", async () => {
@@ -449,11 +481,15 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("blocked");
-    expect(entry.rounds[0].attempts.at(-1).parsed.content).toBe("echo rm-rf-fake");
-    expect(entry.rounds[0].execution).toBeUndefined();
+    const assistant = turnOfKind(entry, "assistant");
+    expect((assistant?.response as { content: string }).content).toBe("echo rm-rf-fake");
+    const final = turnOfKind(entry, "final");
+    expect(final?.source).toBe("blocked");
+    expect(final?.command).toBe("echo rm-rf-fake");
+    expect(final?.exit_code).toBeNull();
   });
 
-  test("command with non-zero exit code logs outcome 'error'", async () => {
+  test("command with non-zero exit code logs outcome 'error' and final exit_code", async () => {
     const result = await wrapMock("fail", {
       type: "command",
       content: "exit 1",
@@ -461,7 +497,8 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("error");
-    expect(entry.rounds[0].execution.exit_code).toBe(1);
+    const final = turnOfKind(entry, "final");
+    expect(final?.exit_code).toBe(1);
   });
 
   test("logs memory state from invocation", async () => {
@@ -524,14 +561,15 @@ describe("scrubApiKey", () => {
 });
 
 describe("log traces — default off", () => {
-  test("successful round omits request/request_wire/response_wire", async () => {
+  test("successful round omits request/request_wire/response_wire on the assistant attempt", async () => {
     const result = await wrapMock("list files", {
       type: "command",
       content: "echo hi",
       risk_level: "low",
     });
     const entry = readLog(result.wrapHome);
-    const attempt = entry.rounds[0].attempts.at(-1);
+    const assistant = turnOfKind(entry, "assistant");
+    const attempt = (assistant?.attempts as Record<string, unknown>[])[0] ?? {};
     expect("request" in attempt).toBe(false);
     expect("request_wire" in attempt).toBe(false);
     expect("response_wire" in attempt).toBe(false);
@@ -541,14 +579,15 @@ describe("log traces — default off", () => {
 });
 
 describe("log traces — enabled", () => {
-  test("trace fields go to sidecar; entry stays lean", async () => {
+  test("trace fields go to sidecar keyed by turn index; entry stays lean", async () => {
     const result = await wrapMock(
       "list files",
       { type: "command", content: "echo hi", risk_level: "low" },
       { logTraces: true },
     );
     const entry = readLog(result.wrapHome);
-    const attempt = entry.rounds[0].attempts.at(-1);
+    const assistant = turnOfKind(entry, "assistant");
+    const attempt = (assistant?.attempts as Record<string, unknown>[])[0] ?? {};
     expect("request" in attempt).toBe(false);
     expect("request_wire" in attempt).toBe(false);
     expect("response_wire" in attempt).toBe(false);
@@ -558,7 +597,8 @@ describe("log traces — enabled", () => {
     expect(existsSync(tracePath)).toBe(true);
     const trace = JSON.parse(readFileSync(tracePath, "utf-8"));
     expect(trace.entry_id).toBe(entry.id);
-    const traced = trace.rounds[0].attempts[0];
+    // The assistant turn is at index 1 (user is at 0).
+    const traced = trace.turn_attempts["1"][0];
     expect(traced.request).toBeDefined();
     expect(traced.request.system).toBeDefined();
     expect(Array.isArray(traced.request.messages)).toBe(true);

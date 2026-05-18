@@ -16,11 +16,12 @@ export type PromptConfig = {
 };
 
 /**
- * The static, per-session pieces of the prompt: the system text, the few-shot
- * example messages (as a flat conversation prefix), and the formatted initial
- * user-request text. The session uses these to seed a `Transcript` and the
- * `LoopOptions`. Pure function — produced once at session start, not on
- * every round.
+ * The static, per-session pieces of the prompt: system text, few-shot
+ * example messages (as a flat conversation prefix), and the formatted
+ * `contextString` (memory, tools, cwd, attached input). The session passes
+ * `contextString` + `sectionUserRequest` to `buildPromptInput` as a
+ * `requestFraming` directive so the first user turn is wrapped at
+ * projection time — storage is bare, framing is per-invocation.
  */
 export type PromptScaffold = {
   system: string;
@@ -31,19 +32,17 @@ export type PromptScaffold = {
    */
   prefixMessages: ReadonlyArray<ConversationMessage>;
   /**
-   * The text content of the initial user turn the session pushes to the
-   * transcript: `${contextString}\n\n${sectionUserRequest}\n${query}` (or
-   * whichever subset of those parts is non-empty).
+   * The formatted context block (memory/tools/cwd/attached input). Wrapped
+   * around the first user turn at projection time via `requestFraming`. May
+   * be empty.
    */
-  initialUserText: string;
+  contextString: string;
+  /** Pinned section header — paired with `contextString` in `requestFraming`. */
+  sectionUserRequest: string;
 };
 
 /** Assemble the per-session prompt scaffold. Pure function. */
-export function buildPromptScaffold(
-  config: PromptConfig,
-  contextString: string,
-  query: string,
-): PromptScaffold {
+export function buildPromptScaffold(config: PromptConfig, contextString: string): PromptScaffold {
   const systemParts: string[] = [
     config.instruction,
     config.memoryRecencyInstruction,
@@ -68,13 +67,10 @@ export function buildPromptScaffold(
     prefixMessages.push({ role: "user", content: config.fewShotSeparator });
   }
 
-  const userParts: string[] = [];
-  if (contextString) userParts.push(contextString);
-  if (query) userParts.push(`${config.sectionUserRequest}\n${query}`);
-
   return {
     system: systemParts.join("\n\n"),
     prefixMessages,
-    initialUserText: userParts.join("\n\n"),
+    contextString,
+    sectionUserRequest: config.sectionUserRequest,
   };
 }

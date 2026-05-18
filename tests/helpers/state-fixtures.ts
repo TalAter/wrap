@@ -1,5 +1,4 @@
 import type { CommandResponse, RiskLevel } from "../../src/command-response.schema.ts";
-import type { Round } from "../../src/logging/entry.ts";
 import type {
   ComposingInteractiveState,
   ComposingState,
@@ -21,19 +20,11 @@ export function makeResponse(overrides: Partial<CommandResponse> = {}): CommandR
   } as CommandResponse;
 }
 
-export function makeRound(parsed?: CommandResponse): Round {
-  return {
-    attempts: [{ parsed: parsed ?? makeResponse(), llm_ms: 12 }],
-    llm_ms: 12,
-  };
-}
-
 export function makeConfirming(overrides: Partial<ConfirmingState> = {}): ConfirmingState {
   const response = overrides.response ?? makeResponse();
   return {
     tag: "confirming",
     response,
-    round: overrides.round ?? makeRound(response),
     outputSlot: overrides.outputSlot,
   };
 }
@@ -43,7 +34,6 @@ export function makeEditing(overrides: Partial<EditingState> = {}): EditingState
   return {
     tag: "editing",
     response,
-    round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? response.content,
     outputSlot: overrides.outputSlot,
   };
@@ -54,7 +44,6 @@ export function makeComposing(overrides: Partial<ComposingState> = {}): Composin
   return {
     tag: "composing-followup",
     response,
-    round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? "",
     outputSlot: overrides.outputSlot,
   };
@@ -65,7 +54,6 @@ export function makeProcessing(overrides: Partial<ProcessingState> = {}): Proces
   return {
     tag: "processing-followup",
     response,
-    round: overrides.round ?? makeRound(response),
     draft: overrides.draft ?? "be safer",
     status: overrides.status,
     outputSlot: overrides.outputSlot,
@@ -97,7 +85,6 @@ export function makeEditorHandoff(overrides: Partial<EditorHandoffState> = {}): 
     origin: overrides.origin ?? "composing-interactive",
     draft: overrides.draft ?? "",
     response: overrides.response,
-    round: overrides.round,
     outputSlot: overrides.outputSlot,
   };
 }
@@ -107,7 +94,7 @@ export function makeExecutingStep(overrides: Partial<ExecutingStepState> = {}): 
   return {
     tag: "executing-step",
     response,
-    round: overrides.round ?? makeRound(response),
+    source: overrides.source ?? "model",
     outputSlot: overrides.outputSlot,
   };
 }

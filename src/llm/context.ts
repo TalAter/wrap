@@ -6,7 +6,6 @@ import { buildPromptScaffold, type PromptScaffold } from "./build-prompt.ts";
 import { formatContext } from "./format-context.ts";
 
 export type QueryContext = {
-  prompt: string;
   cwd: string;
   memory: Memory;
   tools?: ToolProbeResult | null;
@@ -20,9 +19,10 @@ export type QueryContext = {
 
 /**
  * Assemble the per-session prompt scaffold (system text, static prefix
- * messages, and the initial user-turn text). The session calls this once
- * at startup; the runner re-uses `system` + `prefixMessages` on every
- * `runRound` call via `buildPromptInput`.
+ * messages, formatted context block). The session calls this once at
+ * startup; the runner re-uses everything on every `runRound` call via
+ * `buildPromptInput`. The user's bare prompt is NOT part of the scaffold —
+ * it's stored as a `user` Turn and framed at projection time.
  */
 export function assemblePromptScaffold(ctx: QueryContext): PromptScaffold {
   const contextString = formatContext({
@@ -57,6 +57,5 @@ export function assemblePromptScaffold(ctx: QueryContext): PromptScaffold {
       sectionUserRequest: promptConstants.sectionUserRequest,
     },
     contextString,
-    ctx.prompt,
   );
 }

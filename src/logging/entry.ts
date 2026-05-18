@@ -1,6 +1,6 @@
 import pkg from "../../package.json";
 import type { CommandResponse } from "../command-response.schema.ts";
-import type { ResolvedProvider } from "../llm/types.ts";
+import type { PromptInput, ResolvedProvider } from "../llm/types.ts";
 import type { Memory } from "../memory/types.ts";
 
 function redactProvider(provider: ResolvedProvider): ResolvedProvider {
@@ -67,16 +67,10 @@ export type WireCapture = {
   wire_capture_error?: string;
 };
 
-export type Execution = {
-  command: string;
-  exit_code: number;
-  shell: string;
-};
-
 /**
- * Categorical error reported per Attempt. Parsing failures, provider errors,
- * and empty-content responses are distinct enough that consumers want to
- * discriminate without string-matching a free-text message.
+ * Categorical error reported per AttemptMeta. Parsing failures, provider
+ * errors, and empty-content responses are distinct enough that consumers
+ * want to discriminate without string-matching a free-text message.
  */
 export type AttemptError =
   | { kind: "parse"; message: string }
@@ -84,53 +78,115 @@ export type AttemptError =
   | { kind: "empty"; message: string };
 
 /**
- * One physical LLM call inside a round. Up to four per round: initial →
- * json-retry → scratchpad-retry → json-retry of scratchpad. Every successful
- * ladder appends at least one.
+ * One physical LLM call inside an `assistant` turn. Up to four per turn:
+ * initial → json-retry → scratchpad-retry → json-retry of the scratchpad.
+ * Every successful ladder appends at least one.
  *
  * Detail-mode-gated fields (`request`, `request_wire`, `response_wire`) are
  * only populated when the user opts in via `logTraces`. `raw_response` keeps
  * its always-on-parse-failure behavior plus always-on-success when
- * `logTraces` is on.
+ * `logTraces` is on. The trace fields are extracted to a sidecar at write
+ * time; the on-disk JSONL stays lean.
  */
-export type Attempt = {
-  request?: import("../llm/types.ts").PromptInput;
+export type AttemptMeta = {
+  /**
+   * The parsed response from this specific physical call. Forensic detail —
+   * lets the log show, e.g., that the first scratchpad attempt came back
+   * null before the retry. The canonical post-ladder response is on the
+   * containing assistant turn, not here.
+   */
+  parsed?: CommandResponse;
+  request?: PromptInput;
   request_wire?: WireRequest;
   raw_response?: string;
   response_wire?: WireResponse;
-  parsed?: CommandResponse;
   error?: AttemptError;
   wire_capture_error?: string;
   llm_ms?: number;
 };
 
-export type Round = {
+/**
+ * Semantic conversation turn. The LogEntry's `turns[]` and the runtime
+ * transcript are the same array — one shape, two consumers (the JSONL
+ * writer and the LLM projector).
+ */
+export type Turn =
   /**
-   * Canonical record of the round's LLM calls — always length >= 1 when the
-   * round reaches the loggable state. `runRound` appends one attempt per
-   * physical call before deciding whether to retry.
+   * A user message — the initial query (first user turn) or a follow-up
+   * typed into the dialog. Stored as bare text; framing (context,
+   * sectionUserRequest) is applied at projection time only.
    */
-  attempts: Attempt[];
-  execution?: Execution;
-  /** Wall-clock sum across attempts. Kept round-level for back-compat jq patterns. */
-  llm_ms?: number;
-  exec_ms?: number;
+  | { kind: "user"; text: string }
   /**
-   * The user's follow-up text that triggered this round, set only on the
-   * FIRST round produced by a follow-up call. Subsequent rounds in the same
-   * call (e.g. probe → command) leave it unset so the log can faithfully
-   * reconstruct which user message kicked off which sequence. The very first
-   * user turn of the entry is NOT a follow-up — it lives on `LogEntry.prompt`.
+   * One LLM round. `response` is the last successful parse (absent only
+   * when every attempt in the round failed). `attempts[]` enumerates every
+   * physical LLM call including failures, for forensic use.
    */
-  followup_text?: string;
-};
+  | {
+      kind: "assistant";
+      response?: CommandResponse;
+      attempts: AttemptMeta[];
+      llm_ms?: number;
+    }
+  /**
+   * A non-final execution: an inline low-risk step run by the runner OR a
+   * med/high step the user confirmed via the dialog. `command` is the
+   * executed bytes (may differ from the prior assistant turn's
+   * `response.content` on `user_override`). `output` is post-truncation
+   * captured stdout+stderr.
+   */
+  | {
+      kind: "step";
+      command: string;
+      exit_code: number;
+      output: string;
+      shell: string;
+      source: "model" | "user_override";
+      exec_ms?: number;
+    }
+  /**
+   * Session's final outcome. One per session — pushed at session end
+   * whenever a final response was reached or attempted. Pure-answer
+   * sessions have no `final` turn (the answer is the last assistant turn).
+   *
+   * - `model` / `user_override`: actual execution; `exit_code` set.
+   * - `cancelled` / `blocked`: user cancelled or rule blocked; `command`
+   *   is the proposed bytes, `exit_code` null.
+   * - `exhausted` / `error`: budget hit or unrecoverable error; `command`
+   *   is the last LLM-proposed bytes (else empty), `exit_code` null.
+   */
+  | {
+      kind: "final";
+      command: string;
+      exit_code: number | null;
+      shell?: string;
+      source: "model" | "user_override" | "cancelled" | "blocked" | "exhausted" | "error";
+      exec_ms?: number;
+    }
+  /**
+   * Continuation only: cwd changed between the parent invocation and the
+   * child. Never appears in a single-invocation entry.
+   */
+  | { kind: "cwd_change"; from: string; to: string };
+
+/**
+ * Convenience alias for the assistant Turn variant. `runRound` builds and
+ * returns one of these; the runner pushes it directly onto `entry.turns`.
+ */
+export type AssistantTurn = Extract<Turn, { kind: "assistant" }>;
 
 export type LogEntry = {
   id: string;
   timestamp: string;
   version: string;
-  prompt: string;
   cwd: string;
+  /** `process.ppid` at session start. Stamped on every entry. */
+  ppid: number;
+  /**
+   * Set by continuation when this entry resumes another. Always absent
+   * outside the continuation path.
+   */
+  parent_id?: string;
   /**
    * Recorded when stdin was piped.
    * - `path` is ephemeral — the per-invocation temp dir is removed by the OS
@@ -149,7 +205,11 @@ export type LogEntry = {
   memory?: Memory;
   provider: ResolvedProvider;
   prompt_hash: string;
-  rounds: Round[];
+  /**
+   * Semantic conversation: user / assistant / step / final / cwd_change.
+   * This is the runtime transcript and the durable log — one shape.
+   */
+  turns: Turn[];
   outcome: "success" | "error" | "blocked" | "cancelled" | "max_rounds";
   /** How the prompt arrived: argv (default), pipe (stdin), or tui (the
    *  interactive composer). Absent entries predate this field and should be
@@ -158,7 +218,6 @@ export type LogEntry = {
 };
 
 export function createLogEntry(params: {
-  prompt: string;
   cwd: string;
   attachedInputPath?: string;
   attachedInputSize?: number;
@@ -167,16 +226,18 @@ export function createLogEntry(params: {
   provider: ResolvedProvider;
   promptHash: string;
   inputSource?: "argv" | "pipe" | "tui";
+  /** Override for `process.ppid` — only used by tests. */
+  ppid?: number;
 }): LogEntry {
   const entry: LogEntry = {
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
     version: pkg.version,
-    prompt: params.prompt,
     cwd: params.cwd,
+    ppid: params.ppid ?? process.ppid,
     provider: redactProvider(params.provider),
     prompt_hash: params.promptHash,
-    rounds: [],
+    turns: [],
     outcome: "error",
   };
   if (
@@ -200,10 +261,6 @@ export function createLogEntry(params: {
   }
   if (params.inputSource !== undefined) entry.input_source = params.inputSource;
   return entry;
-}
-
-export function addRound(entry: LogEntry, round: Round): void {
-  entry.rounds.push(round);
 }
 
 export function serializeEntry(entry: LogEntry): string {

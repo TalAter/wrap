@@ -1,7 +1,6 @@
 import type { CommandResponse } from "../command-response.schema.ts";
 import type { Notification } from "../core/notify.ts";
 import type { LoopReturn } from "../core/runner.ts";
-import type { Round } from "../logging/entry.ts";
 
 /** All states the session can be in. The dialog is mounted iff `tag` is one
  *  of the dialog tags (confirming, editing, composing-followup, processing-followup,
@@ -29,7 +28,7 @@ export type ThinkingState = { tag: "thinking" };
  * `command`, `risk`, and `explanation` are NOT separate fields — they are
  * derived from `response.content`, `response.risk_level`, and
  * `response.explanation`. The dialog reads them via `state.response.*`;
- * the reducer threads `response` and `round` through every transition. */
+ * the reducer threads `response` through every transition. */
 export type ConfirmingState = {
   tag: "confirming";
   /** The full LLM response. The dialog reads command/risk/explanation off
@@ -38,9 +37,6 @@ export type ConfirmingState = {
    *  `response.content`) and `source: "user_override"` (which records both
    *  the executed bytes and the original model response) need it. */
   response: CommandResponse;
-  /** The eagerly-logged round for this command — kept on state so the
-   *  exiting{run} hook can mutate `exec_ms`/`execution` on it after exec. */
-  round: Round;
   /** Last step's captured output (post-truncation), rendered in the output
    *  slot between the top border and the command strip. Persists across
    *  transitions within one dialog lifecycle — reset only when the dialog
@@ -52,7 +48,6 @@ export type ConfirmingState = {
 export type EditingState = {
   tag: "editing";
   response: CommandResponse;
-  round: Round;
   /** Live edit buffer. The "discard to original" Esc behaviour reads from
    *  `response.content` (no separate `original` field needed). */
   draft: string;
@@ -63,7 +58,6 @@ export type EditingState = {
 export type ComposingState = {
   tag: "composing-followup";
   response: CommandResponse;
-  round: Round;
   /** Live follow-up text. Preserved into processing-followup and back. */
   draft: string;
   outputSlot?: string;
@@ -73,7 +67,6 @@ export type ComposingState = {
 export type ProcessingState = {
   tag: "processing-followup";
   response: CommandResponse;
-  round: Round;
   /** The follow-up text the user submitted; preserved so Esc → composing-followup keeps it. */
   draft: string;
   /** Latest chrome line, shown in the bottom border. */
@@ -120,9 +113,8 @@ export type EditorHandoffState = {
   /** Buffer the user had when Ctrl-G was pressed. Preserved verbatim if the
    *  editor exits non-zero or writes nothing. */
   draft: string;
-  /** Threaded for origins that carry a response/round (composing-followup, editing). */
+  /** Threaded for origins that carry a response (composing-followup, editing). */
   response?: CommandResponse;
-  round?: Round;
   outputSlot?: string;
 };
 
@@ -132,11 +124,16 @@ export type EditorHandoffState = {
  * visible, new step-output notifications replace `outputSlot`. The
  * submit-step-confirm post-transition hook kicks off the capture + re-
  * enters pumpLoop when the state lands on this tag.
+ *
+ * `source` discriminates the path that led here:
+ *   - `model`         — user confirmed the model's command unchanged.
+ *   - `user_override` — user edited the command before confirming.
+ * The session uses this to stamp the `step` turn's `source` field.
  */
 export type ExecutingStepState = {
   tag: "executing-step";
   response: CommandResponse;
-  round: Round;
+  source: "model" | "user_override";
   outputSlot?: string;
 };
 
@@ -153,23 +150,23 @@ export type SessionOutcome =
    * `source` distinguishes the model's command from a user-edited override.
    * `model`         — exactly what the LLM produced; `command === response.content`.
    * `user_override` — the user opened Edit, modified the text, and ran it.
-   *                   `command !== response.content`. The log records both
-   *                   `command` (what ran) and `response.content` (what the
-   *                   model said) so audits can tell them apart.
+   *                   `command !== response.content`. The log's `final` turn
+   *                   records the executed bytes and `source`; the prior
+   *                   assistant turn carries the original model response, so
+   *                   audits can tell them apart.
    */
   | {
       kind: "run";
       command: string;
       response: CommandResponse;
-      round: Round;
       source: "model" | "user_override";
     }
   /** A reply/answer was returned (initial or via follow-up). Print to stdout. */
   | { kind: "answer"; content: string }
   /** User cancelled. Exit code 0 — user-initiated abort is graceful. */
-  | { kind: "cancel" }
+  | { kind: "cancel"; response?: CommandResponse }
   /** No TTY, can't show the dialog. Exit code 1 with a chrome line explaining. */
-  | { kind: "blocked"; command: string }
+  | { kind: "blocked"; command: string; response?: CommandResponse }
   /** Round budget hit zero without a final response. Exit code 1. */
   | { kind: "exhausted" }
   /** Loop or session error. Throws after appendLogEntry runs. */
@@ -188,7 +185,7 @@ export type AppEvent =
    * but `process.stderr.isTTY` is false. Carries the command that would
    * have been confirmed so the reducer can route to `exiting{blocked}`.
    */
-  | { type: "block"; command: string }
+  | { type: "block"; command: string; response: CommandResponse }
   // ──── from the notification bus (relayed by the coordinator while in `processing-followup`) ────
   | { type: "notification"; notification: Notification }
   // ──── from the dialog ────
@@ -222,12 +219,3 @@ export function isDialogTag(tag: AppState["tag"]): boolean {
     tag === "executing-step"
   );
 }
-
-/**
- * Add a `submit-step-confirm` event to the reducer surface? No — the
- * confirmation event is the existing `key-action run` on `confirming`
- * with a non-final med/high `response`. The reducer distinguishes that
- * case and transitions to `executing-step`; the coordinator drives the
- * capture + re-pump via a post-transition hook parallel to
- * `submit-followup`.
- */

@@ -12,7 +12,8 @@ import { capturedStderr as stderr } from "./preload.ts";
 const scaffold: PromptScaffold = {
   system: "system",
   prefixMessages: [],
-  initialUserText: "",
+  contextString: "",
+  sectionUserRequest: "## User's request",
 };
 
 beforeEach(() => {
@@ -44,30 +45,31 @@ function makeProvider(responses: CommandResponse[]): { provider: Provider; captu
 }
 
 describe("runRound", () => {
-  test("returns a Round with parsed set on a successful command", async () => {
+  test("returns an AssistantTurn with response set on a successful command", async () => {
     const { provider } = makeProvider([
       { type: "command", content: "ls", risk_level: "low" } as CommandResponse,
     ]);
-    const round = await runRound(provider, makeTranscript(), scaffold, {
+    const turn = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
-    expect(round.attempts.at(-1)?.parsed?.type).toBe("command");
-    expect(round.attempts.at(-1)?.parsed?.content).toBe("ls");
-    expect(typeof round.llm_ms).toBe("number");
+    expect(turn.kind).toBe("assistant");
+    expect(turn.response?.type).toBe("command");
+    expect(turn.response?.content).toBe("ls");
+    expect(typeof turn.llm_ms).toBe("number");
   });
 
-  test("returns a Round with parsed set on a successful answer", async () => {
+  test("returns an AssistantTurn with response set on a successful answer", async () => {
     const { provider } = makeProvider([
       { type: "reply", content: "hello", risk_level: "low" } as CommandResponse,
     ]);
-    const round = await runRound(provider, makeTranscript(), scaffold, {
+    const turn = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
-    expect(round.attempts.at(-1)?.parsed?.type).toBe("reply");
+    expect(turn.response?.type).toBe("reply");
   });
 
   test("the LLM sees a temp-dir listing as live context each round", async () => {
@@ -147,8 +149,8 @@ describe("runRound", () => {
     expect(thrown).toBeInstanceOf(RoundError);
     if (thrown instanceof RoundError) {
       expect(thrown.message).toBe("LLM returned an empty response.");
-      expect(thrown.round.attempts.at(-1)?.parsed).toBeDefined();
-      expect(thrown.round.attempts.at(-1)?.error?.kind).toBe("empty");
+      expect(thrown.turn.attempts.at(-1)?.parsed).toBeDefined();
+      expect(thrown.turn.attempts.at(-1)?.error?.kind).toBe("empty");
     }
   });
 
@@ -172,8 +174,8 @@ describe("runRound", () => {
     if (thrown instanceof RoundError) {
       expect(thrown.message).toContain("test / model");
       expect(thrown.message).toContain("network down");
-      expect(thrown.round.attempts[0]?.error?.kind).toBe("provider");
-      expect(thrown.round.attempts[0]?.error?.message).toBe("network down");
+      expect(thrown.turn.attempts[0]?.error?.kind).toBe("provider");
+      expect(thrown.turn.attempts[0]?.error?.message).toBe("network down");
     }
   });
 
@@ -230,15 +232,15 @@ describe("runRound", () => {
         risk_level: "high",
       } as CommandResponse,
     ]);
-    const round = await runRound(provider, makeTranscript(), scaffold, {
+    const turn = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
     expect(captured.calls).toBe(2);
-    expect(round.attempts).toHaveLength(2);
-    expect(round.attempts[0]?.parsed?._scratchpad).toBeNull();
-    expect(round.attempts.at(-1)?.parsed?._scratchpad).toBe(
+    expect(turn.attempts).toHaveLength(2);
+    expect(turn.attempts[0]?.parsed?._scratchpad).toBeNull();
+    expect(turn.attempts.at(-1)?.parsed?._scratchpad).toBe(
       "Destructive: blow away deps for a clean install.",
     );
     // The retry call must include the scratchpadRequiredInstruction
@@ -298,13 +300,13 @@ describe("runRound", () => {
         risk_level: "high",
       } as CommandResponse,
     ]);
-    const round = await runRound(provider, makeTranscript(), scaffold, {
+    const turn = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
     expect(captured.calls).toBe(2);
-    expect(round.attempts.at(-1)?.parsed?.type).toBe("command");
+    expect(turn.attempts.at(-1)?.parsed?.type).toBe("command");
   });
 
   test("json-retry appends a user turn carrying the retry instruction", async () => {
@@ -375,7 +377,7 @@ describe("runRound", () => {
     }
     expect(thrown).toBeInstanceOf(RoundError);
     if (thrown instanceof RoundError) {
-      expect(thrown.round.attempts).toHaveLength(2);
+      expect(thrown.turn.attempts).toHaveLength(2);
       expect(thrown.message).toContain("invalid JSON: still broken");
     }
   });
@@ -392,19 +394,19 @@ describe("runRound", () => {
         return { type: "command", content: "ls", risk_level: "low" } as CommandResponse;
       },
     };
-    const round = await runRound(provider, makeTranscript(), scaffold, {
+    const turn = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
     expect(calls).toBe(2);
-    expect(round.attempts).toHaveLength(2);
-    expect(round.attempts[0]?.error?.kind).toBe("parse");
-    expect(round.attempts[0]?.parsed).toBeUndefined();
-    expect(round.attempts.at(-1)?.parsed?.content).toBe("ls");
+    expect(turn.attempts).toHaveLength(2);
+    expect(turn.attempts[0]?.error?.kind).toBe("parse");
+    expect(turn.attempts[0]?.parsed).toBeUndefined();
+    expect(turn.attempts.at(-1)?.parsed?.content).toBe("ls");
   });
 
-  test("sums llm_ms across attempts into round.llm_ms", async () => {
+  test("sums llm_ms across attempts into turn.llm_ms", async () => {
     let calls = 0;
     const provider: Provider = {
       runPrompt: async () => {
@@ -413,13 +415,13 @@ describe("runRound", () => {
         return { type: "command", content: "ls", risk_level: "low" } as CommandResponse;
       },
     };
-    const round = await runRound(provider, makeTranscript(), scaffold, {
+    const turn = await runRound(provider, makeTranscript(), scaffold, {
       isLastRound: false,
       model: "test",
       showSpinner: false,
     });
-    expect(round.attempts).toHaveLength(2);
-    const per = round.attempts.reduce((sum, a) => sum + (a.llm_ms ?? 0), 0);
-    expect(round.llm_ms).toBe(per);
+    expect(turn.attempts).toHaveLength(2);
+    const per = turn.attempts.reduce((sum, a) => sum + (a.llm_ms ?? 0), 0);
+    expect(turn.llm_ms).toBe(per);
   });
 });

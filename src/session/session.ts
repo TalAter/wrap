@@ -17,7 +17,7 @@ import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { getWrapHome } from "../fs/home.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
 import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
-import { addRound, createLogEntry, type LogEntry } from "../logging/entry.ts";
+import { createLogEntry, type LogEntry } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
@@ -50,8 +50,6 @@ export type SessionOptions = {
 /**
  * Run a single user query end-to-end. Returns the process exit code.
  * Caller is responsible for `process.exit()`.
- *
- * Replaces the old `runQuery`. Same external contract.
  */
 export async function runSession(
   prompt: string,
@@ -65,7 +63,6 @@ export async function runSession(
   const memory = options.memory ?? {};
 
   const entry = createLogEntry({
-    prompt,
     cwd: options.cwd,
     attachedInputPreview: options.attachedInputPreview,
     attachedInputPath: options.attachedInputPath,
@@ -76,9 +73,8 @@ export async function runSession(
     inputSource: options.inputSource,
   });
 
-  const buildScaffold = (p: string) =>
+  const buildScaffold = () =>
     assemblePromptScaffold({
-      prompt: p,
       cwd: options.cwd,
       memory,
       tools: options.tools,
@@ -95,19 +91,24 @@ export async function runSession(
   // transcript stays empty until submit so we don't send an unqualified
   // context blurb to the LLM.
   const isInteractiveBootstrap = prompt === "" && process.stdin.isTTY === true;
-  let scaffold = buildScaffold(prompt);
+  let scaffold = buildScaffold();
 
-  const transcript: Transcript = [];
+  // The transcript IS entry.turns — one shape, two consumers.
+  const transcript: Transcript = entry.turns;
   if (!isInteractiveBootstrap) {
-    transcript.push({ kind: "user", text: scaffold.initialUserText });
+    transcript.push({ kind: "user", text: prompt });
   }
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const model = formatProvider(options.resolvedProvider);
-  const baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner"> = {
+  const baseLoopOptions = (): Omit<LoopOptions, "signal" | "showSpinner"> => ({
     cwd: options.cwd,
     wrapHome,
     model,
-  };
+    requestFraming: {
+      contextString: scaffold.contextString,
+      sectionUserRequest: scaffold.sectionUserRequest,
+    },
+  });
 
   // Kicked off in parallel with the first LLM call so the first-mount
   // await is free in practice. The .catch surfaces a failed dynamic import
@@ -162,23 +163,21 @@ export async function runSession(
     }
     const entered = state.tag !== prevTag;
     if (entered && state.tag === "processing-followup") {
-      // submit-followup just landed. The previous `candidate_command` turn
-      // is already in the transcript, so pushing a user turn here gives the
-      // LLM `[..., candidate, user]` — no message-history hygiene needed.
+      // submit-followup just landed. The previous assistant turn is already
+      // in the transcript; we push a follow-up user turn so the LLM sees
+      // `[..., assistant, user]` — no message-history hygiene needed.
       const followupText = state.draft;
       transcript.push({ kind: "user", text: followupText });
       loopState.budgetRemaining = maxRounds;
-      startPumpLoop({ isInitialLoop: false, followupText });
+      startPumpLoop();
     }
     if (entered && state.tag === "processing-interactive") {
-      // submit-interactive just landed on an empty transcript. Reassemble
-      // the scaffold with the real draft so `initialUserText` carries the
-      // proper context + user request framing, then seed the transcript and
-      // pump. The chrome spinner is suppressed automatically because
-      // startPumpLoop reads isDialogTag(state.tag) — dialog is mounted.
-      scaffold = buildScaffold(state.draft);
-      transcript.push({ kind: "user", text: scaffold.initialUserText });
-      entry.prompt = state.draft;
+      // submit-interactive just landed on an empty transcript. Seed the
+      // transcript with a bare user turn (framing is applied per-call by
+      // `requestFraming`). The chrome spinner is suppressed automatically
+      // because startPumpLoop reads isDialogTag(state.tag) — dialog is up.
+      scaffold = buildScaffold();
+      transcript.push({ kind: "user", text: state.draft });
       entry.input_source = "tui";
       // --verbose buffers lines through the notification bus while the dialog
       // is up and flushes on teardown, so this prompt echo lands in scrollback
@@ -188,7 +187,7 @@ export async function runSession(
         for (const line of state.draft.split("\n")) verbose(`prompt: ${line}`);
       }
       loopState.budgetRemaining = maxRounds;
-      startPumpLoop({ isInitialLoop: true, followupText: undefined });
+      startPumpLoop();
     }
     if (entered && state.tag === "editor-handoff") {
       void beginEditorHandoff(state.draft);
@@ -196,14 +195,15 @@ export async function runSession(
     if (entered && state.tag === "executing-step") {
       // submit-step-confirm hook: the user just confirmed a non-final
       // med/high step (or finished editing one). Capture its output,
-      // emit step-output through the bus, push a confirmed_step turn,
-      // reset budget, then re-enter pumpLoop for the next round.
-      void runConfirmedStep(state.response);
+      // emit step-output through the bus, push a step turn, reset budget,
+      // then re-enter pumpLoop for the next round.
+      void runConfirmedStep(state.response, state.source);
     }
   };
 
   async function runConfirmedStep(
     response: import("../command-response.schema.ts").CommandResponse,
+    source: "model" | "user_override",
   ): Promise<void> {
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
@@ -217,13 +217,16 @@ export async function runSession(
       stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
       notifications.emit({ kind: "step-output", text: stepOutput });
       transcript.push({
-        kind: "confirmed_step",
-        response,
+        kind: "step",
+        command: response.content,
+        exit_code: exec.exitCode,
         output: stepOutput,
-        exitCode: exec.exitCode,
+        shell: exec.shell,
+        source,
+        exec_ms: exec.exec_ms,
       });
       loopState.budgetRemaining = maxRounds;
-      startPumpLoop({ isInitialLoop: false, followupText: undefined });
+      startPumpLoop();
     } catch (e) {
       if (ctrl.signal.aborted) return;
       const err = e instanceof Error ? e : new Error(String(e));
@@ -284,28 +287,24 @@ export async function runSession(
     }
   }
 
-  function startPumpLoop(opts: { isInitialLoop: boolean; followupText: string | undefined }): void {
+  function startPumpLoop(): void {
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
     // The chrome spinner and the dialog's bottom-border spinner report the
     // same thing; only one should run at a time or they flicker against each
     // other. If a dialog is mounted for the current state, the dialog owns
-    // the spinner. `isDialogTag(state.tag)` is the single source of truth —
-    // read at pump-start so it's correct for initial thinking (no dialog),
-    // processing-followup/interactive (dialog up), and executing-step (dialog
-    // up). No per-call-site override needed.
+    // the spinner. `isDialogTag(state.tag)` is the single source of truth.
     const showSpinner = !isDialogTag(state.tag);
+    const isInitialLoop = !isDialogTag(state.tag) && state.tag === "thinking";
     void pumpLoop({
       provider,
       transcript,
       scaffold,
       loopState,
-      baseLoopOptions,
+      baseLoopOptions: baseLoopOptions(),
       signal: ctrl.signal,
-      isInitialLoop: opts.isInitialLoop,
+      isInitialLoop,
       showSpinner,
-      followupText: opts.followupText,
-      onRound: (round) => addRound(entry, round),
       dispatch,
     });
   }
@@ -318,7 +317,7 @@ export async function runSession(
     // a prompt yet. submit-interactive kicks off the loop via the post-
     // transition hook on entering `processing-interactive`.
     if (!isInteractiveBootstrap) {
-      startPumpLoop({ isInitialLoop: true, followupText: undefined });
+      startPumpLoop();
     } else {
       // Mount the compose dialog immediately so the user can start typing.
       void syncDialog();
@@ -358,12 +357,6 @@ type PumpLoopArgs = {
    *  False whenever a dialog is mounted — the dialog's bottom-border
    *  spinner already reports progress and the two would flicker. */
   showSpinner: boolean;
-  /** Stamped on the first `round-complete` only — even if it's a probe
-   *  and the command lands several rounds later. Lets the log reconstruct
-   *  which user message kicked off which sequence. Undefined for the
-   *  initial loop (attributed to `entry.prompt`). */
-  followupText: string | undefined;
-  onRound: (round: import("../logging/entry.ts").Round) => void;
   dispatch: (event: AppEvent) => void;
 };
 
@@ -372,17 +365,13 @@ type PumpLoopArgs = {
  * `dispatch` (`loop-final` / `loop-error` / `block`).
  */
 async function pumpLoop(args: PumpLoopArgs): Promise<void> {
-  const { signal, isInitialLoop, showSpinner, followupText, onRound, dispatch } = args;
-  let firstRoundComplete = true;
+  const { signal, isInitialLoop, showSpinner, dispatch } = args;
 
   function handleLoopEvent(event: LoopEvent): void {
     switch (event.type) {
-      case "round-complete":
-        if (firstRoundComplete && followupText !== undefined) {
-          event.round.followup_text = followupText;
-        }
-        firstRoundComplete = false;
-        onRound(event.round);
+      case "assistant-turn":
+        // The turn is already pushed onto the transcript (= entry.turns).
+        // Nothing additional to do here; the event exists for telemetry.
         return;
       case "step-running":
         notifications.emit({
@@ -425,7 +414,7 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
       !getConfig().yolo
     ) {
       chrome(`Command requires confirmation (no TTY available): ${final.response.content}`);
-      dispatch({ type: "block", command: final.response.content });
+      dispatch({ type: "block", command: final.response.content, response: final.response });
       return;
     }
     dispatch({ type: "loop-final", result: final });
@@ -436,39 +425,86 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   }
 }
 
+/**
+ * Pull the last LLM-proposed command bytes out of the transcript. Used by
+ * `finaliseOutcome` to populate the `final` turn's `command` field for
+ * outcomes that didn't have an explicit command (cancelled/exhausted/error).
+ * Empty string if the LLM never produced a command.
+ */
+function lastProposedCommand(entry: LogEntry): string {
+  for (let i = entry.turns.length - 1; i >= 0; i--) {
+    const turn = entry.turns[i];
+    if (turn?.kind === "assistant" && turn.response?.type === "command") {
+      return turn.response.content;
+    }
+  }
+  return "";
+}
+
 export async function finaliseOutcome(outcome: SessionOutcome, entry: LogEntry): Promise<number> {
   switch (outcome.kind) {
     case "answer":
+      // Pure-answer sessions have no `final` turn per spec — the last
+      // assistant turn carries the reply.
       console.log(outcome.content);
       entry.outcome = "success";
       return 0;
-    case "exhausted":
-      chrome(`Could not resolve the request within ${entry.rounds.length} rounds.`);
+    case "exhausted": {
+      const proposed = lastProposedCommand(entry);
+      entry.turns.push({
+        kind: "final",
+        command: proposed,
+        exit_code: null,
+        source: "exhausted",
+      });
+      const roundsUsed = entry.turns.filter((t) => t.kind === "assistant").length;
+      chrome(`Could not resolve the request within ${roundsUsed} rounds.`);
       entry.outcome = "max_rounds";
       return 1;
+    }
     case "blocked":
+      entry.turns.push({
+        kind: "final",
+        command: outcome.command,
+        exit_code: null,
+        source: "blocked",
+      });
       entry.outcome = "blocked";
       return 1;
-    case "cancel":
+    case "cancel": {
+      const command = outcome.response?.content ?? lastProposedCommand(entry);
+      entry.turns.push({
+        kind: "final",
+        command,
+        exit_code: null,
+        source: "cancelled",
+      });
       entry.outcome = "cancelled";
       return 0;
+    }
     case "error":
       // Throw rather than return — main.ts catches and renders via chrome.
       // The throw runs AFTER the finally writes the log, so the failure
-      // round is on disk regardless of what main.ts does next.
+      // turn is on disk regardless of what main.ts does next.
+      entry.turns.push({
+        kind: "final",
+        command: lastProposedCommand(entry),
+        exit_code: null,
+        source: "error",
+      });
       entry.outcome = "error";
       throw new Error(outcome.message);
     case "run": {
       verbose(`Running: ${outcome.command}`);
       const exec = await executeShellCommand(outcome.command, { mode: "inherit" });
-      // The round is the same reference held in `entry.rounds` (eager-logged
-      // by pumpLoop), so this in-place mutation lands in the JSONL flush.
-      outcome.round.exec_ms = exec.exec_ms;
-      outcome.round.execution = {
+      entry.turns.push({
+        kind: "final",
         command: outcome.command,
         exit_code: exec.exitCode,
         shell: exec.shell,
-      };
+        source: outcome.source,
+        exec_ms: exec.exec_ms,
+      });
       verbose(`Command exited (${exec.exitCode})`);
       entry.outcome = exec.exitCode === 0 ? "success" : "error";
       return exec.exitCode;

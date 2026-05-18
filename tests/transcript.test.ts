@@ -11,11 +11,17 @@ import promptConstants from "../src/prompt.constants.json";
 const sys: PromptScaffold = {
   system: "system",
   prefixMessages: [],
-  initialUserText: "",
+  contextString: "",
+  sectionUserRequest: "## User's request",
 };
 
 function withPrefix(messages: PromptScaffold["prefixMessages"]): PromptScaffold {
-  return { system: "system", prefixMessages: messages, initialUserText: "" };
+  return {
+    system: "system",
+    prefixMessages: messages,
+    contextString: "",
+    sectionUserRequest: "## User's request",
+  };
 }
 
 const cmdResponse: CommandResponse = {
@@ -58,16 +64,24 @@ describe("buildPromptInput", () => {
     expect(out.messages).toEqual([]);
   });
 
-  test("single user turn renders as user message", () => {
+  test("single user turn renders as user message (bare, no framing)", () => {
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages).toEqual([{ role: "user", content: "hi" }]);
   });
 
-  test("user + step turn renders as user, assistant(projected JSON), user(captured output)", () => {
+  test("user + assistant + step turns render in order", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "step", response: stepResponse, output: "out1", exitCode: 0 },
+      { kind: "assistant", response: stepResponse, attempts: [] },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "out1",
+        shell: "/bin/sh",
+        source: "model",
+      },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages).toHaveLength(3);
@@ -82,7 +96,7 @@ describe("buildPromptInput", () => {
     });
   });
 
-  test("confirmed_step renders identically to step", () => {
+  test("user_override step renders identically to model-source step", () => {
     const confirmedCmd: CommandResponse = {
       type: "command",
       final: false,
@@ -92,11 +106,14 @@ describe("buildPromptInput", () => {
     };
     const transcript: Transcript = [
       { kind: "user", text: "test clean" },
+      { kind: "assistant", response: confirmedCmd, attempts: [] },
       {
-        kind: "confirmed_step",
-        response: confirmedCmd,
+        kind: "step",
+        command: "echo git-stash-fake",
+        exit_code: 0,
         output: "Saved working directory.",
-        exitCode: 0,
+        shell: "/bin/sh",
+        source: "user_override",
       },
     ];
     const out = buildPromptInput(transcript, sys);
@@ -121,7 +138,7 @@ describe("buildPromptInput", () => {
     };
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "candidate_command", response: richResponse },
+      { kind: "assistant", response: richResponse, attempts: [] },
     ];
     const out = buildPromptInput(transcript, sys);
     const echoed = out.messages[1]?.content ?? "";
@@ -135,7 +152,15 @@ describe("buildPromptInput", () => {
   test("step with empty output renders the capturedNoOutput sentinel", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "step", response: stepResponse, output: "", exitCode: 0 },
+      { kind: "assistant", response: stepResponse, attempts: [] },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "",
+        shell: "/bin/sh",
+        source: "model",
+      },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(
@@ -146,7 +171,15 @@ describe("buildPromptInput", () => {
   test("step with whitespace-only output and exit 0 renders the no-output sentinel", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "step", response: stepResponse, output: "  \n  ", exitCode: 0 },
+      { kind: "assistant", response: stepResponse, attempts: [] },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "  \n  ",
+        shell: "/bin/sh",
+        source: "model",
+      },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(
@@ -157,16 +190,24 @@ describe("buildPromptInput", () => {
   test("step output with trailing newline is trimmed in render", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "step", response: stepResponse, output: "hi\n", exitCode: 0 },
+      { kind: "assistant", response: stepResponse, attempts: [] },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "hi\n",
+        shell: "/bin/sh",
+        source: "model",
+      },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toBe(`${promptConstants.sectionCapturedOutput}\nhi`);
   });
 
-  test("candidate_command + follow-up user turn renders both", () => {
+  test("assistant + follow-up user turn renders both", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "candidate_command", response: cmdResponse },
+      { kind: "assistant", response: cmdResponse, attempts: [] },
       { kind: "user", text: "hmm" },
     ];
     const out = buildPromptInput(transcript, sys);
@@ -174,22 +215,108 @@ describe("buildPromptInput", () => {
     expect(out.messages[0]).toEqual({ role: "user", content: "hi" });
     expect(out.messages[1]).toEqual({
       role: "assistant",
-      content: JSON.stringify(cmdResponse),
+      content: JSON.stringify(project(cmdResponse)),
     });
     expect(out.messages[2]).toEqual({ role: "user", content: "hmm" });
   });
 
-  test("answer turn renders as assistant JSON", () => {
+  test("assistant turn for a reply renders as projected JSON", () => {
     const transcript: Transcript = [
       { kind: "user", text: "what" },
-      { kind: "answer", response: answerResponse },
+      { kind: "assistant", response: answerResponse, attempts: [] },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages).toHaveLength(2);
     expect(out.messages[1]).toEqual({
       role: "assistant",
-      content: JSON.stringify(answerResponse),
+      content: JSON.stringify(project(answerResponse)),
     });
+  });
+
+  test("assistant turn with no response (fully-failed round) is skipped", () => {
+    const transcript: Transcript = [
+      { kind: "user", text: "hi" },
+      {
+        kind: "assistant",
+        attempts: [{ error: { kind: "provider", message: "rate limit" } }],
+      },
+      { kind: "user", text: "retry" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    // Failed assistant turn contributes nothing — projection is [user, user].
+    expect(out.messages).toEqual([
+      { role: "user", content: "hi" },
+      { role: "user", content: "retry" },
+    ]);
+  });
+
+  test("requestFraming wraps only the FIRST user turn", () => {
+    const transcript: Transcript = [
+      { kind: "user", text: "first" },
+      { kind: "assistant", response: cmdResponse, attempts: [] },
+      { kind: "user", text: "second" },
+    ];
+    const out = buildPromptInput(transcript, sys, {
+      requestFraming: {
+        contextString: "ctx-here",
+        sectionUserRequest: "## User's request",
+      },
+    });
+    expect(out.messages[0]?.content).toBe("ctx-here\n\n## User's request\nfirst");
+    expect(out.messages[2]?.content).toBe("second");
+  });
+
+  test("requestFraming with empty contextString omits the leading separator", () => {
+    const transcript: Transcript = [{ kind: "user", text: "go" }];
+    const out = buildPromptInput(transcript, sys, {
+      requestFraming: { contextString: "", sectionUserRequest: "## User's request" },
+    });
+    expect(out.messages[0]?.content).toBe("## User's request\ngo");
+  });
+
+  test("final turn projects as a <wrap-note> user message", () => {
+    const transcript: Transcript = [
+      {
+        kind: "final",
+        command: "git push heroku main",
+        exit_code: 0,
+        shell: "/bin/sh",
+        source: "model",
+        exec_ms: 10,
+      },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages).toHaveLength(1);
+    expect(out.messages[0]).toEqual({
+      role: "user",
+      content: "<wrap-note>\nprevious command exited 0\n</wrap-note>",
+    });
+  });
+
+  test("final turn cancelled source includes the proposed command", () => {
+    const transcript: Transcript = [
+      {
+        kind: "final",
+        command: "git push heroku main",
+        exit_code: null,
+        source: "cancelled",
+      },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toContain("user cancelled the previous command");
+    expect(out.messages[0]?.content).toContain("git push heroku main");
+  });
+
+  test("cwd_change turn projects as a <wrap-note> user message", () => {
+    const transcript: Transcript = [
+      { kind: "cwd_change", from: "/Users/tal/proj-a", to: "/Users/tal/proj-b" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[0]?.content).toContain(
+      "cwd changed from /Users/tal/proj-a to /Users/tal/proj-b",
+    );
+    expect(out.messages[0]?.content).toStartWith("<wrap-note>");
+    expect(out.messages[0]?.content).toEndWith("</wrap-note>");
   });
 
   test("liveContext directive appends it as a user turn before lastRoundInstruction", () => {
@@ -206,7 +333,7 @@ describe("buildPromptInput", () => {
     expect(out.messages[2]?.content).toBe(promptConstants.lastRoundInstruction);
   });
 
-  test("scratchpadRequiredRetry directive echoes the rejected response as an assistant turn and appends the scratchpad-required instruction", () => {
+  test("scratchpadRequiredRetry directive echoes the rejected response and appends the scratchpad-required instruction", () => {
     const rejected: CommandResponse = {
       type: "command",
       final: true,
@@ -242,7 +369,15 @@ describe("buildPromptInput", () => {
   test("does not mutate the input transcript", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "step", response: stepResponse, output: "out", exitCode: 0 },
+      { kind: "assistant", response: stepResponse, attempts: [] },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "out",
+        shell: "/bin/sh",
+        source: "model",
+      },
     ];
     const before = transcript.length;
     buildPromptInput(transcript, sys, { isLastRound: true });
@@ -252,7 +387,7 @@ describe("buildPromptInput", () => {
   test("calling twice with the same args returns equal output", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "candidate_command", response: cmdResponse },
+      { kind: "assistant", response: cmdResponse, attempts: [] },
     ];
     const a = buildPromptInput(transcript, sys);
     const b = buildPromptInput(transcript, sys);
@@ -275,7 +410,15 @@ describe("buildPromptInput", () => {
   test("step output with non-zero exit code includes the exit code", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "step", response: stepResponse, output: "boom", exitCode: 2 },
+      { kind: "assistant", response: stepResponse, attempts: [] },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 2,
+        output: "boom",
+        shell: "/bin/sh",
+        source: "model",
+      },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages[2]?.content).toContain("Exit code: 2");

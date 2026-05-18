@@ -61,12 +61,11 @@ function reduceThinking(state: AppState & { tag: "thinking" }, event: AppEvent):
             kind: "run",
             command: r.response.content,
             response: r.response,
-            round: r.round,
             source: "model",
           },
         };
       }
-      return { tag: "confirming", response: r.response, round: r.round };
+      return { tag: "confirming", response: r.response };
     }
     if (r.type === "answer") {
       return { tag: "exiting", outcome: { kind: "answer", content: r.content } };
@@ -85,7 +84,10 @@ function reduceThinking(state: AppState & { tag: "thinking" }, event: AppEvent):
     };
   }
   if (event.type === "block") {
-    return { tag: "exiting", outcome: { kind: "blocked", command: event.command } };
+    return {
+      tag: "exiting",
+      outcome: { kind: "blocked", command: event.command, response: event.response },
+    };
   }
   return state;
 }
@@ -102,7 +104,7 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
           return {
             tag: "executing-step",
             response: state.response,
-            round: state.round,
+            source: "model",
             outputSlot: state.outputSlot,
           };
         }
@@ -112,17 +114,15 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
             kind: "run",
             command: state.response.content,
             response: state.response,
-            round: state.round,
             source: "model",
           },
         };
       case "cancel":
-        return { tag: "exiting", outcome: { kind: "cancel" } };
+        return { tag: "exiting", outcome: { kind: "cancel", response: state.response } };
       case "edit":
         return {
           tag: "editing",
           response: state.response,
-          round: state.round,
           draft: state.response.content,
           outputSlot: state.outputSlot,
         };
@@ -130,7 +130,6 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
         return {
           tag: "composing-followup",
           response: state.response,
-          round: state.round,
           draft: "",
           outputSlot: state.outputSlot,
         };
@@ -140,7 +139,7 @@ function reduceConfirming(state: AppState & { tag: "confirming" }, event: AppEve
     }
   }
   if (event.type === "key-esc") {
-    return { tag: "exiting", outcome: { kind: "cancel" } };
+    return { tag: "exiting", outcome: { kind: "cancel", response: state.response } };
   }
   if (event.type === "notification" && event.notification.kind === "step-output") {
     // A late step-output arriving after we already transitioned to
@@ -156,22 +155,20 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
     return {
       tag: "confirming",
       response: state.response,
-      round: state.round,
       outputSlot: state.outputSlot,
     };
   }
   if (event.type === "submit-edit") {
     // User-override on a non-final med/high step: route into `executing-step`
     // with a response that carries the edited bytes, so the coordinator
-    // captures the same way as a model-authored step. The round's audit log
-    // still holds `round.attempts.at(-1).parsed.content` (the original model
-    // bytes) and `round.execution.command` (what actually ran), so auditors
-    // can tell them apart.
+    // captures the same way as a model-authored step. The prior assistant
+    // turn still holds the original model bytes in `response.content`, so
+    // auditors can tell them apart from the `step` turn's executed `command`.
     if (isNonFinalConfirm(state.response)) {
       return {
         tag: "executing-step",
         response: { ...state.response, content: event.text },
-        round: state.round,
+        source: "user_override",
         outputSlot: state.outputSlot,
       };
     }
@@ -181,7 +178,6 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
         kind: "run",
         command: event.text,
         response: state.response,
-        round: state.round,
         source: "user_override",
       },
     };
@@ -195,7 +191,6 @@ function reduceEditing(state: AppState & { tag: "editing" }, event: AppEvent): A
       origin: "editing",
       draft: event.draft,
       response: state.response,
-      round: state.round,
       outputSlot: state.outputSlot,
     };
   }
@@ -210,7 +205,6 @@ function reduceComposing(
     return {
       tag: "confirming",
       response: state.response,
-      round: state.round,
       outputSlot: state.outputSlot,
     };
   }
@@ -221,7 +215,6 @@ function reduceComposing(
     return {
       tag: "processing-followup",
       response: state.response,
-      round: state.round,
       draft: event.text,
       status: undefined,
       outputSlot: state.outputSlot,
@@ -233,7 +226,6 @@ function reduceComposing(
       origin: "composing-followup",
       draft: event.draft,
       response: state.response,
-      round: state.round,
       outputSlot: state.outputSlot,
     };
   }
@@ -248,7 +240,6 @@ function reduceProcessing(
     return {
       tag: "composing-followup",
       response: state.response,
-      round: state.round,
       draft: state.draft,
       outputSlot: state.outputSlot,
     };
@@ -271,7 +262,6 @@ function reduceProcessing(
       return {
         tag: "confirming",
         response: r.response,
-        round: r.round,
         outputSlot: state.outputSlot,
       };
     }
@@ -340,12 +330,11 @@ function reduceProcessingInteractive(
             kind: "run",
             command: r.response.content,
             response: r.response,
-            round: r.round,
             source: "model",
           },
         };
       }
-      return { tag: "confirming", response: r.response, round: r.round };
+      return { tag: "confirming", response: r.response };
     }
     if (r.type === "answer") {
       return { tag: "exiting", outcome: { kind: "answer", content: r.content } };
@@ -381,20 +370,18 @@ function reduceEditorHandoff(
       case "composing-interactive":
         return { tag: "composing-interactive", draft: newDraft };
       case "composing-followup":
-        if (!state.response || !state.round) return state;
+        if (!state.response) return state;
         return {
           tag: "composing-followup",
           response: state.response,
-          round: state.round,
           draft: newDraft,
           outputSlot: state.outputSlot,
         };
       case "editing":
-        if (!state.response || !state.round) return state;
+        if (!state.response) return state;
         return {
           tag: "editing",
           response: state.response,
-          round: state.round,
           draft: newDraft,
           outputSlot: state.outputSlot,
         };
@@ -423,7 +410,6 @@ function reduceExecutingStep(
     return {
       tag: "confirming",
       response: state.response,
-      round: state.round,
       outputSlot: state.outputSlot,
     };
   }
@@ -439,7 +425,6 @@ function reduceExecutingStep(
       return {
         tag: "confirming",
         response: r.response,
-        round: r.round,
         outputSlot: state.outputSlot,
       };
     }

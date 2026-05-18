@@ -17,44 +17,44 @@ const config: PromptConfig = {
 
 describe("buildPromptScaffold — system message", () => {
   test("contains instruction", () => {
-    const result = buildPromptScaffold(config, "", "test query");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("You are a CLI tool.");
   });
 
   test("contains memory recency instruction", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("Later facts override earlier ones.");
   });
 
   test("contains tools scope instruction", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("Tools are not exhaustive.");
   });
 
   test("contains temp-dir principle", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("Use $WRAP_TEMP_DIR for intermediate artifacts.");
   });
 
   test("contains voice instructions", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("Be concise.");
   });
 
   test("contains schema instruction + schema text", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("Respond with JSON:");
     expect(result.system).toContain("z.object({ type: z.string() })");
   });
 
   test("omits schema block when schemaText is empty", () => {
     const noSchema = { ...config, schemaText: "" };
-    const result = buildPromptScaffold(noSchema, "", "test");
+    const result = buildPromptScaffold(noSchema, "");
     expect(result.system).not.toContain("Respond with JSON:");
   });
 
   test("omits attached-input block when attachedInputInstruction is undefined", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     // If the conditional was bypassed, `undefined` would be pushed into
     // systemParts and coerced to "" by `join`, producing a 3+ newline run
     // between the surrounding sections.
@@ -62,14 +62,14 @@ describe("buildPromptScaffold — system message", () => {
   });
 
   test("system parts joined by double newlines", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.system).toContain("You are a CLI tool.\n\nLater facts override earlier ones.");
   });
 });
 
 describe("buildPromptScaffold — prefix messages", () => {
   test("few-shot examples become user/assistant pairs", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.prefixMessages[0]).toEqual({ role: "user", content: "list files" });
     expect(result.prefixMessages[1]).toEqual({
       role: "assistant",
@@ -78,7 +78,7 @@ describe("buildPromptScaffold — prefix messages", () => {
   });
 
   test("separator follows few-shot examples", () => {
-    const result = buildPromptScaffold(config, "", "test");
+    const result = buildPromptScaffold(config, "");
     expect(result.prefixMessages[2]).toEqual({
       role: "user",
       content: "Now handle the following request.",
@@ -87,7 +87,7 @@ describe("buildPromptScaffold — prefix messages", () => {
 
   test("no few-shot examples: empty prefixMessages", () => {
     const noExamples = { ...config, fewShotExamples: [] };
-    const result = buildPromptScaffold(noExamples, "", "test");
+    const result = buildPromptScaffold(noExamples, "");
     expect(result.prefixMessages.length).toBe(0);
   });
 
@@ -99,7 +99,7 @@ describe("buildPromptScaffold — prefix messages", () => {
         { input: "second", output: "out2" },
       ],
     };
-    const result = buildPromptScaffold(multi, "", "test");
+    const result = buildPromptScaffold(multi, "");
     expect(result.prefixMessages[0]).toEqual({ role: "user", content: "first" });
     expect(result.prefixMessages[1]).toEqual({ role: "assistant", content: "out1" });
     expect(result.prefixMessages[2]).toEqual({ role: "user", content: "second" });
@@ -111,20 +111,19 @@ describe("buildPromptScaffold — prefix messages", () => {
   });
 });
 
-describe("buildPromptScaffold — initial user text", () => {
-  test("contains context + user request header + query", () => {
-    const result = buildPromptScaffold(config, "## System facts\n- macOS", "find files");
-    expect(result.initialUserText).toContain("## System facts\n- macOS");
-    expect(result.initialUserText).toContain("## User's request\nfind files");
+describe("buildPromptScaffold — context + framing", () => {
+  test("exposes contextString verbatim", () => {
+    const result = buildPromptScaffold(config, "## System facts\n- macOS");
+    expect(result.contextString).toBe("## System facts\n- macOS");
   });
 
-  test("context and user request separated by double newline", () => {
-    const result = buildPromptScaffold(config, "context here", "query here");
-    expect(result.initialUserText).toBe("context here\n\n## User's request\nquery here");
+  test("exposes sectionUserRequest from config", () => {
+    const result = buildPromptScaffold(config, "");
+    expect(result.sectionUserRequest).toBe("## User's request");
   });
 
-  test("empty context produces no leading separator", () => {
-    const result = buildPromptScaffold(config, "", "query here");
-    expect(result.initialUserText).toBe("## User's request\nquery here");
+  test("empty context is preserved as empty string", () => {
+    const result = buildPromptScaffold(config, "");
+    expect(result.contextString).toBe("");
   });
 });

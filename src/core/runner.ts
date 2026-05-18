@@ -2,7 +2,7 @@ import { getConfig } from "../config/store.ts";
 import { addToWatchlist } from "../discovery/watchlist.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import type { Provider } from "../llm/types.ts";
-import type { Round } from "../logging/entry.ts";
+import type { AssistantTurn } from "../logging/entry.ts";
 import { appendFacts } from "../memory/memory.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
@@ -30,18 +30,25 @@ export type LoopOptions = {
    * initial loop in `thinking`, false for follow-up loops in `processing`.
    */
   showSpinner: boolean;
+  /**
+   * Per-call framing for the first user turn (applied at projection time
+   * via `requestFraming`). The session builds this once from the current
+   * `contextString` and pinned `sectionUserRequest` and forwards it every
+   * round so the LLM sees the proper framing without it polluting storage.
+   * Optional so direct-runner tests can skip the framing.
+   */
+  requestFraming?: { contextString: string; sectionUserRequest: string };
 };
 
 export type LoopEvent =
   /**
-   * Yielded immediately after a successful LLM round. The Round object is the
-   * one the consumer should `addRound(entry, round)` — same reference, so any
-   * later mutation by the consumer (exec_ms / execution after final exec)
-   * lands in the entry too. The consumer is responsible for stamping
-   * `round.followup_text` on the first round-complete of each loop restart;
-   * the runner doesn't know about follow-ups.
+   * Yielded immediately after a successful or failed LLM round. The
+   * `AssistantTurn` is already on the transcript by the time this event
+   * fires — the consumer just observes (e.g. for telemetry or step-output
+   * routing). RoundError yields this once before the throw propagates so
+   * the partial turn is recorded.
    */
-  | { type: "round-complete"; round: Round }
+  | { type: "assistant-turn"; turn: AssistantTurn }
   /**
    * Yielded just before executing a non-final low-risk step. The consumer
    * surfaces this as a chrome line (or to the dialog's status slot if a
@@ -58,7 +65,6 @@ export type LoopReturn =
   | {
       type: "command";
       response: import("../command-response.schema.ts").CommandResponse;
-      round: Round;
     }
   | { type: "answer"; content: string }
   | { type: "exhausted" }
@@ -101,23 +107,22 @@ function handleMemoryUpdates(
  *   1. Check options.signal — if aborted, return `{ type: "aborted" }`.
  *   2. Call runRound. Re-check options.signal IMMEDIATELY after the await.
  *      If aborted, return `{ type: "aborted" }` WITHOUT pushing to the
- *      transcript or yielding round-complete (orphan-turn prevention).
- *   3. yield round-complete with the produced Round.
+ *      transcript or yielding assistant-turn (orphan-turn prevention).
+ *   3. Push the assistant turn onto the transcript (which IS entry.turns).
+ *      Yield assistant-turn so the consumer can observe.
  *   4. Apply side effects: memory updates, watchlist additions.
  *   5. Route by response shape:
- *        - reply                         → push answer turn, return { type: "answer" }
- *                                          (LoopReturn variant name stays "answer" — the schema
- *                                          field is decoupled from the coordinator-facing tag.)
- *        - command, final: true          → push candidate_command turn, return { type: "command" }
+ *        - reply                         → return { type: "answer" }
+ *        - command, final: true          → return { type: "command" }
  *        - command, final: false, low    → execute inline, push step turn, continue
- *        - command, final: false, !low   → push candidate_command turn, return { type: "command" };
- *                                          the coordinator hands it to the confirmation dialog and
- *                                          re-enters pumpLoop via the submit-step-confirm hook.
+ *        - command, final: false, !low   → return { type: "command" }; coordinator
+ *                                          hands it to the confirmation dialog and
+ *                                          re-enters pumpLoop via submit-step-confirm.
  *   6. When budget reaches zero, return { type: "exhausted" }.
  *
  * Error propagation: `runRound` throws a typed `RoundError` carrying the
- * partial Round. We catch it, yield `round-complete` with the partial
- * round (so the consumer logs it), then re-throw.
+ * partial assistant turn. We catch it, push the turn onto the transcript
+ * and yield assistant-turn (so the consumer logs it), then re-throw.
  */
 export async function* runLoop(
   provider: Provider,
@@ -146,35 +151,42 @@ export async function* runLoop(
     }
     verbose(`Calling ${options.model}...`);
 
-    let round: Round;
+    let turn: AssistantTurn;
     try {
-      round = await runRound(provider, transcript, scaffold, {
+      turn = await runRound(provider, transcript, scaffold, {
         isLastRound,
         model: options.model,
         showSpinner: options.showSpinner,
+        requestFraming: options.requestFraming,
       });
     } catch (e) {
-      // RoundError carries the partial round so the consumer can log it
+      // RoundError carries the partial assistant turn so we record it
       // before the throw propagates.
       const partial =
-        e !== null && typeof e === "object" && "round" in e ? (e as { round: Round }).round : null;
-      if (partial) yield { type: "round-complete", round: partial };
+        e !== null && typeof e === "object" && "turn" in e
+          ? (e as { turn: AssistantTurn }).turn
+          : null;
+      if (partial) {
+        transcript.push(partial);
+        yield { type: "assistant-turn", turn: partial };
+      }
       throw e;
     }
 
     // Orphan-turn prevention: if the signal fired while we were awaiting the
     // LLM call, drop the result without pushing to the transcript or yielding
-    // round-complete. The consumer's signal-check guard also catches this,
+    // assistant-turn. The consumer's signal-check guard also catches this,
     // but the runner closes the race so a slow provider can't leave a stale
     // turn in the shared transcript that the next pumpLoop would see.
     if (options.signal?.aborted) return { type: "aborted" };
 
-    yield { type: "round-complete", round };
+    transcript.push(turn);
+    yield { type: "assistant-turn", turn };
 
-    const response = round.attempts.at(-1)?.parsed;
+    const response = turn.response;
     if (!response) {
-      // runRound's contract guarantees the last attempt has parsed on success — defensive.
-      throw new Error("runRound returned a round without a parsed final attempt");
+      // runRound's contract guarantees a response on success — defensive.
+      throw new Error("runRound returned an assistant turn without a response");
     }
 
     handleMemoryUpdates(response, options.wrapHome, options.cwd);
@@ -185,7 +197,6 @@ export async function* runLoop(
     }
 
     if (response.type === "reply") {
-      transcript.push({ kind: "answer", response });
       return { type: "answer", content: response.content };
     }
 
@@ -196,11 +207,8 @@ export async function* runLoop(
 
     if (!canInlineStep) {
       // Final commands (any risk) AND non-final med/high commands exit the
-      // generator so the coordinator can run the confirmation dialog. The
-      // distinction between "run" and "confirm-then-continue" is the
-      // coordinator's job — the runner just surfaces the response.
-      transcript.push({ kind: "candidate_command", response });
-      return { type: "command", response, round };
+      // generator so the coordinator can run the confirmation dialog.
+      return { type: "command", response };
     }
 
     // Inline-step path: execute and loop.
@@ -224,12 +232,6 @@ export async function* runLoop(
     // this, an Esc during the step await would still push the step turn.
     if (options.signal?.aborted) return { type: "aborted" };
 
-    round.exec_ms = exec.exec_ms;
-    round.execution = {
-      command: response.content,
-      exit_code: exec.exitCode,
-      shell: exec.shell,
-    };
     verbose(`Step exited (${exec.exitCode})`);
 
     let stepOutput = exec.stdout;
@@ -242,9 +244,12 @@ export async function* runLoop(
     yield { type: "step-output", text: stepOutput };
     transcript.push({
       kind: "step",
-      response,
+      command: response.content,
+      exit_code: exec.exitCode,
       output: stepOutput,
-      exitCode: exec.exitCode,
+      shell: exec.shell,
+      source: "model",
+      exec_ms: exec.exec_ms,
     });
   }
 

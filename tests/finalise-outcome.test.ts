@@ -5,7 +5,6 @@ import { finaliseOutcome } from "../src/session/session.ts";
 
 function makeEntry(): LogEntry {
   return createLogEntry({
-    prompt: "x",
     cwd: "/tmp",
     provider: TEST_RESOLVED_PROVIDER,
     promptHash: "h",

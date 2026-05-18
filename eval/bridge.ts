@@ -10,11 +10,12 @@ import { NoObjectGeneratedError } from "ai";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
 import { applyModelOverride } from "../src/config/resolve.ts";
+import type { Transcript } from "../src/core/transcript.ts";
+import { buildPromptInput } from "../src/core/transcript.ts";
 import { buildPromptScaffold } from "../src/llm/build-prompt.ts";
 import { formatContext } from "../src/llm/format-context.ts";
 import { initProvider } from "../src/llm/index.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
-import type { PromptInput } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
 
 function out(value: object): void {
@@ -64,28 +65,38 @@ const scaffold = buildPromptScaffold(
     sectionUserRequest: promptConstants.sectionUserRequest,
   },
   contextString,
-  input.query,
 );
 
-const promptInput: PromptInput = {
-  system: scaffold.system,
-  messages: [...scaffold.prefixMessages, { role: "user", content: scaffold.initialUserText }],
-};
-
-// Multi-turn: append extra messages (e.g. probe response + output) after the initial prompt
-if (input.extraMessages) {
+// Seed the transcript: bare first user turn, then any extra simulated turns
+// the harness supplied (probe responses + captured outputs). The harness uses
+// raw {role, content} pairs; we map them to assistant / step Turn kinds so
+// `buildPromptInput` projects them the same way runtime does.
+const transcript: Transcript = [{ kind: "user", text: input.query }];
+if (Array.isArray(input.extraMessages)) {
   for (const msg of input.extraMessages) {
-    promptInput.messages.push({ role: msg.role, content: msg.content });
+    if (msg.role === "user") {
+      transcript.push({ kind: "user", text: msg.content });
+    } else if (msg.role === "assistant") {
+      // The harness sends raw JSON command-response text; parse it back so
+      // the assistant turn projects through `projectResponseForEcho`.
+      const parsed = JSON.parse(msg.content);
+      transcript.push({
+        kind: "assistant",
+        response: parsed,
+        attempts: [],
+      });
+    }
   }
 }
 
-// Last round: append the "do not probe" instruction as a separate user message
-if (input.lastRound) {
-  promptInput.messages.push({
-    role: "user",
-    content: promptConstants.lastRoundInstruction,
-  });
-}
+const promptInput = buildPromptInput(transcript, scaffold, {
+  liveContext: undefined,
+  isLastRound: input.lastRound === true,
+  requestFraming: {
+    contextString,
+    sectionUserRequest: promptConstants.sectionUserRequest,
+  },
+});
 
 if (input.mode === "assemble") {
   out({ ok: true, promptInput });

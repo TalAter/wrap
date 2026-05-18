@@ -19,7 +19,8 @@ import { seedTestConfig } from "./helpers.ts";
 const scaffold: PromptScaffold = {
   system: "system",
   prefixMessages: [],
-  initialUserText: "",
+  contextString: "",
+  sectionUserRequest: "## User's request",
 };
 
 let tmpHome: string;
@@ -68,7 +69,7 @@ async function drain(
 }
 
 describe("runLoop", () => {
-  test("single-iteration command yields round-complete and pushes a candidate_command turn", async () => {
+  test("single-iteration command yields assistant-turn and pushes one assistant turn", async () => {
     const { provider } = makeProvider([
       { type: "command", content: "ls", risk_level: "medium" } as CommandResponse,
     ]);
@@ -78,13 +79,13 @@ describe("runLoop", () => {
       runLoop(provider, transcript, scaffold, state, makeOptions()),
     );
     expect(events).toHaveLength(1);
-    expect(events[0]?.type).toBe("round-complete");
+    expect(events[0]?.type).toBe("assistant-turn");
     expect(final.type).toBe("command");
     expect(transcript.length).toBe(2);
-    expect(transcript[1]?.kind).toBe("candidate_command");
+    expect(transcript[1]?.kind).toBe("assistant");
   });
 
-  test("single-iteration answer pushes an answer turn and returns answer", async () => {
+  test("single-iteration answer pushes an assistant turn and returns answer", async () => {
     const { provider } = makeProvider([
       { type: "reply", content: "hi back", risk_level: "low" } as CommandResponse,
     ]);
@@ -92,10 +93,10 @@ describe("runLoop", () => {
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { final } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
     expect(final.type).toBe("answer");
-    expect(transcript[1]?.kind).toBe("answer");
+    expect(transcript[1]?.kind).toBe("assistant");
   });
 
-  test("non-final low: runs inline, pushes a step turn, continues the loop", async () => {
+  test("non-final low: runs inline, pushes assistant + step turns, continues the loop", async () => {
     const { provider } = makeProvider([
       {
         type: "command",
@@ -114,11 +115,11 @@ describe("runLoop", () => {
     expect(final.type).toBe("command");
     const stepEvents = events.filter((e) => e.type === "step-running" || e.type === "step-output");
     expect(stepEvents.length).toBe(2);
-    // One step turn + one candidate_command turn were pushed.
-    expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
+    // user, assistant (step response), step (output), assistant (final command)
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant", "step", "assistant"]);
   });
 
-  test("yolo + non-final medium: runs inline, pushes a step turn, continues the loop", async () => {
+  test("yolo + non-final medium: runs inline, pushes assistant + step turns, continues the loop", async () => {
     seedTestConfig({ yolo: true });
     const { provider } = makeProvider([
       {
@@ -138,7 +139,7 @@ describe("runLoop", () => {
     expect(final.type).toBe("command");
     const stepEvents = events.filter((e) => e.type === "step-running" || e.type === "step-output");
     expect(stepEvents.length).toBe(2);
-    expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant", "step", "assistant"]);
   });
 
   test("yolo + non-final high: runs inline (any non-low non-final runs in yolo)", async () => {
@@ -160,7 +161,7 @@ describe("runLoop", () => {
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
     expect(events.some((e) => e.type === "step-running")).toBe(true);
-    expect(transcript.map((t) => t.kind)).toEqual(["user", "step", "candidate_command"]);
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant", "step", "assistant"]);
   });
 
   test("non-final medium: returns to coordinator without executing", async () => {
@@ -184,8 +185,8 @@ describe("runLoop", () => {
     expect(final.type).toBe("command");
     // No step-running / step-output yielded — the runner did not execute.
     expect(events.some((e) => e.type === "step-running")).toBe(false);
-    // A candidate_command turn was pushed (not a step).
-    expect(transcript[1]?.kind).toBe("candidate_command");
+    // An assistant turn was pushed (not a step turn).
+    expect(transcript[1]?.kind).toBe("assistant");
   });
 
   test("exhausted when budget runs out", async () => {
@@ -225,7 +226,9 @@ describe("runLoop", () => {
     expect(final.type).toBe("exhausted");
     expect(events.some((e) => e.type === "step-running")).toBe(false);
     expect(events.some((e) => e.type === "step-output")).toBe(false);
-    expect(transcript.map((t) => t.kind)).toEqual(["user"]);
+    // The assistant turn for the (rejected) response still got pushed;
+    // no step turn followed because the runner bails out.
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant"]);
   });
 
   test("inline-step output inserts a newline boundary between stdout and stderr", async () => {
@@ -308,11 +311,11 @@ describe("runLoop", () => {
     expect(calls).toBe(1);
   });
 
-  test("orphan-turn race: abort during runRound await — no candidate_command pushed", async () => {
+  test("orphan-turn race: abort during runRound await — no assistant turn pushed", async () => {
     // Test provider returns a command but the controller is aborted while the
     // provider promise is resolving. The post-await abort check must see the
     // aborted signal and return without pushing a transcript turn or yielding
-    // round-complete.
+    // assistant-turn.
     const ctrl = new AbortController();
     const provider: Provider = {
       runPrompt: async () => {
@@ -332,9 +335,9 @@ describe("runLoop", () => {
       runLoop(provider, transcript, scaffold, state, makeOptions({ signal: ctrl.signal })),
     );
     expect(final.type).toBe("aborted");
-    // No round-complete yielded.
-    expect(events.filter((e) => e.type === "round-complete")).toHaveLength(0);
-    // No orphan candidate_command turn.
+    // No assistant-turn yielded.
+    expect(events.filter((e) => e.type === "assistant-turn")).toHaveLength(0);
+    // No orphan assistant turn.
     expect(transcript.length).toBe(1);
   });
 
@@ -368,10 +371,12 @@ describe("runLoop", () => {
       if (value.type === "step-running") ctrl.abort();
     }
     expect(final?.type).toBe("aborted");
-    expect(transcript.map((t) => t.kind)).toEqual(["user"]);
+    // The assistant turn for the step response made it onto the transcript
+    // before the exec was aborted; no step turn followed.
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant"]);
   });
 
-  test("round-complete is yielded BEFORE the runRound throw propagates", async () => {
+  test("assistant-turn is yielded BEFORE the runRound throw propagates", async () => {
     // Simulate a provider that throws after the test provider's first call.
     let calls = 0;
     const provider: Provider = {
@@ -395,8 +400,8 @@ describe("runLoop", () => {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(Error);
-    // The errored round was still yielded so the consumer can log it.
-    expect(events.filter((e) => e.type === "round-complete")).toHaveLength(1);
+    // The errored turn was still yielded so the consumer can log it.
+    expect(events.filter((e) => e.type === "assistant-turn")).toHaveLength(1);
     expect(calls).toBe(1);
   });
 });

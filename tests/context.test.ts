@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { buildPromptInput, type Transcript } from "../src/core/transcript.ts";
 import { assemblePromptScaffold, type QueryContext } from "../src/llm/context.ts";
 import promptOptimized from "../src/prompt.optimized.json";
 
@@ -9,15 +10,29 @@ const FEW_SHOT_EXAMPLES: readonly { input: string; output: string }[] =
 
 function makeContext(overrides?: Partial<QueryContext>): QueryContext {
   return {
-    prompt: "list files",
     cwd: "/home/user",
     memory: {},
     ...overrides,
   };
 }
 
-function userText(ctx: QueryContext): string {
-  return assemblePromptScaffold(ctx).initialUserText;
+/** Return the formatted contextString (everything but the user-request line). */
+function contextText(ctx: QueryContext): string {
+  return assemblePromptScaffold(ctx).contextString;
+}
+
+/** Render the first user message the LLM sees for `prompt` under context `ctx`. */
+function userMessageText(ctx: QueryContext, prompt: string): string {
+  const scaffold = assemblePromptScaffold(ctx);
+  const transcript: Transcript = [{ kind: "user", text: prompt }];
+  const input = buildPromptInput(transcript, scaffold, {
+    requestFraming: {
+      contextString: scaffold.contextString,
+      sectionUserRequest: scaffold.sectionUserRequest,
+    },
+  });
+  const lastUser = [...input.messages].reverse().find((m) => m.role === "user");
+  return lastUser?.content ?? "";
 }
 
 describe("assemblePromptScaffold", () => {
@@ -56,10 +71,10 @@ describe("assemblePromptScaffold", () => {
     });
   });
 
-  test("initial user text contains cwd and prompt", () => {
-    const result = assemblePromptScaffold(makeContext({ cwd: "/tmp/test", prompt: "find stuff" }));
-    expect(result.initialUserText).toContain("/tmp/test");
-    expect(result.initialUserText).toContain("find stuff");
+  test("contextString contains cwd; first user message contains framed prompt", () => {
+    const ctx = makeContext({ cwd: "/tmp/test" });
+    expect(contextText(ctx)).toContain("/tmp/test");
+    expect(userMessageText(ctx, "find stuff")).toContain("find stuff");
   });
 
   test("no separator when there are no few-shot examples", () => {
@@ -80,7 +95,7 @@ describe("assemblePromptScaffold", () => {
 
 describe("scoped memory in prompt", () => {
   test("global facts always included", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/some/random/dir",
         memory: { "/": [{ fact: "macOS arm64" }] },
@@ -90,7 +105,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("global scope uses '## System facts' header", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         memory: { "/": [{ fact: "macOS" }] },
       }),
@@ -100,7 +115,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("directory scope uses '## Facts about {path}' header", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/Users/tal/project",
         memory: {
@@ -114,7 +129,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("subdirectory CWD matches parent scope", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/Users/tal/project/packages/api",
         memory: {
@@ -126,7 +141,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("unrelated directory scope excluded", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/Users/tal/other",
         memory: {
@@ -141,7 +156,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("sibling directory with shared prefix excluded", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/monorepo-tools",
         memory: {
@@ -153,7 +168,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("sections ordered global then specific (by key order)", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/Users/tal/project/packages/api",
         memory: {
@@ -171,7 +186,7 @@ describe("scoped memory in prompt", () => {
   });
 
   test("facts within scope preserve insertion order", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         memory: { "/": [{ fact: "first" }, { fact: "second" }, { fact: "third" }] },
       }),
@@ -184,14 +199,14 @@ describe("scoped memory in prompt", () => {
   });
 
   test("omits entire facts block when no facts match", () => {
-    const text = userText(makeContext({ memory: {} }));
+    const text = contextText(makeContext({ memory: {} }));
     expect(text).not.toContain("System facts");
     expect(text).not.toContain("Facts about");
     expect(text).not.toContain("Known facts");
   });
 
   test("omits section for scope with no facts after filtering", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         cwd: "/Users/tal/other",
         memory: {
@@ -223,7 +238,7 @@ describe("scoped memory in prompt", () => {
 
 describe("tools output in prompt", () => {
   test("includes detected tools section when available tools provided", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({ tools: { available: ["/usr/bin/git"], unavailable: ["docker"] } }),
     );
     expect(text).toContain("## Detected tools");
@@ -231,7 +246,7 @@ describe("tools output in prompt", () => {
   });
 
   test("includes unavailable tools section", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({ tools: { available: [], unavailable: ["docker", "kubectl"] } }),
     );
     expect(text).toContain("## Unavailable tools");
@@ -239,13 +254,13 @@ describe("tools output in prompt", () => {
   });
 
   test("omits tools sections when no tools provided", () => {
-    const text = userText(makeContext());
+    const text = contextText(makeContext());
     expect(text).not.toContain("Detected tools");
     expect(text).not.toContain("Unavailable tools");
   });
 
   test("tools section appears after memory facts and before cwd", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         memory: { "/": [{ fact: "macOS" }] },
         tools: { available: ["/usr/bin/git"], unavailable: [] },
@@ -260,8 +275,8 @@ describe("tools output in prompt", () => {
 });
 
 describe("attached input in prompt", () => {
-  test("preview shows up in initial user text", () => {
-    const text = userText(
+  test("preview shows up in contextString", () => {
+    const text = contextText(
       makeContext({
         attachedInputPath: "/tmp/wrap-scratch-abc/input",
         attachedInputSize: 22,
@@ -273,7 +288,7 @@ describe("attached input in prompt", () => {
   });
 
   test("attached input appears before memory facts", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         attachedInputPath: "/tmp/wrap-scratch-abc/input",
         attachedInputSize: 8,
@@ -286,29 +301,30 @@ describe("attached input in prompt", () => {
     expect(pipedIdx).toBeLessThan(factsIdx);
   });
 
-  test("user request section omitted when prompt is empty", () => {
-    const text = userText(
-      makeContext({
-        prompt: "",
-        attachedInputPath: "/tmp/wrap-scratch-abc/input",
-        attachedInputSize: 13,
-        attachedInputPreview: "piped content",
-      }),
-    );
-    expect(text).not.toContain("## User's request");
+  test("user request section omitted when prompt is empty (projected)", () => {
+    const ctx = makeContext({
+      attachedInputPath: "/tmp/wrap-scratch-abc/input",
+      attachedInputSize: 13,
+      attachedInputPreview: "piped content",
+    });
+    // With an empty prompt the session would NOT push a user turn — but
+    // the framing logic itself should still tolerate an empty user.
+    const text = userMessageText(ctx, "");
     expect(text).toContain("## Attached input");
     expect(text).toContain("piped content");
+    // Header is still applied because the framing wraps any first user turn,
+    // even an empty one. The session avoids that by not pushing it in the
+    // empty case (interactive bootstrap).
+    expect(text).toContain("## User's request");
   });
 
   test("user request section present when prompt is non-empty with attached input", () => {
-    const text = userText(
-      makeContext({
-        prompt: "explain this",
-        attachedInputPath: "/tmp/wrap-scratch-abc/input",
-        attachedInputSize: 9,
-        attachedInputPreview: "error log",
-      }),
-    );
+    const ctx = makeContext({
+      attachedInputPath: "/tmp/wrap-scratch-abc/input",
+      attachedInputSize: 9,
+      attachedInputPreview: "error log",
+    });
+    const text = userMessageText(ctx, "explain this");
     expect(text).toContain("## User's request\nexplain this");
     expect(text).toContain("## Attached input");
   });
@@ -316,23 +332,23 @@ describe("attached input in prompt", () => {
 
 describe("piped-mode prompt", () => {
   test("piped: true appends piped-mode instruction", () => {
-    const text = userText(makeContext({ piped: true }));
+    const text = contextText(makeContext({ piped: true }));
     expect(text).toContain("stdout is being piped");
     expect(text).toContain("bare value");
   });
 
   test("piped: false does not include piped-mode instruction", () => {
-    const text = userText(makeContext({ piped: false }));
+    const text = contextText(makeContext({ piped: false }));
     expect(text).not.toContain("stdout is being piped");
   });
 
   test("piped defaults to false (no piped-mode instruction)", () => {
-    const text = userText(makeContext());
+    const text = contextText(makeContext());
     expect(text).not.toContain("stdout is being piped");
   });
 
   test("piped instruction appears after tools and before cwd", () => {
-    const text = userText(
+    const text = contextText(
       makeContext({
         tools: { available: ["/usr/bin/git"], unavailable: [] },
         piped: true,

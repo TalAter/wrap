@@ -614,16 +614,19 @@ describe("piped input", () => {
     const read = (wrapHome: string) =>
       JSON.parse(readFileSync(join(wrapHome, "logs", "wrap.jsonl"), "utf-8").trim());
 
+    const firstUserText = (entry: { turns: { kind: string; text?: string }[] }) =>
+      entry.turns.find((t) => t.kind === "user")?.text ?? "";
+
     const e1 = read(argvOnly.wrapHome);
-    expect(e1.prompt).toBe("say hi");
+    expect(firstUserText(e1)).toBe("say hi");
     expect(e1.input_source).toBe("argv");
 
     const e2 = read(argvPipe.wrapHome);
-    expect(e2.prompt).toBe("explain this");
+    expect(firstUserText(e2)).toBe("explain this");
     expect(e2.input_source).toBe("argv");
 
     const e3 = read(pipeOnly.wrapHome);
-    expect(e3.prompt).toBe("");
+    expect(firstUserText(e3)).toBe("");
     expect(e3.input_source).toBe("pipe");
   });
 });
