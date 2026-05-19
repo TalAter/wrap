@@ -77,3 +77,4 @@
 - src/fs/cache.ts
 - src/config/ensure.ts
 - src/config/config.ts
+- src/logging/lookup.ts
