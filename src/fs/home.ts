@@ -1,3 +1,3 @@
-import { createAppHome } from "wrap-core/fs";
+import { createAppFs } from "wrap-core/fs";
 
-export const wrapFs = createAppHome({ app: "wrap" });
+export const wrapFs = createAppFs({ app: "wrap" });

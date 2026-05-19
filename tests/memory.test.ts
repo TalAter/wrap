@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -9,10 +9,6 @@ import { TEST_HOME } from "./wrap-home-preload.ts";
 const MEMORY_PATH = join(TEST_HOME, "memory.json");
 
 beforeEach(() => {
-  rmSync(MEMORY_PATH, { force: true });
-});
-
-afterEach(() => {
   rmSync(MEMORY_PATH, { force: true });
 });
 

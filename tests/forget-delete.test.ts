@@ -18,15 +18,7 @@ import {
 } from "../src/subcommands/forget-delete.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
 
-/** Wipe every entry inside TEST_HOME (but keep TEST_HOME itself). */
-function clearHome() {
-  rmSync(TEST_HOME, { recursive: true, force: true });
-  mkdirSync(TEST_HOME, { recursive: true });
-}
-
 describe("deleteMemory", () => {
-  beforeEach(clearHome);
-
   test("missing files → removed false, no errors", () => {
     expect(deleteMemory()).toEqual({ removed: false, errors: [] });
   });
@@ -65,8 +57,6 @@ describe("deleteMemory", () => {
 });
 
 describe("deleteLogs", () => {
-  beforeEach(clearHome);
-
   test("missing log → removed false", () => {
     expect(deleteLogs()).toEqual({ removed: false, errors: [] });
   });
@@ -91,8 +81,6 @@ describe("deleteLogs", () => {
 });
 
 describe("deleteCache", () => {
-  beforeEach(clearHome);
-
   test("missing cache dir → removed false", () => {
     expect(deleteCache()).toEqual({ removed: false, errors: [] });
   });

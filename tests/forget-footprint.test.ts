@@ -11,15 +11,7 @@ import {
 } from "../src/subcommands/forget-footprint.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
 
-/** Wipe every entry inside TEST_HOME (but keep TEST_HOME itself). */
-function clearHome() {
-  rmSync(TEST_HOME, { recursive: true, force: true });
-  mkdirSync(TEST_HOME, { recursive: true });
-}
-
 describe("memoryFootprint", () => {
-  beforeEach(clearHome);
-
   test("no files → empty", () => {
     expect(memoryFootprint()).toEqual({ state: "empty" });
   });
@@ -51,8 +43,6 @@ describe("memoryFootprint", () => {
 });
 
 describe("logsFootprint", () => {
-  beforeEach(clearHome);
-
   test("no log file → empty", () => {
     expect(logsFootprint()).toEqual({ state: "empty" });
   });
@@ -112,8 +102,6 @@ describe("logsFootprint", () => {
 });
 
 describe("cacheFootprint", () => {
-  beforeEach(clearHome);
-
   test("missing cache dir → empty", () => {
     expect(cacheFootprint()).toEqual({ state: "empty" });
   });

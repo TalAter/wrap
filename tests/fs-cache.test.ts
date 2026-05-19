@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fetchCached } from "../src/fs/cache.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
@@ -7,8 +7,6 @@ import { TEST_HOME } from "./wrap-home-preload.ts";
 let realFetch: typeof fetch;
 
 beforeEach(() => {
-  rmSync(TEST_HOME, { recursive: true, force: true });
-  mkdirSync(TEST_HOME, { recursive: true });
   realFetch = globalThis.fetch;
 });
 

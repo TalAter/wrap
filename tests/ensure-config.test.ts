@@ -1,17 +1,10 @@
-import { beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ensureConfig } from "../src/config/ensure.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
 
-function clearHome() {
-  rmSync(TEST_HOME, { recursive: true, force: true });
-  mkdirSync(TEST_HOME, { recursive: true });
-}
-
 describe("ensureConfig", () => {
-  beforeEach(clearHome);
-
   test("returns existing config when config.jsonc exists", async () => {
     writeFileSync(
       join(TEST_HOME, "config.jsonc"),

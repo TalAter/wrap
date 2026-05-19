@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { wrapFs } from "../fs/home.ts";
 import { chrome } from "./output.ts";
 
@@ -180,8 +180,7 @@ export async function spawnEditor(
   const filePath = wrapFs.resolve("cache/compose.md");
   let proc: ReturnType<typeof Bun.spawn> | undefined;
   try {
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, draft, "utf-8");
+    wrapFs.write("cache/compose.md", draft);
 
     const argv = resolved.meta.waitFlag
       ? [resolved.path, resolved.meta.waitFlag, filePath]
