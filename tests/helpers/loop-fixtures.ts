@@ -42,7 +42,6 @@ export function makeEntry(): LogEntry {
 export function makeOptions(overrides: Partial<LoopOptions> = {}): LoopOptions {
   return {
     cwd: "/tmp",
-    wrapHome: "/tmp",
     model: formatProvider(TEST_RESOLVED_PROVIDER),
     showSpinner: false,
     ...overrides,

@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { wrapFs } from "../fs/home.ts";
 import { dirStats, formatSize } from "../fs/temp.ts";
 import { loadMemory } from "../memory/memory.ts";
 import { countFacts } from "../memory/types.ts";
@@ -14,9 +15,9 @@ export type Unit = "facts" | "entries" | "files" | "dirs";
 const SCRATCH_PREFIX = "wrap-scratch-";
 
 /** Footprint of memory.json (fact count) + total bytes of memory.json + tool-watchlist.json. */
-export function memoryFootprint(wrapHome: string): Footprint {
-  const memPath = join(wrapHome, "memory.json");
-  const wlPath = join(wrapHome, "tool-watchlist.json");
+export function memoryFootprint(): Footprint {
+  const memPath = wrapFs.resolve("memory.json");
+  const wlPath = wrapFs.resolve("tool-watchlist.json");
   const memBytes = fileBytes(memPath);
   const wlBytes = fileBytes(wlPath);
   if (memBytes === 0 && wlBytes === 0) return { state: "empty" };
@@ -24,7 +25,7 @@ export function memoryFootprint(wrapHome: string): Footprint {
   let count = 0;
   if (memBytes > 0) {
     try {
-      count = countFacts(loadMemory(wrapHome));
+      count = countFacts(loadMemory());
     } catch {
       return { state: "unreadable" };
     }
@@ -34,8 +35,8 @@ export function memoryFootprint(wrapHome: string): Footprint {
 
 // Count is jsonl lines (invocation entries); bytes cover sidecars too so the
 // number matches what `--forget` Logs actually removes.
-export function logsFootprint(wrapHome: string): Footprint {
-  const logsDir = join(wrapHome, "logs");
+export function logsFootprint(): Footprint {
+  const logsDir = wrapFs.resolve("logs");
   const jsonlPath = join(logsDir, "wrap.jsonl");
   const jsonlBytes = fileBytes(jsonlPath);
   const traceBytes = dirStats(join(logsDir, "traces")).bytes;
@@ -50,8 +51,8 @@ export function logsFootprint(wrapHome: string): Footprint {
 }
 
 /** Footprint of ~/.wrap/cache/ — recursive file count + total bytes. */
-export function cacheFootprint(wrapHome: string): Footprint {
-  const { files, bytes } = dirStats(join(wrapHome, "cache"));
+export function cacheFootprint(): Footprint {
+  const { files, bytes } = dirStats(wrapFs.resolve("cache"));
   if (files === 0) return { state: "empty" };
   return { state: "ok", count: files, bytes };
 }

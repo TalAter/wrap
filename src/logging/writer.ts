@@ -1,4 +1,4 @@
-import { appendWrapFile, writeWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 import type { PromptInput } from "../llm/types.ts";
 import type { AttemptMeta, LogEntry, WireRequest, WireResponse } from "./entry.ts";
 import { serializeEntry } from "./entry.ts";
@@ -69,10 +69,10 @@ function extractTraces(entry: LogEntry): TraceFile | null {
  * to strip those fields before serialization. JSONL is written first so a
  * sidecar-write failure never costs us the durable record.
  */
-export function appendLogEntry(wrapHome: string, entry: LogEntry): void {
+export function appendLogEntry(entry: LogEntry): void {
   const trace = extractTraces(entry);
-  appendWrapFile("logs/wrap.jsonl", `${serializeEntry(entry)}\n`, wrapHome);
+  wrapFs.append("logs/wrap.jsonl", `${serializeEntry(entry)}\n`);
   if (trace) {
-    writeWrapFile(`logs/traces/${entry.id}.json`, JSON.stringify(trace), wrapHome);
+    wrapFs.write(`logs/traces/${entry.id}.json`, JSON.stringify(trace));
   }
 }

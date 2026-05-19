@@ -1,8 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { buildConfig, writeWizardConfig } from "../src/wizard/write-config.ts";
-import { tmpHome } from "./helpers.ts";
+import { TEST_HOME } from "./wrap-home-preload.ts";
+
+const CONFIG_PATH = join(TEST_HOME, "config.jsonc");
 
 describe("buildConfig", () => {
   test("rejects entries that fail validateProviderEntry (ollama without baseURL)", () => {
@@ -41,16 +43,16 @@ describe("buildConfig", () => {
 });
 
 describe("writeWizardConfig", () => {
+  beforeEach(() => {
+    rmSync(CONFIG_PATH, { force: true });
+  });
+
   test("writes config.jsonc with $schema + providers + defaultProvider", () => {
-    const home = tmpHome();
-    writeWizardConfig(
-      {
-        entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
-        defaultProvider: "anthropic",
-      },
-      home,
-    );
-    const raw = readFileSync(join(home, "config.jsonc"), "utf8");
+    writeWizardConfig({
+      entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+      defaultProvider: "anthropic",
+    });
+    const raw = readFileSync(CONFIG_PATH, "utf8");
     const parsed = JSON.parse(raw);
     expect(parsed.$schema).toBe("./config.schema.json");
     expect(parsed.providers).toEqual({
@@ -60,58 +62,45 @@ describe("writeWizardConfig", () => {
   });
 
   test("serializes with 2-space indent (human-readable)", () => {
-    const home = tmpHome();
-    writeWizardConfig(
-      {
-        entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
-        defaultProvider: "anthropic",
-      },
-      home,
-    );
-    const raw = readFileSync(join(home, "config.jsonc"), "utf8");
+    writeWizardConfig({
+      entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+      defaultProvider: "anthropic",
+    });
+    const raw = readFileSync(CONFIG_PATH, "utf8");
     expect(raw).toContain('  "providers"');
     expect(raw).toContain('    "anthropic"');
   });
 
   test("writes multi-provider config in given order", () => {
-    const home = tmpHome();
-    writeWizardConfig(
-      {
-        entries: {
-          anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" },
-          openai: { apiKey: "sk-o", model: "gpt-5" },
-        },
-        defaultProvider: "openai",
+    writeWizardConfig({
+      entries: {
+        anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" },
+        openai: { apiKey: "sk-o", model: "gpt-5" },
       },
-      home,
-    );
-    const parsed = JSON.parse(readFileSync(join(home, "config.jsonc"), "utf8"));
+      defaultProvider: "openai",
+    });
+    const parsed = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
     expect(Object.keys(parsed.providers)).toEqual(["anthropic", "openai"]);
     expect(parsed.defaultProvider).toBe("openai");
   });
 
   test("writes nerdFonts: true to disk when set", () => {
-    const home = tmpHome();
-    writeWizardConfig(
-      {
-        entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
-        defaultProvider: "anthropic",
-        nerdFonts: true,
-      },
-      home,
-    );
-    const parsed = JSON.parse(readFileSync(join(home, "config.jsonc"), "utf8"));
+    writeWizardConfig({
+      entries: { anthropic: { apiKey: "sk-ant", model: "claude-sonnet-4-6" } },
+      defaultProvider: "anthropic",
+      nerdFonts: true,
+    });
+    const parsed = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
     expect(parsed.nerdFonts).toBe(true);
   });
 
   test("validation error prevents the file from being written", () => {
-    const home = tmpHome();
     expect(() =>
-      writeWizardConfig(
-        { entries: { ollama: { model: "llama3.2" } }, defaultProvider: "ollama" },
-        home,
-      ),
+      writeWizardConfig({
+        entries: { ollama: { model: "llama3.2" } },
+        defaultProvider: "ollama",
+      }),
     ).toThrow(/ollama.*requires baseURL/);
-    expect(() => readFileSync(join(home, "config.jsonc"), "utf8")).toThrow();
+    expect(() => readFileSync(CONFIG_PATH, "utf8")).toThrow();
   });
 });

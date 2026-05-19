@@ -1,23 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fetchCached } from "../src/fs/cache.ts";
-import { tmpHome } from "./helpers.ts";
+import { TEST_HOME } from "./wrap-home-preload.ts";
 
-let home: string;
-let prevHome: string | undefined;
 let realFetch: typeof fetch;
 
 beforeEach(() => {
-  home = tmpHome();
-  prevHome = process.env.WRAP_HOME;
-  process.env.WRAP_HOME = home;
+  rmSync(TEST_HOME, { recursive: true, force: true });
+  mkdirSync(TEST_HOME, { recursive: true });
   realFetch = globalThis.fetch;
 });
 
 afterEach(() => {
-  if (prevHome === undefined) delete process.env.WRAP_HOME;
-  else process.env.WRAP_HOME = prevHome;
   globalThis.fetch = realFetch;
 });
 
@@ -28,7 +23,7 @@ function mockFetch(fn: (url: string) => Promise<Response>) {
 
 describe("fetchCached", () => {
   test("fresh cache hit returns cached content without fetching", async () => {
-    writeFileSync(join(home, "cached.json"), '{"from":"disk"}');
+    writeFileSync(join(TEST_HOME, "cached.json"), '{"from":"disk"}');
     let called = false;
     mockFetch(async () => {
       called = true;
@@ -55,14 +50,15 @@ describe("fetchCached", () => {
     });
 
     expect(result).toEqual({ stale: false, content: '{"from":"network"}' });
-    expect(readFileSync(join(home, "cache/models.dev.json"), "utf-8")).toBe('{"from":"network"}');
+    expect(readFileSync(join(TEST_HOME, "cache/models.dev.json"), "utf-8")).toBe(
+      '{"from":"network"}',
+    );
   });
 
   test("stale cache with network success refetches and overwrites", async () => {
-    writeFileSync(join(home, "stale.json"), '{"old":true}');
-    // Backdate so mtime + ttlMs < now.
+    writeFileSync(join(TEST_HOME, "stale.json"), '{"old":true}');
     const past = new Date(Date.now() - 120_000);
-    utimesSync(join(home, "stale.json"), past, past);
+    utimesSync(join(TEST_HOME, "stale.json"), past, past);
     mockFetch(async () => new Response('{"new":true}'));
 
     const result = await fetchCached({
@@ -75,9 +71,9 @@ describe("fetchCached", () => {
   });
 
   test("stale cache + network failure returns stale content", async () => {
-    writeFileSync(join(home, "offline.json"), '{"last":"known"}');
+    writeFileSync(join(TEST_HOME, "offline.json"), '{"last":"known"}');
     const past = new Date(Date.now() - 120_000);
-    utimesSync(join(home, "offline.json"), past, past);
+    utimesSync(join(TEST_HOME, "offline.json"), past, past);
     mockFetch(async () => {
       throw new Error("network down");
     });
@@ -115,7 +111,7 @@ describe("fetchCached", () => {
         ttlMs: 60_000,
       }),
     ).rejects.toThrow();
-    expect(existsSync(join(home, "should-not-exist.json"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "should-not-exist.json"))).toBe(false);
   });
 
   test("creates cache subdirectories lazily", async () => {
@@ -127,6 +123,6 @@ describe("fetchCached", () => {
       ttlMs: 60_000,
     });
 
-    expect(existsSync(join(home, "cache/nested/deep.json"))).toBe(true);
+    expect(existsSync(join(TEST_HOME, "cache/nested/deep.json"))).toBe(true);
   });
 });

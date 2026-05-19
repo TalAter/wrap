@@ -1,6 +1,6 @@
 import { openSync } from "node:fs";
 import { ReadStream } from "node:tty";
-import { readWrapFile, writeWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 
 export type Appearance = "dark" | "light";
 
@@ -29,8 +29,8 @@ export function parseOsc11Response(raw: string): Appearance | null {
 }
 
 /** Read cached appearance from disk. Returns null if missing or expired. */
-export function getCachedAppearance(home?: string): Appearance | null {
-  const raw = readWrapFile(CACHE_PATH, home);
+export function getCachedAppearance(): Appearance | null {
+  const raw = wrapFs.read(CACHE_PATH);
   if (raw === null) return null;
 
   try {
@@ -45,8 +45,8 @@ export function getCachedAppearance(home?: string): Appearance | null {
 }
 
 /** Write detected appearance to disk cache. */
-export function cacheAppearance(appearance: Appearance, home?: string): void {
-  writeWrapFile(CACHE_PATH, JSON.stringify({ appearance, ts: Date.now() }), home);
+export function cacheAppearance(appearance: Appearance): void {
+  wrapFs.write(CACHE_PATH, JSON.stringify({ appearance, ts: Date.now() }));
 }
 
 /**

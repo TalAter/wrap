@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { wrapFs } from "../fs/home.ts";
 import type { LogEntry, Turn } from "./entry.ts";
 
 /**
@@ -9,8 +9,8 @@ import type { LogEntry, Turn } from "./entry.ts";
  * Exposed so callers that need multiple ops over the same snapshot (lookup
  * + chain walk for `-c`) can avoid re-reading the file.
  */
-export function readLogEntries(wrapHome: string): LogEntry[] {
-  const path = join(wrapHome, "logs", "wrap.jsonl");
+export function readLogEntries(): LogEntry[] {
+  const path = wrapFs.resolve("logs/wrap.jsonl");
   if (!existsSync(path)) return [];
   const content = readFileSync(path, "utf-8").trimEnd();
   if (!content) return [];

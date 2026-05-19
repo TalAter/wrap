@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -141,17 +141,9 @@ describe("resolveEditor", () => {
 
 describe("spawnEditor", () => {
   let home: string;
-  let prevHome: string | undefined;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "wrap-editor-spawn-"));
-    prevHome = process.env.WRAP_HOME;
-    process.env.WRAP_HOME = home;
-  });
-
-  afterEach(() => {
-    if (prevHome === undefined) delete process.env.WRAP_HOME;
-    else process.env.WRAP_HOME = prevHome;
   });
 
   let seq = 0;

@@ -1,6 +1,5 @@
 import { statSync } from "node:fs";
-import { join } from "node:path";
-import { getWrapHome, readWrapFile, writeWrapFile } from "./home.ts";
+import { wrapFs } from "./home.ts";
 
 /**
  * TTL-bounded network fetch with a filesystem cache under $WRAP_HOME.
@@ -8,7 +7,7 @@ import { getWrapHome, readWrapFile, writeWrapFile } from "./home.ts";
  * - Fresh cache hit: the file exists and `mtime + ttlMs > now`. Returned
  *   as `{ stale: false, content }` without touching the network.
  * - Cache miss or expired: fetch `url`. On success, write to `path` via
- *   `writeWrapFile` (parent directories created on demand) and return
+ *   `wrapFs.write` (parent directories created on demand) and return
  *   `{ stale: false, content }`.
  * - Fetch failure with a cache file present: return `{ stale: true, content }`.
  *   Caller decides whether to use it.
@@ -25,7 +24,7 @@ export async function fetchCached(opts: {
 }): Promise<{ stale: boolean; content: string }> {
   const { url, path, ttlMs } = opts;
 
-  const cached = readWrapFile(path);
+  const cached = wrapFs.read(path);
   if (cached !== null && isFresh(path, ttlMs)) {
     return { stale: false, content: cached };
   }
@@ -36,7 +35,7 @@ export async function fetchCached(opts: {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
     const content = await response.text();
-    writeWrapFile(path, content);
+    wrapFs.write(path, content);
     return { stale: false, content };
   } catch (e) {
     if (cached !== null) {
@@ -48,7 +47,7 @@ export async function fetchCached(opts: {
 
 function isFresh(relPath: string, ttlMs: number): boolean {
   try {
-    const { mtimeMs } = statSync(join(getWrapHome(), relPath));
+    const { mtimeMs } = statSync(wrapFs.resolve(relPath));
     return mtimeMs + ttlMs > Date.now();
   } catch {
     return false;

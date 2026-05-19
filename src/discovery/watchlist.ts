@@ -1,4 +1,4 @@
-import { readWrapFile, writeWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 import { VALID_TOOL_NAME } from "./init-probes.ts";
 
 const WATCHLIST_FILE = "tool-watchlist.json";
@@ -9,8 +9,8 @@ export type WatchlistEntry = {
 };
 
 /** Load the tool watchlist from WRAP_HOME. Returns [] if missing or invalid. */
-export function loadWatchlist(wrapHome: string): WatchlistEntry[] {
-  const raw = readWrapFile(WATCHLIST_FILE, wrapHome)?.trim();
+export function loadWatchlist(): WatchlistEntry[] {
+  const raw = wrapFs.read(WATCHLIST_FILE)?.trim();
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -31,11 +31,11 @@ export function loadWatchlist(wrapHome: string): WatchlistEntry[] {
 }
 
 /** Add tools to the watchlist. Re-nominations update the date (useful for pruning). */
-export function addToWatchlist(wrapHome: string, tools: string[]): void {
+export function addToWatchlist(tools: string[]): void {
   const valid = tools.filter((t) => VALID_TOOL_NAME.test(t));
   if (valid.length === 0) return;
 
-  const existing = loadWatchlist(wrapHome);
+  const existing = loadWatchlist();
   const today = new Date().toISOString().slice(0, 10);
   const nominated = new Set(valid);
 
@@ -49,9 +49,5 @@ export function addToWatchlist(wrapHome: string, tools: string[]): void {
       added: today,
     }));
 
-  writeWrapFile(
-    WATCHLIST_FILE,
-    `${JSON.stringify([...updated, ...additions], null, 2)}\n`,
-    wrapHome,
-  );
+  wrapFs.write(WATCHLIST_FILE, `${JSON.stringify([...updated, ...additions], null, 2)}\n`);
 }

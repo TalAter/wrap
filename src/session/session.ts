@@ -14,7 +14,6 @@ import type { Transcript } from "../core/transcript.ts";
 import { truncateMiddle } from "../core/truncate.ts";
 import { verbose } from "../core/verbose.ts";
 import type { ToolProbeResult } from "../discovery/init-probes.ts";
-import { getWrapHome } from "../fs/home.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
 import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
 import { createLogEntry, type LogEntry, type Turn } from "../logging/entry.ts";
@@ -72,7 +71,6 @@ export async function runSession(
   provider: Provider,
   options: SessionOptions,
 ): Promise<number> {
-  const wrapHome = getWrapHome();
   const config = getConfig();
   const maxRounds = config.maxRounds;
   const maxCapturedOutput = config.maxCapturedOutputChars;
@@ -125,7 +123,6 @@ export async function runSession(
   // existed at session start.
   const makeBaseLoopOptions = (): Omit<LoopOptions, "signal" | "showSpinner"> => ({
     cwd: options.cwd,
-    wrapHome,
     model,
     requestFraming: {
       contextString: scaffold.contextString,
@@ -366,15 +363,15 @@ export async function runSession(
     if (options.continuationParent) {
       entry.turns = entry.turns.slice(options.continuationParent.assembledTurns.length);
     }
-    appendLogEntryIgnoreErrors(wrapHome, entry);
+    appendLogEntryIgnoreErrors(entry);
   }
 
   return exitCode;
 }
 
-function appendLogEntryIgnoreErrors(wrapHome: string, entry: LogEntry): void {
+function appendLogEntryIgnoreErrors(entry: LogEntry): void {
   try {
-    appendLogEntry(wrapHome, entry);
+    appendLogEntry(entry);
   } catch {
     // Logging must never break the tool.
   }

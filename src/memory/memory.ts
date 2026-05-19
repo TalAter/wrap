@@ -1,10 +1,9 @@
-import { join } from "node:path";
 import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
 import { verbose } from "../core/verbose.ts";
 import { runProbes } from "../discovery/init-probes.ts";
-import { readWrapFile, writeWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 import type { Provider } from "../llm/types.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
 
@@ -16,11 +15,11 @@ const FactSchema = z.object({ fact: z.string() });
 const MemoryFileSchema = z.record(z.string(), z.array(FactSchema));
 
 /** Load memory from disk. Returns {} if file doesn't exist. Throws on corrupt/invalid file. */
-export function loadMemory(wrapHome: string): Memory {
-  const raw = readWrapFile(MEMORY_FILE, wrapHome);
+export function loadMemory(): Memory {
+  const raw = wrapFs.read(MEMORY_FILE);
   if (raw === null) return {};
 
-  const path = join(wrapHome, MEMORY_FILE);
+  const path = wrapFs.resolve(MEMORY_FILE);
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -43,24 +42,20 @@ function memoryError(filePath: string): Error {
 }
 
 /** Write memory to disk. Creates directory lazily. Sorts keys alphabetically. */
-export function saveMemory(wrapHome: string, memory: Memory): void {
+export function saveMemory(memory: Memory): void {
   const sorted: Memory = {};
   for (const [key, value] of Object.entries(memory).sort(([a], [b]) => a.localeCompare(b))) {
     sorted[key] = value;
   }
-  writeWrapFile(MEMORY_FILE, JSON.stringify(sorted, null, 2), wrapHome);
+  wrapFs.write(MEMORY_FILE, JSON.stringify(sorted, null, 2));
 }
 
 /**
  * Resolve scopes, append facts to the correct scope, persist, and return updated Memory.
  * Discards facts whose scope doesn't resolve to an existing directory.
  */
-export function appendFacts(
-  wrapHome: string,
-  updates: Array<{ fact: string; scope: string }>,
-  cwd: string,
-): Memory {
-  const memory = loadMemory(wrapHome);
+export function appendFacts(updates: Array<{ fact: string; scope: string }>, cwd: string): Memory {
+  const memory = loadMemory();
   for (const { fact, scope } of updates) {
     const resolved = resolvePath(scope, cwd);
     if (resolved === null) continue;
@@ -69,7 +64,7 @@ export function appendFacts(
       memory[resolved] = [...existing, { fact }];
     }
   }
-  saveMemory(wrapHome, memory);
+  saveMemory(memory);
   return memory;
 }
 
@@ -83,8 +78,8 @@ export function parseInitResponse(response: string): Fact[] {
 }
 
 /** Load existing memory or initialize by probing the system and asking the LLM. */
-export async function ensureMemory(provider: Provider, wrapHome: string): Promise<Memory> {
-  const existing = loadMemory(wrapHome);
+export async function ensureMemory(provider: Provider): Promise<Memory> {
+  const existing = loadMemory();
   if (Object.keys(existing).length > 0) {
     const total = countFacts(existing);
     const globalCount = (existing["/"] ?? []).length;
@@ -105,7 +100,7 @@ export async function ensureMemory(provider: Provider, wrapHome: string): Promis
   verbose(`Init: ${facts.length} facts extracted`);
   const memory: Memory = { "/": facts };
 
-  saveMemory(wrapHome, memory);
+  saveMemory(memory);
 
   chrome("Detected OS and shell", "🧠");
 

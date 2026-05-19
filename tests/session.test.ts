@@ -7,8 +7,7 @@
  * stream and observing the resulting outcome.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandResponse } from "../src/command-response.schema.ts";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
@@ -17,19 +16,12 @@ import { resetDialogHostCache } from "../src/session/dialog-host.ts";
 import { runSession } from "../src/session/session.ts";
 import { seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr, capturedStdout as stdout } from "./preload.ts";
-
-let tmpHome: string;
+import { TEST_HOME } from "./wrap-home-preload.ts";
 
 beforeEach(() => {
   seedTestConfig();
-  tmpHome = mkdtempSync(join(tmpdir(), "wrap-session-test-"));
-  process.env.WRAP_HOME = tmpHome;
+  rmSync(join(TEST_HOME, "logs"), { recursive: true, force: true });
   resetDialogHostCache();
-});
-
-afterEach(() => {
-  delete process.env.WRAP_HOME;
-  rmSync(tmpHome, { recursive: true, force: true });
 });
 
 function makeProvider(responses: CommandResponse[]): { provider: Provider; calls: () => number } {
@@ -175,7 +167,7 @@ describe("runSession — multi-round step → reply", () => {
     expect(stdout.text).toContain("the answer");
     // Verify the log entry has both assistant turns (step response + reply)
     const { readFileSync } = await import("node:fs");
-    const log = readFileSync(join(tmpHome, "logs/wrap.jsonl"), "utf-8");
+    const log = readFileSync(join(TEST_HOME, "logs/wrap.jsonl"), "utf-8");
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
     const assistants = entry.turns.filter((t: { kind: string }) => t.kind === "assistant");
     expect(assistants).toHaveLength(2);

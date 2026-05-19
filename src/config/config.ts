@@ -1,5 +1,5 @@
 import { type ParseError, parse } from "jsonc-parser";
-import { getWrapHome, readWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 
 /** One entry in the providers map — see specs/llm.md. */
 export type ProviderEntry = {
@@ -56,8 +56,8 @@ export type _DriftCheck = _AssertTrue<
 
 export const CONFIG_FILENAME = "config.jsonc";
 
-function loadFileConfig(wrapHome: string): Config {
-  const raw = readWrapFile(CONFIG_FILENAME, wrapHome);
+function loadFileConfig(): Config {
+  const raw = wrapFs.read(CONFIG_FILENAME);
   if (raw === null) return {};
 
   const errors: ParseError[] = [];
@@ -81,10 +81,17 @@ function loadEnvConfig(env: Record<string, string | undefined>): Config | undefi
   }
 }
 
+/**
+ * Load the on-disk config (under `wrapFs.root`) and merge in any
+ * `WRAP_CONFIG` env override.
+ *
+ * `envOverrides` exists for the `WRAP_CONFIG` test/CI override only —
+ * `WRAP_HOME` is resolved at startup by `wrapFs` and cannot be overridden
+ * here. Defaults to `process.env`.
+ */
 export function loadConfig(envOverrides: Record<string, string | undefined> = {}): Config {
   const env = { ...process.env, ...envOverrides };
-  const wrapHome = getWrapHome(env);
-  const fileConfig = loadFileConfig(wrapHome);
+  const fileConfig = loadFileConfig();
   const envConfig = loadEnvConfig(env);
 
   if (envConfig === undefined) return fileConfig;

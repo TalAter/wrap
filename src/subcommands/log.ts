@@ -1,13 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { chrome, hasJq, isTTY } from "../core/output.ts";
-import { getWrapHome } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 import type { Command } from "./types.ts";
 
 type Writer = (parsed: object[]) => Promise<void>;
 
 export function readLog(n: number | null): { valid: object[]; corrupt: number } {
-  const logPath = join(getWrapHome(), "logs", "wrap.jsonl");
+  const logPath = wrapFs.resolve("logs/wrap.jsonl");
 
   if (!existsSync(logPath)) {
     return { valid: [], corrupt: 0 };

@@ -16,134 +16,116 @@ import {
   deleteMemory,
   deleteScratch,
 } from "../src/subcommands/forget-delete.ts";
+import { TEST_HOME } from "./wrap-home-preload.ts";
+
+/** Wipe every entry inside TEST_HOME (but keep TEST_HOME itself). */
+function clearHome() {
+  rmSync(TEST_HOME, { recursive: true, force: true });
+  mkdirSync(TEST_HOME, { recursive: true });
+}
 
 describe("deleteMemory", () => {
-  let home: string;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "wrap-del-mem-"));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
-  });
+  beforeEach(clearHome);
 
   test("missing files → removed false, no errors", () => {
-    expect(deleteMemory(home)).toEqual({ removed: false, errors: [] });
+    expect(deleteMemory()).toEqual({ removed: false, errors: [] });
   });
 
   test("removes memory.json + tool-watchlist.json", () => {
-    writeFileSync(join(home, "memory.json"), "{}");
-    writeFileSync(join(home, "tool-watchlist.json"), "[]");
-    const r = deleteMemory(home);
+    writeFileSync(join(TEST_HOME, "memory.json"), "{}");
+    writeFileSync(join(TEST_HOME, "tool-watchlist.json"), "[]");
+    const r = deleteMemory();
     expect(r).toEqual({ removed: true, errors: [] });
-    expect(existsSync(join(home, "memory.json"))).toBe(false);
-    expect(existsSync(join(home, "tool-watchlist.json"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "memory.json"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "tool-watchlist.json"))).toBe(false);
   });
 
   test("removes memory.json when watchlist missing", () => {
-    writeFileSync(join(home, "memory.json"), "{}");
-    const r = deleteMemory(home);
+    writeFileSync(join(TEST_HOME, "memory.json"), "{}");
+    const r = deleteMemory();
     expect(r.removed).toBe(true);
     expect(r.errors).toEqual([]);
-    expect(existsSync(join(home, "memory.json"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "memory.json"))).toBe(false);
   });
 
   test("does not touch config.jsonc", () => {
-    writeFileSync(join(home, "memory.json"), "{}");
-    writeFileSync(join(home, "config.jsonc"), "{}");
-    deleteMemory(home);
-    expect(existsSync(join(home, "config.jsonc"))).toBe(true);
+    writeFileSync(join(TEST_HOME, "memory.json"), "{}");
+    writeFileSync(join(TEST_HOME, "config.jsonc"), "{}");
+    deleteMemory();
+    expect(existsSync(join(TEST_HOME, "config.jsonc"))).toBe(true);
   });
 
   test("non-ENOENT unlink failure is recorded in errors", () => {
     // memory.json as a directory → unlinkSync throws EISDIR (not ENOENT).
-    mkdirSync(join(home, "memory.json"));
-    const r = deleteMemory(home);
-    expect(r.errors).toEqual([join(home, "memory.json")]);
+    mkdirSync(join(TEST_HOME, "memory.json"));
+    const r = deleteMemory();
+    expect(r.errors).toEqual([join(TEST_HOME, "memory.json")]);
     expect(r.removed).toBe(false);
   });
 });
 
 describe("deleteLogs", () => {
-  let home: string;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "wrap-del-log-"));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
-  });
+  beforeEach(clearHome);
 
   test("missing log → removed false", () => {
-    expect(deleteLogs(home)).toEqual({ removed: false, errors: [] });
+    expect(deleteLogs()).toEqual({ removed: false, errors: [] });
   });
 
   test("removes wrap.jsonl", () => {
-    mkdirSync(join(home, "logs"));
-    writeFileSync(join(home, "logs", "wrap.jsonl"), "{}\n");
-    const r = deleteLogs(home);
+    mkdirSync(join(TEST_HOME, "logs"));
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), "{}\n");
+    const r = deleteLogs();
     expect(r).toEqual({ removed: true, errors: [] });
-    expect(existsSync(join(home, "logs", "wrap.jsonl"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "logs", "wrap.jsonl"))).toBe(false);
   });
 
   test("removes trace sidecars under logs/traces/", () => {
-    mkdirSync(join(home, "logs", "traces"), { recursive: true });
-    writeFileSync(join(home, "logs", "wrap.jsonl"), "{}\n");
-    writeFileSync(join(home, "logs", "traces", "abc.json"), "{}");
-    writeFileSync(join(home, "logs", "traces", "def.json"), "{}");
-    const r = deleteLogs(home);
+    mkdirSync(join(TEST_HOME, "logs", "traces"), { recursive: true });
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), "{}\n");
+    writeFileSync(join(TEST_HOME, "logs", "traces", "abc.json"), "{}");
+    writeFileSync(join(TEST_HOME, "logs", "traces", "def.json"), "{}");
+    const r = deleteLogs();
     expect(r).toEqual({ removed: true, errors: [] });
-    expect(existsSync(join(home, "logs"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "logs"))).toBe(false);
   });
 });
 
 describe("deleteCache", () => {
-  let home: string;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "wrap-del-cache-"));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
-  });
+  beforeEach(clearHome);
 
   test("missing cache dir → removed false", () => {
-    expect(deleteCache(home)).toEqual({ removed: false, errors: [] });
+    expect(deleteCache()).toEqual({ removed: false, errors: [] });
   });
 
   test("removes whole cache dir recursively", () => {
-    mkdirSync(join(home, "cache"));
-    mkdirSync(join(home, "cache", "sub"));
-    writeFileSync(join(home, "cache", "a"), "x");
-    writeFileSync(join(home, "cache", "sub", "b"), "y");
-    const r = deleteCache(home);
+    mkdirSync(join(TEST_HOME, "cache"));
+    mkdirSync(join(TEST_HOME, "cache", "sub"));
+    writeFileSync(join(TEST_HOME, "cache", "a"), "x");
+    writeFileSync(join(TEST_HOME, "cache", "sub", "b"), "y");
+    const r = deleteCache();
     expect(r.removed).toBe(true);
-    expect(existsSync(join(home, "cache"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "cache"))).toBe(false);
   });
 
   test("cache path is a file → removed=true, cache is unlinked", () => {
     // readdirSync on a regular file throws ENOTDIR (not ENOENT), so `existed`
     // stays true; rmSync(force:true, recursive:true) unlinks the file.
-    writeFileSync(join(home, "cache"), "oops");
-    const r = deleteCache(home);
+    writeFileSync(join(TEST_HOME, "cache"), "oops");
+    const r = deleteCache();
     expect(r.removed).toBe(true);
     expect(r.errors).toEqual([]);
-    expect(existsSync(join(home, "cache"))).toBe(false);
+    expect(existsSync(join(TEST_HOME, "cache"))).toBe(false);
   });
 
   test("removes symlink inside cache but not the symlink target", () => {
     const target = mkdtempSync(join(tmpdir(), "wrap-cache-target-"));
     try {
       writeFileSync(join(target, "survives.txt"), "important");
-      mkdirSync(join(home, "cache"));
-      symlinkSync(target, join(home, "cache", "link-to-target"));
-      const r = deleteCache(home);
+      mkdirSync(join(TEST_HOME, "cache"));
+      symlinkSync(target, join(TEST_HOME, "cache", "link-to-target"));
+      const r = deleteCache();
       expect(r.removed).toBe(true);
-      expect(existsSync(join(home, "cache"))).toBe(false);
-      // The symlink target directory must still exist with contents intact.
+      expect(existsSync(join(TEST_HOME, "cache"))).toBe(false);
       expect(existsSync(target)).toBe(true);
       expect(readFileSync(join(target, "survives.txt"), "utf-8")).toBe("important");
     } finally {

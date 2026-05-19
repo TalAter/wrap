@@ -9,27 +9,26 @@ import {
   memoryFootprint,
   scratchFootprint,
 } from "../src/subcommands/forget-footprint.ts";
+import { TEST_HOME } from "./wrap-home-preload.ts";
+
+/** Wipe every entry inside TEST_HOME (but keep TEST_HOME itself). */
+function clearHome() {
+  rmSync(TEST_HOME, { recursive: true, force: true });
+  mkdirSync(TEST_HOME, { recursive: true });
+}
 
 describe("memoryFootprint", () => {
-  let home: string;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "wrap-fp-mem-"));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
-  });
+  beforeEach(clearHome);
 
   test("no files → empty", () => {
-    expect(memoryFootprint(home)).toEqual({ state: "empty" });
+    expect(memoryFootprint()).toEqual({ state: "empty" });
   });
 
   test("populated memory.json → fact count + bytes of both files", () => {
     const mem = { "/": [{ fact: "a" }, { fact: "b" }], "/tmp": [{ fact: "c" }] };
-    writeFileSync(join(home, "memory.json"), JSON.stringify(mem));
-    writeFileSync(join(home, "tool-watchlist.json"), "[]");
-    const fp = memoryFootprint(home);
+    writeFileSync(join(TEST_HOME, "memory.json"), JSON.stringify(mem));
+    writeFileSync(join(TEST_HOME, "tool-watchlist.json"), "[]");
+    const fp = memoryFootprint();
     expect(fp.state).toBe("ok");
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(3);
@@ -37,13 +36,13 @@ describe("memoryFootprint", () => {
   });
 
   test("corrupt memory.json → unreadable", () => {
-    writeFileSync(join(home, "memory.json"), "{not json");
-    expect(memoryFootprint(home)).toEqual({ state: "unreadable" });
+    writeFileSync(join(TEST_HOME, "memory.json"), "{not json");
+    expect(memoryFootprint()).toEqual({ state: "unreadable" });
   });
 
   test("only watchlist present → ok with 0 facts but bytes > 0", () => {
-    writeFileSync(join(home, "tool-watchlist.json"), "[]");
-    const fp = memoryFootprint(home);
+    writeFileSync(join(TEST_HOME, "tool-watchlist.json"), "[]");
+    const fp = memoryFootprint();
     expect(fp.state).toBe("ok");
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(0);
@@ -52,31 +51,23 @@ describe("memoryFootprint", () => {
 });
 
 describe("logsFootprint", () => {
-  let home: string;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "wrap-fp-log-"));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
-  });
+  beforeEach(clearHome);
 
   test("no log file → empty", () => {
-    expect(logsFootprint(home)).toEqual({ state: "empty" });
+    expect(logsFootprint()).toEqual({ state: "empty" });
   });
 
   test("empty log file → empty", () => {
-    mkdirSync(join(home, "logs"));
-    writeFileSync(join(home, "logs", "wrap.jsonl"), "");
-    expect(logsFootprint(home)).toEqual({ state: "empty" });
+    mkdirSync(join(TEST_HOME, "logs"));
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), "");
+    expect(logsFootprint()).toEqual({ state: "empty" });
   });
 
   test("populated log → line count + bytes", () => {
-    mkdirSync(join(home, "logs"));
+    mkdirSync(join(TEST_HOME, "logs"));
     const content = `${JSON.stringify({ a: 1 })}\n${JSON.stringify({ a: 2 })}\n${JSON.stringify({ a: 3 })}\n`;
-    writeFileSync(join(home, "logs", "wrap.jsonl"), content);
-    const fp = logsFootprint(home);
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), content);
+    const fp = logsFootprint();
     expect(fp.state).toBe("ok");
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(3);
@@ -84,36 +75,36 @@ describe("logsFootprint", () => {
   });
 
   test("trailing newline doesn't count as extra entry", () => {
-    mkdirSync(join(home, "logs"));
-    writeFileSync(join(home, "logs", "wrap.jsonl"), "{}\n{}\n");
-    const fp = logsFootprint(home);
+    mkdirSync(join(TEST_HOME, "logs"));
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), "{}\n{}\n");
+    const fp = logsFootprint();
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(2);
   });
 
   test("single entry without trailing newline counts as 1", () => {
-    mkdirSync(join(home, "logs"));
+    mkdirSync(join(TEST_HOME, "logs"));
     // Single char is needed to kill the endsWith("\n") → endsWith("") mutant:
     // longer content slices to a non-empty string that splits to the same count.
-    writeFileSync(join(home, "logs", "wrap.jsonl"), "x");
-    const fp = logsFootprint(home);
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), "x");
+    const fp = logsFootprint();
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(1);
   });
 
   test("file containing only a newline → empty", () => {
-    mkdirSync(join(home, "logs"));
-    writeFileSync(join(home, "logs", "wrap.jsonl"), "\n");
-    expect(logsFootprint(home)).toEqual({ state: "empty" });
+    mkdirSync(join(TEST_HOME, "logs"));
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), "\n");
+    expect(logsFootprint()).toEqual({ state: "empty" });
   });
 
   test("trace sidecar bytes are included in the total", () => {
-    mkdirSync(join(home, "logs", "traces"), { recursive: true });
+    mkdirSync(join(TEST_HOME, "logs", "traces"), { recursive: true });
     const jsonl = `${JSON.stringify({ a: 1 })}\n`;
     const traceBody = "x".repeat(500);
-    writeFileSync(join(home, "logs", "wrap.jsonl"), jsonl);
-    writeFileSync(join(home, "logs", "traces", "abc.json"), traceBody);
-    const fp = logsFootprint(home);
+    writeFileSync(join(TEST_HOME, "logs", "wrap.jsonl"), jsonl);
+    writeFileSync(join(TEST_HOME, "logs", "traces", "abc.json"), traceBody);
+    const fp = logsFootprint();
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(1);
     expect(fp.bytes).toBe(jsonl.length + traceBody.length);
@@ -121,36 +112,28 @@ describe("logsFootprint", () => {
 });
 
 describe("cacheFootprint", () => {
-  let home: string;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "wrap-fp-cache-"));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
-  });
+  beforeEach(clearHome);
 
   test("missing cache dir → empty", () => {
-    expect(cacheFootprint(home)).toEqual({ state: "empty" });
+    expect(cacheFootprint()).toEqual({ state: "empty" });
   });
 
   test("empty cache dir → empty", () => {
-    mkdirSync(join(home, "cache"));
-    expect(cacheFootprint(home)).toEqual({ state: "empty" });
+    mkdirSync(join(TEST_HOME, "cache"));
+    expect(cacheFootprint()).toEqual({ state: "empty" });
   });
 
   test("sibling files outside cache/ are ignored", () => {
-    writeFileSync(join(home, "memory.json"), "xxxxx");
-    expect(cacheFootprint(home)).toEqual({ state: "empty" });
+    writeFileSync(join(TEST_HOME, "memory.json"), "xxxxx");
+    expect(cacheFootprint()).toEqual({ state: "empty" });
   });
 
   test("populated cache → file count + bytes, recursive", () => {
-    mkdirSync(join(home, "cache"));
-    writeFileSync(join(home, "cache", "a.json"), "aa");
-    mkdirSync(join(home, "cache", "sub"));
-    writeFileSync(join(home, "cache", "sub", "b.json"), "bbbb");
-    const fp = cacheFootprint(home);
+    mkdirSync(join(TEST_HOME, "cache"));
+    writeFileSync(join(TEST_HOME, "cache", "a.json"), "aa");
+    mkdirSync(join(TEST_HOME, "cache", "sub"));
+    writeFileSync(join(TEST_HOME, "cache", "sub", "b.json"), "bbbb");
+    const fp = cacheFootprint();
     if (fp.state !== "ok") throw new Error();
     expect(fp.count).toBe(2);
     expect(fp.bytes).toBe(6);
@@ -177,7 +160,6 @@ describe("scratchFootprint", () => {
     writeFileSync(join(base, "wrap-scratch-aaa", "f"), "12345"); // 5
     mkdirSync(join(base, "wrap-scratch-bbb"));
     writeFileSync(join(base, "wrap-scratch-bbb", "f"), "xyz"); // 3
-    // Non-match — must be ignored.
     mkdirSync(join(base, "wrap-other-zzz"));
     writeFileSync(join(base, "wrap-other-zzz", "f"), "zzzzzzzz");
     const fp = scratchFootprint(base);

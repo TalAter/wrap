@@ -34,3 +34,7 @@ Wrap has a vault at `vault/`. The index is auto-loaded below. When working on a 
 ## Stop hook
 
 A stop hook runs `bun run lint` (biome --write + tsc) automatically when you finish. Don't run lint/format/tsc as a final check before stopping — they'll just run twice. Tests are **not** in the stop hook — run them yourself when needed, preferring targeted runs (`bun test tests/foo.test.ts`) over the full suite.
+
+## wrap-core dependency
+
+wrap-core is a sibling package providing shared substrate. When working on shared substrate (TUI primitives, theme, providers, dialog infra, config), read `vault/wrap-core-api`

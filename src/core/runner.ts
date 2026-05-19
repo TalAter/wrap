@@ -21,7 +21,6 @@ export type LoopState = {
 
 export type LoopOptions = {
   cwd: string;
-  wrapHome: string;
   /** Display label for the active provider, e.g. "anthropic / claude-sonnet-4-6". */
   model: string;
   signal?: AbortSignal;
@@ -82,11 +81,10 @@ export function fetchesUrl(content: string): boolean {
 
 function handleMemoryUpdates(
   response: import("../command-response.schema.ts").CommandResponse,
-  wrapHome: string,
   cwd: string,
 ): void {
   if (!response.memory_updates?.length) return;
-  appendFacts(wrapHome, response.memory_updates, cwd);
+  appendFacts(response.memory_updates, cwd);
   verbose(`Memory updated: ${response.memory_updates.length} facts`);
   if (response.memory_updates_message) {
     const scopes = response.memory_updates
@@ -189,10 +187,10 @@ export async function* runLoop(
       throw new Error("runRound returned an assistant turn without a response");
     }
 
-    handleMemoryUpdates(response, options.wrapHome, options.cwd);
+    handleMemoryUpdates(response, options.cwd);
 
     if (response.watchlist_additions?.length) {
-      addToWatchlist(options.wrapHome, response.watchlist_additions);
+      addToWatchlist(response.watchlist_additions);
       verbose(`Watchlist: added ${response.watchlist_additions.join(", ")}`);
     }
 

@@ -1,5 +1,5 @@
 import { CONFIG_FILENAME, type Config, type ProviderEntry } from "../config/config.ts";
-import { writeWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 import { validateProviderEntry } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 
@@ -23,7 +23,7 @@ export function serializeConfig(config: Config): string {
   return JSON.stringify({ $schema: "./config.schema.json", ...config }, null, 2);
 }
 
-export function writeWizardConfig(result: WizardResult, home?: string): void {
+export function writeWizardConfig(result: WizardResult): void {
   const config = buildConfig(result.entries, result.defaultProvider, result.nerdFonts);
-  writeWrapFile(CONFIG_FILENAME, serializeConfig(config), home);
+  wrapFs.write(CONFIG_FILENAME, serializeConfig(config));
 }

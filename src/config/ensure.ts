@@ -1,6 +1,6 @@
 import { chrome } from "../core/output.ts";
 import { fetchCached } from "../fs/cache.ts";
-import { getWrapHome, readWrapFile, writeWrapFile } from "../fs/home.ts";
+import { wrapFs } from "../fs/home.ts";
 import { CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import { mountConfigWizardDialog, type WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
@@ -35,16 +35,15 @@ function probeCliBinaries(): Record<string, boolean> {
   return result;
 }
 
-function writeSchema(home: string): void {
-  writeWrapFile("config.schema.json", JSON.stringify(configSchema, null, 2), home);
+function writeSchema(): void {
+  wrapFs.write("config.schema.json", JSON.stringify(configSchema, null, 2));
 }
 
 /**
- * Options for `ensureConfig`. Production callers pass env overrides;
- * tests pass `_testWizardResult` to bypass the interactive wizard.
+ * Options for `ensureConfig`. Tests pass `_testWizardResult` to bypass the
+ * interactive wizard.
  */
 export type EnsureConfigOptions = {
-  WRAP_HOME?: string;
   /** Test-only: bypass wizard UI. `null` simulates cancel. */
   _testWizardResult?: WizardResult | null;
 };
@@ -63,15 +62,10 @@ export type EnsureConfigResult = {
 };
 
 export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<EnsureConfigResult> {
-  const env = opts.WRAP_HOME ? { ...process.env, WRAP_HOME: opts.WRAP_HOME } : process.env;
-  const home = getWrapHome(env);
-
-  const envOverrides = opts.WRAP_HOME ? { WRAP_HOME: opts.WRAP_HOME } : {};
-
   // Skip wizard when config exists on disk or was injected via WRAP_CONFIG.
-  const existing = readWrapFile(CONFIG_FILENAME, home);
-  if (existing !== null || env.WRAP_CONFIG) {
-    return { config: loadConfig(envOverrides), justCreated: false };
+  const existing = wrapFs.read(CONFIG_FILENAME);
+  if (existing !== null || process.env.WRAP_CONFIG) {
+    return { config: loadConfig(), justCreated: false };
   }
 
   let result: WizardResult | null;
@@ -89,8 +83,8 @@ export async function ensureConfig(opts: EnsureConfigOptions = {}): Promise<Ensu
     throw new Error("unreachable"); // satisfy TS return type
   }
 
-  writeWizardConfig(result, home);
-  writeSchema(home);
+  writeWizardConfig(result);
+  writeSchema();
   chrome("Configuration saved", "🧠");
-  return { config: loadConfig(envOverrides), justCreated: true };
+  return { config: loadConfig(), justCreated: true };
 }

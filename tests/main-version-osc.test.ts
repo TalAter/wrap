@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as appearance from "../src/core/detect-appearance.ts";
 import { main } from "../src/main.ts";
 import { mockStdout } from "./helpers/mock-stdout.ts";
-import { tmpHome } from "./helpers.ts";
 
 // Regression: main called resolveAppearance() before parsing argv, which
 // writes "\x1b]11;?\x07" to stderr to detect dark/light theme. On slow
@@ -13,20 +12,15 @@ import { tmpHome } from "./helpers.ts";
 describe("main --version skips OSC 11 background-color probe", () => {
   let originalArgv: string[];
   let originalExitCode: number | string | undefined;
-  let originalWrapHome: string | undefined;
 
   beforeEach(() => {
     originalArgv = process.argv;
     originalExitCode = process.exitCode ?? undefined;
-    originalWrapHome = process.env.WRAP_HOME;
-    process.env.WRAP_HOME = tmpHome();
   });
 
   afterEach(() => {
     process.argv = originalArgv;
     process.exitCode = originalExitCode;
-    if (originalWrapHome === undefined) delete process.env.WRAP_HOME;
-    else process.env.WRAP_HOME = originalWrapHome;
   });
 
   async function runVersionAndCountProbes(flag: string): Promise<number> {

@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import { createLogEntry, type LogEntry, serializeEntry } from "../src/logging/entry.ts";
@@ -9,6 +8,7 @@ import {
   findContinuationParent,
   readLogEntries,
 } from "../src/logging/lookup.ts";
+import { TEST_HOME } from "./wrap-home-preload.ts";
 
 const defaults = {
   cwd: "/Users/tal/projects",
@@ -16,15 +16,17 @@ const defaults = {
   promptHash: "abc123",
 };
 
-function home(): string {
-  return mkdtempSync(join(tmpdir(), "wrap-lookup-"));
-}
+const LOGS_DIR = join(TEST_HOME, "logs");
+const LOG_PATH = join(LOGS_DIR, "wrap.jsonl");
 
-function writeLog(wrapHome: string, entries: LogEntry[]): void {
-  mkdirSync(join(wrapHome, "logs"), { recursive: true });
-  const path = join(wrapHome, "logs", "wrap.jsonl");
+beforeEach(() => {
+  rmSync(LOGS_DIR, { recursive: true, force: true });
+});
+
+function writeLog(entries: LogEntry[]): void {
+  mkdirSync(LOGS_DIR, { recursive: true });
   const body = entries.length === 0 ? "" : `${entries.map(serializeEntry).join("\n")}\n`;
-  writeFileSync(path, body);
+  writeFileSync(LOG_PATH, body);
 }
 
 function mkEntry(overrides: Partial<LogEntry>): LogEntry {
@@ -33,22 +35,19 @@ function mkEntry(overrides: Partial<LogEntry>): LogEntry {
 
 describe("readLogEntries", () => {
   test("returns [] when no log file exists", () => {
-    expect(readLogEntries(home())).toEqual([]);
+    expect(readLogEntries()).toEqual([]);
   });
 
   test("returns [] for an empty log file", () => {
-    const wrapHome = home();
-    writeLog(wrapHome, []);
-    expect(readLogEntries(wrapHome)).toEqual([]);
+    writeLog([]);
+    expect(readLogEntries()).toEqual([]);
   });
 
   test("skips malformed JSON lines silently", () => {
-    const wrapHome = home();
-    mkdirSync(join(wrapHome, "logs"), { recursive: true });
-    const path = join(wrapHome, "logs", "wrap.jsonl");
+    mkdirSync(LOGS_DIR, { recursive: true });
     const good = mkEntry({ id: "good" });
-    writeFileSync(path, `garbage\n${serializeEntry(good)}\ntrash\n`);
-    const entries = readLogEntries(wrapHome);
+    writeFileSync(LOG_PATH, `garbage\n${serializeEntry(good)}\ntrash\n`);
+    const entries = readLogEntries();
     expect(entries.map((e) => e.id)).toEqual(["good"]);
   });
 });

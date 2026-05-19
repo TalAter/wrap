@@ -1,7 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
 import {
   fetchesUrl,
@@ -23,15 +20,8 @@ const scaffold: PromptScaffold = {
   sectionUserRequest: "## User's request",
 };
 
-let tmpHome: string;
-
 beforeEach(() => {
   seedTestConfig();
-  tmpHome = mkdtempSync(join(tmpdir(), "wrap-runner-test-"));
-});
-
-afterEach(() => {
-  rmSync(tmpHome, { recursive: true, force: true });
 });
 
 function makeProvider(responses: CommandResponse[]): { provider: Provider; calls: () => number } {
@@ -50,7 +40,6 @@ function makeProvider(responses: CommandResponse[]): { provider: Provider; calls
 function makeOptions(overrides?: Partial<LoopOptions>): LoopOptions {
   return {
     cwd: "/tmp",
-    wrapHome: tmpHome,
     model: "test / model",
     showSpinner: false,
     ...overrides,

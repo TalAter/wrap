@@ -1,11 +1,12 @@
-import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import { createLogEntry, scrubApiKey, serializeEntry } from "../src/logging/entry.ts";
 import { appendLogEntry } from "../src/logging/writer.ts";
 import { wrap, wrapMock } from "./helpers.ts";
+import { TEST_HOME as UNIT_TEST_HOME } from "./wrap-home-preload.ts";
 
 const defaults = {
   cwd: "/Users/tal/projects",
@@ -315,9 +316,13 @@ describe("serializeEntry", () => {
 });
 
 describe("appendLogEntry", () => {
-  function makeTmpHome() {
-    return mkdtempSync(join(tmpdir(), "wrap-log-test-"));
-  }
+  // appendLogEntry writes under UNIT_TEST_HOME (the singleton set at file
+  // top). Wipe `logs/` between tests so each starts from an empty state.
+  const LOGS_DIR = join(UNIT_TEST_HOME, "logs");
+
+  beforeEach(() => {
+    rmSync(LOGS_DIR, { recursive: true, force: true });
+  });
 
   function makeEntry() {
     return createLogEntry({
@@ -328,17 +333,13 @@ describe("appendLogEntry", () => {
   }
 
   test("creates logs directory and file on first write", () => {
-    const home = makeTmpHome();
-    const entry = makeEntry();
-    appendLogEntry(home, entry);
-    const logPath = join(home, "logs", "wrap.jsonl");
-    expect(existsSync(logPath)).toBe(true);
+    appendLogEntry(makeEntry());
+    expect(existsSync(join(LOGS_DIR, "wrap.jsonl"))).toBe(true);
   });
 
   test("writes valid JSON on a single line", () => {
-    const home = makeTmpHome();
-    appendLogEntry(home, makeEntry());
-    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
+    appendLogEntry(makeEntry());
+    const content = readFileSync(join(LOGS_DIR, "wrap.jsonl"), "utf-8");
     const lines = content.trimEnd().split("\n");
     expect(lines).toHaveLength(1);
     const line = lines[0];
@@ -347,11 +348,10 @@ describe("appendLogEntry", () => {
   });
 
   test("appends multiple entries as separate lines", () => {
-    const home = makeTmpHome();
-    appendLogEntry(home, makeEntry());
-    appendLogEntry(home, makeEntry());
-    appendLogEntry(home, makeEntry());
-    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
+    appendLogEntry(makeEntry());
+    appendLogEntry(makeEntry());
+    appendLogEntry(makeEntry());
+    const content = readFileSync(join(LOGS_DIR, "wrap.jsonl"), "utf-8");
     const lines = content.trimEnd().split("\n");
     expect(lines).toHaveLength(3);
     for (const line of lines) {
@@ -360,10 +360,9 @@ describe("appendLogEntry", () => {
   });
 
   test("each line has a unique id", () => {
-    const home = makeTmpHome();
-    appendLogEntry(home, makeEntry());
-    appendLogEntry(home, makeEntry());
-    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8");
+    appendLogEntry(makeEntry());
+    appendLogEntry(makeEntry());
+    const content = readFileSync(join(LOGS_DIR, "wrap.jsonl"), "utf-8");
     const ids = content
       .trimEnd()
       .split("\n")
@@ -375,7 +374,6 @@ describe("appendLogEntry", () => {
     // Sanity that the writer doesn't off-by-one when non-assistant turns come
     // first/in-between. Two user turns + an assistant + a step + another
     // assistant: the traced indices must be 2 and 4, not 0 and 1.
-    const home = makeTmpHome();
     const entry = makeEntry();
     entry.turns.push({ kind: "user", text: "first" });
     entry.turns.push({ kind: "user", text: "second" });
@@ -395,18 +393,15 @@ describe("appendLogEntry", () => {
       kind: "assistant",
       attempts: [{ request_wire: { kind: "test" } }],
     });
-    appendLogEntry(home, entry);
-    const trace = JSON.parse(
-      readFileSync(join(home, "logs", "traces", `${entry.id}.json`), "utf-8"),
-    );
+    appendLogEntry(entry);
+    const trace = JSON.parse(readFileSync(join(LOGS_DIR, "traces", `${entry.id}.json`), "utf-8"));
     expect(Object.keys(trace.turn_attempts).sort()).toEqual(["2", "4"]);
   });
 
   test("sidecar failure does not block jsonl append", () => {
-    const home = makeTmpHome();
-    mkdirSync(join(home, "logs"));
+    mkdirSync(LOGS_DIR);
     // Block sidecar by occupying its parent path with a file.
-    writeFileSync(join(home, "logs", "traces"), "");
+    writeFileSync(join(LOGS_DIR, "traces"), "");
 
     const entry = makeEntry();
     entry.turns.push({
@@ -414,9 +409,9 @@ describe("appendLogEntry", () => {
       attempts: [{ request_wire: { kind: "test" } }],
     });
 
-    expect(() => appendLogEntry(home, entry)).toThrow();
+    expect(() => appendLogEntry(entry)).toThrow();
 
-    const content = readFileSync(join(home, "logs", "wrap.jsonl"), "utf-8").trim();
+    const content = readFileSync(join(LOGS_DIR, "wrap.jsonl"), "utf-8").trim();
     expect(JSON.parse(content).id).toBe(entry.id);
   });
 });

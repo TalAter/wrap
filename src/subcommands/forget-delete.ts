@@ -1,5 +1,6 @@
 import { readdirSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { wrapFs } from "../fs/home.ts";
 
 export type DeleteResult = {
   /** True iff at least one real filesystem entry was removed (ENOENT doesn't count). */
@@ -10,19 +11,19 @@ export type DeleteResult = {
 
 const SCRATCH_PREFIX = "wrap-scratch-";
 
-export function deleteMemory(wrapHome: string): DeleteResult {
+export function deleteMemory(): DeleteResult {
   const result: DeleteResult = { removed: false, errors: [] };
-  unlinkIfPresent(join(wrapHome, "memory.json"), result);
-  unlinkIfPresent(join(wrapHome, "tool-watchlist.json"), result);
+  unlinkIfPresent(wrapFs.resolve("memory.json"), result);
+  unlinkIfPresent(wrapFs.resolve("tool-watchlist.json"), result);
   return result;
 }
 
-export function deleteLogs(wrapHome: string): DeleteResult {
-  return rmDir(join(wrapHome, "logs"));
+export function deleteLogs(): DeleteResult {
+  return rmDir(wrapFs.resolve("logs"));
 }
 
-export function deleteCache(wrapHome: string): DeleteResult {
-  return rmDir(join(wrapHome, "cache"));
+export function deleteCache(): DeleteResult {
+  return rmDir(wrapFs.resolve("cache"));
 }
 
 export function deleteScratch(tmpBase: string): DeleteResult {

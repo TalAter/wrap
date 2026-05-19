@@ -1,7 +1,6 @@
 import { tmpdir } from "node:os";
 import { getConfig } from "../config/store.ts";
 import { chrome } from "../core/output.ts";
-import { getWrapHome } from "../fs/home.ts";
 import {
   type DeleteResult,
   deleteCache,
@@ -44,13 +43,12 @@ export const forgetCmd: Command = {
       process.exit(1);
     }
 
-    const wrapHome = getWrapHome();
     const tmpBase = tmpdir();
 
     const footprints = {
-      memory: memoryFootprint(wrapHome),
-      logs: logsFootprint(wrapHome),
-      cache: cacheFootprint(wrapHome),
+      memory: memoryFootprint(),
+      logs: logsFootprint(),
+      cache: cacheFootprint(),
       scratch: scratchFootprint(tmpBase),
     };
 
@@ -67,7 +65,7 @@ export const forgetCmd: Command = {
       selected = values as Bucket[];
     }
 
-    const results = performDeletes(selected, wrapHome, tmpBase);
+    const results = performDeletes(selected, tmpBase);
 
     let anyFailure = false;
     let anyRemoved = false;
@@ -86,18 +84,18 @@ export const forgetCmd: Command = {
   },
 };
 
-function performDeletes(selected: Bucket[], wrapHome: string, tmpBase: string): DeleteResult[] {
+function performDeletes(selected: Bucket[], tmpBase: string): DeleteResult[] {
   const out: DeleteResult[] = [];
   for (const bucket of selected) {
     switch (bucket) {
       case "memory":
-        out.push(deleteMemory(wrapHome));
+        out.push(deleteMemory());
         break;
       case "logs":
-        out.push(deleteLogs(wrapHome));
+        out.push(deleteLogs());
         break;
       case "cache":
-        out.push(deleteCache(wrapHome));
+        out.push(deleteCache());
         break;
       case "scratch":
         out.push(deleteScratch(tmpBase));

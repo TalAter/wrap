@@ -13,7 +13,6 @@ import { verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
 import { loadWatchlist } from "./discovery/watchlist.ts";
-import { getWrapHome } from "./fs/home.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
@@ -122,8 +121,7 @@ export async function main() {
       verbose(`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`);
     }
 
-    const wrapHome = getWrapHome();
-    const watchlist = loadWatchlist(wrapHome);
+    const watchlist = loadWatchlist();
     const tools = probeTools(watchlist.map((e) => e.tool));
     if (tools) {
       verbose(
@@ -131,7 +129,7 @@ export async function main() {
       );
     }
 
-    const memory = await ensureMemory(provider, wrapHome);
+    const memory = await ensureMemory(provider);
 
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
     const cwdFiles = await listCwdFiles(cwd);
@@ -175,8 +173,7 @@ function resolveContinuation(): {
   assembledTurns: Turn[];
   parentPrompt: string;
 } {
-  const wrapHome = getWrapHome();
-  const entries = readLogEntries(wrapHome);
+  const entries = readLogEntries();
   const parent = findContinuationParent(entries, process.ppid);
   if (parent === null) {
     throw new Error("Continue error: no previous wrap run found.");
