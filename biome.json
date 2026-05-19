@@ -3,6 +3,8 @@
   "files": {
     "includes": [
       "**",
+      "!**/node_modules",
+      "!vault",
       "!.claude/worktrees",
       "!eval/results",
       "!stryker/.stryker-tmp",
