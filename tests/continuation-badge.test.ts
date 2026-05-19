@@ -39,9 +39,10 @@ describe("formatContinuationBadge", () => {
     expect(formatContinuationBadge("anything", 0)).toBe("");
   });
 
-  test("does not append an ellipsis when the prompt is exactly within budget", () => {
+  test("does not append an ellipsis when body length equals budget exactly", () => {
+    // columns=40 → budget = max(20, 40 - 14 - 1) = 25. Body matches budget exactly.
     const body = "x".repeat(25);
-    const out = formatContinuationBadge(body, 80);
+    const out = formatContinuationBadge(body, 40);
     expect(out).toBe(`↳ Continuing: ${body}`);
     expect(out).not.toEndWith("…");
   });
