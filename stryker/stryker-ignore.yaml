@@ -1956,3 +1956,27 @@
   mutated: 'entries.length + 1'
   reason: 'equivalent — loop starts 2 above the last valid index. With noUncheckedIndexedAccess, entries[entries.length] and entries[entries.length + 1] are undefined, so the `entry && entry.ppid === ppid` guard skips them harmlessly. Iteration over valid indices is identical.'
   added: 2026-05-19
+- file: src/config/store.ts
+  mutator: ConditionalExpression
+  original: '!store'
+  mutated: 'false'
+  reason: 'line 11 in getConfig — init guard. Diverges only when store is null at call time, a before-init state no real caller produces (main.ts always calls setConfig before any getConfig). Without the throw, getConfig returns null and the very next field access in the caller throws TypeError — same crash, less helpful message. Defensive guard, not behavioral logic.'
+  added: 2026-05-19
+- file: src/config/store.ts
+  mutator: StringLiteral
+  original: '"Config accessed before initialization"'
+  mutated: '""'
+  reason: 'line 11 in getConfig — Error.message is cosmetic: no caller parses it, only humans see it on crash. The throw is only reachable via the before-init state covered by the ConditionalExpression ignore on the same line.'
+  added: 2026-05-19
+- file: src/config/store.ts
+  mutator: ConditionalExpression
+  original: '!store'
+  mutated: 'false'
+  reason: 'line 20 in updateConfig — same init guard as line 11. Diverges only when store is null at call time, a before-init state no real caller produces. Without the throw, `{...null}` is `{}` so updateConfig would install a partial config — bad, but only on the unreachable before-init code path.'
+  added: 2026-05-19
+- file: src/config/store.ts
+  mutator: StringLiteral
+  original: '"Config accessed before initialization"'
+  mutated: '""'
+  reason: 'line 20 in updateConfig — same as line 11 StringLiteral: Error.message is cosmetic and the throw is only reachable via the before-init state.'
+  added: 2026-05-19

@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/config/store.ts
 - src/core/output.ts
 - src/core/logo.ts
 - src/core/clipboard.ts
@@ -79,3 +78,4 @@
 - src/logging/lookup.ts
 - src/tui/continuation-badge.ts
 - src/config/settings.ts
+- src/config/store.ts
