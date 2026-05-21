@@ -236,7 +236,7 @@ describe("ConfigWizardDialog", () => {
     // Select Anthropic (Space to toggle)
     stdin.write(" ");
     await wait();
-    
+
     // Arrow down to OpenAI
     stdin.write("\x1b[B");
     await wait();

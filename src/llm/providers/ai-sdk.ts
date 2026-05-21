@@ -1,6 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
 import { type ZodType, z } from "zod";
 import { notifications } from "../../core/notify.ts";
@@ -67,7 +68,12 @@ function captureFromResult(
 /**
  * `openai-compat` speaks Chat Completions (via `@ai-sdk/openai-compatible`)
  * rather than the Responses API — OpenAI's Responses validator rejects
- * multi-turn shapes against non-OpenAI backends (openrouter, groq, …).
+ * multi-turn shapes against non-OpenAI backends (groq, mistral, …).
+ *
+ * `openrouter` has its own first-party SDK provider that forwards
+ * `response_format: json_schema` (the generic openai-compatible package
+ * silently drops the schema and only sends `{type: "json_object"}` when
+ * `supportsStructuredOutputs` is false, which also leaks a console.warn).
  */
 export function buildModel(resolved: ResolvedProvider): LanguageModel {
   const { model, name } = resolved;
@@ -84,6 +90,11 @@ export function buildModel(resolved: ResolvedProvider): LanguageModel {
         apiKey: resolveApiKey(resolved.apiKey),
         baseURL: resolved.baseURL,
       })(model);
+    case "openrouter":
+      return createOpenRouter({
+        apiKey: resolveApiKey(resolved.apiKey),
+        baseURL: resolved.baseURL,
+      }).chat(model);
     case "openai-compat": {
       if (!resolved.baseURL) {
         throw new Error(`LLM error: provider "${name}" requires baseURL.`);

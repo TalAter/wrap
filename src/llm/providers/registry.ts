@@ -16,12 +16,14 @@ import type { ProviderEntry } from "../../config/config.ts";
  * `kind` distinguishes the runtime SDK family — one kind = one factory:
  *  - `anthropic`     → `@ai-sdk/anthropic`
  *  - `openai`        → `@ai-sdk/openai` (Responses API against api.openai.com)
+ *  - `openrouter`    → `@openrouter/ai-sdk-provider` (forwards `json_schema`
+ *                     response_format; per-model strictness handled server-side)
  *  - `openai-compat` → `@ai-sdk/openai-compatible` (Chat Completions; covers
- *                     openrouter, groq, mistral, ollama, and any unknown
- *                     user-defined OpenAI-compatible endpoint)
+ *                     groq, mistral, ollama, and any unknown user-defined
+ *                     OpenAI-compatible endpoint)
  *  - `claude-code`   → `claude` CLI subprocess
  */
-export type ProviderKind = "anthropic" | "openai" | "openai-compat" | "claude-code";
+export type ProviderKind = "anthropic" | "openai" | "openrouter" | "openai-compat" | "claude-code";
 
 export type ProviderRegistration = {
   kind: ProviderKind;
@@ -119,11 +121,10 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
   // },
   openrouter: {
     displayName: "OpenRouter",
-    kind: "openai-compat",
+    kind: "openrouter",
     apiKeyUrl: "https://openrouter.ai/keys",
     apiKeyPlaceholder: "sk-or-v1-",
     baseURL: "https://openrouter.ai/api/v1",
-    validate: requiresBaseURL("openrouter"),
     nerdIcon: "\uea63", // nf-cod-repo_forked
   },
   groq: {

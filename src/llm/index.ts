@@ -20,6 +20,7 @@ function initProvider(resolved: ResolvedProvider): Provider {
       return claudeCodeProvider(resolved);
     case "anthropic":
     case "openai":
+    case "openrouter":
     case "openai-compat":
       return aiSdkProvider(resolved);
   }

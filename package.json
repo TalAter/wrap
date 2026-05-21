@@ -28,6 +28,7 @@
     "@ai-sdk/openai": "^3.0.53",
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@inkjs/ui": "^2.0.0",
+    "@openrouter/ai-sdk-provider": "^2.9.0",
     "ai": "^6.0.168",
     "ink": "^7.0.1",
     "jsonc-parser": "^3.3.1",

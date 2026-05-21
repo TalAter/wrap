@@ -15,6 +15,8 @@ A registry maps each provider name to a `kind` that selects the SDK family. Name
 
 OpenAI-compat is deliberately separate from OpenAI proper: the OpenAI Responses API rejects multi-turn shapes against non-OpenAI backends, so those speak Chat Completions instead.
 
+OpenRouter gets its own kind so we can use its first-party SDK. The generic openai-compat adapter can't enable structured outputs for OpenRouter — its `supportsStructuredOutputs` is per-provider, but OpenRouter routes to many upstream models with varying capabilities. OpenRouter's own SDK forwards the JSON schema and lets the upstream do per-model strictness.
+
 The user-facing name **is** the discriminant — no `type` field. Users type `anthropic`, not a tagged object.
 
 ## Prompt scaffold

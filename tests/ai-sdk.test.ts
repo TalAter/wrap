@@ -131,9 +131,10 @@ describe("OpenAI strict schema round-trip", () => {
   });
 });
 
-// Asserts on the AI SDK's internal `.provider` tag (e.g. `openai.responses`
-// vs `openrouter.chat`) — intentionally brittle so accidental regressions
-// back to the Responses API against OpenAI-compat endpoints fail loudly.
+// Asserts on the AI SDK's internal `.provider` tag (e.g. `openai.responses`,
+// `groq.chat`, `openrouter`) — intentionally brittle so accidental regressions
+// (Responses API against compat endpoints, openrouter falling back to the
+// generic openai-compat adapter) fail loudly.
 describe("buildModel routing", () => {
   function info(m: ReturnType<typeof buildModel>): { provider: string; modelId: string } {
     if (typeof m === "string") throw new Error("expected LanguageModel object");
@@ -151,7 +152,7 @@ describe("buildModel routing", () => {
     expect(m.provider).toBe("openai.responses");
   });
 
-  test("openrouter → openrouter.chat (Chat Completions, not Responses)", () => {
+  test("openrouter → first-party @openrouter/ai-sdk-provider (provider tag 'openrouter')", () => {
     const m = info(
       buildModel({
         name: "openrouter",
@@ -160,7 +161,14 @@ describe("buildModel routing", () => {
         baseURL: "https://openrouter.ai/api/v1",
       }),
     );
-    expect(m.provider).toBe("openrouter.chat");
+    expect(m.provider).toBe("openrouter");
+  });
+
+  test("openrouter works without an explicit baseURL (SDK default)", () => {
+    const m = info(
+      buildModel({ name: "openrouter", model: "google/gemini-2.5-flash", apiKey: "x" }),
+    );
+    expect(m.provider).toBe("openrouter");
   });
 
   test("groq → groq.chat", () => {
@@ -199,7 +207,7 @@ describe("buildModel routing", () => {
   });
 
   test("throws when openai-compat has no baseURL", () => {
-    expect(() => buildModel({ name: "openrouter", model: "x", apiKey: "k" })).toThrow(/baseURL/);
+    expect(() => buildModel({ name: "groq", model: "x", apiKey: "k" })).toThrow(/baseURL/);
   });
 
   test("throws when called with claude-code (CLI provider)", () => {

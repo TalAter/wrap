@@ -98,6 +98,10 @@ describe("getRegistration", () => {
     expect(getRegistration("ollama").kind).toBe("openai-compat");
   });
 
+  test("openrouter uses its own kind (first-party SDK provider)", () => {
+    expect(getRegistration("openrouter").kind).toBe("openrouter");
+  });
+
   test("returns the CLI provider kind", () => {
     expect(getRegistration("claude-code").kind).toBe("claude-code");
   });
@@ -113,17 +117,16 @@ describe("getRegistration", () => {
   });
 
   test("supportsStructuredOutputs is false/undefined for non-strict providers", () => {
-    expect(getRegistration("openrouter").supportsStructuredOutputs).toBeFalsy();
+    // openrouter does not consult this flag (its own SDK handles strictness),
+    // but ollama and unknowns still flow through the openai-compat path.
     expect(getRegistration("ollama").supportsStructuredOutputs).toBeFalsy();
     expect(getRegistration("somebody").supportsStructuredOutputs).toBeFalsy();
   });
 });
 
 describe("validateProviderEntry", () => {
-  test("openrouter without baseURL → error", () => {
-    expect(validateProviderEntry("openrouter", { apiKey: "x", model: "y" })).toMatch(
-      /requires baseURL/,
-    );
+  test("openrouter without baseURL → ok (SDK provides default)", () => {
+    expect(validateProviderEntry("openrouter", { apiKey: "x", model: "y" })).toBeNull();
   });
 
   test("groq without baseURL → error", () => {
