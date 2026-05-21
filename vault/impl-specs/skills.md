@@ -10,7 +10,7 @@
 
 ## Goal
 
-Collapse common multi-round Wrap invocations into a single LLM round. Today `w commit` takes ~8s because the LLM probes `git status`, then `git diff`, then proposes a commit. With this feature, both probes run before the first LLM call and their output is already in the transcript when the model first sees the prompt, so the model can produce a final commit proposal in one round (~2s). This is done by introducing the concept of skills that Wrap can decide to run on its own before even consulting the LLM so that the results of those skills get sent to the LLM on the first call. We already have some discovery steps which do something similar (e.g., listing files in cwd, running `which <tool>`, etc). These will be refactored into skills.
+Collapse common multi-round Wrap invocations into a single LLM round. Today `w commit` takes ~8s because the LLM probes `git status`, then `git diff`, then proposes a commit. With skills, both probes run before the first LLM call and their output is already in the transcript when the model first sees the prompt, so the model can produce a final commit proposal in one round (~2s). Skills also subsume what `formatContext()` previously did for eager discovery (cwd, files, tools) — those observations now flow through the transcript as turns rather than the context block.
 
 ## What a skill is
 
@@ -22,8 +22,8 @@ A skill is NOT a tool the LLM chooses. Activation is deterministic. The skill ru
 
 Two bundled skills. No user-defined skills, no config surface.
 
-- **`discovery`** — trigger is "always". Emits the equivalent of `pwd`, an `ls` of cwd, and a `which` lookup for the tool watchlist. Reuses the existing helpers in `src/discovery/` so mtime-sorting + the 50-entry cap on cwd files and the tool-name validation guard on the watchlist are preserved; the existing output formats become the body of the corresponding step turns. Replaces the cwd/files/tools portions of the eager-discovery context block produced by `formatContext()` in `src/llm/format-context.ts`.
-- **`commit`** — trigger matches `/\bcommit\b/i` against the user prompt. Emits `git status --short` and `git diff --cached`.
+- ✅ **`discovery`** — always-on. Emits pwd / ls (mtime-sorted, capped at 50) / `which` over `PROBED_TOOLS ∪ watchlist`. Source: `src/skills/discovery.ts`.
+- ⏳ **`commit`** — trigger matches `/\bcommit\b/i` against the user prompt. Emits `git status --short` and `git diff --cached`.
 
 ## Trigger types
 
@@ -61,18 +61,22 @@ Assistant and step turns carry a `source` field identifying who emitted them:
 
 ## Continuation
 
-Each invocation re-fires its skills against the new prompt and the current state. Fresh skill-emitted turns are appended before the new user prompt. Prior skill-emitted turns from earlier invocations stay in the transcript as history with their original source markers — they are real turns, just emitted by a skill rather than the LLM.
+> **Status:** Implemented via `seedFirstUserTurn` re-firing on every invocation entry.
+
+Each invocation re-fires its skills against the new prompt and the current state. Fresh skill-emitted turns are appended before the new user prompt. Prior skill-emitted turns from earlier invocations stay in the transcript as history with their original source markers — they are real turns, just emitted by a skill rather than the LLM. Multi-generation discovery (e.g. successive `pwd` outputs across a `cd`) is intentional: the LLM sees the progression.
 
 ## What the discovery skill displaces
 
-The discovery skill takes over what `formatContext()` does today for cwd path, cwd files listing, and tool watchlist results. These observations move out of the context block and into transcript turns.
+> **Status:** Implemented. The split below is the design rule for future skills.
 
-What stays in the context block (knowledge, not observations):
+The discovery skill took over what `formatContext()` did for cwd path, cwd files listing, and tool watchlist results. These are **observations** — they belong in transcript turns, not the context block.
+
+What stays in the context block (**knowledge**, not observations):
 
 - Memory facts
 - Piped-input instruction and the attached-input preview block (these are about untrusted user-supplied input, not about probed environment state)
 
-The `cwd_change` turn kind has been removed. A cwd change is now expressed by the next invocation's discovery skill emitting a fresh `pwd` step turn. Continuation across a cwd boundary therefore has no explicit cue until the discovery skill lands — accepted gap since steps ship together.
+The `cwd_change` turn kind was removed; a `cd` is now expressed by the next invocation's discovery skill emitting a fresh `pwd` step turn.
 
 ## Failure handling
 
@@ -84,25 +88,25 @@ The `cwd_change` turn kind has been removed. A cwd change is now expressed by th
 
 ## UX
 
-> **Status:** Implemented (runner is silent by construction; final wire-in lands with the discovery skill).
+> **Status:** Implemented.
 
 Silent. No spinner, no chrome, no "🔍 Checking…" line. The user sees nothing between accepting the prompt and the LLM's response.
 
 ## Task shape
 
-> **Status:** Implemented (`SkillTask` in `src/skills/types.ts`).
+> **Status:** Implemented (`SkillTask` in `src/skills/types.ts`). `Skill.tasks` is a thunk (`() => SkillTask[]`) so dynamic skills (e.g. discovery re-reading the watchlist) can defer list-build to run time without lying about the field's type.
 
-A skill is a list of tasks. Each task has a `command` string (shown in the skill-emitted assistant turn) and an optional `run` function. When `run` is absent, the runner executes `command` in a shell. `run` is the escape hatch for tasks whose output is computed in TS (e.g. the discovery `ls` task will synthesize `command: "ls"` while internally calling `listCwdFiles` to preserve mtime-sort + the 50-entry cap). Returning `null` or throwing from `run` is a misfire and drops the turn pair, matching how non-zero exit drops a shell task.
+A skill is a list of tasks. Each task has a `command` string (shown in the skill-emitted assistant turn) and an optional `run` function. When `run` is absent, the runner executes `command` in a shell. `run` is the escape hatch for tasks whose output is computed in TS (e.g. discovery's `ls` task synthesises `command: "ls"` while internally calling `listCwdFiles`). Returning `null` or throwing from `run` is a misfire and drops the turn pair, matching how non-zero exit drops a shell task. Tasks within a skill run in parallel; turn order is preserved by zipping results with the task list.
 
 The skill-emitted assistant turn must carry a `response` so `buildPromptInput` projects it as a real LLM message — the runner stamps `{ type: "command", final: false, content: task.command, risk_level: "low" }`. Without `response`, the projector silently skips the turn.
 
 ## Code organization
 
-`src/skills/<name>.ts` per skill, registry in `src/skills/index.ts`. The existing `src/discovery/` is being dissolved:
+`src/skills/<name>.ts` per skill, registry in `src/skills/index.ts`. The old `src/discovery/` has been dissolved:
 
-- ✅ Watchlist storage (`loadWatchlist`, `addToWatchlist`, `VALID_TOOL_NAME`) → `src/watchlist.ts`. Stays outside `src/skills/` so the tracker (persistence) is separated from the skill (consumer + which-runner).
-- ✅ `runProbes` / `PROBE_COMMANDS` (memory-init probes, not per-call) → `src/memory/memory-init-probes.ts`.
-- ✅ `cwd-files` + per-call tool probe → `src/skills/discovery.ts`. The discovery skill emits pwd / ls / which-watchlist as transcript turns.
+- Watchlist storage (persistence) → `src/watchlist.ts`. Lives **outside** `src/skills/` on purpose: the tracker (persisted state) and its consumer (the discovery skill's `which` task) are separated, so adding/reading the watchlist isn't tangled with skill execution.
+- Memory-init probes → `src/memory/memory-init-probes.ts` (these run once on memory init, not per-invocation).
+- Per-call discovery (cwd-files + tool probe) → `src/skills/discovery.ts`.
 
 ## Prompt-constants + eval-bridge cleanup (follow-up)
 
