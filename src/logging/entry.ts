@@ -173,6 +173,7 @@ export type Turn =
  * returns one of these; the runner pushes it directly onto `entry.turns`.
  */
 export type AssistantTurn = Extract<Turn, { kind: "assistant" }>;
+export type StepTurn = Extract<Turn, { kind: "step" }>;
 
 export type LogEntry = {
   id: string;
