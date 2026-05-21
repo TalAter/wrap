@@ -1,11 +1,8 @@
-import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { formatSize } from "../fs/temp.ts";
 import type { Memory } from "../memory/types.ts";
 
 export type FormatContextParams = {
   memory: Memory;
-  tools?: ToolProbeResult | null;
-  cwdFiles?: string;
   cwd: string;
   piped?: boolean;
   attachedInputPath?: string;
@@ -15,21 +12,21 @@ export type FormatContextParams = {
   constants: {
     sectionSystemFacts: string;
     sectionFactsAbout: string;
-    sectionDetectedTools: string;
-    sectionUnavailableTools: string;
-    sectionCwdFiles: string;
     sectionAttachedInput: string;
-    cwdPrefix: string;
     pipedOutputInstruction: string;
   };
 };
 
-/** Build the context string from memory, tools, piped flag, and cwd. Pure function. */
+/**
+ * Build the context string from memory + piped flag + attached input. Pure.
+ * cwd path, cwd files, and tool watchlist are emitted by the discovery skill
+ * as transcript turns rather than the context block — keeping `formatContext`
+ * focused on knowledge (memory facts, piped instruction) instead of probed
+ * observations.
+ */
 export function formatContext(params: FormatContextParams): string {
   const {
     memory,
-    tools,
-    cwdFiles,
     cwd,
     piped,
     attachedInputPath,
@@ -65,24 +62,9 @@ export function formatContext(params: FormatContextParams): string {
     sections.push(`${header}\n${facts.map((f) => `- ${f.fact}`).join("\n")}`);
   }
 
-  if (tools) {
-    if (tools.available.length > 0) {
-      sections.push(`${constants.sectionDetectedTools}\n${tools.available.join("\n")}`);
-    }
-    if (tools.unavailable.length > 0) {
-      sections.push(`${constants.sectionUnavailableTools}\n${tools.unavailable.join(", ")}`);
-    }
-  }
-
   if (piped) {
     sections.push(constants.pipedOutputInstruction);
   }
-
-  if (cwdFiles) {
-    sections.push(`${constants.sectionCwdFiles}\n${cwdFiles}`);
-  }
-
-  sections.push(`${constants.cwdPrefix} ${cwd}`);
 
   return sections.join("\n\n");
 }

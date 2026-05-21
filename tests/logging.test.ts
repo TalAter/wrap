@@ -455,14 +455,28 @@ function seedMemoryIn(home: string) {
   writeFileSync(join(home, "memory.json"), '{"/":[{"fact":"test"}]}');
 }
 
-/** Pull the first / nth / last turn of a given kind. */
+/** True if this is a model-emitted (or non-skill) turn — filters out discovery
+ * skill assistant/step pairs from `turnOfKind` lookups by default. */
+function isModelTurn(t: { kind: string; source?: unknown }): boolean {
+  if (t.kind !== "assistant" && t.kind !== "step") return true;
+  return t.source === "model" || t.source === "user_override";
+}
+
+/** Pull the first / nth / last turn of a given kind. Skill-emitted turns are
+ * filtered out so tests that pre-date skills keep matching the model turn. */
 function turnOfKind<K extends string>(
-  entry: { turns: { kind: string }[] },
+  entry: { turns: { kind: string; source?: unknown }[] },
   kind: K,
   index = 0,
 ): Record<string, unknown> | undefined {
-  const matches = entry.turns.filter((t) => t.kind === kind);
+  const matches = entry.turns.filter((t) => t.kind === kind && isModelTurn(t));
   return matches[index] as Record<string, unknown> | undefined;
+}
+
+/** Turn kinds with skill-emitted turns stripped — for tests that pin the
+ * structural sequence of model + final turns. */
+function modelTurnKinds(entry: { turns: { kind: string; source?: unknown }[] }): string[] {
+  return entry.turns.filter(isModelTurn).map((t) => t.kind);
 }
 
 describe("logging integration", () => {
@@ -474,12 +488,8 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("success");
-    // user → assistant → final
-    expect(entry.turns.map((t: { kind: string }) => t.kind)).toEqual([
-      "user",
-      "assistant",
-      "final",
-    ]);
+    // user → assistant → final (skill turns filtered out)
+    expect(modelTurnKinds(entry)).toEqual(["user", "assistant", "final"]);
     const userTurn = turnOfKind(entry, "user");
     expect(userTurn?.text).toBe("list files");
     const assistant = turnOfKind(entry, "assistant");
@@ -501,7 +511,7 @@ describe("logging integration", () => {
     });
     const entry = readLog(result.wrapHome);
     expect(entry.outcome).toBe("success");
-    expect(entry.turns.map((t: { kind: string }) => t.kind)).toEqual(["user", "assistant"]);
+    expect(modelTurnKinds(entry)).toEqual(["user", "assistant"]);
     const assistant = turnOfKind(entry, "assistant");
     expect((assistant?.response as { type: string }).type).toBe("reply");
     // Invocation-level fields
@@ -679,8 +689,11 @@ describe("log traces — enabled", () => {
     expect(existsSync(tracePath)).toBe(true);
     const trace = JSON.parse(readFileSync(tracePath, "utf-8"));
     expect(trace.entry_id).toBe(entry.id);
-    // The assistant turn is at index 1 (user is at 0).
-    const traced = trace.turn_attempts["1"][0];
+    // Only the model assistant has traced attempts; skill assistants have
+    // empty attempt arrays and are skipped by the trace extractor.
+    const tracedKeys = Object.keys(trace.turn_attempts);
+    expect(tracedKeys).toHaveLength(1);
+    const traced = trace.turn_attempts[tracedKeys[0] as string][0];
     expect(traced.request).toBeDefined();
     expect(traced.request.system).toBeDefined();
     expect(Array.isArray(traced.request.messages)).toBe(true);

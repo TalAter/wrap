@@ -10,8 +10,6 @@ import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { resolveTheme, setTheme } from "./core/theme.ts";
 import { verbose } from "./core/verbose.ts";
-import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
-import { probeTools } from "./discovery/init-probes.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
@@ -24,9 +22,9 @@ import {
 } from "./logging/lookup.ts";
 import { ensureMemory } from "./memory/memory.ts";
 import { runSession } from "./session/session.ts";
+import { SKILLS } from "./skills/index.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 import { options } from "./subcommands/registry.ts";
-import { loadWatchlist } from "./watchlist.ts";
 
 const MODIFIER_SPECS: readonly ModifierSpec[] = options.map((o) => ({
   name: o.id,
@@ -121,21 +119,9 @@ export async function main() {
       verbose(`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`);
     }
 
-    const watchlist = loadWatchlist();
-    const tools = probeTools(watchlist.map((e) => e.tool));
-    if (tools) {
-      verbose(
-        `Tools: ${tools.available.length}/${tools.available.length + tools.unavailable.length} available`,
-      );
-    }
-
     const memory = await ensureMemory(provider);
 
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
-    const cwdFiles = await listCwdFiles(cwd);
-    if (cwdFiles) {
-      verbose(`CWD: ${countCwdFiles(cwdFiles)} files listed`);
-    }
 
     // The interactive composer will override this to "tui" on submit;
     // "argv" is the default whenever a prompt actually came through argv,
@@ -147,8 +133,7 @@ export async function main() {
       memory,
       cwd,
       resolvedProvider: resolved,
-      tools,
-      cwdFiles,
+      skills: SKILLS,
       attachedInputPath,
       attachedInputSize,
       attachedInputPreview,

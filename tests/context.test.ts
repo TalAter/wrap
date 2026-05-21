@@ -71,9 +71,10 @@ describe("assemblePromptScaffold", () => {
     });
   });
 
-  test("contextString contains cwd; first user message contains framed prompt", () => {
+  test("first user message contains framed prompt", () => {
+    // cwd no longer appears in contextString — it is emitted by the
+    // discovery skill as a `pwd` step turn.
     const ctx = makeContext({ cwd: "/tmp/test" });
-    expect(contextText(ctx)).toContain("/tmp/test");
     expect(userMessageText(ctx, "find stuff")).toContain("find stuff");
   });
 
@@ -236,41 +237,13 @@ describe("scoped memory in prompt", () => {
   });
 });
 
-describe("tools output in prompt", () => {
-  test("includes detected tools section when available tools provided", () => {
-    const text = contextText(
-      makeContext({ tools: { available: ["/usr/bin/git"], unavailable: ["docker"] } }),
-    );
-    expect(text).toContain("## Detected tools");
-    expect(text).toContain("/usr/bin/git");
-  });
-
-  test("includes unavailable tools section", () => {
-    const text = contextText(
-      makeContext({ tools: { available: [], unavailable: ["docker", "kubectl"] } }),
-    );
-    expect(text).toContain("## Unavailable tools");
-    expect(text).toContain("docker, kubectl");
-  });
-
-  test("omits tools sections when no tools provided", () => {
-    const text = contextText(makeContext());
+describe("tool sections removed from context", () => {
+  test("contextString never contains Detected/Unavailable tools headers", () => {
+    // Tool probing is now the discovery skill's job. The legacy
+    // `formatContext` tools sections are gone.
+    const text = contextText(makeContext({ memory: { "/": [{ fact: "macOS" }] } }));
     expect(text).not.toContain("Detected tools");
     expect(text).not.toContain("Unavailable tools");
-  });
-
-  test("tools section appears after memory facts and before cwd", () => {
-    const text = contextText(
-      makeContext({
-        memory: { "/": [{ fact: "macOS" }] },
-        tools: { available: ["/usr/bin/git"], unavailable: [] },
-      }),
-    );
-    const factsIdx = text.indexOf("## System facts");
-    const toolsIdx = text.indexOf("## Detected tools");
-    const cwdIdx = text.indexOf("Working directory");
-    expect(factsIdx).toBeLessThan(toolsIdx);
-    expect(toolsIdx).toBeLessThan(cwdIdx);
   });
 });
 
@@ -347,17 +320,15 @@ describe("piped-mode prompt", () => {
     expect(text).not.toContain("stdout is being piped");
   });
 
-  test("piped instruction appears after tools and before cwd", () => {
+  test("piped instruction follows memory facts when both present", () => {
     const text = contextText(
       makeContext({
-        tools: { available: ["/usr/bin/git"], unavailable: [] },
+        memory: { "/": [{ fact: "macOS" }] },
         piped: true,
       }),
     );
-    const toolsIdx = text.indexOf("## Detected tools");
+    const factsIdx = text.indexOf("## System facts");
     const pipedIdx = text.indexOf("stdout is being piped");
-    const cwdIdx = text.indexOf("Working directory");
-    expect(toolsIdx).toBeLessThan(pipedIdx);
-    expect(pipedIdx).toBeLessThan(cwdIdx);
+    expect(factsIdx).toBeLessThan(pipedIdx);
   });
 });

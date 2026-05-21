@@ -4,8 +4,9 @@
 > - ✅ Per-turn `source` field + `cwd_change` turn removal — landed.
 > - ✅ Watchlist + memory-init probes carveout from `src/discovery/` — landed.
 > - ✅ Skills infrastructure: types, registry shell (empty), runner with 1s timeout + silent misfire drop — landed at `src/skills/`.
-> - ⏳ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles, dissolves remaining `src/discovery/`).
+> - ✅ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles, dissolves remaining `src/discovery/`).
 > - ⏳ Commit skill.
+> - ⏳ Prompt-constants + eval-bridge cleanup (post-discovery housekeeping).
 
 ## Goal
 
@@ -32,6 +33,8 @@ Two bundled skills. No user-defined skills, no config surface.
 - `{ kind: "match"; pattern: RegExp }` — tested against the user prompt. **User prompt** here means the natural-language argv that follows `w`, after any modifier flags are stripped; piped stdin is NOT included in the match. Accept false positives — wasted IO is cheap relative to a saved LLM round-trip.
 
 ## Turn placement — before the user prompt
+
+> **Status:** Implemented. `seedFirstUserTurn` in `src/session/session.ts` is the single source of truth for this invariant; it runs skills, splices their turns, then pushes the user turn. Called from both the argv entry path and the `processing-interactive` submit hook so neither path can drift.
 
 All skill-emitted turns are inserted BEFORE the user prompt in the transcript. The user's prompt is always the last turn before the next LLM call.
 
@@ -99,4 +102,17 @@ The skill-emitted assistant turn must carry a `response` so `buildPromptInput` p
 
 - ✅ Watchlist storage (`loadWatchlist`, `addToWatchlist`, `VALID_TOOL_NAME`) → `src/watchlist.ts`. Stays outside `src/skills/` so the tracker (persistence) is separated from the skill (consumer + which-runner).
 - ✅ `runProbes` / `PROBE_COMMANDS` (memory-init probes, not per-call) → `src/memory/memory-init-probes.ts`.
-- ⏳ `cwd-files` + per-call tool probe (`probeTools`, `PROBED_TOOLS`, `ToolProbeResult`) → `src/skills/discovery.ts` (step 4).
+- ✅ `cwd-files` + per-call tool probe → `src/skills/discovery.ts`. The discovery skill emits pwd / ls / which-watchlist as transcript turns.
+
+## Prompt-constants + eval-bridge cleanup (follow-up)
+
+> **Status:** Not started. Read [[editing-prompts]] before touching prompt text — the TS mirror is generated from a Python source-of-truth.
+
+After the discovery skill landed, several pieces still reference the displaced sections:
+
+- `src/prompt.constants.json`: `sectionDetectedTools`, `sectionUnavailableTools`, `sectionCwdFiles`, `cwdPrefix` are unused by the runtime but still emitted.
+- `eval/dspy/optimize.py`: still references those section keys when assembling examples.
+- `eval/bridge.ts`: still accepts `tools` / `cwdFiles` fields at the JSON boundary (silently ignored).
+- `toolsScopeInstruction` text in the prompt references "detected tools" — the LLM no longer sees that section header in the context block (it sees the discovery skill's `which` step output instead).
+
+This is one coordinated edit: Python source-of-truth, TS mirror, optimizer, and the eval bridge. Sequence it after the commit skill so prompt edits aren't competing with skill-content changes.

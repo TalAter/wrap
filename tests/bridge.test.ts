@@ -31,7 +31,6 @@ const baseInput = {
   fewShotExamples: [] as { input: string; output: string }[],
   schemaText: "z.object({ type: z.string() })",
   memory: { "/": [{ fact: "macOS arm64" }] },
-  tools: { available: ["/usr/bin/git"], unavailable: ["docker"] },
   cwd: "/home/user",
   piped: false,
   query: "list files",
@@ -56,28 +55,14 @@ describe("bridge — assemble mode", () => {
     expect(last.content).toContain("macOS arm64");
   });
 
-  test("context includes detected and unavailable tools", async () => {
+  test("context no longer carries tool sections (moved to discovery skill)", async () => {
     const result = await bridgeResult({ ...baseInput, mode: "assemble" });
     const last = result.promptInput.messages.at(-1);
-    expect(last.content).toContain("## Detected tools");
-    expect(last.content).toContain("/usr/bin/git");
-    expect(last.content).toContain("## Unavailable tools");
-    expect(last.content).toContain("docker");
+    expect(last.content).not.toContain("## Detected tools");
+    expect(last.content).not.toContain("## Unavailable tools");
   });
 
-  test("context includes cwdFiles when provided", async () => {
-    const result = await bridgeResult({
-      ...baseInput,
-      mode: "assemble",
-      cwdFiles: "package.json\nsrc/\nREADME.md",
-    });
-    const last = result.promptInput.messages.at(-1);
-    expect(last.content).toContain("## Files in CWD");
-    expect(last.content).toContain("package.json");
-    expect(last.content).toContain("src/");
-  });
-
-  test("context omits cwdFiles section when not provided", async () => {
+  test("context no longer carries Files in CWD section (moved to discovery skill)", async () => {
     const result = await bridgeResult({ ...baseInput, mode: "assemble" });
     const last = result.promptInput.messages.at(-1);
     expect(last.content).not.toContain("Files in CWD");

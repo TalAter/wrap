@@ -13,13 +13,13 @@ import { executeShellCommand } from "../core/shell.ts";
 import type { Transcript } from "../core/transcript.ts";
 import { truncateMiddle } from "../core/truncate.ts";
 import { verbose } from "../core/verbose.ts";
-import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
 import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
 import { createLogEntry, type LogEntry, type Turn } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
 import { promptHash as PROMPT_HASH } from "../prompt.optimized.json";
+import { runSkills, type Skill } from "../skills/index.ts";
 import { mountResponseDialog, preloadResponseDialogModules } from "./dialog-host.ts";
 import { createNotificationRouter } from "./notification-router.ts";
 import { reduce } from "./reducer.ts";
@@ -29,8 +29,14 @@ export type SessionOptions = {
   memory?: Memory;
   cwd: string;
   resolvedProvider: ResolvedProvider;
-  tools?: ToolProbeResult | null;
-  cwdFiles?: string;
+  /**
+   * Skills to run before the first LLM call on each user-prompt entry point
+   * (argv at session start; `state.draft` on interactive submit). Their
+   * emitted turn pairs are spliced in before the user turn so the user's
+   * natural-language request stays the freshest message — the trust-fence
+   * for false-positive trigger matches.
+   */
+  skills?: readonly Skill[];
   /** Absolute path to the materialized attached-input file. Absent when no input was piped. */
   attachedInputPath?: string;
   /** Size of the attached-input file in bytes. */
@@ -94,8 +100,6 @@ export async function runSession(
     assemblePromptScaffold({
       cwd: options.cwd,
       memory,
-      tools: options.tools,
-      cwdFiles: options.cwdFiles,
       attachedInputPath: options.attachedInputPath,
       attachedInputSize: options.attachedInputSize,
       attachedInputPreview: options.attachedInputPreview,
@@ -113,7 +117,7 @@ export async function runSession(
   // The transcript IS entry.turns — one shape, two consumers.
   const transcript: Transcript = entry.turns;
   if (!isInteractiveBootstrap) {
-    transcript.push({ kind: "user", text: prompt });
+    await seedFirstUserTurn(options.skills, prompt, transcript);
   }
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const model = formatProvider(options.resolvedProvider);
@@ -191,21 +195,21 @@ export async function runSession(
       startPumpLoop();
     }
     if (entered && state.tag === "processing-interactive") {
-      // submit-interactive just landed on an empty transcript. Seed the
-      // transcript with a bare user turn (framing is applied per-call by
-      // `requestFraming`). The chrome spinner is suppressed automatically
-      // because startPumpLoop reads isDialogTag(state.tag) — dialog is up.
-      transcript.push({ kind: "user", text: state.draft });
+      // submit-interactive just landed on an empty transcript. Run skills
+      // first (silent, ≤1s/task), then seed [skill turns..., user turn].
+      // Framing is applied per-call by `requestFraming`. The chrome spinner
+      // is suppressed automatically because startPumpLoop reads
+      // isDialogTag(state.tag) — dialog is up.
+      const draft = state.draft;
       entry.input_source = "tui";
       // --verbose buffers lines through the notification bus while the dialog
       // is up and flushes on teardown, so this prompt echo lands in scrollback
       // after the invocation finishes — users get to see exactly what they
       // submitted without the live dialog competing for attention.
       if (config.verbose) {
-        for (const line of state.draft.split("\n")) verbose(`prompt: ${line}`);
+        for (const line of draft.split("\n")) verbose(`prompt: ${line}`);
       }
-      loopState.budgetRemaining = maxRounds;
-      startPumpLoop();
+      void seedAndPumpInteractive(draft);
     }
     if (entered && state.tag === "editor-handoff") {
       void beginEditorHandoff(state.draft);
@@ -243,6 +247,25 @@ export async function runSession(
         source,
         exec_ms: exec.exec_ms,
       });
+      loopState.budgetRemaining = maxRounds;
+      startPumpLoop();
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const err = e instanceof Error ? e : new Error(String(e));
+      dispatch({ type: "loop-error", error: err });
+    }
+  }
+
+  // Mirrors the argv path's `seedFirstUserTurn` call but lives inside the
+  // dispatch hook so it can be abort-aware: a user Esc during the skill
+  // run flips state back to `composing-interactive` and we bail rather
+  // than push turns into a transcript the user has walked away from.
+  async function seedAndPumpInteractive(draft: string): Promise<void> {
+    const ctrl = new AbortController();
+    currentLoopAbort = ctrl;
+    try {
+      await seedFirstUserTurn(options.skills, draft, transcript);
+      if (ctrl.signal.aborted) return;
       loopState.budgetRemaining = maxRounds;
       startPumpLoop();
     } catch (e) {
@@ -374,6 +397,24 @@ function appendLogEntryIgnoreErrors(entry: LogEntry): void {
   } catch {
     // Logging must never break the tool.
   }
+}
+
+// Skill turns sit between the system/scaffold and the user prompt so the
+// user's natural-language request is the last (and freshest) message —
+// the trust-fence guard for false-positive trigger matches. Called from
+// both entry points where a new user prompt enters the transcript: argv
+// at session start, and `state.draft` on interactive submit.
+async function seedFirstUserTurn(
+  skills: readonly Skill[] | undefined,
+  prompt: string,
+  transcript: Transcript,
+): Promise<void> {
+  if (skills) {
+    const skillTurns = await runSkills(skills, prompt);
+    verbose(`Skill turns: ${skillTurns.length}`);
+    if (skillTurns.length) transcript.push(...skillTurns);
+  }
+  transcript.push({ kind: "user", text: prompt });
 }
 
 type PumpLoopArgs = {

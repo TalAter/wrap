@@ -34,7 +34,7 @@ describe("verbose e2e", () => {
     expect(stdout).toBe("world\n");
     expect(stderr).toContain("Config loaded (test / test)");
     expect(stderr).toContain("Provider initialized (test / test)");
-    expect(stderr).toMatch(/Tools: \d+\/\d+ available/);
+    expect(stderr).toMatch(/Skill turns: \d+/);
     expect(stderr).toMatch(/Memory: \d+ facts/);
     expect(stderr).toContain("Calling test / test...");
     expect(stderr).toContain("LLM responded (reply, 5 chars)");

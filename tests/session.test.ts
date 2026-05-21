@@ -14,6 +14,7 @@ import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
 import type { Provider } from "../src/llm/types.ts";
 import { resetDialogHostCache } from "../src/session/dialog-host.ts";
 import { runSession } from "../src/session/session.ts";
+import type { Skill } from "../src/skills/index.ts";
 import { seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr, capturedStdout as stdout } from "./preload.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
@@ -174,6 +175,41 @@ describe("runSession — multi-round step → reply", () => {
     expect(assistants[0].response.type).toBe("command");
     expect(assistants[0].response.final).toBe(false);
     expect(assistants[1].response.type).toBe("reply");
+  });
+
+  test("skills passed to runSession emit turns before the user prompt (argv path)", async () => {
+    // runSession owns skill execution. main.ts passes a `skills` array, and
+    // runSession splices the resulting turn pairs in BEFORE the user turn so
+    // the user's natural-language request stays the freshest message.
+    const sentinel: Skill = {
+      name: "sentinel",
+      trigger: { kind: "always" },
+      tasks: () => [
+        { command: "echo sentinel", run: async () => ({ output: "SENTINEL_OUT", exitCode: 0 }) },
+      ],
+    };
+    const { provider } = makeProvider([
+      { type: "reply", content: "ok", risk_level: "low" } as CommandResponse,
+    ]);
+    const exit = await runSession("hello", provider, {
+      cwd: "/tmp",
+      resolvedProvider: TEST_RESOLVED_PROVIDER,
+      skills: [sentinel],
+    });
+    expect(exit).toBe(0);
+    const { readFileSync } = await import("node:fs");
+    const log = readFileSync(join(TEST_HOME, "logs/wrap.jsonl"), "utf-8");
+    const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
+    const userIdx = entry.turns.findIndex((t: { kind: string }) => t.kind === "user");
+    expect(userIdx).toBeGreaterThan(0);
+    const skillStep = entry.turns
+      .slice(0, userIdx)
+      .find(
+        (t: { kind: string; command?: string; source?: unknown }) =>
+          t.kind === "step" && t.command === "echo sentinel",
+      );
+    expect(skillStep).toBeDefined();
+    expect(skillStep.output).toBe("SENTINEL_OUT");
   });
 
   test("captured step output never lands on stderr (only the chrome explanation does)", async () => {

@@ -89,9 +89,15 @@ export async function runSkills(
   const out: (AssistantTurn | StepTurn)[] = [];
   for (const skill of skills) {
     if (!triggerMatches(skill.trigger, userPrompt)) continue;
-    for (const task of skill.tasks) {
-      const result = await runTask(task);
-      if (!result || result.exitCode !== 0) continue;
+    // Tasks within a skill have no inter-dependencies — run them in parallel.
+    // Turn order in the transcript is preserved by iterating the resolved
+    // array (zipped with the task list) in declaration order.
+    const tasks = skill.tasks();
+    const results = await Promise.all(tasks.map(runTask));
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i];
+      const result = results[i];
+      if (!task || !result || result.exitCode !== 0) continue;
       out.push({
         kind: "assistant",
         response: {

@@ -1,4 +1,3 @@
-import type { ToolProbeResult } from "../discovery/init-probes.ts";
 import type { Memory } from "../memory/types.ts";
 import promptConstants from "../prompt.constants.json";
 import promptOptimized from "../prompt.optimized.json";
@@ -8,8 +7,6 @@ import { formatContext } from "./format-context.ts";
 export type QueryContext = {
   cwd: string;
   memory: Memory;
-  tools?: ToolProbeResult | null;
-  cwdFiles?: string;
   piped?: boolean;
   attachedInputPath?: string;
   attachedInputSize?: number;
@@ -27,8 +24,6 @@ export type QueryContext = {
 export function assemblePromptScaffold(ctx: QueryContext): PromptScaffold {
   const contextString = formatContext({
     memory: ctx.memory,
-    tools: ctx.tools,
-    cwdFiles: ctx.cwdFiles,
     cwd: ctx.cwd,
     piped: ctx.piped,
     attachedInputPath: ctx.attachedInputPath,

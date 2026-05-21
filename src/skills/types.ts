@@ -8,8 +8,11 @@ export type SkillTask = {
   run?: () => Promise<{ output: string; exitCode: number } | null>;
 };
 
+// `tasks` is a thunk so dynamic skills (e.g. discovery re-reading the
+// watchlist) can defer their list-build until run time without lying about
+// the field's type.
 export type Skill = {
   name: string;
   trigger: Trigger;
-  tasks: SkillTask[];
+  tasks: () => SkillTask[];
 };

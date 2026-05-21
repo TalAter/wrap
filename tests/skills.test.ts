@@ -9,7 +9,7 @@ describe("Trigger matching", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
+      tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "anything");
     expect(turns).toHaveLength(2);
@@ -19,7 +19,7 @@ describe("Trigger matching", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "match", pattern: /foo/i },
-      tasks: [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
+      tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "FOO bar");
     expect(turns).toHaveLength(2);
@@ -29,7 +29,7 @@ describe("Trigger matching", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "match", pattern: /foo/i },
-      tasks: [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
+      tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "baz");
     expect(turns).toEqual([]);
@@ -41,7 +41,7 @@ describe("Task emission", () => {
     const skill: Skill = {
       name: "discovery",
       trigger: { kind: "always" },
-      tasks: [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
+      tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "anything");
     expect(turns).toHaveLength(2);
@@ -62,7 +62,7 @@ describe("Task emission", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [{ command: "echo hi", run: async () => ({ output: "oops", exitCode: 1 }) }],
+      tasks: () => [{ command: "echo hi", run: async () => ({ output: "oops", exitCode: 1 }) }],
     };
     const turns = await runSkills([skill], "anything");
     expect(turns).toEqual([]);
@@ -72,7 +72,7 @@ describe("Task emission", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [{ command: "echo hi", run: async () => null }],
+      tasks: () => [{ command: "echo hi", run: async () => null }],
     };
     const turns = await runSkills([skill], "anything");
     expect(turns).toEqual([]);
@@ -82,7 +82,7 @@ describe("Task emission", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [
+      tasks: () => [
         {
           command: "echo hi",
           run: async () => {
@@ -101,7 +101,7 @@ describe("Shell exec (no `run`)", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [{ command: "echo hi" }],
+      tasks: () => [{ command: "echo hi" }],
     };
     const turns = await runSkills([skill], "anything");
     expect(turns).toHaveLength(2);
@@ -115,7 +115,7 @@ describe("Shell exec (no `run`)", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [{ command: "false" }],
+      tasks: () => [{ command: "false" }],
     };
     const turns = await runSkills([skill], "anything");
     expect(turns).toEqual([]);
@@ -125,7 +125,7 @@ describe("Shell exec (no `run`)", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [{ command: "sleep 5" }],
+      tasks: () => [{ command: "sleep 5" }],
     };
     const start = performance.now();
     const turns = await runSkills([skill], "anything");
@@ -138,7 +138,7 @@ describe("Shell exec (no `run`)", () => {
     const skill: Skill = {
       name: "s",
       trigger: { kind: "always" },
-      tasks: [
+      tasks: () => [
         {
           command: "slow",
           run: () =>
@@ -161,17 +161,17 @@ describe("Trigger × ordering interaction", () => {
     const a: Skill = {
       name: "a",
       trigger: { kind: "always" },
-      tasks: [{ command: "a", run: async () => ({ output: "a-out", exitCode: 0 }) }],
+      tasks: () => [{ command: "a", run: async () => ({ output: "a-out", exitCode: 0 }) }],
     };
     const b: Skill = {
       name: "b",
       trigger: { kind: "match", pattern: /nope/ },
-      tasks: [{ command: "b", run: async () => ({ output: "b-out", exitCode: 0 }) }],
+      tasks: () => [{ command: "b", run: async () => ({ output: "b-out", exitCode: 0 }) }],
     };
     const c: Skill = {
       name: "c",
       trigger: { kind: "always" },
-      tasks: [{ command: "c", run: async () => ({ output: "c-out", exitCode: 0 }) }],
+      tasks: () => [{ command: "c", run: async () => ({ output: "c-out", exitCode: 0 }) }],
     };
     const turns = await runSkills([a, b, c], "anything");
     const commands = turns.filter((t) => t.kind === "step").map((t) => t.command);
@@ -184,7 +184,7 @@ describe("Ordering", () => {
     const skillA: Skill = {
       name: "a",
       trigger: { kind: "always" },
-      tasks: [
+      tasks: () => [
         { command: "a1", run: async () => ({ output: "a1-out", exitCode: 0 }) },
         { command: "a2", run: async () => ({ output: "a2-out", exitCode: 0 }) },
       ],
@@ -192,7 +192,7 @@ describe("Ordering", () => {
     const skillB: Skill = {
       name: "b",
       trigger: { kind: "always" },
-      tasks: [{ command: "b1", run: async () => ({ output: "b1-out", exitCode: 0 }) }],
+      tasks: () => [{ command: "b1", run: async () => ({ output: "b1-out", exitCode: 0 }) }],
     };
     const turns = await runSkills([skillA, skillB], "anything");
     expect(turns).toHaveLength(6);
