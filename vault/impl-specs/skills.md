@@ -71,6 +71,23 @@ The existing `cwd_change` turn kind is deprecated. A cwd change is now expressed
 
 Silent. No spinner, no chrome, no "🔍 Checking…" line. The user sees nothing between accepting the prompt and the LLM's response.
 
+## Task shape
+
+A skill is a list of tasks. Each task:
+
+```ts
+type SkillTask = {
+  command: string;                 // shown in the assistant turn
+  run?: () => Promise<{ output: string; exitCode: number } | null>;
+};
+```
+
+When `run` is absent, the runner executes `command` in a shell with the 1s timeout. `run` is the escape hatch for tasks whose output is computed in TS (e.g. the discovery `ls` task synthesizes `command: "ls"` while internally calling the existing `listCwdFiles` helper to preserve mtime-sort + the 50-entry cap). `null` from `run` is treated as a misfire and drops the turn pair.
+
 ## Code organization
 
-`src/skills/<name>.ts` per skill, registry in `src/skills/index.ts`. The existing `src/discovery/` is absorbed into `src/skills/discovery.ts`.
+`src/skills/<name>.ts` per skill, registry in `src/skills/index.ts`. The existing `src/discovery/` is dissolved:
+
+- `cwd-files` + `probe-tools` (the per-call probes) → `src/skills/discovery.ts`.
+- Watchlist storage (`loadWatchlist`, `addToWatchlist`, `VALID_TOOL_NAME`) → `src/watchlist.ts`. Stays outside `src/skills/` so the tracker (persistence) is separated from the skill (consumer + which-runner).
+- `runProbes` / `PROBE_COMMANDS` (memory wizard probes, not per-call) → `src/memory/wizard-probes.ts`.
