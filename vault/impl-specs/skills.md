@@ -2,9 +2,9 @@
 
 > **Implementation status (2026-05-21):**
 > - ✅ Per-turn `source` field + `cwd_change` turn removal — landed.
-> - ⏳ Watchlist + memory-init probes carveout from `src/discovery/`.
-> - ⏳ Skills infrastructure (types, registry, runner).
-> - ⏳ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles).
+> - ✅ Watchlist + memory-init probes carveout from `src/discovery/` — landed.
+> - ✅ Skills infrastructure: types, registry shell (empty), runner with 1s timeout + silent misfire drop — landed at `src/skills/`.
+> - ⏳ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles, dissolves remaining `src/discovery/`).
 > - ⏳ Commit skill.
 
 ## Goal
@@ -26,8 +26,10 @@ Two bundled skills. No user-defined skills, no config surface.
 
 ## Trigger types
 
+> **Status:** Implemented (`src/skills/types.ts`).
+
 - `{ kind: "always" }`
-- `{ kind: "match"; pattern: RegExp }` — tested against the user prompt. **User prompt** here means the natural-language argv that follows `w`, after any modifier flags are stripped; piped stdin is NOT included in the match. The commit skill uses `/\bcommit\b/i`. Accept false positives — wasted IO is cheap relative to a saved LLM round-trip.
+- `{ kind: "match"; pattern: RegExp }` — tested against the user prompt. **User prompt** here means the natural-language argv that follows `w`, after any modifier flags are stripped; piped stdin is NOT included in the match. Accept false positives — wasted IO is cheap relative to a saved LLM round-trip.
 
 ## Turn placement — before the user prompt
 
@@ -71,31 +73,30 @@ The `cwd_change` turn kind has been removed. A cwd change is now expressed by th
 
 ## Failure handling
 
+> **Status:** Implemented in the runner.
+
 - A skill command's output is included in the transcript only on exit 0. Non-zero exits are misfires (e.g. `git status` outside a repo); drop the turn pair silently.
-- 1s hard timeout per command. On timeout, drop the turn pair silently.
+- 1s hard timeout per task, applied uniformly to shell tasks and TS `run` tasks. On timeout, drop the turn pair silently.
 - Misfires never surface to the user and never reach the LLM.
 
 ## UX
+
+> **Status:** Implemented (runner is silent by construction; final wire-in lands with the discovery skill).
 
 Silent. No spinner, no chrome, no "🔍 Checking…" line. The user sees nothing between accepting the prompt and the LLM's response.
 
 ## Task shape
 
-A skill is a list of tasks. Each task:
+> **Status:** Implemented (`SkillTask` in `src/skills/types.ts`).
 
-```ts
-type SkillTask = {
-  command: string;                 // shown in the assistant turn
-  run?: () => Promise<{ output: string; exitCode: number } | null>;
-};
-```
+A skill is a list of tasks. Each task has a `command` string (shown in the skill-emitted assistant turn) and an optional `run` function. When `run` is absent, the runner executes `command` in a shell. `run` is the escape hatch for tasks whose output is computed in TS (e.g. the discovery `ls` task will synthesize `command: "ls"` while internally calling `listCwdFiles` to preserve mtime-sort + the 50-entry cap). Returning `null` or throwing from `run` is a misfire and drops the turn pair, matching how non-zero exit drops a shell task.
 
-When `run` is absent, the runner executes `command` in a shell with the 1s timeout. `run` is the escape hatch for tasks whose output is computed in TS (e.g. the discovery `ls` task synthesizes `command: "ls"` while internally calling the existing `listCwdFiles` helper to preserve mtime-sort + the 50-entry cap). `null` from `run` is treated as a misfire and drops the turn pair.
+The skill-emitted assistant turn must carry a `response` so `buildPromptInput` projects it as a real LLM message — the runner stamps `{ type: "command", final: false, content: task.command, risk_level: "low" }`. Without `response`, the projector silently skips the turn.
 
 ## Code organization
 
-`src/skills/<name>.ts` per skill, registry in `src/skills/index.ts`. The existing `src/discovery/` is dissolved:
+`src/skills/<name>.ts` per skill, registry in `src/skills/index.ts`. The existing `src/discovery/` is being dissolved:
 
-- `cwd-files` + `probe-tools` (the per-call probes) → `src/skills/discovery.ts`.
-- Watchlist storage (`loadWatchlist`, `addToWatchlist`, `VALID_TOOL_NAME`) → `src/watchlist.ts`. Stays outside `src/skills/` so the tracker (persistence) is separated from the skill (consumer + which-runner).
-- `runProbes` / `PROBE_COMMANDS` (memory-init probes, not per-call) → `src/memory/memory-init-probes.ts`.
+- ✅ Watchlist storage (`loadWatchlist`, `addToWatchlist`, `VALID_TOOL_NAME`) → `src/watchlist.ts`. Stays outside `src/skills/` so the tracker (persistence) is separated from the skill (consumer + which-runner).
+- ✅ `runProbes` / `PROBE_COMMANDS` (memory-init probes, not per-call) → `src/memory/memory-init-probes.ts`.
+- ⏳ `cwd-files` + per-call tool probe (`probeTools`, `PROBED_TOOLS`, `ToolProbeResult`) → `src/skills/discovery.ts` (step 4).
