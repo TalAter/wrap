@@ -191,7 +191,7 @@ export async function runRound(
   scaffold: PromptScaffold,
   options: RunRoundOptions,
 ): Promise<AssistantTurn> {
-  const turn: AssistantTurn = { kind: "assistant", attempts: [] };
+  const turn: AssistantTurn = { kind: "assistant", attempts: [], source: "model" };
   const stopSpinner = options.showSpinner ? startChromeSpinner(SPINNER_TEXT) : () => {};
   try {
     const baseDirectives: AttemptDirectives = { liveContext: formatTempDirSection() };

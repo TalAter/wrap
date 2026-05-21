@@ -55,6 +55,7 @@ describe("runRound", () => {
       showSpinner: false,
     });
     expect(turn.kind).toBe("assistant");
+    expect(turn.source).toBe("model");
     expect(turn.response?.type).toBe("command");
     expect(turn.response?.content).toBe("ls");
     expect(typeof turn.llm_ms).toBe("number");

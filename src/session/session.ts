@@ -46,8 +46,7 @@ export type SessionOptions = {
   inputSource?: "argv" | "pipe" | "tui";
   /**
    * Set on a `-c` invocation. `assembledTurns` is the chronological
-   * concat of every ancestor entry's `turns[]`, plus a synthetic
-   * `cwd_change` turn if the child's cwd differs from the parent's.
+   * concat of every ancestor entry's `turns[]`.
    * `parentPrompt` is the chain root's original user prompt (drives the
    * `↳ Continuing` UX badge; unused outside the dialog).
    *

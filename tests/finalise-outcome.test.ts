@@ -80,6 +80,7 @@ describe("finaliseOutcome pushes a final turn", () => {
       kind: "assistant",
       response: makeCmd({ content: "echo fallback" }),
       attempts: [],
+      source: "model",
     });
     await finaliseOutcome({ kind: "cancel" }, entry);
     expect(finalTurn(entry)?.command).toBe("echo fallback");
@@ -101,6 +102,7 @@ describe("finaliseOutcome pushes a final turn", () => {
       kind: "assistant",
       response: makeCmd({ content: "old proposal", final: false }),
       attempts: [],
+      source: "model",
     });
     entry.turns.push({
       kind: "step",
@@ -114,6 +116,7 @@ describe("finaliseOutcome pushes a final turn", () => {
       kind: "assistant",
       response: makeCmd({ content: "latest proposal" }),
       attempts: [],
+      source: "model",
     });
     await finaliseOutcome({ kind: "exhausted" }, entry);
     const f = finalTurn(entry);
@@ -135,11 +138,13 @@ describe("finaliseOutcome pushes a final turn", () => {
       kind: "assistant",
       response: makeCmd({ content: "command-bytes", final: false }),
       attempts: [],
+      source: "model",
     });
     entry.turns.push({
       kind: "assistant",
       response: { type: "reply", final: true, content: "an answer", risk_level: "low" },
       attempts: [],
+      source: "model",
     });
     await finaliseOutcome({ kind: "exhausted" }, entry);
     expect(finalTurn(entry)?.command).toBe("command-bytes");
@@ -154,6 +159,7 @@ describe("finaliseOutcome pushes a final turn", () => {
       kind: "assistant",
       response: makeCmd({ content: "model-bytes", final: false, risk_level: "medium" }),
       attempts: [],
+      source: "model",
     });
     entry.turns.push({
       kind: "step",
@@ -173,6 +179,7 @@ describe("finaliseOutcome pushes a final turn", () => {
       kind: "assistant",
       response: makeCmd({ content: "would-have-run" }),
       attempts: [],
+      source: "model",
     });
     let thrown: unknown;
     try {

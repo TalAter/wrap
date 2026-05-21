@@ -187,6 +187,7 @@ describe("turns push directly onto entry.turns", () => {
       response: { type: "command", content: "ls", risk_level: "low", final: true },
       attempts: [{ llm_ms: 12 }],
       llm_ms: 12,
+      source: "model",
     });
     entry.turns.push({
       kind: "final",
@@ -238,6 +239,7 @@ describe("serializeEntry", () => {
       response: { type: "command", content: "ls", risk_level: "low", final: true },
       attempts: [{ llm_ms: 5 }],
       llm_ms: 5,
+      source: "model",
     });
     entry.turns.push({
       kind: "final",
@@ -264,6 +266,7 @@ describe("serializeEntry", () => {
     entry.turns.push({
       kind: "assistant",
       attempts: [{ raw_response: "garbage", error: { kind: "parse", message: "bad json" } }],
+      source: "model",
     });
     const parsed = JSON.parse(serializeEntry(entry));
     const turn = parsed.turns[0];
@@ -292,6 +295,22 @@ describe("serializeEntry", () => {
     expect(parsed.ppid).toBe(4242);
   });
 
+  test("assistant turn source round-trips through serialize", () => {
+    const entry = createLogEntry({
+      cwd: "/tmp",
+      provider: TEST_RESOLVED_PROVIDER,
+      promptHash: "abc",
+    });
+    entry.turns.push({
+      kind: "assistant",
+      response: { type: "command", content: "ls", risk_level: "low", final: true },
+      attempts: [],
+      source: "model",
+    });
+    const parsed = JSON.parse(serializeEntry(entry));
+    expect(parsed.turns[0].source).toBe("model");
+  });
+
   test("response-less assistant turn (fully-failed round) is preserved in JSONL", () => {
     const entry = createLogEntry({
       cwd: "/tmp",
@@ -304,6 +323,7 @@ describe("serializeEntry", () => {
         { error: { kind: "provider", message: "rate limit" }, llm_ms: 12 },
         { error: { kind: "parse", message: "bad json" }, raw_response: "oops" },
       ],
+      source: "model",
     });
     const parsed = JSON.parse(serializeEntry(entry));
     const turn = parsed.turns[0];
@@ -380,6 +400,7 @@ describe("appendLogEntry", () => {
     entry.turns.push({
       kind: "assistant",
       attempts: [{ request_wire: { kind: "test" } }],
+      source: "model",
     });
     entry.turns.push({
       kind: "step",
@@ -392,6 +413,7 @@ describe("appendLogEntry", () => {
     entry.turns.push({
       kind: "assistant",
       attempts: [{ request_wire: { kind: "test" } }],
+      source: "model",
     });
     appendLogEntry(entry);
     const trace = JSON.parse(readFileSync(join(LOGS_DIR, "traces", `${entry.id}.json`), "utf-8"));
@@ -407,6 +429,7 @@ describe("appendLogEntry", () => {
     entry.turns.push({
       kind: "assistant",
       attempts: [{ request_wire: { kind: "test" } }],
+      source: "model",
     });
 
     expect(() => appendLogEntry(entry)).toThrow();

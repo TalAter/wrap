@@ -21,7 +21,7 @@ Walks the `parent_id` chain to assemble ancestor turns, then projects through th
 
 Memory, cwd discovery, provider, and the prompt scaffold are loaded fresh. The chain is the conversation; everything else is the environment.
 
-Metadata turns (`final`, `cwd_change`) project to user-role messages wrapped in `<wrap-note>` fences. A short system-prompt sentence tells the LLM the convention. User-role because mid-conversation system messages aren't portable across providers.
+Metadata turns (`final`) project to user-role messages wrapped in `<wrap-note>` fences. A short system-prompt sentence tells the LLM the convention. User-role because mid-conversation system messages aren't portable across providers.
 
 ## Decisions
 

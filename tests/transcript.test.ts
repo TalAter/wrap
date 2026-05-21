@@ -73,7 +73,7 @@ describe("buildPromptInput", () => {
   test("user + assistant + step turns render in order", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: stepResponse, attempts: [] },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
         kind: "step",
         command: "uname",
@@ -106,7 +106,7 @@ describe("buildPromptInput", () => {
     };
     const transcript: Transcript = [
       { kind: "user", text: "test clean" },
-      { kind: "assistant", response: confirmedCmd, attempts: [] },
+      { kind: "assistant", response: confirmedCmd, attempts: [], source: "model" },
       {
         kind: "step",
         command: "echo git-stash-fake",
@@ -138,7 +138,7 @@ describe("buildPromptInput", () => {
     };
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: richResponse, attempts: [] },
+      { kind: "assistant", response: richResponse, attempts: [], source: "model" },
     ];
     const out = buildPromptInput(transcript, sys);
     const echoed = out.messages[1]?.content ?? "";
@@ -152,7 +152,7 @@ describe("buildPromptInput", () => {
   test("step with empty output renders the capturedNoOutput sentinel", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: stepResponse, attempts: [] },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
         kind: "step",
         command: "uname",
@@ -171,7 +171,7 @@ describe("buildPromptInput", () => {
   test("step with whitespace-only output and exit 0 renders the no-output sentinel", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: stepResponse, attempts: [] },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
         kind: "step",
         command: "uname",
@@ -190,7 +190,7 @@ describe("buildPromptInput", () => {
   test("step output with trailing newline is trimmed in render", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: stepResponse, attempts: [] },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
         kind: "step",
         command: "uname",
@@ -207,7 +207,7 @@ describe("buildPromptInput", () => {
   test("assistant + follow-up user turn renders both", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: cmdResponse, attempts: [] },
+      { kind: "assistant", response: cmdResponse, attempts: [], source: "model" },
       { kind: "user", text: "hmm" },
     ];
     const out = buildPromptInput(transcript, sys);
@@ -223,7 +223,7 @@ describe("buildPromptInput", () => {
   test("assistant turn for a reply renders as projected JSON", () => {
     const transcript: Transcript = [
       { kind: "user", text: "what" },
-      { kind: "assistant", response: answerResponse, attempts: [] },
+      { kind: "assistant", response: answerResponse, attempts: [], source: "model" },
     ];
     const out = buildPromptInput(transcript, sys);
     expect(out.messages).toHaveLength(2);
@@ -239,6 +239,7 @@ describe("buildPromptInput", () => {
       {
         kind: "assistant",
         attempts: [{ error: { kind: "provider", message: "rate limit" } }],
+        source: "model",
       },
       { kind: "user", text: "retry" },
     ];
@@ -253,7 +254,7 @@ describe("buildPromptInput", () => {
   test("requestFraming wraps only the FIRST user turn", () => {
     const transcript: Transcript = [
       { kind: "user", text: "first" },
-      { kind: "assistant", response: cmdResponse, attempts: [] },
+      { kind: "assistant", response: cmdResponse, attempts: [], source: "model" },
       { kind: "user", text: "second" },
     ];
     const out = buildPromptInput(transcript, sys, {
@@ -365,16 +366,58 @@ describe("buildPromptInput", () => {
     );
   });
 
-  test("cwd_change turn projects as a <wrap-note> user message", () => {
-    const transcript: Transcript = [
-      { kind: "cwd_change", from: "/Users/tal/proj-a", to: "/Users/tal/proj-b" },
+  test("skill-sourced assistant turn projects identically to model-sourced", () => {
+    const llm: Transcript = [
+      { kind: "user", text: "hi" },
+      { kind: "assistant", response: cmdResponse, attempts: [], source: "model" },
     ];
-    const out = buildPromptInput(transcript, sys);
-    expect(out.messages[0]?.content).toContain(
-      "cwd changed from /Users/tal/proj-a to /Users/tal/proj-b",
-    );
-    expect(out.messages[0]?.content).toStartWith("<wrap-note>");
-    expect(out.messages[0]?.content).toEndWith("</wrap-note>");
+    const skill: Transcript = [
+      { kind: "user", text: "hi" },
+      {
+        kind: "assistant",
+        response: cmdResponse,
+        attempts: [],
+        source: { kind: "skill", name: "discovery" },
+      },
+    ];
+    const a = buildPromptInput(llm, sys);
+    const b = buildPromptInput(skill, sys);
+    expect(a).toEqual(b);
+  });
+
+  test("skill-sourced step turn projects identically to model-sourced", () => {
+    const model: Transcript = [
+      { kind: "user", text: "hi" },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "Linux",
+        shell: "/bin/sh",
+        source: "model",
+      },
+    ];
+    const skill: Transcript = [
+      { kind: "user", text: "hi" },
+      {
+        kind: "assistant",
+        response: stepResponse,
+        attempts: [],
+        source: { kind: "skill", name: "discovery" },
+      },
+      {
+        kind: "step",
+        command: "uname",
+        exit_code: 0,
+        output: "Linux",
+        shell: "/bin/sh",
+        source: { kind: "skill", name: "discovery" },
+      },
+    ];
+    const a = buildPromptInput(model, sys);
+    const b = buildPromptInput(skill, sys);
+    expect(a).toEqual(b);
   });
 
   test("liveContext directive appends it as a user turn before lastRoundInstruction", () => {
@@ -427,7 +470,7 @@ describe("buildPromptInput", () => {
   test("does not mutate the input transcript", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: stepResponse, attempts: [] },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
         kind: "step",
         command: "uname",
@@ -445,7 +488,7 @@ describe("buildPromptInput", () => {
   test("calling twice with the same args returns equal output", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: cmdResponse, attempts: [] },
+      { kind: "assistant", response: cmdResponse, attempts: [], source: "model" },
     ];
     const a = buildPromptInput(transcript, sys);
     const b = buildPromptInput(transcript, sys);
@@ -468,7 +511,7 @@ describe("buildPromptInput", () => {
   test("step output with non-zero exit code includes the exit code", () => {
     const transcript: Transcript = [
       { kind: "user", text: "hi" },
-      { kind: "assistant", response: stepResponse, attempts: [] },
+      { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
         kind: "step",
         command: "uname",

@@ -182,10 +182,6 @@ function resolveContinuation(): {
     throw new Error("Continue error: previous run had piped input that's no longer available.");
   }
   const assembledTurns = assembleContinuationChain(entries, parent);
-  const cwdNow = process.cwd();
-  if (parent.cwd !== cwdNow) {
-    assembledTurns.push({ kind: "cwd_change", from: parent.cwd, to: cwdNow });
-  }
   const firstUserTurn = parent.turns.find(
     (t): t is Extract<Turn, { kind: "user" }> => t.kind === "user",
   );

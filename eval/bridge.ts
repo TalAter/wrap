@@ -85,6 +85,7 @@ if (Array.isArray(input.extraMessages)) {
         kind: "assistant",
         response: parsed,
         attempts: [],
+        source: "model",
       });
     }
   }

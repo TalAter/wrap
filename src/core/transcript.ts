@@ -167,12 +167,6 @@ export function buildPromptInput(
       case "final":
         messages.push({ role: "user", content: wrapNote(formatFinalNote(turn)) });
         break;
-      case "cwd_change":
-        messages.push({
-          role: "user",
-          content: wrapNote(`cwd changed from ${turn.from} to ${turn.to}`),
-        });
-        break;
       default: {
         const _exhaustive: never = turn;
         throw new Error(`unhandled transcript turn: ${(_exhaustive as { kind: string }).kind}`);

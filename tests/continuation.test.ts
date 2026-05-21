@@ -147,33 +147,6 @@ describe("continuation — refusal", () => {
   });
 });
 
-describe("continuation — cwd change", () => {
-  test("differing cwd injects a cwd_change turn into the assembled chain", async () => {
-    const wrapHome = freshHome();
-    const cwdA = mkdtempSync(join(tmpdir(), "wrap-continuation-A-"));
-    const cwdB = mkdtempSync(join(tmpdir(), "wrap-continuation-B-"));
-
-    await run("how to deploy", {
-      wrapHome,
-      cwd: cwdA,
-      responses: [{ type: "reply", content: "deploy.sh", risk_level: "low" }],
-    });
-    const child = await run("-c do it", {
-      wrapHome,
-      cwd: cwdB,
-      responses: [{ type: "command", content: "echo ok", risk_level: "low" }],
-    });
-    expect(child.exitCode).toBe(0);
-
-    // The child entry's stored turns[] contains only its own invocation —
-    // cwd_change is part of the assembled chain at replay time, not stored.
-    // To verify the chain was actually built with a cwd_change, we inspect
-    // the parent entry's cwd vs child entry's cwd: they must differ.
-    const [parentEntry, childEntry] = readEntries(wrapHome);
-    expect(parentEntry?.cwd).not.toBe(childEntry?.cwd);
-  });
-});
-
 describe("continuation — truncated chain", () => {
   test("missing parent_id reference does not crash; child still completes", async () => {
     const wrapHome = freshHome();
@@ -190,7 +163,7 @@ describe("continuation — truncated chain", () => {
       prompt_hash: "h",
       turns: [
         { kind: "user", text: "orphan prompt" },
-        { kind: "assistant", attempts: [] },
+        { kind: "assistant", attempts: [], source: "model" },
       ],
       outcome: "success",
     };

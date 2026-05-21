@@ -91,7 +91,7 @@ describe("assembleContinuationChain", () => {
       id: "p",
       turns: [
         { kind: "user", text: "deploy this" },
-        { kind: "assistant", attempts: [] },
+        { kind: "assistant", attempts: [], source: "model" },
       ],
     });
     const assembled = assembleContinuationChain([parent], parent);
