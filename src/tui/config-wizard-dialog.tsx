@@ -332,25 +332,19 @@ function ModelPickerScreen({
   dispatch: React.Dispatch<ProviderWizardAction>;
 }) {
   const api = API_PROVIDERS[provider];
-  const [selected, setSelected] = useState(models[0]?.id ?? "");
-
-  useKeyBindings([
-    {
-      on: "return",
-      do: () => {
-        const idx = models.findIndex((m) => m.id === selected);
-        if (idx >= 0) {
-          if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
-          dispatch({ type: "submit-model" });
-        }
-      },
-    },
-  ]);
 
   const options = models.map((m) => ({
     label: m.recommended ? `${m.id}  ✦ Recommended` : m.id,
     value: m.id,
   }));
+
+  const handleSelect = (val: string) => {
+    const idx = models.findIndex((m) => m.id === val);
+    if (idx >= 0) {
+      if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
+      dispatch({ type: "submit-model" });
+    }
+  };
 
   return (
     <Box flexDirection="column">
@@ -358,7 +352,7 @@ function ModelPickerScreen({
       <Text> </Text>
       <Select
         options={options}
-        onChange={setSelected}
+        onChange={handleSelect}
         visibleOptionCount={Math.min(MAX_VISIBLE_OPTIONS, models.length)}
       />
       <Text> </Text>
@@ -406,31 +400,24 @@ function DefaultPickerScreen({
   cursor: number;
   dispatch: React.Dispatch<ProviderWizardAction>;
 }) {
-  const [selected, setSelected] = useState(providers[0] ?? "");
-
-  useKeyBindings([
-    {
-      on: "return",
-      do: () => {
-        const idx = providers.indexOf(selected);
-        if (idx >= 0) {
-          if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
-          dispatch({ type: "submit-default" });
-        }
-      },
-    },
-  ]);
-
   const options = providers.map((name) => ({
     label: API_PROVIDERS[name]?.displayName ?? CLI_PROVIDERS[name]?.displayName ?? name,
     value: name,
   }));
 
+  const handleSelect = (val: string) => {
+    const idx = providers.indexOf(val);
+    if (idx >= 0) {
+      if (cursor !== idx) dispatch({ type: "move-cursor", delta: idx - cursor });
+      dispatch({ type: "submit-default" });
+    }
+  };
+
   return (
     <Box flexDirection="column">
       <Text bold>Which provider should be the default?</Text>
       <Text> </Text>
-      <Select options={options} onChange={setSelected} />
+      <Select options={options} onChange={handleSelect} />
       <Text> </Text>
       <Box paddingLeft={3}>
         <ActionBar

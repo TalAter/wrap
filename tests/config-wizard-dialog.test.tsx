@@ -185,6 +185,104 @@ describe("ConfigWizardDialog", () => {
     expect(cb.result?.nerdFonts).toBe(true);
   });
 
+  test("happy path with non-default model selection", async () => {
+    const cb = makeCallbacks();
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+
+    // Nerd icons: Yes
+    await passIntro(stdin);
+
+    // Select Anthropic → Space to toggle
+    stdin.write(" ");
+    await wait();
+    // Submit selection
+    stdin.write("\r");
+
+    // Should be on API key screen after models load
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("API key"));
+
+    // Type a key
+    stdin.write("sk-ant-test-key");
+    await wait();
+    // Submit key
+    stdin.write("\r");
+
+    // Should be on model picker
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("model"));
+
+    // Navigate to the second option (down arrow)
+    stdin.write("\x1b[B");
+    await wait();
+    // Submit
+    stdin.write("\r");
+
+    // Single provider → auto-default → done
+    await waitFor(() => expect(cb.result).not.toBeNull());
+    expect(cb.result?.defaultProvider).toBe("anthropic");
+    expect(cb.result?.entries.anthropic?.apiKey).toBe("sk-ant-test-key");
+    expect(cb.result?.entries.anthropic?.model).toBe("claude-haiku-4-5");
+    expect(cb.result?.nerdFonts).toBe(true);
+  });
+
+  test("happy path with multiple providers and non-default provider selection", async () => {
+    const cb = makeCallbacks({
+      probeCliBinaries: () => ({}),
+    });
+    const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
+
+    // Nerd icons: Yes
+    await passIntro(stdin);
+
+    // Select Anthropic (Space to toggle)
+    stdin.write(" ");
+    await wait();
+    
+    // Arrow down to OpenAI
+    stdin.write("\x1b[B");
+    await wait();
+    // Select OpenAI (Space to toggle)
+    stdin.write(" ");
+    await wait();
+
+    // Submit selection
+    stdin.write("\r");
+
+    // Anthropic API key screen
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Anthropic API key"));
+    stdin.write("sk-ant-key");
+    await wait();
+    stdin.write("\r");
+
+    // Anthropic model screen -> accept first
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Anthropic model"));
+    stdin.write("\r");
+
+    // OpenAI API key screen
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("OpenAI API key"));
+    stdin.write("sk-proj-key");
+    await wait();
+    stdin.write("\r");
+
+    // OpenAI model screen -> accept first
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("OpenAI model"));
+    stdin.write("\r");
+
+    // Default provider screen
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("default?"));
+
+    // Press down arrow to select OpenAI (second option)
+    stdin.write("\x1b[B");
+    await wait();
+    // Submit
+    stdin.write("\r");
+
+    // done
+    await waitFor(() => expect(cb.result).not.toBeNull());
+    expect(cb.result?.defaultProvider).toBe("openai");
+    expect(cb.result?.entries.anthropic?.model).toBe("claude-sonnet-4-6");
+    expect(cb.result?.entries.openai?.model).toBe("gpt-5");
+  });
+
   test("CLI tools section hidden when no binaries found", async () => {
     const cb = makeCallbacks({ probeCliBinaries: () => ({}) });
     const { stdin, lastFrame } = render(<ConfigWizardDialog {...cb} />);
