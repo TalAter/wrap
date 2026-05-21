@@ -1,5 +1,12 @@
 # Skills
 
+> **Implementation status (2026-05-21):**
+> - ✅ Per-turn `source` field + `cwd_change` turn removal — landed.
+> - ⏳ Watchlist + wizard-probes carveout from `src/discovery/`.
+> - ⏳ Skills infrastructure (types, registry, runner).
+> - ⏳ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles).
+> - ⏳ Commit skill.
+
 ## Goal
 
 Collapse common multi-round Wrap invocations into a single LLM round. Today `w commit` takes ~8s because the LLM probes `git status`, then `git diff`, then proposes a commit. With this feature, both probes run before the first LLM call and their output is already in the transcript when the model first sees the prompt, so the model can produce a final commit proposal in one round (~2s). This is done by introducing the concept of skills that Wrap can decide to run on its own before even consulting the LLM so that the results of those skills get sent to the LLM on the first call. We already have some discovery steps which do something similar (e.g., listing files in cwd, running `which <tool>`, etc). These will be refactored into skills.
@@ -38,13 +45,14 @@ This matches the trust-fence pattern already used for piped input (see [[piped-i
 
 ## Per-turn source marker
 
-Every transcript turn carries a source field identifying who emitted it. The existing `step` and `final` turns already carry a `source` field (`"model" | "user_override"` and friends — see `src/logging/entry.ts`). This work extends that field to identify the emitting skill — exact union shape is the implementer's call, but conceptually:
+> **Status:** Implemented.
 
-```
-source: "llm" | { skill: string }
-```
+Assistant and step turns carry a `source` field identifying who emitted them:
 
-Durable through the JSONL log so continuation can rebuild the conversation faithfully (see [[continuation]]). The marker is what distinguishes a skill-emitted turn from a real LLM turn — there's no other architectural difference between them.
+- assistant: `"model" | { kind: "skill"; name: string }`
+- step: `"model" | "user_override" | { kind: "skill"; name: string }`
+
+`"model"` means an LLM-emitted turn. The `{ kind: "skill"; name }` discriminated-union shape mirrors the `Trigger` shape and leaves room for additive fields (e.g. task index) without a breaking change. Durable through the JSONL log so continuation can rebuild the conversation faithfully (see [[continuation]]). The marker is the only architectural difference between a skill-emitted turn and a real LLM turn.
 
 ## Continuation
 
@@ -59,7 +67,7 @@ What stays in the context block (knowledge, not observations):
 - Memory facts
 - Piped-input instruction and the attached-input preview block (these are about untrusted user-supplied input, not about probed environment state)
 
-The existing `cwd_change` turn kind is deprecated. A cwd change is now expressed by the next invocation's discovery skill emitting a fresh `pwd` step turn. Remove the existing wrap-note that today renders cwd changes between continuations (`src/main.ts` and the `cwd_change` branch in `src/core/transcript.ts`).
+The `cwd_change` turn kind has been removed. A cwd change is now expressed by the next invocation's discovery skill emitting a fresh `pwd` step turn. Continuation across a cwd boundary therefore has no explicit cue until the discovery skill lands — accepted gap since steps ship together.
 
 ## Failure handling
 
