@@ -4,6 +4,10 @@ import type { AssistantTurn, StepTurn } from "../logging/entry.ts";
 import type { Skill, SkillTask, Trigger } from "./types.ts";
 
 const TIMEOUT_MS = 1000;
+// Grace so the inner shell-exec timeout (which kills the proc) wins the race
+// against the outer task.run timeout (which has no kill action) when both are
+// armed for the same physical work. See `runTask`.
+const OUTER_TIMEOUT_GRACE_MS = 100;
 
 type TaskResult = { output: string; exitCode: number } | null;
 
@@ -15,12 +19,16 @@ function triggerMatches(trigger: Trigger, userPrompt: string): boolean {
 // 1s hard cap, applied uniformly to shell tasks and `run` tasks. `onTimeout`
 // is the side effect for the shell path (process kill); the timer is unref'd
 // so a forgotten promise never holds the event loop open.
-function withTimeout<T>(work: Promise<T>, onTimeout: () => void): Promise<T | null> {
+function withTimeout<T>(
+  work: Promise<T>,
+  onTimeout: () => void,
+  timeoutMs: number = TIMEOUT_MS,
+): Promise<T | null> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       onTimeout();
       resolve(null);
-    }, TIMEOUT_MS);
+    }, timeoutMs);
     timer.unref?.();
     work.then(
       (v) => {
@@ -35,7 +43,7 @@ function withTimeout<T>(work: Promise<T>, onTimeout: () => void): Promise<T | nu
   });
 }
 
-async function execTaskInShell(command: string): Promise<TaskResult> {
+export async function execTaskInShell(command: string): Promise<TaskResult> {
   const shell = process.env.SHELL || "sh";
   // No `-i` — skill probes are Wrap-controlled, not user-typed, so they
   // shouldn't pick up user rc files (aliases, prompt setup, etc).
@@ -52,16 +60,19 @@ async function execTaskInShell(command: string): Promise<TaskResult> {
     }
   })();
   if (!proc) return null;
+  // Drain pipes concurrently with exit. OS pipe buffers are ~64KB; if we
+  // awaited `proc.exited` before reading, a command writing more than that
+  // would block on write and never exit, forcing the 1s timeout to fire as
+  // a false misfire.
+  const stdoutP = new Response(proc.stdout).text();
+  const stderrP = new Response(proc.stderr).text();
   const exitCode = await withTimeout(proc.exited, () => {
     try {
       proc.kill();
     } catch {}
   });
   if (exitCode === null) return null;
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
+  const [stdout, stderr] = await Promise.all([stdoutP, stderrP]);
   let output = stdout;
   if (stderr.trim()) output += (output.trim() ? "\n" : "") + stderr;
   return { output, exitCode };
@@ -72,6 +83,7 @@ async function runTask(task: SkillTask): Promise<TaskResult> {
     return withTimeout(
       task.run().catch(() => null),
       () => {},
+      TIMEOUT_MS + OUTER_TIMEOUT_GRACE_MS,
     );
   }
   return execTaskInShell(task.command);
