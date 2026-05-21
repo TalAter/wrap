@@ -2,12 +2,11 @@ import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
 import { verbose } from "../core/verbose.ts";
-import { runProbes } from "../discovery/init-probes.ts";
 import { wrapFs } from "../fs/home.ts";
 import type { Provider } from "../llm/types.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
-
 import { countFacts, type Fact, type Memory } from "./types.ts";
+import { runProbes } from "./memory-init-probes.ts";
 
 const MEMORY_FILE = "memory.json";
 

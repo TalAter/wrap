@@ -1,50 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { CLIPBOARD_PASTE_TOOLS, CLIPBOARD_TOOLS } from "../src/core/clipboard.ts";
-import {
-  PROBE_COMMANDS,
-  PROBED_TOOLS,
-  probeTools,
-  runProbes,
-} from "../src/discovery/init-probes.ts";
-
-describe("PROBE_COMMANDS", () => {
-  test("is a non-empty array of {label, command} entries", () => {
-    expect(PROBE_COMMANDS.length).toBeGreaterThan(0);
-    for (const probe of PROBE_COMMANDS) {
-      expect(typeof probe.label).toBe("string");
-      expect(typeof probe.command).toBe("string");
-    }
-  });
-
-  test("does not include Core tools or Package manager", () => {
-    const labels = PROBE_COMMANDS.map((p) => p.label);
-    expect(labels).not.toContain("Core tools");
-    expect(labels).not.toContain("Package manager");
-  });
-});
+import { PROBED_TOOLS, probeTools } from "../src/discovery/init-probes.ts";
 
 describe("PROBED_TOOLS", () => {
   test("includes every clipboard tool (copy + paste)", () => {
     for (const tool of [...CLIPBOARD_TOOLS, ...CLIPBOARD_PASTE_TOOLS]) {
       expect(PROBED_TOOLS).toContain(tool);
     }
-  });
-});
-
-describe("runProbes", () => {
-  test("returns a non-empty string with probe output", () => {
-    const output = runProbes();
-    expect(output.length).toBeGreaterThan(0);
-  });
-
-  test("includes OS label in output", () => {
-    const output = runProbes();
-    expect(output).toContain("## OS");
-  });
-
-  test("includes Shell label in output", () => {
-    const output = runProbes();
-    expect(output).toContain("## Shell");
   });
 });
 

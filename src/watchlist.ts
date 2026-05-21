@@ -1,7 +1,11 @@
-import { wrapFs } from "../fs/home.ts";
-import { VALID_TOOL_NAME } from "./init-probes.ts";
+import { wrapFs } from "./fs/home.ts";
 
 const WATCHLIST_FILE = "tool-watchlist.json";
+
+// Invariant for what may be persisted. `probeTools` relies on this for
+// shell-injection safety when interpolating into `which` — entries come
+// from user/LLM input and could otherwise be `; rm -rf /`.
+export const VALID_TOOL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 export type WatchlistEntry = {
   tool: string;

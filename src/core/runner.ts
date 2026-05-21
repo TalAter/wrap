@@ -1,9 +1,9 @@
 import { getConfig } from "../config/store.ts";
-import { addToWatchlist } from "../discovery/watchlist.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import type { Provider } from "../llm/types.ts";
 import type { AssistantTurn } from "../logging/entry.ts";
 import { appendFacts } from "../memory/memory.ts";
+import { addToWatchlist } from "../watchlist.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
 import { runRound } from "./round.ts";

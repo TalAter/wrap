@@ -12,7 +12,6 @@ import { resolveTheme, setTheme } from "./core/theme.ts";
 import { verbose } from "./core/verbose.ts";
 import { countCwdFiles, listCwdFiles } from "./discovery/cwd-files.ts";
 import { probeTools } from "./discovery/init-probes.ts";
-import { loadWatchlist } from "./discovery/watchlist.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
@@ -27,6 +26,7 @@ import { ensureMemory } from "./memory/memory.ts";
 import { runSession } from "./session/session.ts";
 import { dispatch } from "./subcommands/dispatch.ts";
 import { options } from "./subcommands/registry.ts";
+import { loadWatchlist } from "./watchlist.ts";
 
 const MODIFIER_SPECS: readonly ModifierSpec[] = options.map((o) => ({
   name: o.id,

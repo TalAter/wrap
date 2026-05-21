@@ -1,24 +1,10 @@
 import { CLIPBOARD_PASTE_TOOLS, CLIPBOARD_TOOLS } from "../core/clipboard.ts";
-
-export type ProbeCommand = { label: string; command: string };
+import { VALID_TOOL_NAME } from "../watchlist.ts";
 
 export type ToolProbeResult = {
   available: string[];
   unavailable: string[];
 };
-
-/**
- * Probe commands sent to the init LLM for semantic parsing.
- */
-export const PROBE_COMMANDS: readonly ProbeCommand[] = [
-  { label: "OS", command: "uname -a" },
-  { label: "Shell", command: "echo $SHELL" },
-  { label: "Distro", command: "cat /etc/os-release 2>/dev/null || echo 'Not Linux'" },
-  {
-    label: "Shell config files",
-    command: "ls -la ~/.*shrc ~/.*sh_profile ~/.*profile ~/.config/fish/config.fish 2>/dev/null",
-  },
-];
 
 /**
  * Tools probed on every run via `which` as part of the tool probe
@@ -53,25 +39,6 @@ export const PROBED_TOOLS: readonly string[] = [
   ...CLIPBOARD_TOOLS,
   ...CLIPBOARD_PASTE_TOOLS,
 ];
-
-/** Run all probe commands and concatenate output as labeled sections. */
-export function runProbes(): string {
-  const sections: string[] = [];
-
-  for (const probe of PROBE_COMMANDS) {
-    const result = Bun.spawnSync(["sh", "-c", probe.command]);
-    const output = result.stdout.toString().trim();
-    sections.push(`## ${probe.label}\n${output || "(no output)"}`);
-  }
-
-  return sections.join("\n\n");
-}
-
-// Tool names are interpolated into a shell `which` command, so we must
-// validate them to prevent command injection. extraTools comes from the
-// persistent watchlist file, which a user (or a compromised LLM response)
-// could fill with malicious strings like `; rm -rf /`.
-export const VALID_TOOL_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * Probe tool availability via a single `which` call.

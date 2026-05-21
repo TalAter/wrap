@@ -2,7 +2,7 @@
 
 > **Implementation status (2026-05-21):**
 > - ✅ Per-turn `source` field + `cwd_change` turn removal — landed.
-> - ⏳ Watchlist + wizard-probes carveout from `src/discovery/`.
+> - ⏳ Watchlist + memory-init probes carveout from `src/discovery/`.
 > - ⏳ Skills infrastructure (types, registry, runner).
 > - ⏳ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles).
 > - ⏳ Commit skill.
@@ -98,4 +98,4 @@ When `run` is absent, the runner executes `command` in a shell with the 1s timeo
 
 - `cwd-files` + `probe-tools` (the per-call probes) → `src/skills/discovery.ts`.
 - Watchlist storage (`loadWatchlist`, `addToWatchlist`, `VALID_TOOL_NAME`) → `src/watchlist.ts`. Stays outside `src/skills/` so the tracker (persistence) is separated from the skill (consumer + which-runner).
-- `runProbes` / `PROBE_COMMANDS` (memory wizard probes, not per-call) → `src/memory/wizard-probes.ts`.
+- `runProbes` / `PROBE_COMMANDS` (memory-init probes, not per-call) → `src/memory/memory-init-probes.ts`.

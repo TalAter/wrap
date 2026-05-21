@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addToWatchlist, loadWatchlist, type WatchlistEntry } from "../src/discovery/watchlist.ts";
+import { addToWatchlist, loadWatchlist, type WatchlistEntry } from "../src/watchlist.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
 
 const WATCHLIST_PATH = join(TEST_HOME, "tool-watchlist.json");
