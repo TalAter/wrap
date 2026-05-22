@@ -1,9 +1,3 @@
-- file: src/core/attached-input.ts
-  mutator: ConditionalExpression
-  original: 'bytes.byteLength === 0'
-  mutated: 'false'
-  reason: equivalent — when bytes is empty, isAsciiWhitespace(emptyBytes) on the next line returns true (zero-iteration for-loop falls through to return true), so the function still returns undefined. No observable behavior change.
-  added: 2026-05-09
 - file: src/core/input.ts
   mutator: EqualityOperator
   original: 'i < args.length'
