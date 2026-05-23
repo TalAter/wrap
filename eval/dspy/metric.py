@@ -140,10 +140,10 @@ def score(response: dict, assertions: dict) -> float:
         additions = response.get("watchlist_additions") or []
         if not isinstance(additions, list):
             additions = []
-        tools_text = " ".join(str(t) for t in additions)
+        additions_text = " ".join(str(t) for t in additions)
         checks.append((
             "watchlist_additions_pattern",
-            bool(re.search(assertions["watchlist_additions_pattern"], tools_text, re.IGNORECASE)),
+            bool(re.search(assertions["watchlist_additions_pattern"], additions_text, re.IGNORECASE)),
         ))
 
     # watchlist_additions must have at least N entries

@@ -185,7 +185,7 @@ class WrapPredictor(dspy.Module):
             query=kwargs["natural_language_query"],
             extra_messages=extra_messages,
             last_round=last_round,
-            attached_input=attached_input if attached_input else None,
+            attached_input=attached_input,
         )
 
         # response_json as JSON string: DSPy signature declares it as str,
@@ -391,7 +391,7 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
             cwd=ex.cwd,
             piped=ex.piped,
             query=ex.natural_language_query,
-            attached_input=attached_input if attached_input else None,
+            attached_input=attached_input,
             extra_messages=extra_messages,
             last_round=last_round,
         )

@@ -23,7 +23,7 @@ A skill is NOT a tool the LLM chooses. Activation is deterministic. The skill ru
 Two bundled skills. No user-defined skills, no config surface.
 
 - ✅ **`discovery`** — always-on. Emits pwd / ls (mtime-sorted, capped at 50) / `which` over `PROBED_TOOLS ∪ watchlist`. Source: `src/skills/discovery.ts`.
-- ⏳ **`commit`** — trigger matches `/\bcommit\b/i` against the user prompt. Emits `git status --short` and `git diff --cached`.
+- ✅ **`commit`** — trigger matches `/\bcommit\b/i` against the user prompt. Emits `git status --short`, `git diff --cached`, and `git diff` — separate diffs so the LLM can tell staged from unstaged for partial-commit workflows. Empty-output pairs are dropped so a clean repo doesn't waste the round. Source: `src/skills/commit.ts`.
 
 ## Trigger types
 
