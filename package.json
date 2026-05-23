@@ -34,7 +34,7 @@
     "jsonc-parser": "^3.3.1",
     "react": "^19.2.6",
     "string-width": "^8.2.1",
-    "wrap-core": "link:wrap-core",
+    "wrap-core": "github:TalAter/wrap-core#main",
     "zod": "^4.4.3"
   }
 }
