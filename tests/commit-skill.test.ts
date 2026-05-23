@@ -74,7 +74,6 @@ describe("commit skill — execution", () => {
 
   test("staged + unstaged changes emit status, both diffs, in order", async () => {
     await initGitRepo(tmpDir);
-    // Initial commit so `git diff` (working tree vs index) has a tracked file to diff.
     await writeFile(join(tmpDir, "tracked.txt"), "base\n");
     await execIn(tmpDir, "git add tracked.txt");
     await execIn(tmpDir, "git commit -q -m init");
@@ -84,18 +83,15 @@ describe("commit skill — execution", () => {
 
     const turns = await runSkills([commitSkill], "commit my changes");
 
-    const commands = turns
-      .filter((t) => t.kind === "assistant")
-      .map((t) => t.kind === "assistant" && t.response?.content);
-    expect(commands).toEqual(["git status --short", "git diff --cached", "git diff"]);
-
-    expect(turns).toHaveLength(6);
-    const steps = turns.filter((t) => t.kind === "step");
-    if (steps[0]?.kind !== "step" || steps[1]?.kind !== "step" || steps[2]?.kind !== "step")
-      throw new Error("expected three step turns");
-    expect(steps[0].output).toContain("tracked.txt");
-    expect(steps[1].output).toContain("staged-line");
-    expect(steps[2].output).toContain("unstaged-line");
+    expect(turns.map((t) => t.command)).toEqual([
+      "git status --short",
+      "git diff --cached",
+      "git diff",
+    ]);
+    expect(turns).toHaveLength(3);
+    expect(turns[0]?.output).toContain("tracked.txt");
+    expect(turns[1]?.output).toContain("staged-line");
+    expect(turns[2]?.output).toContain("unstaged-line");
   });
 
   test("staged only: unstaged diff drops, status + cached emit", async () => {
@@ -104,10 +100,7 @@ describe("commit skill — execution", () => {
     await execIn(tmpDir, "git add hello.txt");
 
     const turns = await runSkills([commitSkill], "commit my changes");
-    const commands = turns
-      .filter((t) => t.kind === "assistant")
-      .map((t) => t.kind === "assistant" && t.response?.content);
-    expect(commands).toEqual(["git status --short", "git diff --cached"]);
+    expect(turns.map((t) => t.command)).toEqual(["git status --short", "git diff --cached"]);
   });
 
   test("unstaged only: cached drops, status + unstaged diff emit", async () => {
@@ -118,10 +111,7 @@ describe("commit skill — execution", () => {
     await writeFile(join(tmpDir, "tracked.txt"), "x\nmore\n");
 
     const turns = await runSkills([commitSkill], "commit my changes");
-    const commands = turns
-      .filter((t) => t.kind === "assistant")
-      .map((t) => t.kind === "assistant" && t.response?.content);
-    expect(commands).toEqual(["git status --short", "git diff"]);
+    expect(turns.map((t) => t.command)).toEqual(["git status --short", "git diff"]);
   });
 });
 

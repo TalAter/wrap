@@ -7,9 +7,9 @@ Last-synced: 8e2e5c7
 
 # Skills
 
-A **skill** is a bundle of read-only tasks that fire deterministically before the first LLM call. Each task emits an assistant + step turn pair into the transcript — the same shape the LLM would produce via a non-final probe. Collapses common multi-round flows (`w commit` was 3 rounds, now 1) by front-loading what the LLM would have probed anyway.
+A **skill** is a bundle of read-only tasks that fire deterministically before the first LLM call. Each task emits a single `probe` turn into the transcript — one record carrying both the command and the captured output. The projector expands each probe into two LLM messages (assistant + user) identical to what the LLM would produce via a non-final step. Collapses common multi-round flows (`w commit` was 3 rounds, now 1) by front-loading what the LLM would have probed anyway.
 
-A skill is NOT an LLM-chosen tool. Activation is deterministic; the resulting turns are structurally identical to LLM-emitted ones — the only difference is the durable `source: { kind: "skill"; name }` marker.
+A skill is NOT an LLM-chosen tool. Activation is deterministic; probe turns project identically to LLM-emitted assistant + step pairs.
 
 ## Activation
 
@@ -22,7 +22,7 @@ False-positive matches are cheap: wasted IO beats a saved LLM round.
 ## Bundled skills
 
 - **discovery** — always-on. `pwd`, `ls`, `which <PROBED_TOOLS ∪ watchlist>`. Replaces what `formatContext` used to emit as `## Detected tools` / `## Files in CWD` sections — observations flow through the transcript now. See [[discovery]].
-- **commit** — fires on `/\bcommit\b/i`. `git status --short`, `git diff --cached`, `git diff`. Each task drops its pair on empty output, so clean repos stay silent.
+- **commit** — fires on `/\bcommit\b/i`. `git status --short`, `git diff --cached`, `git diff`. Each task drops its probe on empty output, so clean repos stay silent.
 
 ## Turn placement — the trust fence
 
@@ -30,11 +30,11 @@ Skill turns are spliced BEFORE the user prompt; the user's prompt is always the 
 
 ## Failure
 
-Misfires (non-zero exit, 1s timeout, empty output) drop the turn pair silently. Never reach the LLM, never surface to the user. Multi-step LLM probes still work after a skill misfire — the LLM just does what it would have done without the skill.
+Misfires (non-zero exit, 1s timeout, empty output) drop the probe silently. Never reach the LLM, never surface to the user. Multi-step LLM probes still work after a skill misfire — the LLM just does what it would have done without the skill.
 
 ## Continuation
 
-Each invocation re-fires its skills against the new prompt and current state. Prior skill turns stay in the transcript as history with their source markers; new skill turns are appended before the new user prompt. Multi-generation discovery (successive `pwd` outputs across a `cd`) is intentional — the LLM sees the progression. See [[continuation]].
+Each invocation re-fires its skills against the new prompt and current state. Prior probe turns stay in the transcript as history; new probe turns are appended before the new user prompt. Multi-generation discovery (successive `pwd` outputs across a `cd`) is intentional — the LLM sees the progression. See [[continuation]].
 
 ## Decisions
 

@@ -12,7 +12,7 @@ describe("Trigger matching", () => {
       tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "anything");
-    expect(turns).toHaveLength(2);
+    expect(turns).toHaveLength(1);
   });
 
   test("match trigger fires when pattern matches the prompt", async () => {
@@ -22,7 +22,7 @@ describe("Trigger matching", () => {
       tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "FOO bar");
-    expect(turns).toHaveLength(2);
+    expect(turns).toHaveLength(1);
   });
 
   test("match trigger skips skill when pattern doesn't match", async () => {
@@ -37,25 +37,19 @@ describe("Trigger matching", () => {
 });
 
 describe("Task emission", () => {
-  test("successful task with `run` emits assistant+step pair with skill source", async () => {
+  test("successful task emits a single probe turn", async () => {
     const skill: Skill = {
       name: "discovery",
       trigger: { kind: "always" },
       tasks: () => [{ command: "echo hi", run: async () => ({ output: "hi", exitCode: 0 }) }],
     };
     const turns = await runSkills([skill], "anything");
-    expect(turns).toHaveLength(2);
-    const assistant = turns[0];
-    const step = turns[1];
-    if (assistant?.kind !== "assistant") throw new Error("expected assistant turn");
-    if (step?.kind !== "step") throw new Error("expected step turn");
-    expect(assistant.source).toEqual({ kind: "skill", name: "discovery" });
-    expect(assistant.attempts).toEqual([]);
-    expect(assistant.response?.content).toBe("echo hi");
-    expect(step.source).toEqual({ kind: "skill", name: "discovery" });
-    expect(step.command).toBe("echo hi");
-    expect(step.output).toBe("hi");
-    expect(step.exit_code).toBe(0);
+    expect(turns).toHaveLength(1);
+    const probe = turns[0];
+    if (probe?.kind !== "probe") throw new Error("expected probe turn");
+    expect(probe.skill).toBe("discovery");
+    expect(probe.command).toBe("echo hi");
+    expect(probe.output).toBe("hi");
   });
 
   test("task with non-zero exitCode drops the pair silently", async () => {
@@ -104,11 +98,10 @@ describe("Shell exec (no `run`)", () => {
       tasks: () => [{ command: "echo hi" }],
     };
     const turns = await runSkills([skill], "anything");
-    expect(turns).toHaveLength(2);
-    const step = turns[1];
-    if (step?.kind !== "step") throw new Error("expected step");
-    expect(step.output).toContain("hi");
-    expect(step.exit_code).toBe(0);
+    expect(turns).toHaveLength(1);
+    const probe = turns[0];
+    if (probe?.kind !== "probe") throw new Error("expected probe");
+    expect(probe.output).toContain("hi");
   });
 
   test("non-zero exit (e.g. `false`) drops the pair silently", async () => {
@@ -174,13 +167,12 @@ describe("Trigger × ordering interaction", () => {
       tasks: () => [{ command: "c", run: async () => ({ output: "c-out", exitCode: 0 }) }],
     };
     const turns = await runSkills([a, b, c], "anything");
-    const commands = turns.filter((t) => t.kind === "step").map((t) => t.command);
-    expect(commands).toEqual(["a", "c"]);
+    expect(turns.map((t) => t.command)).toEqual(["a", "c"]);
   });
 });
 
 describe("Ordering", () => {
-  test("emits turn pairs in skill order, then task order within each skill", async () => {
+  test("emits probes in skill order, then task order within each skill", async () => {
     const skillA: Skill = {
       name: "a",
       trigger: { kind: "always" },
@@ -195,14 +187,8 @@ describe("Ordering", () => {
       tasks: () => [{ command: "b1", run: async () => ({ output: "b1-out", exitCode: 0 }) }],
     };
     const turns = await runSkills([skillA, skillB], "anything");
-    expect(turns).toHaveLength(6);
-    const steps = turns.filter((t) => t.kind === "step");
-    expect(steps.map((s) => s.kind === "step" && s.command)).toEqual(["a1", "a2", "b1"]);
-    const assistants = turns.filter((t) => t.kind === "assistant");
-    expect(assistants.map((a) => a.kind === "assistant" && a.source)).toEqual([
-      { kind: "skill", name: "a" },
-      { kind: "skill", name: "a" },
-      { kind: "skill", name: "b" },
-    ]);
+    expect(turns).toHaveLength(3);
+    expect(turns.map((t) => t.command)).toEqual(["a1", "a2", "b1"]);
+    expect(turns.map((t) => t.skill)).toEqual(["a", "a", "b"]);
   });
 });

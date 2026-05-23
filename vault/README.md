@@ -43,8 +43,8 @@ Canonical vocabulary. Use consistently; do not invent synonyms.
 **Discovery & memory**
 - **Discovery** — ongoing process of learning the environment.
 - **Skill** — deterministic bundle of read-only tasks that fires before the first LLM call and emits transcript turns. See [[skills]].
-- **Task** — one command within a skill (assistant + step turn pair).
-- **Probe** — a command run for discovery, not for the user (either skill-emitted or LLM-emitted via a non-final step).
+- **Task** — one command within a skill (emits a single probe turn).
+- **Probe** — a `kind: "probe"` transcript turn: one collapsed record (command + output) that the projector expands into an assistant message + user message. Skill-emitted; LLM-emitted discovery uses non-final steps.
 - **Tool watchlist** — persistent list of tool names `which`-checked every run by the discovery skill.
 - **Memory** — scoped facts learned about the environment. Scope = directory the fact belongs to.
 

@@ -42,33 +42,29 @@ describe("discovery skill", () => {
     expect(discoverySkill.trigger).toEqual({ kind: "always" });
   });
 
-  test("emits a pwd turn pair", async () => {
+  test("emits a pwd probe", async () => {
     const turns = await runSkills([discoverySkill], "anything");
-    const pwdStep = turns.find((t) => t.kind === "step" && t.command === "pwd");
-    expect(pwdStep).toBeDefined();
-    if (pwdStep?.kind !== "step") throw new Error("expected step");
-    // macOS prepends /private to tmpdir paths via realpath, so just check the suffix
-    expect(pwdStep.output.trim().endsWith(tmpDir) || pwdStep.output.trim() === tmpDir).toBe(true);
+    const pwd = turns.find((t) => t.command === "pwd");
+    expect(pwd).toBeDefined();
+    if (pwd?.kind !== "probe") throw new Error("expected probe");
+    expect(pwd.output.trim().endsWith(tmpDir) || pwd.output.trim() === tmpDir).toBe(true);
   });
 
-  test("ls task emits assistant with `ls` command and step with formatted listing", async () => {
+  test("ls task emits probe with formatted listing", async () => {
     await writeFile(join(tmpDir, "alpha.txt"), "");
     await utimes(join(tmpDir, "alpha.txt"), new Date("2024-01-01"), new Date("2024-01-01"));
     await writeFile(join(tmpDir, "beta.txt"), "");
     await utimes(join(tmpDir, "beta.txt"), new Date("2024-01-02"), new Date("2024-01-02"));
 
     const turns = await runSkills([discoverySkill], "anything");
-    const lsIdx = turns.findIndex((t) => t.kind === "assistant" && t.response?.content === "ls");
-    expect(lsIdx).toBeGreaterThanOrEqual(0);
-    const lsStep = turns[lsIdx + 1];
-    if (lsStep?.kind !== "step") throw new Error("expected step after ls assistant");
-    expect(lsStep.command).toBe("ls");
-    expect(lsStep.output).toBe("alpha.txt\nbeta.txt");
+    const ls = turns.find((t) => t.command === "ls");
+    if (ls?.kind !== "probe") throw new Error("expected probe");
+    expect(ls.output).toBe("alpha.txt\nbeta.txt");
   });
 
-  test("ls task drops the pair when cwd has no entries", async () => {
+  test("ls task drops the probe when cwd has no entries", async () => {
     const turns = await runSkills([discoverySkill], "anything");
-    const hasLs = turns.some((t) => t.kind === "assistant" && t.response?.content === "ls");
+    const hasLs = turns.some((t) => t.command === "ls");
     expect(hasLs).toBe(false);
   });
 
@@ -80,28 +76,21 @@ describe("discovery skill", () => {
     );
 
     const turns = await runSkills([discoverySkill], "anything");
-    const whichAssistant = turns.find(
-      (t) => t.kind === "assistant" && t.response?.content.startsWith("which "),
-    );
-    expect(whichAssistant).toBeDefined();
-    if (whichAssistant?.kind !== "assistant") throw new Error("expected assistant");
-    // Default PROBED_TOOLS tool + the watchlist entry both appear.
-    expect(whichAssistant.response?.content).toContain("git");
-    expect(whichAssistant.response?.content).toContain("watchlist-extra");
+    const which = turns.find((t) => t.command.startsWith("which "));
+    expect(which).toBeDefined();
+    if (which?.kind !== "probe") throw new Error("expected probe");
+    expect(which.command).toContain("git");
+    expect(which.command).toContain("watchlist-extra");
   });
 
   test("which task is present even when watchlist is empty (PROBED_TOOLS make it non-empty)", async () => {
     const turns = await runSkills([discoverySkill], "anything");
-    const hasWhich = turns.some(
-      (t) => t.kind === "assistant" && t.response?.content.startsWith("which "),
-    );
+    const hasWhich = turns.some((t) => t.command.startsWith("which "));
     expect(hasWhich).toBe(true);
   });
 
   test("which task injects only tool names that pass VALID_TOOL_NAME", async () => {
     const watchlistPath = join(TEST_HOME, "tool-watchlist.json");
-    // loadWatchlist already filters via VALID_TOOL_NAME, so we add a valid one
-    // and assert the malicious-looking string never appears in the command.
     writeFileSync(
       watchlistPath,
       JSON.stringify([
@@ -110,44 +99,34 @@ describe("discovery skill", () => {
       ]),
     );
     const turns = await runSkills([discoverySkill], "anything");
-    const whichAssistant = turns.find(
-      (t) => t.kind === "assistant" && t.response?.content.startsWith("which "),
-    );
-    if (whichAssistant?.kind !== "assistant") throw new Error("expected assistant");
-    expect(whichAssistant.response?.content).toContain("valid-tool");
-    expect(whichAssistant.response?.content).not.toContain("rm -rf");
+    const which = turns.find((t) => t.command.startsWith("which "));
+    if (which?.kind !== "probe") throw new Error("expected probe");
+    expect(which.command).toContain("valid-tool");
+    expect(which.command).not.toContain("rm -rf");
   });
 
   test("which task rejects tool names with shell-metachar prefix (`; legit`)", async () => {
-    // Defense-in-depth: VALID_TOOL_NAME must reject the *entire* string, not
-    // match somewhere inside. A name like "; legit" has an alphanumeric body
-    // but a leading `;` — if the regex weren't anchored, the `;` would end
-    // the `which` invocation and run attacker-controlled commands after.
     const watchlistPath = join(TEST_HOME, "tool-watchlist.json");
     writeFileSync(watchlistPath, JSON.stringify([{ tool: "; legit", added: "2026-05-21" }]));
     const turns = await runSkills([discoverySkill], "anything");
-    const whichAssistant = turns.find(
-      (t) => t.kind === "assistant" && t.response?.content.startsWith("which "),
-    );
-    if (whichAssistant?.kind !== "assistant") throw new Error("expected assistant");
-    expect(whichAssistant.response?.content).not.toContain("; legit");
-    expect(whichAssistant.response?.content).not.toContain("legit");
+    const which = turns.find((t) => t.command.startsWith("which "));
+    if (which?.kind !== "probe") throw new Error("expected probe");
+    expect(which.command).not.toContain("; legit");
+    expect(which.command).not.toContain("legit");
   });
 
-  test("all turns carry the discovery skill source marker", async () => {
+  test("all turns carry the discovery skill name", async () => {
     await writeFile(join(tmpDir, "a"), "");
 
     const turns = await runSkills([discoverySkill], "anything");
     for (const turn of turns) {
-      if (turn.kind === "assistant" || turn.kind === "step") {
-        expect(turn.source).toEqual({ kind: "skill", name: "discovery" });
-      }
+      expect(turn.skill).toBe("discovery");
     }
   });
 });
 
 describe("discovery skill wire-in (main.ts)", () => {
-  test("skill turns are spliced before the user prompt in the logged transcript", async () => {
+  test("probe turns are spliced before the user prompt in the logged transcript", async () => {
     const { readFileSync } = await import("node:fs");
     const { wrapMock } = await import("./helpers.ts");
 
@@ -158,31 +137,13 @@ describe("discovery skill wire-in (main.ts)", () => {
     });
     const log = readFileSync(`${result.wrapHome}/logs/wrap.jsonl`, "utf-8").trim();
     const entry = JSON.parse(log) as {
-      turns: Array<{ kind: string; source?: unknown; text?: string }>;
+      turns: Array<{ kind: string }>;
     };
     const userIdx = entry.turns.findIndex((t) => t.kind === "user");
-    // All skill-emitted turns come BEFORE the first user turn — this is the
-    // trust-fence invariant.
-    const skillBefore = entry.turns
-      .slice(0, userIdx)
-      .filter(
-        (t) =>
-          (t.kind === "assistant" || t.kind === "step") &&
-          typeof t.source === "object" &&
-          t.source !== null &&
-          (t.source as { kind?: string }).kind === "skill",
-      );
-    expect(skillBefore.length).toBeGreaterThan(0);
-    const skillAfter = entry.turns
-      .slice(userIdx)
-      .filter(
-        (t) =>
-          (t.kind === "assistant" || t.kind === "step") &&
-          typeof t.source === "object" &&
-          t.source !== null &&
-          (t.source as { kind?: string }).kind === "skill",
-      );
-    expect(skillAfter.length).toBe(0);
+    const probesBefore = entry.turns.slice(0, userIdx).filter((t) => t.kind === "probe");
+    expect(probesBefore.length).toBeGreaterThan(0);
+    const probesAfter = entry.turns.slice(userIdx).filter((t) => t.kind === "probe");
+    expect(probesAfter.length).toBe(0);
   });
 });
 

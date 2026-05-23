@@ -202,14 +202,14 @@ describe("runSession — multi-round step → reply", () => {
     const entry = JSON.parse(log.trim().split("\n").pop() ?? "{}");
     const userIdx = entry.turns.findIndex((t: { kind: string }) => t.kind === "user");
     expect(userIdx).toBeGreaterThan(0);
-    const skillStep = entry.turns
+    const probe = entry.turns
       .slice(0, userIdx)
       .find(
-        (t: { kind: string; command?: string; source?: unknown }) =>
-          t.kind === "step" && t.command === "echo sentinel",
+        (t: { kind: string; command?: string }) =>
+          t.kind === "probe" && t.command === "echo sentinel",
       );
-    expect(skillStep).toBeDefined();
-    expect(skillStep.output).toBe("SENTINEL_OUT");
+    expect(probe).toBeDefined();
+    expect(probe.output).toBe("SENTINEL_OUT");
   });
 
   test("captured step output never lands on stderr (only the chrome explanation does)", async () => {

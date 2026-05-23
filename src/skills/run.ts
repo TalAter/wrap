@@ -1,6 +1,6 @@
 import { getConfig } from "../config/store.ts";
 import { truncateMiddle } from "../core/truncate.ts";
-import type { AssistantTurn, StepTurn } from "../logging/entry.ts";
+import type { ProbeTurn } from "../logging/entry.ts";
 import type { Skill, SkillTask, Trigger } from "./types.ts";
 
 const TIMEOUT_MS = 1000;
@@ -89,21 +89,14 @@ async function runTask(task: SkillTask): Promise<TaskResult> {
   return execTaskInShell(task.command);
 }
 
-// The assistant turn carries `response.content` so `buildPromptInput` projects
-// it as a real LLM message — without `response`, the turn is silently skipped
-// from the projected transcript.
 export async function runSkills(
   skills: readonly Skill[],
   userPrompt: string,
-): Promise<(AssistantTurn | StepTurn)[]> {
-  const shell = process.env.SHELL || "sh";
+): Promise<ProbeTurn[]> {
   const maxCapturedOutput = getConfig().maxCapturedOutputChars;
-  const out: (AssistantTurn | StepTurn)[] = [];
+  const out: ProbeTurn[] = [];
   for (const skill of skills) {
     if (!triggerMatches(skill.trigger, userPrompt)) continue;
-    // Tasks within a skill have no inter-dependencies — run them in parallel.
-    // Turn order in the transcript is preserved by iterating the resolved
-    // array (zipped with the task list) in declaration order.
     const tasks = skill.tasks();
     const results = await Promise.all(tasks.map(runTask));
     for (let i = 0; i < tasks.length; i++) {
@@ -111,23 +104,10 @@ export async function runSkills(
       const result = results[i];
       if (!task || !result || result.exitCode !== 0) continue;
       out.push({
-        kind: "assistant",
-        response: {
-          type: "command",
-          final: false,
-          content: task.command,
-          risk_level: "low",
-        },
-        attempts: [],
-        source: { kind: "skill", name: skill.name },
-      });
-      out.push({
-        kind: "step",
+        kind: "probe",
+        skill: skill.name,
         command: task.command,
-        exit_code: 0,
         output: truncateMiddle(result.output, maxCapturedOutput),
-        shell,
-        source: { kind: "skill", name: skill.name },
       });
     }
   }

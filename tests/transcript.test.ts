@@ -366,27 +366,8 @@ describe("buildPromptInput", () => {
     );
   });
 
-  test("skill-sourced assistant turn projects identically to model-sourced", () => {
-    const llm: Transcript = [
-      { kind: "user", text: "hi" },
-      { kind: "assistant", response: cmdResponse, attempts: [], source: "model" },
-    ];
-    const skill: Transcript = [
-      { kind: "user", text: "hi" },
-      {
-        kind: "assistant",
-        response: cmdResponse,
-        attempts: [],
-        source: { kind: "skill", name: "discovery" },
-      },
-    ];
-    const a = buildPromptInput(llm, sys);
-    const b = buildPromptInput(skill, sys);
-    expect(a).toEqual(b);
-  });
-
-  test("skill-sourced step turn projects identically to model-sourced", () => {
-    const model: Transcript = [
+  test("probe turn expands to assistant + step messages, identical to model-sourced pair", () => {
+    const fromPair: Transcript = [
       { kind: "user", text: "hi" },
       { kind: "assistant", response: stepResponse, attempts: [], source: "model" },
       {
@@ -398,26 +379,38 @@ describe("buildPromptInput", () => {
         source: "model",
       },
     ];
-    const skill: Transcript = [
+    const fromProbe: Transcript = [
       { kind: "user", text: "hi" },
-      {
-        kind: "assistant",
-        response: stepResponse,
-        attempts: [],
-        source: { kind: "skill", name: "discovery" },
-      },
-      {
-        kind: "step",
-        command: "uname",
-        exit_code: 0,
-        output: "Linux",
-        shell: "/bin/sh",
-        source: { kind: "skill", name: "discovery" },
-      },
+      { kind: "probe", skill: "discovery", command: "uname", output: "Linux" },
     ];
-    const a = buildPromptInput(model, sys);
-    const b = buildPromptInput(skill, sys);
+    const a = buildPromptInput(fromPair, sys);
+    const b = buildPromptInput(fromProbe, sys);
     expect(a).toEqual(b);
+  });
+
+  test("probe turn with empty output uses the no-output sentinel", () => {
+    const transcript: Transcript = [
+      { kind: "user", text: "hi" },
+      { kind: "probe", skill: "discovery", command: "pwd", output: "" },
+    ];
+    const out = buildPromptInput(transcript, sys);
+    expect(out.messages[2]?.content).toBe(
+      `${promptConstants.sectionCapturedOutput}\n${promptConstants.capturedNoOutput}`,
+    );
+  });
+
+  test("probe turn is not treated as a user turn for requestFraming", () => {
+    const transcript: Transcript = [
+      { kind: "probe", skill: "discovery", command: "pwd", output: "/home" },
+      { kind: "user", text: "list files" },
+    ];
+    const out = buildPromptInput(transcript, sys, {
+      requestFraming: {
+        contextString: "ctx",
+        sectionUserRequest: "## User's request",
+      },
+    });
+    expect(out.messages[2]?.content).toBe("ctx\n\n## User's request\nlist files");
   });
 
   test("liveContext directive appends it as a user turn before lastRoundInstruction", () => {

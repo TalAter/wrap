@@ -118,26 +118,22 @@ export type Turn =
    */
   | { kind: "user"; text: string }
   /**
-   * One LLM round, OR a skill-emitted proposal. `response` is the last
-   * successful parse (absent only when every attempt in the round failed).
-   * `attempts[]` enumerates every physical LLM call including failures, for
-   * forensic use. `source` distinguishes a real LLM turn ("model") from one
-   * emitted imperatively by a skill ({ kind: "skill"; name: <name> });
-   * skill-emitted assistant turns have no attempts to enumerate.
+   * One LLM round. `response` is the last successful parse (absent only when
+   * every attempt in the round failed). `attempts[]` enumerates every physical
+   * LLM call including failures, for forensic use.
    */
   | {
       kind: "assistant";
       response?: CommandResponse;
       attempts: AttemptMeta[];
       llm_ms?: number;
-      source: "model" | { kind: "skill"; name: string };
+      source: "model";
     }
   /**
-   * A non-final execution: an inline low-risk step run by the runner, a
-   * med/high step the user confirmed via the dialog, OR the output captured
-   * by a skill's command. `command` is the executed bytes (may differ from
-   * the prior assistant turn's `response.content` on `user_override`).
-   * `output` is post-truncation captured stdout+stderr.
+   * A non-final execution: an inline low-risk step run by the runner, or a
+   * med/high step the user confirmed via the dialog. `command` is the executed
+   * bytes (may differ from the prior assistant turn's `response.content` on
+   * `user_override`). `output` is post-truncation captured stdout+stderr.
    */
   | {
       kind: "step";
@@ -145,8 +141,18 @@ export type Turn =
       exit_code: number;
       output: string;
       shell: string;
-      source: "model" | "user_override" | { kind: "skill"; name: string };
+      source: "model" | "user_override";
       exec_ms?: number;
+    }
+  /**
+   * A skill-emitted probe: one collapsed turn that the projector expands into
+   * an assistant message (the command) + a user message (the captured output).
+   */
+  | {
+      kind: "probe";
+      skill: string;
+      command: string;
+      output: string;
     }
   /**
    * Session's final outcome. Exactly one per session, pushed at session end
@@ -174,6 +180,7 @@ export type Turn =
  */
 export type AssistantTurn = Extract<Turn, { kind: "assistant" }>;
 export type StepTurn = Extract<Turn, { kind: "step" }>;
+export type ProbeTurn = Extract<Turn, { kind: "probe" }>;
 
 export type LogEntry = {
   id: string;
@@ -206,7 +213,7 @@ export type LogEntry = {
   provider: ResolvedProvider;
   prompt_hash: string;
   /**
-   * Semantic conversation: user / assistant / step / final.
+   * Semantic conversation: user / assistant / step / probe / final.
    * This is the runtime transcript and the durable log — one shape.
    */
   turns: Turn[];

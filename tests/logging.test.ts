@@ -455,28 +455,20 @@ function seedMemoryIn(home: string) {
   writeFileSync(join(home, "memory.json"), '{"/":[{"fact":"test"}]}');
 }
 
-/** True if this is a model-emitted (or non-skill) turn — filters out discovery
- * skill assistant/step pairs from `turnOfKind` lookups by default. */
-function isModelTurn(t: { kind: string; source?: unknown }): boolean {
-  if (t.kind !== "assistant" && t.kind !== "step") return true;
-  return t.source === "model" || t.source === "user_override";
-}
-
-/** Pull the first / nth / last turn of a given kind. Skill-emitted turns are
- * filtered out so tests that pre-date skills keep matching the model turn. */
+/** Pull the first / nth turn of a given kind (skips probe turns). */
 function turnOfKind<K extends string>(
-  entry: { turns: { kind: string; source?: unknown }[] },
+  entry: { turns: { kind: string }[] },
   kind: K,
   index = 0,
 ): Record<string, unknown> | undefined {
-  const matches = entry.turns.filter((t) => t.kind === kind && isModelTurn(t));
+  const matches = entry.turns.filter((t) => t.kind === kind);
   return matches[index] as Record<string, unknown> | undefined;
 }
 
-/** Turn kinds with skill-emitted turns stripped — for tests that pin the
+/** Turn kinds with probe turns stripped — for tests that pin the
  * structural sequence of model + final turns. */
-function modelTurnKinds(entry: { turns: { kind: string; source?: unknown }[] }): string[] {
-  return entry.turns.filter(isModelTurn).map((t) => t.kind);
+function modelTurnKinds(entry: { turns: { kind: string }[] }): string[] {
+  return entry.turns.filter((t) => t.kind !== "probe").map((t) => t.kind);
 }
 
 describe("logging integration", () => {

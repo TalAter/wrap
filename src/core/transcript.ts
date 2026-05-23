@@ -88,6 +88,10 @@ function projectResponseForEcho(response: CommandResponse): Record<string, unkno
   return out;
 }
 
+function probeAsEcho(command: string): Record<string, unknown> {
+  return { type: "command", final: false, content: command, risk_level: "low" };
+}
+
 /**
  * Render a `final` Turn as a `<wrap-note>` body. Only meaningful inside a
  * continuation chain — within a single invocation, the final turn is the
@@ -162,6 +166,16 @@ export function buildPromptInput(
         messages.push({
           role: "user",
           content: formatStepBody(turn.output, turn.exit_code),
+        });
+        break;
+      case "probe":
+        messages.push({
+          role: "assistant",
+          content: JSON.stringify(probeAsEcho(turn.command)),
+        });
+        messages.push({
+          role: "user",
+          content: formatStepBody(turn.output, 0),
         });
         break;
       case "final":

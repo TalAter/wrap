@@ -83,15 +83,9 @@ describe("continuation — basic chain", () => {
     expect(parentEntry).toBeDefined();
     expect(childEntry?.parent_id).toBe(parentEntry?.id as string);
     // Child stores only its own invocation's turns — chain walk is at replay
-    // time, not write time. Skill-emitted turns are filtered out so this
-    // pins the model trajectory, not discovery noise.
-    const kinds = (childEntry?.turns as Array<{ kind: string; source?: unknown }>)
-      .filter(
-        (t) =>
-          (t.kind !== "assistant" && t.kind !== "step") ||
-          t.source === "model" ||
-          t.source === "user_override",
-      )
+    // time, not write time. Probe turns filtered so this pins the model trajectory.
+    const kinds = (childEntry?.turns as Array<{ kind: string }>)
+      .filter((t) => t.kind !== "probe")
       .map((t) => t.kind);
     expect(kinds).toEqual(["user", "assistant", "final"]);
   });
@@ -117,16 +111,9 @@ describe("continuation — basic chain", () => {
     expect(b?.parent_id).toBe(a?.id as string);
     expect(c?.parent_id).toBe(b?.id as string);
     // Each link's own turns[] is only its invocation's turns — never accumulates.
-    // Skill-emitted turns are filtered out so the structural count pins the
-    // model trajectory; discovery turn count is its own contract.
+    // Probe turns filtered so the structural count pins the model trajectory.
     const modelTurnCounts = entries.map(
-      (e) =>
-        (e.turns as Array<{ kind: string; source?: unknown }>).filter(
-          (t) =>
-            (t.kind !== "assistant" && t.kind !== "step") ||
-            t.source === "model" ||
-            t.source === "user_override",
-        ).length,
+      (e) => (e.turns as Array<{ kind: string }>).filter((t) => t.kind !== "probe").length,
     );
     expect(modelTurnCounts).toEqual([2, 3, 3]);
   });
