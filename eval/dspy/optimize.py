@@ -229,9 +229,8 @@ DEFAULT_MEMORY = {"/": [{"fact": "Runs macOS on arm64 (Apple Silicon)"}, {"fact"
 
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
-    """Probe state (tools, cwd files) belongs in `extra_messages` as
-    transcript turns — the bridge no longer accepts top-level `tools` /
-    `cwd_files` fields.
+    """Probe state (tools, cwdFiles) belongs in `extra_messages` as transcript
+    turns — the bridge no longer accepts top-level `tools` / `cwdFiles` fields.
     """
     dspy_examples = []
     for ex in examples:
@@ -315,6 +314,8 @@ def build_prompt_hash_manifest(
         ["TOOLS_SCOPE_INSTRUCTION", CONSTANTS["toolsScopeInstruction"]],
         ["VOICE_INSTRUCTIONS", CONSTANTS["voiceInstructions"]],
         ["WRAP_NOTE_INSTRUCTION", CONSTANTS["wrapNoteInstruction"]],
+        ["TEMP_DIR_PRINCIPLE", CONSTANTS["tempDirPrinciple"]],
+        ["FINAL_FLAG_INSTRUCTION", CONSTANTS["finalFlagInstruction"]],
         ["SCHEMA_INSTRUCTION", CONSTANTS["schemaInstruction"]],
         ["SCHEMA_TEXT", (schema_text or "").strip()],
         ["FEW_SHOT_SEPARATOR", CONSTANTS["fewShotSeparator"]],
@@ -324,6 +325,17 @@ def build_prompt_hash_manifest(
         ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
         ["SECTION_ATTACHED_INPUT", CONSTANTS["sectionAttachedInput"]],
         ["ATTACHED_INPUT_INSTRUCTION", CONSTANTS["attachedInputInstruction"]],
+        # Conditionally appended at projection time but still part of the
+        # prompt surface — see src/core/transcript.ts (step body wrapping,
+        # last-round / scratchpad-required appendices) and src/fs/temp.ts
+        # (live temp-dir context).
+        ["SECTION_CAPTURED_OUTPUT", CONSTANTS["sectionCapturedOutput"]],
+        ["CAPTURED_NO_OUTPUT", CONSTANTS["capturedNoOutput"]],
+        ["LAST_ROUND_INSTRUCTION", CONSTANTS["lastRoundInstruction"]],
+        ["SCRATCHPAD_REQUIRED_INSTRUCTION", CONSTANTS["scratchpadRequiredInstruction"]],
+        ["JSON_RETRY_INSTRUCTION", CONSTANTS["jsonRetryInstruction"]],
+        ["SECTION_TEMP_DIR", CONSTANTS["sectionTempDir"]],
+        ["TEMP_DIR_EMPTY", CONSTANTS["tempDirEmpty"]],
         # Bumping PROBED_TOOLS changes the discovery skill's `which` command
         # and therefore what the LLM sees in transcript turns at runtime —
         # hash it so prompt drift is detected.
