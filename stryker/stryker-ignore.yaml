@@ -2070,3 +2070,63 @@
   mutated: 'result.output'
   reason: 'equivalent in practice — .trim() only diverges on whitespace-only output; git status/diff/diff--cached never produce whitespace-only output (either empty string or content-bearing)'
   added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: ConditionalExpression
+  original: 'names.length === 0'
+  mutated: 'false'
+  reason: 'equivalent — empty names → Promise.all([]) → empty entries → line 34 entries.length === 0 returns undefined, same as the early return'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: BlockStatement
+  original: '{ return null; }'
+  mutated: '{}'
+  reason: 'unreachable catch path — lstat does not throw on broken symlinks in Bun (returns stats of the symlink itself); only producible via races or permission errors not tractable in unit tests'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: MethodExpression
+  original: 'results.filter((e): e is Entry => e !== null)'
+  mutated: 'results'
+  reason: 'defensive filter for unreachable null entries — the catch on line 29 that produces nulls is unreachable (lstat does not throw on broken symlinks in Bun)'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: ConditionalExpression
+  original: 'e !== null'
+  mutated: 'true'
+  reason: 'filter predicate for unreachable null entries — pairs with the MethodExpression mutant; catch path producing nulls is unreachable'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: ConditionalExpression
+  original: 'entries.length === 0'
+  mutated: 'false'
+  reason: 'equivalent — empty entries falls through to empty lines, lines.join("\n") returns "", caller checks if (!output) which is falsy for both undefined and ""'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: EqualityOperator
+  original: 'total <= OLDEST_COUNT + NEWEST_COUNT'
+  mutated: 'total < OLDEST_COUNT + NEWEST_COUNT'
+  reason: 'equivalent at the boundary — diverges only at total=50; else-branch slice(0,20) ∪ slice(20) covers all 50 entries, and total>50 marker check is false, so result is identical to the if-branch'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: MethodExpression
+  original: '[...new Set([...PROBED_TOOLS, ...extras])].filter((t) => VALID_TOOL_NAME.test(t))'
+  mutated: '[...new Set([...PROBED_TOOLS, ...extras])]'
+  reason: 'defense-in-depth — loadWatchlist() already validates tool names via VALID_TOOL_NAME, and PROBED_TOOLS are hardcoded known-valid strings; filter is redundant'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: ConditionalExpression
+  original: 'allTools.length > 0'
+  mutated: 'true'
+  reason: 'equivalent — PROBED_TOOLS has 29 entries so allTools is always non-empty; the guard only matters when both PROBED_TOOLS and extras are empty, which cannot happen'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: EqualityOperator
+  original: 'allTools.length > 0'
+  mutated: 'allTools.length >= 0'
+  reason: 'equivalent — array.length >= 0 is always true; PROBED_TOOLS is always non-empty (29 entries) so allTools.length is always ≥ 29'
+  added: 2026-05-23
+- file: src/skills/discovery.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: 'which command construction detail — mutant concatenates tool names without spaces, which fails lookup but || true catches it; tests verify tool-name presence in command string not delimiter'
+  added: 2026-05-23

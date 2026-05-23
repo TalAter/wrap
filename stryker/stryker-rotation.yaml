@@ -81,3 +81,4 @@
 - src/config/store.ts
 - src/memory/memory-init-probes.ts
 - src/skills/commit.ts
+- src/skills/discovery.ts
