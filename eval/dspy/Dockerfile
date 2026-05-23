@@ -16,6 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Node modules from first stage (Linux binaries, not from macOS host)
 COPY --from=bun-deps /app/node_modules node_modules/
 
+# package.json — src/logging/entry.ts imports it for the runtime version string,
+# pulled in transitively by the bridge via the provider/logger init path.
+COPY package.json ./
+
 # Python source
 COPY eval/dspy/*.py eval/dspy/
 
