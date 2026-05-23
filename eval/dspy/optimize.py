@@ -247,7 +247,7 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
                 piped=ex.get("piped", False),
                 extra_messages=ex.get("extra_messages"),
                 last_round=ex.get("last_round", False),
-                attached_input=ex.get("attachedInput", ex.get("pipedInput")),
+                attached_input=ex.get("attachedInput"),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
             ).with_inputs("memory", "cwd", "piped", "extra_messages", "last_round", "attached_input", "natural_language_query")
@@ -308,39 +308,45 @@ def build_prompt_hash_manifest(
     is to version every generated/static prompt fragment that the runtime may use,
     including conditionally included sections like the piped-output instruction.
     """
+    # Order mirrors `src/llm/build-prompt.ts:buildPromptScaffold` (system
+    # parts, then few-shot block) followed by formatContext output, then
+    # current-turn framing, then conditional appendices and live context
+    # surfaces. Bumping PROBED_TOOLS changes the discovery skill's `which`
+    # command — hashed last as the cross-skill prompt surface.
     return [
+        # System prompt parts (build-prompt.ts:47-55)
         ["SYSTEM_PROMPT", (instruction or "").strip()],
         ["MEMORY_RECENCY_INSTRUCTION", CONSTANTS["memoryRecencyInstruction"]],
         ["TOOLS_SCOPE_INSTRUCTION", CONSTANTS["toolsScopeInstruction"]],
         ["VOICE_INSTRUCTIONS", CONSTANTS["voiceInstructions"]],
-        ["WRAP_NOTE_INSTRUCTION", CONSTANTS["wrapNoteInstruction"]],
         ["TEMP_DIR_PRINCIPLE", CONSTANTS["tempDirPrinciple"]],
         ["FINAL_FLAG_INSTRUCTION", CONSTANTS["finalFlagInstruction"]],
+        ["WRAP_NOTE_INSTRUCTION", CONSTANTS["wrapNoteInstruction"]],
+        ["ATTACHED_INPUT_INSTRUCTION", CONSTANTS["attachedInputInstruction"]],
         ["SCHEMA_INSTRUCTION", CONSTANTS["schemaInstruction"]],
         ["SCHEMA_TEXT", (schema_text or "").strip()],
+        # Few-shot block
+        ["FEW_SHOT_EXAMPLES", demos or []],
         ["FEW_SHOT_SEPARATOR", CONSTANTS["fewShotSeparator"]],
+        # Context block (formatContext output)
         ["SECTION_SYSTEM_FACTS", CONSTANTS["sectionSystemFacts"]],
         ["SECTION_FACTS_ABOUT", CONSTANTS["sectionFactsAbout"]],
-        ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
-        ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
         ["SECTION_ATTACHED_INPUT", CONSTANTS["sectionAttachedInput"]],
-        ["ATTACHED_INPUT_INSTRUCTION", CONSTANTS["attachedInputInstruction"]],
-        # Conditionally appended at projection time but still part of the
-        # prompt surface — see src/core/transcript.ts (step body wrapping,
-        # last-round / scratchpad-required appendices) and src/fs/temp.ts
-        # (live temp-dir context).
+        ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
+        # Current-turn framing
+        ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
+        # Step turn wrapping (transcript.ts:formatStepBody)
         ["SECTION_CAPTURED_OUTPUT", CONSTANTS["sectionCapturedOutput"]],
         ["CAPTURED_NO_OUTPUT", CONSTANTS["capturedNoOutput"]],
+        # Conditional appendices
         ["LAST_ROUND_INSTRUCTION", CONSTANTS["lastRoundInstruction"]],
         ["SCRATCHPAD_REQUIRED_INSTRUCTION", CONSTANTS["scratchpadRequiredInstruction"]],
         ["JSON_RETRY_INSTRUCTION", CONSTANTS["jsonRetryInstruction"]],
+        # Live context (fs/temp.ts)
         ["SECTION_TEMP_DIR", CONSTANTS["sectionTempDir"]],
         ["TEMP_DIR_EMPTY", CONSTANTS["tempDirEmpty"]],
-        # Bumping PROBED_TOOLS changes the discovery skill's `which` command
-        # and therefore what the LLM sees in transcript turns at runtime —
-        # hash it so prompt drift is detected.
+        # Discovery skill surface
         ["PROBED_TOOLS", PROBED_TOOLS],
-        ["FEW_SHOT_EXAMPLES", demos or []],
     ]
 
 

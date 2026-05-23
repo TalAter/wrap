@@ -108,15 +108,6 @@ The skill-emitted assistant turn must carry a `response` so `buildPromptInput` p
 - Memory-init probes → `src/memory/memory-init-probes.ts` (these run once on memory init, not per-invocation).
 - Per-call discovery (cwd-files + tool probe) → `src/skills/discovery.ts`.
 
-## Prompt-constants + eval-bridge cleanup (follow-up)
+## Prompt-constants + eval-bridge cleanup
 
-> **Status:** Not started. Read [[editing-prompts]] before touching prompt text — the TS mirror is generated from a Python source-of-truth.
-
-After the discovery skill landed, several pieces still reference the displaced sections:
-
-- `src/prompt.constants.json`: `sectionDetectedTools`, `sectionUnavailableTools`, `sectionCwdFiles`, `cwdPrefix` are unused by the runtime but still emitted.
-- `eval/dspy/optimize.py`: still references those section keys when assembling examples.
-- `eval/bridge.ts`: still accepts `tools` / `cwdFiles` fields at the JSON boundary (silently ignored).
-- `toolsScopeInstruction` text in the prompt references "detected tools" — the LLM no longer sees that section header in the context block (it sees the discovery skill's `which` step output instead).
-
-This is one coordinated edit: Python source-of-truth, TS mirror, optimizer, and the eval bridge. Sequence it after the commit skill so prompt edits aren't competing with skill-content changes.
+> **Status:** Landed. Constants pruned, instruction wording updated, bridge strict-rejects unknown fields, seed examples migrated to `extra_messages`, PROBED_TOOLS split out to JSON so Python's `promptHash` manifest covers it.

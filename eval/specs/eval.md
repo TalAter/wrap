@@ -47,7 +47,7 @@ buildPromptScaffold(config, contextString, ...) → PromptScaffold
 assemblePromptScaffold(queryContext) → PromptScaffold
   Runtime wrapper. Reads both JSON files. Calls formatContext with runtime state
   (memory, cwd, piped). Calls buildPromptScaffold with config from JSON. This
-  is what query.ts calls — the public API for runtime prompt assembly.
+  is what the session calls (see src/session/session.ts) — the public API for runtime prompt assembly.
 ```
 
 **Why separate `formatContext` and `buildPromptScaffold`?** Each has one responsibility. `formatContext` converts raw data (memory dict, piped flag) into formatted text. `buildPromptScaffold` takes text pieces and structures them into a `PromptScaffold`. This separation makes each function simpler and independently testable. The bridge calls both in sequence; runtime does the same via the wrapper.
