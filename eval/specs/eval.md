@@ -9,7 +9,7 @@ Wrap's prompt optimization pipeline. DSPy/MIPRO discovers the best instruction t
 The eval system has three layers:
 
 1. **Python (DSPy/MIPRO)** — drives the optimization loop. Proposes candidate instructions via a teacher model, manages few-shot demo bootstrapping, scores results, selects the winner.
-2. **Bun eval bridge** (`eval/bridge.ts`) — a TypeScript subprocess that Python calls for each evaluation. Receives candidate instruction + example data via stdin, uses the same `formatContext` → `buildPrompt` → LLM call path as runtime, returns validated response or classified error via stdout.
+2. **Bun eval bridge** (`eval/bridge.ts`) — a TypeScript subprocess that Python calls for each evaluation. Receives candidate instruction + example data via stdin, uses the same `formatContext` → `buildPromptScaffold` → LLM call path as runtime, returns validated response or classified error via stdout.
 3. **Shared JSON artifacts** — two files that connect Python and TypeScript: static prompt constants (shared, committed) and optimization output (written by Python, read by TS at runtime).
 
 Every candidate evaluation goes through the bridge, so the instruction is always tested against the real prompt shape. Teacher model calls (instruction proposals, demo generation) stay in DSPy — they're meta-level search operations that don't need runtime parity.
@@ -230,7 +230,7 @@ Process response (execute command / print answer / save memory)
 
 An alternative would be letting DSPy evaluate candidates through its own LM and only using the bridge for a final validation pass. The problem: DSPy's internal prompt formatting wraps fields in its own template (`dspy.Predict` adds field descriptions, formatting markers, etc.), so the candidate instruction would be tested against DSPy's prompt shape, not Wrap's — and might perform differently in production.
 
-Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO still manages candidates (instruction text, demos), but every scoring call goes through the bridge — which uses `buildPrompt` (Wrap's real prompt assembly). No double LLM calls: the bridge call replaces DSPy's LM call, not adds to it.
+Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO still manages candidates (instruction text, demos), but every scoring call goes through the bridge — which uses `buildPromptScaffold` (Wrap's real prompt assembly). No double LLM calls: the bridge call replaces DSPy's LM call, not adds to it.
 
 **Overhead**: ~50-100ms Bun subprocess startup per call. ~400 calls × 75ms = ~30 seconds. Full optimization run is ~30-60 minutes (dominated by LLM latency). Net overhead: ~1-2%. Acceptable.
 
@@ -251,7 +251,7 @@ Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO 
 | Bridge modes | One script, `assemble` + `execute` | `assemble` enables parity testing. `execute` is the eval path. One entry point. |
 | Error granularity | `invalid_json`, `invalid_schema`, `provider_error` as distinct types | Provider errors (network) shouldn't penalize instruction quality. JSON vs schema errors are different failure modes. Free signal, zero cost. |
 | Error channels | Structured JSON for expected errors, non-zero exit for fatal | Expected failures (validation, provider) return JSON. Bridge crashes exit non-zero. Two channels, each appropriate. |
-| TS refactor shape | `formatContext` + `buildPrompt` + `assembleCommandPrompt` wrapper | Each function has one job. Pure core is injectable. Wrapper preserves runtime ergonomics. |
+| TS refactor shape | `formatContext` + `buildPromptScaffold` + `assemblePromptScaffold` wrapper | Each function has one job. Pure core is injectable. Wrapper preserves runtime ergonomics. |
 | Docker setup | Multi-stage (Bun + Python) | Hermetic. Linux binaries built in Docker. No host platform leakage. |
 | Post-optimization eval | Custom bridge eval loop | Direct measurement of bridge-scored performance. Full control. Not coupled to DSPy's Evaluate. |
 | Metric adaptation | `score(dict)` takes validated dicts only | Bridge always validates. No raw text scoring needed. Simpler metric. |

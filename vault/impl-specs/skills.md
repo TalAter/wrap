@@ -1,12 +1,12 @@
 # Skills
 
-> **Implementation status (2026-05-21):**
+> **Implementation status (2026-05-22):**
 > - ✅ Per-turn `source` field + `cwd_change` turn removal — landed.
 > - ✅ Watchlist + memory-init probes carveout from `src/discovery/` — landed.
 > - ✅ Skills infrastructure: types, registry shell (empty), runner with 1s timeout + silent misfire drop — landed at `src/skills/`.
 > - ✅ Discovery skill + wire-in (replaces `formatContext` tools/cwdFiles, dissolves remaining `src/discovery/`).
-> - ⏳ Commit skill.
-> - ⏳ Prompt-constants + eval-bridge cleanup (post-discovery housekeeping).
+> - ✅ Commit skill.
+> - ✅ Prompt-constants + eval-bridge cleanup (Zod strict-reject at bridge boundary; PROBED_TOOLS → JSON; seed.jsonl migrated to `extra_messages`).
 
 ## Goal
 
