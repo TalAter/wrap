@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-FROM python:3.12-slim
+FROM python:3.13-slim
 WORKDIR /app
 
 # Bun runtime

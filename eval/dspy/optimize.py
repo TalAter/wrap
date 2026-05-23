@@ -1,24 +1,27 @@
-"""DSPy optimizer for Wrap's system prompt and few-shot examples.
+"""DSPy optimizer for Wrap's system prompt.
 
-Reads the Zod schema (with inline comments), loads examples, runs MIPRO
-optimization to discover the best instruction text + few-shot examples, and writes
-the result to src/prompt.optimized.json.
+Reads the Zod schema (with inline comments), loads examples, runs GEPA
+optimization to discover the best instruction text, and writes the result
+to src/prompt.optimized.json.
 
 The Zod schema's inline comments serve as structural guidance for the LLM —
-they explain what each type means, when to use probe vs command, etc. MIPRO
-optimizes the instruction text and selects few-shot examples around this fixed schema.
+they explain what each type means, when to use probe vs command, etc. GEPA
+optimizes the instruction text around this fixed schema.
 """
 
 import hashlib
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import dspy
+from diskcache import FanoutCache
+from dspy.teleprompt.gepa.gepa_utils import ScoreWithFeedback
 
 from metric import score
 from read_schema import read_schema
@@ -32,9 +35,6 @@ OUTPUT_PATH = Path("/app/src/prompt.optimized.json")
 SEED = 42
 
 # ── Prompt string constants ─────────────────────────────────────────────
-# Shared JSON files read by both TypeScript and Python.
-# MIPRO never touches these — they're data formatting, not the optimizable
-# instruction.
 with open(CONSTANTS_PATH) as _f:
     CONSTANTS = json.load(_f)
 with open(PROBED_TOOLS_PATH) as _f:
@@ -42,18 +42,27 @@ with open(PROBED_TOOLS_PATH) as _f:
 
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
+# ── Bridge-level cache ──────────────────────────────────────────────────
+BRIDGE_CACHE_DIR = os.environ.get("BRIDGE_CACHEDIR", "/tmp/wrap-bridge-cache")
+_bridge_cache = FanoutCache(BRIDGE_CACHE_DIR, shards=8, size_limit=int(1e10))
 
-def call_bridge(mode, instruction, demos, schema_text, memory, cwd, piped, query, extra_messages=None, last_round=False, attached_input=None):
+
+def _bridge_cache_key(payload_dict: dict) -> str:
+    canonical = json.dumps(payload_dict, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def call_bridge(mode, instruction, schema_text, memory, cwd, piped, query, extra_messages=None, last_round=False, attached_input=None):
     """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash.
 
-    Note: tool probe results and cwd files are no longer in the context block —
-    the runtime discovery skill emits them as transcript turns. Examples needing
-    that state should encode it via `extra_messages` (assistant probe + step output).
+    Tool probe results and cwd files flow via `extra_messages` as transcript
+    turns — the runtime discovery skill emits them, and examples encode them
+    as assistant probe + step output pairs.
     """
     payload_dict = {
         "mode": mode,
         "instruction": instruction,
-        "fewShotExamples": demos,
+        "fewShotExamples": [],
         "schemaText": schema_text,
         "memory": memory,
         "cwd": cwd,
@@ -65,12 +74,16 @@ def call_bridge(mode, instruction, demos, schema_text, memory, cwd, piped, query
     if last_round:
         payload_dict["lastRound"] = True
     if attached_input is not None:
-        # Eval synthesizes the path + size from the example's inline content;
-        # real invocations materialize to disk at $WRAP_TEMP_DIR/input.
         payload_dict["attachedInputPath"] = "$WRAP_TEMP_DIR/input"
         payload_dict["attachedInputSize"] = len(attached_input.encode("utf-8"))
         payload_dict["attachedInputPreview"] = attached_input
         payload_dict["attachedInputTruncated"] = False
+
+    cache_key = _bridge_cache_key(payload_dict)
+    cached = _bridge_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     payload = json.dumps(payload_dict)
     try:
         result = subprocess.run(
@@ -85,7 +98,9 @@ def call_bridge(mode, instruction, demos, schema_text, memory, cwd, piped, query
         print(f"Bridge error: {result.stderr}", file=sys.stderr)
         return None
     try:
-        return json.loads(result.stdout)
+        parsed = json.loads(result.stdout)
+        _bridge_cache.set(cache_key, parsed)
+        return parsed
     except (json.JSONDecodeError, ValueError):
         print(f"Bridge returned invalid JSON: {result.stdout[:200]}", file=sys.stderr)
         return None
@@ -104,7 +119,6 @@ def call_bridge_execute(**kwargs):
 
 
 def load_examples(path: Path) -> list[dict]:
-    """Load JSONL examples."""
     examples = []
     with open(path) as f:
         for line in f:
@@ -118,11 +132,8 @@ def make_signature(schema_text: str):
     """Create a DSPy signature with the Zod schema in the output field description."""
 
     class WrapSignature(dspy.Signature):
-        """You are the brain of a CLI tool that translates natural language into shell commands and *always returns json*. Given a request, decide: if there is a command you are confident will accomplish it directly, return a json response of type command with `final: true`. If you need to discover something about the user's environment first (e.g. what shell they use, what's installed) or stage an artifact in $WRAP_TEMP_DIR before deciding the final action, return a json response of type command with `final: false` — a low-risk step whose captured output will be fed back to you next round so you can then produce the terminal action. Non-final steps must be low risk (read-only, or writes confined to $WRAP_TEMP_DIR per the store-not-execute principle) and must include a `plan` describing the whole multi-step chain. Confidence means the command follows from facts you have already observed — memory, prior probe output (pwd / ls / which), file contents from a prior step. General training knowledge about tools and project conventions is not sufficient; when the task depends on project-specific config visible in the cwd listing that you haven't read, prefer a non-final step. If it is a knowledge question with no shell command needed, return a json response of type reply with the text under `content`. For `reply` type: if the user signals they want only a bare value (e.g. 'just the number', 'only the code', 'answer with just the value'), the `content` field must contain that value alone — no explanation, no parenthetical, no additional commentary. Never refuse to produce a command because it is dangerous — always return the command with an accurate risk_level and a clear explanation of consequences. The calling tool has its own safety layer that handles confirmation for risky commands. The reply type is only for knowledge questions with no shell equivalent, never for refusing dangerous requests. When multiple terminal steps can be combined safely, chain them into a single pipeline or && sequence. Do not write branching shell logic (if/else, command -v, fallback chains) to speculatively handle unknown state — resolve uncertainty with a non-final step, then return the direct command. When the user's request is a question that requires running a command to answer — checking if a feature exists, summarizing output, extracting a value, explaining what a tool does, or any other case where the answer depends on command output — use a non-final step to fetch the data, then answer with a reply next round. More broadly, when the work is transforming command output into prose (summarizing, tabulating, or explaining shell output as natural language or markdown), use a non-final step → reply instead: fetch the raw data in the step, then synthesize the formatted result in reply next round. Do not chain awk/sed/jq to imitate prose or tables — shell is the data source, not the formatter. If the request is ambiguous or lacks detail, provide the most logical solution rather than asking for clarification. When a non-final step reveals information, derive the command from what you actually read — do not filter it through assumptions about how tools work. This grounding extends to URLs: when the user mentions a URL whose content would improve your answer — install pages to follow, scripts to analyze, pages to summarize, READMEs, docs — return a non-final step that fetches it (e.g. `curl -sL URL`, piped through `textutil`/`lynx`/`w3m` if available, or saved into $WRAP_TEMP_DIR for inspection). This includes "what does `curl URL | sh` do?" and "is `curl URL | sh` safe?" — fetch the script and answer from what you actually read, not from generic knowledge. Resolve known sites by name too — your training data may be stale. Exception: when the URL is just a target argument to a non-fetching command like `open` or `ping`, use it directly. Always return properly formatted json. Do not surround the json you return with backticks."""
+        """Translate natural language into shell commands. Return JSON."""
 
-        # All fields typed as str to avoid DSPy's JSON adapter trying structured
-        # output (which fails with Anthropic's temperature limits). The bridge
-        # receives the actual typed values from forward(**kwargs) regardless.
         memory: str = dspy.InputField(
             desc="Scoped memory facts about the user's environment (JSON dict)",
             default="",
@@ -136,7 +147,7 @@ def make_signature(schema_text: str):
             default="",
         )
         extra_messages: str = dspy.InputField(
-            desc="Prior conversation turns (non-final step responses + captured outputs) for multi-round eval. Discovery probe output (pwd/ls/which) is encoded here too — the runtime discovery skill emits it as transcript turns.",
+            desc="Prior conversation turns (non-final step responses + captured outputs) for multi-round eval. Discovery probe output (pwd/ls/which) is encoded here too.",
             default="",
         )
         last_round: str = dspy.InputField(
@@ -144,7 +155,7 @@ def make_signature(schema_text: str):
             default="",
         )
         attached_input: str = dspy.InputField(
-            desc="Preview of content the user piped to stdin (e.g. `cat file | w explain this`). In the runtime, the full bytes live on disk at $WRAP_TEMP_DIR/input; commands read via file argument or shell redirection.",
+            desc="Preview of content the user piped to stdin (e.g. `cat file | w explain this`).",
             default="",
         )
         natural_language_query: str = dspy.InputField(
@@ -164,20 +175,13 @@ class WrapPredictor(dspy.Module):
         self.schema_text = schema_text
 
     def forward(self, **kwargs) -> dspy.Prediction:
-        # MIPRO modifies self.predict.signature.instructions and self.predict.demos
-        # before each eval call. Read them dynamically.
         instruction = self.predict.signature.instructions
-        demos = [
-            {"input": d.natural_language_query, "output": d.response_json}
-            for d in (self.predict.demos or [])
-        ]
 
         extra_messages = kwargs.get("extra_messages")
         last_round = kwargs.get("last_round", False)
         attached_input = kwargs.get("attached_input")
         response, error_type = call_bridge_execute(
             instruction=instruction,
-            demos=demos,
             schema_text=self.schema_text,
             memory=kwargs["memory"],
             cwd=kwargs["cwd"],
@@ -188,39 +192,79 @@ class WrapPredictor(dspy.Module):
             attached_input=attached_input,
         )
 
-        # response_json as JSON string: DSPy signature declares it as str,
-        # and MIPRO stores successful predictions as demos where
-        # demo.response_json is read back as a string for few-shot examples.
-        return dspy.Prediction(
+        prediction = dspy.Prediction(
             response_json=json.dumps(response) if response else None,
             response_dict=response,
             error_type=error_type,
         )
 
+        # Register a trace entry so GEPA's reflective dataset builder can
+        # map this prediction back to self.predict. Without this, GEPA sees
+        # "No valid predictions found" and can't do reflective mutation.
+        trace = getattr(dspy.settings, "trace", None)
+        if trace is not None:
+            trace.append((self.predict, dict(**kwargs), prediction))
 
-# Accumulates (score, error_type) per example across all MIPRO trials.
-_trial_scores: dict[tuple, list] = {}
-
-
-def _example_key(ex):
-    # Include assertions hash to distinguish duplicate queries with different expectations
-    assertions_hash = hashlib.md5(json.dumps(ex.assertions, sort_keys=True).encode()).hexdigest()[:8]
-    extra_msg_hash = ""
-    em = getattr(ex, "extra_messages", None)
-    if em:
-        extra_msg_hash = hashlib.md5(json.dumps(em, sort_keys=True).encode()).hexdigest()[:8]
-    return (ex.natural_language_query, ex.cwd, ex.piped, extra_msg_hash, assertions_hash, getattr(ex, "attached_input", None))
+        return prediction
 
 
-def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
-    """DSPy-compatible metric function. Handles bridge error types."""
-    error_type = getattr(prediction, "error_type", None)
+# ── GEPA metric ─────────────────────────────────────────────────────────
+
+def _format_failed_assertions(response: dict, assertions: dict) -> str:
+    """Build a human-readable string explaining which assertions failed."""
+    parts = []
+
+    if "type" in assertions:
+        expected = assertions["type"]
+        actual = response.get("type")
+        if isinstance(expected, list):
+            if actual not in expected:
+                parts.append(f"type: expected one of {expected}, got '{actual}'")
+        elif actual != expected:
+            parts.append(f"type: expected '{expected}', got '{actual}'")
+
+    if "final_expected" in assertions:
+        actual = response.get("final", True)
+        if actual != assertions["final_expected"]:
+            parts.append(f"final: expected {assertions['final_expected']}, got {actual}")
+
+    if "risk_range" in assertions:
+        actual = response.get("risk_level")
+        if actual not in assertions["risk_range"]:
+            parts.append(f"risk_level: expected one of {assertions['risk_range']}, got '{actual}'")
+
+    if "content_pattern" in assertions:
+        content = response.get("content", "")
+        pattern = assertions["content_pattern"]
+        if not re.search(pattern, content or "", re.IGNORECASE):
+            parts.append(f"content should match /{pattern}/ but was: {(content or '')[:120]}")
+
+    if "content_forbidden_pattern" in assertions:
+        content = response.get("content", "")
+        pattern = assertions["content_forbidden_pattern"]
+        if re.search(pattern, content or "", re.IGNORECASE):
+            parts.append(f"content must NOT match /{pattern}/ but did: {(content or '')[:120]}")
+
+    if "no_memory_updates" in assertions and assertions["no_memory_updates"]:
+        updates = response.get("memory_updates") or []
+        if isinstance(updates, list) and len(updates) > 0:
+            parts.append(f"expected no memory_updates but got {len(updates)}")
+
+    return "; ".join(parts) if parts else "unknown assertion failure"
+
+
+def wrap_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    """GEPA-compatible metric. Returns ScoreWithFeedback so GEPA's
+    auto-generated feedback_map picks up targeted failure explanations.
+    """
+    error_type = getattr(pred, "error_type", None)
     if error_type is not None:
-        s = 0.0
-    else:
-        s = score(prediction.response_dict, example.assertions)
-    _trial_scores.setdefault(_example_key(example), []).append((s, error_type))
-    return s
+        return ScoreWithFeedback(score=0.0, feedback=f"Bridge error: {error_type}")
+    s = score(pred.response_dict, gold.assertions)
+    if s < 1.0:
+        feedback = _format_failed_assertions(pred.response_dict, gold.assertions)
+        return ScoreWithFeedback(score=s, feedback=feedback)
+    return ScoreWithFeedback(score=s, feedback="")
 
 
 # Defaults applied to every example unless overridden.
@@ -259,62 +303,26 @@ def extract_instruction(optimized) -> str:
     """Extract the optimized instruction text from the compiled program."""
     predict = optimized.predict
     sig = getattr(predict, "signature", None)
-    if not sig:
-        sig = getattr(predict, "extended_signature", None)
 
     if sig:
-        # DSPy 3.x stores optimized instructions in signature.instructions
         instructions = getattr(sig, "instructions", None)
         if instructions and isinstance(instructions, str):
             return instructions
-
-        # Fallback: signature docstring
         if sig.__doc__:
             return sig.__doc__
 
-    # Debug: dump state to help diagnose if extraction fails
-    print(f"WARNING: Could not extract instruction from optimized program")
+    print("WARNING: Could not extract instruction from optimized program")
     print(f"  predict type: {type(predict)}")
     if sig:
         print(f"  signature attrs: {[a for a in dir(sig) if not a.startswith('_')]}")
     return ""
 
 
-def extract_demos(optimized) -> list[dict]:
-    """Extract few-shot examples from the compiled program."""
-    demos = []
-    predict_demos = getattr(optimized.predict, "demos", None) or []
-    print(f"Raw demos count: {len(predict_demos)}")
-    for i, demo in enumerate(predict_demos):
-        # DSPy stores demos as Example objects or dicts
-        if isinstance(demo, dict):
-            inp = demo.get("natural_language_query", "")
-            out = demo.get("response_json", "")
-        else:
-            inp = getattr(demo, "natural_language_query", "")
-            out = getattr(demo, "response_json", "")
-        print(f"  Demo {i}: has_input={bool(inp)}, has_output={bool(out)}")
-        if inp and out:
-            demos.append({"input": inp, "output": out})
-    return demos
-
-
 def build_prompt_hash_manifest(
-    instruction: str, schema_text: str, demos: list[dict]
+    instruction: str, schema_text: str,
 ) -> list[list[object]]:
-    """Return the static prompt toolset that PROMPT_HASH versions.
-
-    This is intentionally broader than any one invocation's exact prompt. The goal
-    is to version every generated/static prompt fragment that the runtime may use,
-    including conditionally included sections like the piped-output instruction.
-    """
-    # Order mirrors `src/llm/build-prompt.ts:buildPromptScaffold` (system
-    # parts, then few-shot block) followed by formatContext output, then
-    # current-turn framing, then conditional appendices and live context
-    # surfaces. Bumping PROBED_TOOLS changes the discovery skill's `which`
-    # command — hashed last as the cross-skill prompt surface.
+    """Return the static prompt surface that PROMPT_HASH versions."""
     return [
-        # System prompt parts (build-prompt.ts:47-55)
         ["SYSTEM_PROMPT", (instruction or "").strip()],
         ["MEMORY_RECENCY_INSTRUCTION", CONSTANTS["memoryRecencyInstruction"]],
         ["TOOLS_SCOPE_INSTRUCTION", CONSTANTS["toolsScopeInstruction"]],
@@ -325,48 +333,35 @@ def build_prompt_hash_manifest(
         ["ATTACHED_INPUT_INSTRUCTION", CONSTANTS["attachedInputInstruction"]],
         ["SCHEMA_INSTRUCTION", CONSTANTS["schemaInstruction"]],
         ["SCHEMA_TEXT", (schema_text or "").strip()],
-        # Few-shot block
-        ["FEW_SHOT_EXAMPLES", demos or []],
+        ["FEW_SHOT_EXAMPLES", []],
         ["FEW_SHOT_SEPARATOR", CONSTANTS["fewShotSeparator"]],
-        # Context block (formatContext output)
         ["SECTION_SYSTEM_FACTS", CONSTANTS["sectionSystemFacts"]],
         ["SECTION_FACTS_ABOUT", CONSTANTS["sectionFactsAbout"]],
         ["SECTION_ATTACHED_INPUT", CONSTANTS["sectionAttachedInput"]],
         ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
-        # Current-turn framing
         ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
-        # Step turn wrapping (transcript.ts:formatStepBody)
         ["SECTION_CAPTURED_OUTPUT", CONSTANTS["sectionCapturedOutput"]],
         ["CAPTURED_NO_OUTPUT", CONSTANTS["capturedNoOutput"]],
-        # Conditional appendices
         ["LAST_ROUND_INSTRUCTION", CONSTANTS["lastRoundInstruction"]],
         ["SCRATCHPAD_REQUIRED_INSTRUCTION", CONSTANTS["scratchpadRequiredInstruction"]],
         ["JSON_RETRY_INSTRUCTION", CONSTANTS["jsonRetryInstruction"]],
-        # Live context (fs/temp.ts)
         ["SECTION_TEMP_DIR", CONSTANTS["sectionTempDir"]],
         ["TEMP_DIR_EMPTY", CONSTANTS["tempDirEmpty"]],
-        # Discovery skill surface
         ["PROBED_TOOLS", PROBED_TOOLS],
     ]
 
 
-def compute_prompt_hash(instruction: str, schema_text: str, demos: list[dict]) -> str:
-    """Compute SHA-256 hash of the full static prompt toolset.
-
-    Uses a compact JSON manifest so Python and TypeScript can deterministically
-    hash the same ordered set of prompt fragments.
-    """
-    manifest = build_prompt_hash_manifest(instruction, schema_text, demos)
+def compute_prompt_hash(instruction: str, schema_text: str) -> str:
+    manifest = build_prompt_hash_manifest(instruction, schema_text)
     hash_input = json.dumps(manifest, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(hash_input.encode()).hexdigest()
 
 
-def write_output(instruction: str, demos: list[dict], schema_text: str, path: Path) -> None:
-    """Write optimized prompt, schema, and few-shot examples to JSON file."""
-    prompt_hash = compute_prompt_hash(instruction, schema_text, demos)
+def write_output(instruction: str, schema_text: str, path: Path) -> None:
+    prompt_hash = compute_prompt_hash(instruction, schema_text)
     output = {
         "instruction": instruction,
-        "fewShotExamples": demos,
+        "fewShotExamples": [],
         "schemaText": schema_text,
         "promptHash": prompt_hash,
     }
@@ -376,8 +371,8 @@ def write_output(instruction: str, demos: list[dict], schema_text: str, path: Pa
     print(f"Wrote optimized prompt to {path} (hash: {prompt_hash})")
 
 
-def bridge_evaluate(examples, split, instruction, demos, schema_text):
-    """Evaluate the winning prompt through the bridge. Returns (avg_score, results_list)."""
+def bridge_evaluate(examples, split, instruction, schema_text):
+    """Evaluate a prompt through the bridge. Returns (avg_score, results_list)."""
     results = []
     for ex in examples:
         attached_input = getattr(ex, "attached_input", None)
@@ -385,7 +380,6 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
         last_round = getattr(ex, "last_round", False)
         response, error_type = call_bridge_execute(
             instruction=instruction,
-            demos=demos,
             schema_text=schema_text,
             memory=ex.memory,
             cwd=ex.cwd,
@@ -414,38 +408,19 @@ RESULTS_DIR = Path("/app/eval/results")
 
 
 def save_eval_results(
-    teacher_model, target_model, num_candidates, num_trials,
-    instruction, demos, train_score, val_score,
+    teacher_model, target_model, budget,
+    instruction, train_score, val_score,
     train_results, val_results,
 ):
-    """Save optimization results to JSON for post-hoc analysis."""
-    # Build trial difficulty from accumulated wrap_metric data
-    difficulty = []
-    for key, entries in sorted(
-        _trial_scores.items(),
-        key=lambda x: sum(s for s, _ in x[1]) / len(x[1]),
-    ):
-        query, cwd, piped, _extra_msg_hash, _assertions_hash, attached_input = key
-        total = len(entries)
-        perfect = sum(1 for s, _ in entries if s >= 1.0)
-        avg = sum(s for s, _ in entries) / total
-        errors = sum(1 for _, e in entries if e is not None)
-        difficulty.append({
-            "query": query, "cwd": cwd, "piped": piped,
-            "evals": total, "perfect": perfect, "avg": round(avg, 3), "errors": errors,
-        })
-
     ts = datetime.now(timezone.utc)
     output = {
         "timestamp": ts.isoformat(),
+        "optimizer": "GEPA",
         "models": {"teacher": teacher_model, "target": target_model},
-        "num_candidates": num_candidates,
-        "num_trials": num_trials,
+        "budget": budget,
         "winning_instruction": instruction,
-        "winning_demos": demos,
         "training_score": round(train_score, 3),
         "validation_score": round(val_score, 3),
-        "trial_difficulty": difficulty,
         "train_results": train_results,
         "val_results": val_results,
     }
@@ -462,21 +437,16 @@ def save_eval_results(
 
 
 def main():
-    teacher_model = os.environ.get("TEACHER_MODEL", "claude-sonnet-4-20250514")
-    target_model = os.environ.get("TARGET_MODEL", "claude-haiku-4-5-20251001")
+    teacher_model = os.environ.get("TEACHER_MODEL", "claude-opus-4-7")
+    target_model = os.environ.get("TARGET_MODEL", "claude-sonnet-4-6")
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    # Fast iteration: NUM_CANDIDATES=2 NUM_TRIALS=3
-    # Balanced:       NUM_CANDIDATES=7 NUM_TRIALS=11 (default)
-    # Thorough:       NUM_CANDIDATES=15 NUM_TRIALS=25
-    num_candidates = int(os.environ.get("NUM_CANDIDATES", "7"))
-    num_trials = int(os.environ.get("NUM_TRIALS", "11"))
+    budget = os.environ.get("GEPA_BUDGET", "medium")
+    num_threads = int(os.environ.get("NUM_THREADS", "16"))
 
     if not api_key:
         print("Error: ANTHROPIC_API_KEY not set in environment", file=sys.stderr)
         sys.exit(1)
 
-    # Set WRAP_CONFIG for the bridge subprocess — uses target model with
-    # the same API key. The bridge reads this via loadConfig().
     os.environ["WRAP_CONFIG"] = json.dumps({
         "providers": {
             "anthropic": {
@@ -487,20 +457,18 @@ def main():
         "defaultProvider": "anthropic",
     })
 
-    print(f"Teacher model: {teacher_model}")
+    print(f"Reflection model: {teacher_model}")
     print(f"Target model: {target_model}")
-    print(f"Instruction candidates: {num_candidates}, trials: {num_trials}")
+    print(f"GEPA budget: {budget}, threads: {num_threads}")
 
-    # Read schema
     schema_text = read_schema()
     print(f"Loaded schema ({len(schema_text)} chars)")
 
-    # Load examples
     raw_examples = load_examples(EXAMPLES_PATH)
     dspy_examples = examples_to_dspy(raw_examples)
     print(f"Loaded {len(dspy_examples)} examples")
 
-    # Stratified split — each type gets proportional representation in train/val
+    # Stratified split
     rng = random.Random(SEED)
     by_type: dict[str, list] = {}
     for ex in dspy_examples:
@@ -519,12 +487,13 @@ def main():
 
     print(f"Train: {len(trainset)}, Val: {len(valset)}")
 
-    # Configure DSPy models
-    # Teacher: proposes instruction candidates and bootstraps few-shot examples
-    # Target LM configured for DSPy internals; actual eval goes through the bridge
-    teacher_lm = dspy.LM(
+    # Reflection LM (proposes instruction mutations based on failure feedback).
+    # additional_drop_params strips temperature for Opus 4.7 which rejects it
+    # (LiteLLM bug #26444 — still open, no version fixes it).
+    reflection_lm = dspy.LM(
         f"anthropic/{teacher_model}",
         api_key=api_key,
+        additional_drop_params=["temperature"],
     )
     target_lm = dspy.LM(
         f"anthropic/{target_model}",
@@ -532,55 +501,41 @@ def main():
     )
     dspy.configure(lm=target_lm)
 
-    # Build signature with schema as structural constraint
     signature = make_signature(schema_text)
     predictor = WrapPredictor(signature, schema_text)
 
-    # Run MIPRO — optimizes both instruction text and few-shot examples
-    print("Running MIPROv2 optimization...")
-    optimizer = dspy.MIPROv2(
+    print(f"Running GEPA optimization (budget={budget})...")
+    optimizer = dspy.GEPA(
         metric=wrap_metric,
-        auto=None,
-        num_candidates=num_candidates,
-        prompt_model=teacher_lm,
-        task_model=target_lm,
-        max_bootstrapped_demos=4,
-        max_labeled_demos=0,
-        init_temperature=0.9,  # MIPRO adds epsilon (0.01-0.05); Anthropic caps at 1.0
+        auto=budget,
+        reflection_lm=reflection_lm,
+        num_threads=num_threads,
+        log_dir="/app/eval/gepa-logs",
+        track_stats=True,
+        seed=SEED,
     )
 
-    # minibatch=False: evaluate on all examples every trial. Our dataset is small
-    # enough that this is fast. Re-enable minibatching when dataset grows past ~100.
     optimized = optimizer.compile(
         predictor,
         trainset=trainset,
-        num_trials=num_trials,
-        minibatch=False,
-        requires_permission_to_run=False,
+        valset=valset,
     )
 
-    # Extract optimized instruction + few-shot examples
     instruction = extract_instruction(optimized)
-    demos = extract_demos(optimized)
-
     print(f"Optimized instruction ({len(instruction)} chars)")
-    print(f"Extracted {len(demos)} few-shot examples")
-
     if instruction:
         print(f"\n--- Instruction preview ---\n{instruction[:500]}\n---")
 
-    # Evaluate winning prompt on both sets through the bridge
+    # Final eval through the bridge
     print("Evaluating winning prompt...")
-    train_score, train_results = bridge_evaluate(trainset, "train", instruction, demos, schema_text)
-    val_score, val_results = bridge_evaluate(valset, "val", instruction, demos, schema_text)
+    train_score, train_results = bridge_evaluate(trainset, "train", instruction, schema_text)
+    val_score, val_results = bridge_evaluate(valset, "val", instruction, schema_text)
 
-    # Write optimized prompt
-    write_output(instruction, demos, schema_text, OUTPUT_PATH)
+    write_output(instruction, schema_text, OUTPUT_PATH)
 
-    # Write detailed eval results
     save_eval_results(
-        teacher_model, target_model, num_candidates, num_trials,
-        instruction, demos, train_score, val_score,
+        teacher_model, target_model, budget,
+        instruction, train_score, val_score,
         train_results, val_results,
     )
     print("Done!")

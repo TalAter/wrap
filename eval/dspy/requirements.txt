@@ -1,2 +1,4 @@
-dspy>=2.5,<3
-anthropic>=0.39
+dspy>=3.2,<4
+optuna
+diskcache
+anthropic>=0.49
