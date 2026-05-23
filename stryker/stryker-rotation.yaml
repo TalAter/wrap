@@ -82,3 +82,4 @@
 - src/memory/memory-init-probes.ts
 - src/skills/commit.ts
 - src/skills/discovery.ts
+- src/skills/index.ts
