@@ -18,4 +18,12 @@ describe("runProbes", () => {
       expect(output).toContain(`## ${probe.label}`);
     }
   });
+
+  test("returns well-formed sections separated by double newlines", () => {
+    const output = runProbes();
+    expect(output.startsWith("## ")).toBe(true);
+    const headers = output.split("\n\n").filter((s) => s.startsWith("## "));
+    expect(headers.length).toBe(PROBE_COMMANDS.length);
+    expect(output).not.toContain("\n\n\n");
+  });
 });
