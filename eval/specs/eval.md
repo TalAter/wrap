@@ -1,6 +1,6 @@
 # Eval System
 
-Wrap's prompt optimization pipeline. DSPy/MIPRO discovers the best instruction text and few-shot examples by evaluating candidates through a **Bun eval bridge** — a TypeScript subprocess that uses the same prompt assembly and LLM execution as runtime, guaranteeing parity between what's optimized and what ships.
+Wrap's prompt optimization pipeline. DSPy/GEPA discovers the best instruction text by evaluating candidates through a **Bun eval bridge** — a TypeScript subprocess that uses the same prompt assembly and LLM execution as runtime, guaranteeing parity between what's optimized and what ships.
 
 > **Status:** Implemented
 
@@ -8,11 +8,11 @@ Wrap's prompt optimization pipeline. DSPy/MIPRO discovers the best instruction t
 
 The eval system has three layers:
 
-1. **Python (DSPy/MIPRO)** — drives the optimization loop. Proposes candidate instructions via a teacher model, manages few-shot demo bootstrapping, scores results, selects the winner.
+1. **Python (DSPy/GEPA)** — drives the optimization loop. Evolves instruction text via reflective mutation (reflection LM analyzes failure traces and proposes targeted improvements), scores results, maintains a Pareto front of candidates.
 2. **Bun eval bridge** (`eval/bridge.ts`) — a TypeScript subprocess that Python calls for each evaluation. Receives candidate instruction + example data via stdin, uses the same `formatContext` → `buildPromptScaffold` → LLM call path as runtime, returns validated response or classified error via stdout.
 3. **Shared JSON artifacts** — two files that connect Python and TypeScript: static prompt constants (shared, committed) and optimization output (written by Python, read by TS at runtime).
 
-Every candidate evaluation goes through the bridge, so the instruction is always tested against the real prompt shape. Teacher model calls (instruction proposals, demo generation) stay in DSPy — they're meta-level search operations that don't need runtime parity.
+Every candidate evaluation goes through the bridge, so the instruction is always tested against the real prompt shape. Reflection LM calls (instruction evolution) stay in DSPy — they're meta-level search operations that don't need runtime parity.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ Contains: section headers (`## System facts`, `## Facts about`, `## Attached inp
 
 **`src/prompt.optimized.json`** — optimization output. Python writes it after optimization. TS imports it at runtime.
 
-Contains: `instruction` (winning instruction), `fewShotExamples` (winning demos), `schemaText` (extracted from .ts with comments), `promptHash` (SHA-256 covering both JSON files — computed once by Python during optimization, never at runtime).
+Contains: `instruction` (winning instruction), `fewShotExamples` (always `[]` — GEPA is instruction-only), `schemaText` (extracted from .ts with comments), `promptHash` (SHA-256 covering both JSON files — computed once by Python during optimization, never at runtime).
 
 **Why two files?** Constants are shared data that anyone can edit. Optimized data is produced by Python and consumed by TS. Separating them makes the ownership clear without either language "owning" the other's data. The constants change rarely and are committed to git. The optimized artifact changes every optimization run.
 
@@ -146,7 +146,7 @@ Non-zero exit code + stderr for truly fatal issues (missing dependencies, bridge
 The bridge uses the existing `WRAP_CONFIG` environment variable. Docker sets this with eval-specific provider config:
 
 ```bash
-WRAP_CONFIG='{"providers":{"anthropic":{"model":"claude-haiku-4-5-20251001","apiKey":"$ANTHROPIC_API_KEY"}},"defaultProvider":"anthropic"}'
+WRAP_CONFIG='{"providers":{"anthropic":{"model":"claude-sonnet-4-6","apiKey":"$ANTHROPIC_API_KEY"}},"defaultProvider":"anthropic"}'
 ```
 
 The bridge calls `loadConfig()` → `initProvider()` using the existing config loading path. No new config code.
@@ -160,41 +160,38 @@ The bridge calls `loadConfig()` → `initProvider()` using the existing config l
 ```
 OPTIMIZATION START
    │
-   │  Python loads 56 examples from seed.jsonl
+   │  Python loads ~134 examples from seed.jsonl
    │  Python extracts schemaText from command-response.schema.ts
    │  Python reads prompt.constants.json for fixed strings
    │
    ▼
-MIPRO OPTIMIZATION (~400 subprocess calls, each with LLM)
+GEPA OPTIMIZATION (~900 metric calls for medium budget)
    │
-   │  MIPRO proposes candidate instruction text (via teacher LM — stays in DSPy)
-   │  MIPRO bootstraps demo examples (via teacher LM — stays in DSPy)
+   │  Initial full eval on valset establishes baseline
+   │  GEPA iterates: subsample → evaluate → reflect → propose mutation
    │
-   │  For each candidate × each training example:
-   │    MIPRO calls WrapPredictor.forward(memory, cwd, piped, extra_messages, query, ...)
-   │    → forward() reads candidate instruction + demos from self.predict
-   │    → sends to eval/bridge.ts (execute mode) via subprocess:
-   │        {mode: "execute", instruction, demos, schemaText, memory, cwd, piped, query, extraMessages, ...}
-   │    → bridge reads prompt.constants.json
-   │    → bridge calls formatContext({memory, cwd, piped, ...}) → contextString
-   │    → bridge calls buildPromptScaffold(config, contextString, ...) → PromptScaffold
-   │    → bridge calls AI SDK provider with PromptScaffold
-   │    → bridge validates response with Zod
-   │    → returns {ok: true, response: {...}} or {ok: false, error: "validation_error", ...}
-   │    → Python metric.score(response_dict, assertions) → float
+   │  For each candidate × each sampled example:
+   │    GEPA calls WrapPredictor.forward(memory, cwd, piped, extra_messages, query, ...)
+   │    → forward() reads candidate instruction from self.predict.signature.instructions
+   │    → sends to eval/bridge.ts (execute mode) via subprocess (with diskcache)
+   │    → bridge builds prompt, calls LLM, validates with Zod
+   │    → returns {ok: true, response: {...}} or {ok: false, error: "...", ...}
+   │    → Python metric returns ScoreWithFeedback (score + assertion failure explanation)
    │
-   │  MIPRO selects best candidate by aggregate score
+   │  Reflection LM analyzes failure feedback, proposes targeted instruction changes
+   │  Pareto front tracks best candidates across all examples
+   │  Bridge-level diskcache avoids redundant LLM calls across iterations
+   │  16 parallel threads for bridge subprocess calls
    │
    ▼
-FINAL EVAL (~16 bridge calls on validation set)
-   │  Custom eval loop (not dspy.Evaluate)
-   │  Same bridge flow as above
-   │  Reports aggregate score
+FINAL EVAL (bridge calls on train + val sets)
+   │  Custom bridge eval loop
+   │  Reports aggregate scores
    │
    ▼
 WRITE OUTPUT
    │  Python writes src/prompt.optimized.json:
-   │    {instruction, fewShotExamples, schemaText, promptHash}
+   │    {instruction, fewShotExamples: [], schemaText, promptHash}
    │
    ▼
 DONE
@@ -230,11 +227,11 @@ Process response (execute command / print answer / save memory)
 
 An alternative would be letting DSPy evaluate candidates through its own LM and only using the bridge for a final validation pass. The problem: DSPy's internal prompt formatting wraps fields in its own template (`dspy.Predict` adds field descriptions, formatting markers, etc.), so the candidate instruction would be tested against DSPy's prompt shape, not Wrap's — and might perform differently in production.
 
-Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO still manages candidates (instruction text, demos), but every scoring call goes through the bridge — which uses `buildPromptScaffold` (Wrap's real prompt assembly). No double LLM calls: the bridge call replaces DSPy's LM call, not adds to it.
+Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. GEPA manages candidates (instruction text), but every scoring call goes through the bridge — which uses `buildPromptScaffold` (Wrap's real prompt assembly). No double LLM calls: the bridge call replaces DSPy's LM call, not adds to it.
 
-**Overhead**: ~50-100ms Bun subprocess startup per call. ~400 calls × 75ms = ~30 seconds. Full optimization run is ~30-60 minutes (dominated by LLM latency). Net overhead: ~1-2%. Acceptable.
+**Overhead**: ~50-100ms Bun subprocess startup per call, mitigated by bridge-level diskcache (same instruction + example = cache hit). Full optimization run is ~25 minutes for medium budget (dominated by LLM latency). Net subprocess overhead: negligible.
 
-**Teacher model calls stay in DSPy**: MIPRO's teacher proposes instruction candidates and bootstraps demos through DSPy's own LM abstraction. These are meta-level search operations — the teacher generates ideas for the target model, it doesn't need to go through the bridge. Only evaluation of candidates goes through the bridge.
+**Reflection LM calls stay in DSPy**: GEPA's reflection model (Claude Opus) analyzes failure traces and proposes instruction mutations through DSPy's own LM abstraction. These are meta-level search operations — the reflection model reads what went wrong and suggests fixes, it doesn't need to go through the bridge. Only evaluation of candidates goes through the bridge.
 
 
 ## Decisions and reasoning summary
@@ -254,18 +251,20 @@ Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO 
 | TS refactor shape | `formatContext` + `buildPromptScaffold` + `assemblePromptScaffold` wrapper | Each function has one job. Pure core is injectable. Wrapper preserves runtime ergonomics. |
 | Docker setup | Multi-stage (Bun + Python) | Hermetic. Linux binaries built in Docker. No host platform leakage. |
 | Post-optimization eval | Custom bridge eval loop | Direct measurement of bridge-scored performance. Full control. Not coupled to DSPy's Evaluate. |
-| Metric adaptation | `score(dict)` takes validated dicts only | Bridge always validates. No raw text scoring needed. Simpler metric. |
+| Metric adaptation | `ScoreWithFeedback` wrapping `score(dict)` | Bridge validates; metric scores and explains failures for GEPA reflection. |
 | Prompt hash | Computed once by Python, covers both JSON files | Hash versions the full prompt surface (constants + optimized data). Never recomputed at runtime. Read-only for logging/caching. |
+| Optimizer | GEPA (instruction-only, reflective evolution) | +10% over MIPROv2 at same budget. Few-shot demos were never produced by prior MIPROv2 runs — dead weight eliminated. |
+| Bridge caching | diskcache (deterministic hash → disk) | Same (instruction, example) pair = cache hit. Crash recovery + re-run speedup. Docker named volume persists across runs. |
+| Parallelism | 16 threads (configurable via NUM_THREADS) | Bridge subprocess calls release the GIL → true parallelism. ~10x speedup on eval phase. |
+| Metric feedback | ScoreWithFeedback (score + assertion failure text) | GEPA's reflective mutation reads failure explanations. More targeted than generic "score was 0.45". |
+| Trace registration | Manual `dspy.settings.trace.append()` in forward() | GEPA needs trace entries to match predictions to predictors. forward() bypasses self.predict(), so traces are registered manually — same format as Predict.__call__(). |
+| Temperature workaround | `additional_drop_params=["temperature"]` on reflection LM | Claude Opus 4.7 rejects temperature. LiteLLM bug #26444 (still open). Workaround strips the param before the API call. |
 
 ## Risks and notes
 
-### Bun subprocess reliability at scale
-
-~400 subprocess spawns during a single optimization run. Bridge calls are wrapped in try/catch with clear error reporting. Each call is independent. If reliability becomes a real issue, evolve to a long-running server (v2).
-
 ### DSPy compatibility with custom `forward()`
 
-`WrapPredictor.forward()` bypasses DSPy's internal `Predict` module. MIPRO still manages `self.predict.signature.instructions` and `self.predict.demos` — `forward()` reads these dynamically. Verify with a small optimization run before full adoption.
+`WrapPredictor.forward()` bypasses DSPy's internal `Predict` module. GEPA manages `self.predict.signature.instructions` — `forward()` reads this dynamically. Trace entries are manually appended via `dspy.settings.trace.append((self.predict, kwargs, prediction))` so GEPA's reflective dataset builder can map predictions to predictors.
 
 ### Prompt hash
 
@@ -273,7 +272,7 @@ Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO 
 
 ### DSPy signature field changes
 
-DSPy Examples store raw data (memory dict, cwd, piped, extra_messages) instead of pre-formatted `memory_context` string. Probe state (tools availability, cwd listing) lives in `extra_messages` as transcript turns mimicking discovery-skill output. MIPRO's teacher model may see raw JSON when inspecting examples for instruction proposal. Teacher is Claude Sonnet — it understands JSON. Monitor instruction quality; if it degrades, consider a formatting step for teacher-visible fields.
+DSPy Examples store raw data (memory dict, cwd, piped, extra_messages) instead of pre-formatted `memory_context` string. Probe state (tools availability, cwd listing) lives in `extra_messages` as transcript turns mimicking discovery-skill output. GEPA's reflection model sees raw JSON when analyzing failure traces. Reflection model is Claude Opus — it handles JSON well.
 
 ### LLM-as-judge for context-sensitive samples (not yet implemented)
 
@@ -289,9 +288,9 @@ Pattern matching can't distinguish the good command from the bad one — both ma
 
 ## Assumptions
 
-- **v1 bridge is per-call subprocess.** Can evolve to long-running server if overhead becomes a problem.
+- **Bridge is per-call subprocess with diskcache.** Subprocess overhead is negligible; cache eliminates redundant LLM calls.
 - **Eval bridge never retries.** Malformed output is optimization signal, not something to repair.
 - **Static constants live in a shared JSON file.** Neither language owns them. Changed by hand, committed to git.
-- **Python owns optimized instruction/demo data and writes the artifact.**
+- **Python owns optimized instruction data and writes the artifact.** Few-shot examples are always `[]` (GEPA is instruction-only).
 - **Provider config for eval is always explicit and Docker-local.** Eval must not depend on user Wrap runtime config.
 - **Bridge protocol is stdin/stdout JSON.** Designed so it can later become a long-lived worker with the same request/response shape.

@@ -30,7 +30,7 @@ Few-shots are real user/assistant turns, not inline prose. The separator prevent
 ### Source files
 
 - `src/prompt.constants.json` — hand-edited static strings.
-- `src/prompt.optimized.json` — DSPy optimizer output (instruction, demos, schema text). Regenerated via `bun run optimize`. See `eval/specs/eval.md`.
+- `src/prompt.optimized.json` — DSPy/GEPA optimizer output (instruction, schema text; `fewShotExamples` always `[]`). Regenerated via `bun run optimize`. See `eval/specs/eval.md`.
 
 **Before editing prompt text, read `.claude/skills/editing-prompts.md`.** Python is the source of truth for the optimizer; TS mirrors it at runtime. Editing the wrong one silently breaks the optimizer.
 

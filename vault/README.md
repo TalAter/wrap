@@ -75,7 +75,7 @@ Canonical vocabulary. Use consistently; do not invent synonyms.
 - **Log traces** — opt-in detailed capture of full prompt and wire bodies. Off by default. See [[logging]].
 - **Example** — curated input/output pair for eval. Not "sample" or "training data".
 - **Eval** — offline scoring against examples.
-- **Optimization** — using eval results to improve the prompt (DSPy).
+- **Optimization** — using eval results to improve the prompt (DSPy/GEPA).
 
 **Paths**
 - **`$WRAP_HOME`** — runtime data dir. Default `~/.wrap/`.
@@ -89,7 +89,7 @@ src/
   index.ts, main.ts                bin entry + top-level orchestration — [[architecture]]
   command-response.schema.ts       Zod schema for LLM responses
   prompt.constants.json            fixed instructions + section headers
-  prompt.optimized.json            DSPy-generated: instruction + demos + schema text
+  prompt.optimized.json            GEPA-generated: instruction + schema text
 
   core/                            pure loop — [[session]], [[safety]], [[theme]], [[piped-input]]
   session/                         stateful loop + dialog lifecycle — [[session]]
