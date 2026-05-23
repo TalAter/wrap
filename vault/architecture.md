@@ -2,14 +2,14 @@
 name: architecture
 description: Invocation flow, core/session split, and cross-cutting design decisions
 Source: src/main.ts, src/index.ts
-Last-synced: 0a22f2a
+Last-synced: 8e2e5c7
 ---
 
 # Architecture
 
 ## Invocation flow
 
-Parse args → seed config → maybe dispatch subcommand → ensure config (wizard if needed) → re-resolve config with file → resolve provider → probe tools → load memory → run session → append log entry.
+Parse args → seed config → maybe dispatch subcommand → ensure config (wizard if needed) → re-resolve config with file → resolve provider → load memory → run session (skills fire before the first LLM call, splicing transcript turns ahead of the user prompt) → append log entry. See [[skills]].
 
 Subcommands short-circuit before config file load and memory; they see CLI/env/defaults only. See [[subcommands]].
 

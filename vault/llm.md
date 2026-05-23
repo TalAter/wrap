@@ -2,7 +2,7 @@
 name: llm
 description: Provider interface, taxonomy, prompt scaffold, structured output, round retry
 Source: src/llm/
-Last-synced: 0a22f2a
+Last-synced: 8e2e5c7
 ---
 
 # LLM
@@ -34,7 +34,7 @@ Few-shots are real user/assistant turns, not inline prose. The separator prevent
 
 **Before editing prompt text, read `.claude/skills/editing-prompts.md`.** Python is the source of truth for the optimizer; TS mirrors it at runtime. Editing the wrong one silently breaks the optimizer.
 
-Context inputs come from [[memory]] and [[discovery]]. Piped-stdout context lives in [[piped-input]].
+Context-block inputs come from [[memory]] (and the piped-stdout notice — see [[piped-input]]). Probe observations (cwd, files, tool availability) flow through the transcript as [[skills]]-emitted turns, not the context block.
 
 ## Structured output
 

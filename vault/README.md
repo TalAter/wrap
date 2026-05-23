@@ -2,7 +2,7 @@
 name: README
 description: Vault entry — Wrap, invariants, glossary, module map, index. Read at session start.
 Source: src/
-Last-synced: 0a22f2a
+Last-synced: 8e2e5c7
 ---
 
 # Wrap
@@ -42,8 +42,10 @@ Canonical vocabulary. Use consistently; do not invent synonyms.
 
 **Discovery & memory**
 - **Discovery** — ongoing process of learning the environment.
-- **Probe** — a command run for discovery, not for the user.
-- **Tool watchlist** — persistent list of tool names `which`-checked every run.
+- **Skill** — deterministic bundle of read-only tasks that fires before the first LLM call and emits transcript turns. See [[skills]].
+- **Task** — one command within a skill (assistant + step turn pair).
+- **Probe** — a command run for discovery, not for the user (either skill-emitted or LLM-emitted via a non-final step).
+- **Tool watchlist** — persistent list of tool names `which`-checked every run by the discovery skill.
 - **Memory** — scoped facts learned about the environment. Scope = directory the fact belongs to.
 
 **I/O**
@@ -95,7 +97,8 @@ src/
   llm/                             providers, prompt scaffold — [[llm]]
   config/                          sources, precedence, store — [[config]]
   wizard/                          first-run wizard — [[wizard]]
-  discovery/                       probes, watchlist, cwd files — [[discovery]]
+  skills/                          deterministic pre-LLM bundles — [[skills]], [[discovery]]
+  watchlist.ts                     persisted tool watchlist — [[discovery]]
   memory/                          scoped facts — [[memory]]
   logging/                         JSONL writer — [[logging]]
   subcommands/                     CLI subcommands — [[subcommands]]
@@ -115,6 +118,7 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 ### Runtime
 - [[architecture]] — invocation flow, core/session split
 - [[session]] — dialog lifecycle, state machine, notification routing
+- [[skills]] — deterministic pre-LLM bundles (discovery, commit) emitting transcript turns
 - [[multi-step]] — non-final commands and multi-round flows
 - [[follow-up]] — in-dialog refinement
 - [[continuation]] — `-c` resumes the previous conversation in a new invocation
