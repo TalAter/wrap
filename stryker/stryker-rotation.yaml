@@ -79,3 +79,4 @@
 - src/tui/continuation-badge.ts
 - src/config/settings.ts
 - src/config/store.ts
+- src/memory/memory-init-probes.ts

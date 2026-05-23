@@ -1974,3 +1974,75 @@
   mutated: '""'
   reason: 'line 20 in updateConfig — same as line 11 StringLiteral: Error.message is cosmetic and the throw is only reachable via the before-init state.'
   added: 2026-05-19
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"uname -a"'
+  mutated: '""'
+  reason: 'probe command string — data constant, testing would paraphrase the literal'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell"'
+  mutated: '""'
+  reason: 'probe label constant — testing would paraphrase the literal value'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"echo $SHELL"'
+  mutated: '""'
+  reason: 'probe command string — data constant, testing would paraphrase the literal'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"Distro"'
+  mutated: '""'
+  reason: 'probe label constant — testing would paraphrase the literal value'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"cat /etc/os-release 2>/dev/null || echo ''Not Linux''"'
+  mutated: '""'
+  reason: 'probe command string — data constant, testing would paraphrase the literal'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"Shell config files"'
+  mutated: '""'
+  reason: 'probe label constant — testing would paraphrase the literal value'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"ls -la ~/.*shrc ~/.*sh_profile ~/.*profile ~/.config/fish/config.fish 2>/dev/null"'
+  mutated: '""'
+  reason: 'probe command string — data constant, testing would paraphrase the literal'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"-c"'
+  mutated: '""'
+  reason: 'shell flag constant — testing would bind the implementation detail of using sh -c'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: ConditionalExpression
+  original: 'output || "(no output)"'
+  mutated: 'true'
+  reason: 'fallback expression — sections would contain "true" instead of output; only matters when real commands run, testing binds to exact command output content'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: ConditionalExpression
+  original: 'output || "(no output)"'
+  mutated: 'false'
+  reason: 'fallback expression — sections would contain "false" instead of output; same as the true mutant'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: LogicalOperator
+  original: 'output || "(no output)"'
+  mutated: 'output && "(no output)"'
+  reason: 'inverts fallback behavior — with &&, truthy output always returns "(no output)"; detecting requires checking content produced by real shell commands'
+  added: 2026-05-23
+- file: src/memory/memory-init-probes.ts
+  mutator: StringLiteral
+  original: '"(no output)"'
+  mutated: '""'
+  reason: 'cosmetic fallback placeholder text — LLM context gets empty string instead of "(no output)" when command produces nothing'
+  added: 2026-05-23
