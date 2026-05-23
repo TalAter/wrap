@@ -3,10 +3,24 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverySkill, listCwdFiles } from "../src/skills/discovery.ts";
+import { CLIPBOARD_PASTE_TOOLS, CLIPBOARD_TOOLS } from "../src/core/clipboard.ts";
+import { discoverySkill, listCwdFiles, PROBED_TOOLS } from "../src/skills/discovery.ts";
 import { runSkills } from "../src/skills/index.ts";
 import { seedTestConfig } from "./helpers.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
+
+describe("PROBED_TOOLS drift guard", () => {
+  test("every CLIPBOARD_TOOLS / CLIPBOARD_PASTE_TOOLS entry is in PROBED_TOOLS", () => {
+    // Drift guard: clipboard.ts owns runtime resolution + per-tool args, but
+    // probed-tools.json is the source-of-truth Python reads for promptHash.
+    // If they diverge, the LLM is probed for tools the runtime can't use, or
+    // vice versa.
+    const probed = new Set(PROBED_TOOLS);
+    for (const t of [...CLIPBOARD_TOOLS, ...CLIPBOARD_PASTE_TOOLS]) {
+      expect(probed.has(t)).toBe(true);
+    }
+  });
+});
 
 describe("discovery skill", () => {
   let tmpDir: string;

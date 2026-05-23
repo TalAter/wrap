@@ -7,6 +7,7 @@
  *   execute  — build prompt, call LLM once, return validated response
  */
 import { NoObjectGeneratedError } from "ai";
+import { z } from "zod";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
 import { applyModelOverride } from "../src/config/resolve.ts";
@@ -17,6 +18,29 @@ import { formatContext } from "../src/llm/format-context.ts";
 import { initProvider } from "../src/llm/index.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
 import promptConstants from "../src/prompt.constants.json";
+
+// Strict so stale callers (e.g. seed.jsonl still carrying `tools`/`cwdFiles`)
+// fail loudly instead of silently degrading the eval signal.
+const BridgeInputSchema = z
+  .object({
+    mode: z.enum(["assemble", "execute"]),
+    instruction: z.string(),
+    fewShotExamples: z.array(z.object({ input: z.string(), output: z.string() })),
+    schemaText: z.string(),
+    memory: z.record(z.string(), z.array(z.object({ fact: z.string() }))),
+    cwd: z.string(),
+    piped: z.boolean(),
+    query: z.string(),
+    extraMessages: z
+      .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() }))
+      .optional(),
+    lastRound: z.boolean().optional(),
+    attachedInputPath: z.string().optional(),
+    attachedInputSize: z.number().optional(),
+    attachedInputPreview: z.string().optional(),
+    attachedInputTruncated: z.boolean().optional(),
+  })
+  .strict();
 
 function out(value: object): void {
   console.log(JSON.stringify(value));
@@ -31,7 +55,17 @@ function tryParseJson(text: string): boolean {
   }
 }
 
-const input = JSON.parse(await Bun.stdin.text());
+let input: z.infer<typeof BridgeInputSchema>;
+try {
+  input = BridgeInputSchema.parse(JSON.parse(await Bun.stdin.text()));
+} catch (e) {
+  // Loud failure: probe state (tools, cwdFiles) used to be context-block
+  // sections; the discovery skill now emits them as transcript turns, so
+  // eval examples must encode them via `extraMessages`. Unknown top-level
+  // fields are rejected so stale callers can't silently degrade eval signal.
+  console.error(e instanceof Error ? e.message : String(e));
+  process.exit(1);
+}
 
 const contextString = formatContext({
   memory: input.memory,

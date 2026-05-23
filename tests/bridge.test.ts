@@ -68,6 +68,20 @@ describe("bridge — assemble mode", () => {
     expect(last.content).not.toContain("Files in CWD");
   });
 
+  test("legacy tools/cwdFiles fields cause loud failure (non-zero exit)", async () => {
+    // Probe state moved to transcript turns via the discovery skill. Stale
+    // callers that still send `tools`/`cwdFiles` must fail loudly so eval
+    // signal can't silently degrade.
+    const { exitCode, stderr } = await runBridge({
+      ...baseInput,
+      mode: "assemble",
+      tools: { available: ["/usr/bin/git"], unavailable: ["docker"] },
+      cwdFiles: "package.json\nsrc/\n",
+    });
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toMatch(/tools|cwdFiles|unrecognized/i);
+  });
+
   test("final message contains query under user request header", async () => {
     const result = await bridgeResult({ ...baseInput, mode: "assemble" });
     const last = result.promptInput.messages.at(-1);

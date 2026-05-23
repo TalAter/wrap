@@ -1,7 +1,7 @@
 import { lstat, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { CLIPBOARD_PASTE_TOOLS, CLIPBOARD_TOOLS } from "../core/clipboard.ts";
 import { loadWatchlist, VALID_TOOL_NAME } from "../watchlist.ts";
+import PROBED_TOOLS_JSON from "./probed-tools.json";
 import type { Skill, SkillTask } from "./types.ts";
 
 const OLDEST_COUNT = 20;
@@ -57,37 +57,13 @@ export async function listCwdFiles(cwd: string): Promise<string | undefined> {
   return lines.join("\n");
 }
 
-/** Tools probed on every run via `which`. */
-export const PROBED_TOOLS: readonly string[] = [
-  // Package managers
-  "brew",
-  "apt",
-  "dnf",
-  "pacman",
-  "yum",
-  // Core tools
-  "git",
-  "docker",
-  "kubectl",
-  "python3",
-  "node",
-  "bun",
-  "curl",
-  "wget",
-  "jq",
-  "tldr",
-  "rg",
-  "fd",
-  "bat",
-  "eza",
-  // Text extraction
-  "textutil",
-  "lynx",
-  "w3m",
-  // Clipboard
-  ...CLIPBOARD_TOOLS,
-  ...CLIPBOARD_PASTE_TOOLS,
-];
+/**
+ * Tools probed on every run via `which`. JSON-backed so the Python eval
+ * optimizer can include this list in `promptHash` — bumping it changes what
+ * the LLM sees in the discovery skill's `which` step output, so the prompt
+ * surface must track it.
+ */
+export const PROBED_TOOLS: readonly string[] = PROBED_TOOLS_JSON;
 
 function buildTasks(): SkillTask[] {
   const tasks: SkillTask[] = [

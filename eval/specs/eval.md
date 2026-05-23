@@ -20,7 +20,7 @@ Every candidate evaluation goes through the bridge, so the instruction is always
 
 **`src/prompt.constants.json`** — static prompt strings. Checked into the repo. Both TS and Python read it. Neither language "owns" it — it's shared data.
 
-Contains: section headers (`## System facts`, `## Facts about`, etc.), `cwdPrefix`, `fewShotSeparator`, `schemaInstruction`, `memoryRecencyInstruction`, `toolsScopeInstruction`, `voiceInstructions`, `pipedOutputInstruction`, `sectionUserRequest`.
+Contains: section headers (`## System facts`, `## Facts about`, `## Attached input`, etc.), `fewShotSeparator`, `schemaInstruction`, `memoryRecencyInstruction`, `toolsScopeInstruction`, `voiceInstructions`, `pipedOutputInstruction`, `sectionUserRequest`. Probe state (cwd path, cwd files, tool watchlist) is no longer here — the discovery skill emits those as transcript turns.
 
 **`src/prompt.optimized.json`** — optimization output. Python writes it after optimization. TS imports it at runtime.
 
@@ -33,23 +33,24 @@ Contains: `instruction` (winning instruction), `fewShotExamples` (winning demos)
 ### Key TypeScript functions
 
 ```
-formatContext(memory, tools, cwd, piped, constants) → string
+formatContext({memory, cwd, piped, attachedInput*, constants}) → string
   Pure function. Filters memory scopes by CWD prefix, sorts alphabetically,
-  builds sections (## System facts, ## Facts about <path>, ## Detected tools,
-  piped instruction, CWD line). Uses section header strings from constants param.
+  builds sections (## System facts, ## Facts about <path>, optional attached-
+  input + piped-output instructions). Probe state (cwd path, cwd files, tool
+  watchlist) is NOT here — the discovery skill emits those as transcript turns.
 
-buildPrompt(config, contextString, query) → PromptInput
+buildPromptScaffold(config, contextString, ...) → PromptScaffold
   Pure function. Assembles system message from config (instruction + schema +
-  memory/tools/voice instructions). Builds messages array (few-shot pairs,
-  separator, user message with context + query). No side effects.
+  memory/voice instructions). Builds messages array (few-shot pairs, separator,
+  user message with context + query). No side effects.
 
-assembleCommandPrompt(queryContext) → PromptInput
+assemblePromptScaffold(queryContext) → PromptScaffold
   Runtime wrapper. Reads both JSON files. Calls formatContext with runtime state
-  (memory, tools, cwd). Calls buildPrompt with config from JSON. This is what
-  query.ts calls — the public API for runtime prompt assembly.
+  (memory, cwd, piped). Calls buildPromptScaffold with config from JSON. This
+  is what query.ts calls — the public API for runtime prompt assembly.
 ```
 
-**Why separate `formatContext` and `buildPrompt`?** Each has one responsibility. `formatContext` converts raw data (memory dict, tools string) into formatted text. `buildPrompt` takes text pieces and structures them into a `PromptInput`. This separation makes each function simpler and independently testable. The bridge calls both in sequence; runtime does the same via the wrapper.
+**Why separate `formatContext` and `buildPromptScaffold`?** Each has one responsibility. `formatContext` converts raw data (memory dict, piped flag) into formatted text. `buildPromptScaffold` takes text pieces and structures them into a `PromptScaffold`. This separation makes each function simpler and independently testable. The bridge calls both in sequence; runtime does the same via the wrapper.
 
 ### Bridge protocol
 
@@ -68,14 +69,19 @@ One script: `eval/bridge.ts`. Reads JSON from stdin, writes JSON to stdout.
   "fewShotExamples": [{"input": "...", "output": "..."}],
   "schemaText": "const CommandResponseSchema = z.object({...})",
   "memory": {"/": [{"fact": "Runs macOS on arm64"}]},
-  "tools": {"available": ["/opt/homebrew/bin/git", "/opt/homebrew/bin/bun"], "unavailable": ["docker"]},
   "cwd": "/Users/tal/project",
   "piped": false,
-  "query": "find all typescript files"
+  "query": "find all typescript files",
+  "extraMessages": [
+    {"role": "assistant", "content": "{\"type\":\"command\",\"final\":false,\"content\":\"which brew curl git docker || true\",\"risk_level\":\"low\"}"},
+    {"role": "user", "content": "## Captured output\n/opt/homebrew/bin/brew\n/usr/bin/curl\n/usr/bin/git\n"}
+  ]
 }
 ```
 
-The bridge reads `src/prompt.constants.json` internally for section headers and fixed instructions. Python only sends candidate-specific data (instruction, demos, schemaText) and example-specific data (memory, tools, cwd, query, piped).
+Probe state (tools availability, cwd listing) flows via `extraMessages` as transcript turns mimicking what the discovery skill emits at runtime. Top-level `tools` / `cwdFiles` fields are no longer accepted.
+
+The bridge reads `src/prompt.constants.json` internally for section headers and fixed instructions. Python only sends candidate-specific data (instruction, demos, schemaText) and example-specific data (memory, cwd, query, piped, extraMessages).
 
 **Why Python sends schemaText instead of bridge reading it?** The schema text is extracted from `src/command-response.schema.ts` by Python's `read_schema.py` (regex between markers). This preserves the field comments that are critical LLM context. Python already does this extraction; it passes the result to the bridge and also writes it to `prompt.optimized.json` for runtime.
 
@@ -165,14 +171,14 @@ MIPRO OPTIMIZATION (~400 subprocess calls, each with LLM)
    │  MIPRO bootstraps demo examples (via teacher LM — stays in DSPy)
    │
    │  For each candidate × each training example:
-   │    MIPRO calls WrapPredictor.forward(memory, tools, cwd, piped, query)
+   │    MIPRO calls WrapPredictor.forward(memory, cwd, piped, extra_messages, query, ...)
    │    → forward() reads candidate instruction + demos from self.predict
    │    → sends to eval/bridge.ts (execute mode) via subprocess:
-   │        {mode: "execute", instruction, demos, schemaText, memory, tools, cwd, piped, query}
+   │        {mode: "execute", instruction, demos, schemaText, memory, cwd, piped, query, extraMessages, ...}
    │    → bridge reads prompt.constants.json
-   │    → bridge calls formatContext(memory, tools, cwd, piped, constants) → contextString
-   │    → bridge calls buildPrompt(config, contextString, query) → PromptInput
-   │    → bridge calls AI SDK provider with PromptInput
+   │    → bridge calls formatContext({memory, cwd, piped, ...}) → contextString
+   │    → bridge calls buildPromptScaffold(config, contextString, ...) → PromptScaffold
+   │    → bridge calls AI SDK provider with PromptScaffold
    │    → bridge validates response with Zod
    │    → returns {ok: true, response: {...}} or {ok: false, error: "validation_error", ...}
    │    → Python metric.score(response_dict, assertions) → float
@@ -201,14 +207,15 @@ User: w find all typescript files
    │
    ▼
 loadConfig() → initProvider()
-probeTools() → ensureMemory()
+ensureMemory()
+runSkills() → emits transcript turns (discovery: pwd / ls / which; commit: status / diffs)
    │
    ▼
-assembleCommandPrompt(queryContext)
+assemblePromptScaffold(queryContext)
    │  imports prompt.constants.json (section headers, fixed instructions)
    │  imports prompt.optimized.json (instruction, demos, schemaText)
-   │  calls formatContext(memory, tools, cwd, piped, constants) → contextString
-   │  calls buildPrompt(config, contextString, query) → PromptInput
+   │  calls formatContext({memory, cwd, piped, ...}) → contextString
+   │  calls buildPromptScaffold(config, contextString, ...) → PromptScaffold
    │
    ▼
 callWithRetry(provider, promptInput)
@@ -266,7 +273,7 @@ Instead, `WrapPredictor.forward()` calls the bridge for every evaluation. MIPRO 
 
 ### DSPy signature field changes
 
-DSPy Examples store raw data (memory dict, tools, cwd) instead of pre-formatted `memory_context` string. MIPRO's teacher model may see raw JSON when inspecting examples for instruction proposal. Teacher is Claude Sonnet — it understands JSON. Monitor instruction quality; if it degrades, consider a formatting step for teacher-visible fields.
+DSPy Examples store raw data (memory dict, cwd, piped, extra_messages) instead of pre-formatted `memory_context` string. Probe state (tools availability, cwd listing) lives in `extra_messages` as transcript turns mimicking discovery-skill output. MIPRO's teacher model may see raw JSON when inspecting examples for instruction proposal. Teacher is Claude Sonnet — it understands JSON. Monitor instruction quality; if it degrades, consider a formatting step for teacher-visible fields.
 
 ### LLM-as-judge for context-sensitive samples (not yet implemented)
 

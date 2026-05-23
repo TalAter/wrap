@@ -26,35 +26,40 @@ from read_schema import read_schema
 # Paths (container mount points)
 EXAMPLES_PATH = Path("/app/eval/examples/seed.jsonl")
 CONSTANTS_PATH = Path("/app/src/prompt.constants.json")
+PROBED_TOOLS_PATH = Path("/app/src/skills/probed-tools.json")
 OUTPUT_PATH = Path("/app/src/prompt.optimized.json")
 
 SEED = 42
 
 # ── Prompt string constants ─────────────────────────────────────────────
-# Shared JSON file read by both TypeScript and Python.
+# Shared JSON files read by both TypeScript and Python.
 # MIPRO never touches these — they're data formatting, not the optimizable
 # instruction.
 with open(CONSTANTS_PATH) as _f:
     CONSTANTS = json.load(_f)
+with open(PROBED_TOOLS_PATH) as _f:
+    PROBED_TOOLS = json.load(_f)
 
 BRIDGE_PATH = "/app/eval/bridge.ts"
 
 
-def call_bridge(mode, instruction, demos, schema_text, memory, tools, cwd, piped, query, cwd_files=None, extra_messages=None, last_round=False, attached_input=None):
-    """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash."""
+def call_bridge(mode, instruction, demos, schema_text, memory, cwd, piped, query, extra_messages=None, last_round=False, attached_input=None):
+    """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash.
+
+    Note: tool probe results and cwd files are no longer in the context block —
+    the runtime discovery skill emits them as transcript turns. Examples needing
+    that state should encode it via `extra_messages` (assistant probe + step output).
+    """
     payload_dict = {
         "mode": mode,
         "instruction": instruction,
         "fewShotExamples": demos,
         "schemaText": schema_text,
         "memory": memory,
-        "tools": tools,
         "cwd": cwd,
         "piped": piped,
         "query": query,
     }
-    if cwd_files is not None:
-        payload_dict["cwdFiles"] = cwd_files
     if extra_messages is not None:
         payload_dict["extraMessages"] = extra_messages
     if last_round:
@@ -113,17 +118,13 @@ def make_signature(schema_text: str):
     """Create a DSPy signature with the Zod schema in the output field description."""
 
     class WrapSignature(dspy.Signature):
-        """You are the brain of a CLI tool that translates natural language into shell commands and *always returns json*. Given a request, decide: if there is a command you are confident will accomplish it directly, return a json response of type command with `final: true`. If you need to discover something about the user's environment first (e.g. what shell they use, what's installed) or stage an artifact in $WRAP_TEMP_DIR before deciding the final action, return a json response of type command with `final: false` — a low-risk step whose captured output will be fed back to you next round so you can then produce the terminal action. Non-final steps must be low risk (read-only, or writes confined to $WRAP_TEMP_DIR per the store-not-execute principle) and must include a `plan` describing the whole multi-step chain. Confidence means the command follows from facts you have already observed — memory, detected tools, file contents from a prior step. General training knowledge about tools and project conventions is not sufficient; when the task depends on project-specific config visible in Files in CWD that you haven't read, prefer a non-final step. If it is a knowledge question with no shell command needed, return a json response of type reply with the text under `content`. For `reply` type: if the user signals they want only a bare value (e.g. 'just the number', 'only the code', 'answer with just the value'), the `content` field must contain that value alone — no explanation, no parenthetical, no additional commentary. Never refuse to produce a command because it is dangerous — always return the command with an accurate risk_level and a clear explanation of consequences. The calling tool has its own safety layer that handles confirmation for risky commands. The reply type is only for knowledge questions with no shell equivalent, never for refusing dangerous requests. When multiple terminal steps can be combined safely, chain them into a single pipeline or && sequence. Do not write branching shell logic (if/else, command -v, fallback chains) to speculatively handle unknown state — resolve uncertainty with a non-final step, then return the direct command. When the user's request is a question that requires running a command to answer — checking if a feature exists, summarizing output, extracting a value, explaining what a tool does, or any other case where the answer depends on command output — use a non-final step to fetch the data, then answer with a reply next round. More broadly, when the work is transforming command output into prose (summarizing, tabulating, or explaining shell output as natural language or markdown), use a non-final step → reply instead: fetch the raw data in the step, then synthesize the formatted result in reply next round. Do not chain awk/sed/jq to imitate prose or tables — shell is the data source, not the formatter. If the request is ambiguous or lacks detail, provide the most logical solution rather than asking for clarification. When a non-final step reveals information, derive the command from what you actually read — do not filter it through assumptions about how tools work. This grounding extends to URLs: when the user mentions a URL whose content would improve your answer — install pages to follow, scripts to analyze, pages to summarize, READMEs, docs — return a non-final step that fetches it (e.g. `curl -sL URL`, piped through `textutil`/`lynx`/`w3m` if available, or saved into $WRAP_TEMP_DIR for inspection). This includes "what does `curl URL | sh` do?" and "is `curl URL | sh` safe?" — fetch the script and answer from what you actually read, not from generic knowledge. Resolve known sites by name too — your training data may be stale. Exception: when the URL is just a target argument to a non-fetching command like `open` or `ping`, use it directly. Always return properly formatted json. Do not surround the json you return with backticks."""
+        """You are the brain of a CLI tool that translates natural language into shell commands and *always returns json*. Given a request, decide: if there is a command you are confident will accomplish it directly, return a json response of type command with `final: true`. If you need to discover something about the user's environment first (e.g. what shell they use, what's installed) or stage an artifact in $WRAP_TEMP_DIR before deciding the final action, return a json response of type command with `final: false` — a low-risk step whose captured output will be fed back to you next round so you can then produce the terminal action. Non-final steps must be low risk (read-only, or writes confined to $WRAP_TEMP_DIR per the store-not-execute principle) and must include a `plan` describing the whole multi-step chain. Confidence means the command follows from facts you have already observed — memory, prior probe output (pwd / ls / which), file contents from a prior step. General training knowledge about tools and project conventions is not sufficient; when the task depends on project-specific config visible in the cwd listing that you haven't read, prefer a non-final step. If it is a knowledge question with no shell command needed, return a json response of type reply with the text under `content`. For `reply` type: if the user signals they want only a bare value (e.g. 'just the number', 'only the code', 'answer with just the value'), the `content` field must contain that value alone — no explanation, no parenthetical, no additional commentary. Never refuse to produce a command because it is dangerous — always return the command with an accurate risk_level and a clear explanation of consequences. The calling tool has its own safety layer that handles confirmation for risky commands. The reply type is only for knowledge questions with no shell equivalent, never for refusing dangerous requests. When multiple terminal steps can be combined safely, chain them into a single pipeline or && sequence. Do not write branching shell logic (if/else, command -v, fallback chains) to speculatively handle unknown state — resolve uncertainty with a non-final step, then return the direct command. When the user's request is a question that requires running a command to answer — checking if a feature exists, summarizing output, extracting a value, explaining what a tool does, or any other case where the answer depends on command output — use a non-final step to fetch the data, then answer with a reply next round. More broadly, when the work is transforming command output into prose (summarizing, tabulating, or explaining shell output as natural language or markdown), use a non-final step → reply instead: fetch the raw data in the step, then synthesize the formatted result in reply next round. Do not chain awk/sed/jq to imitate prose or tables — shell is the data source, not the formatter. If the request is ambiguous or lacks detail, provide the most logical solution rather than asking for clarification. When a non-final step reveals information, derive the command from what you actually read — do not filter it through assumptions about how tools work. This grounding extends to URLs: when the user mentions a URL whose content would improve your answer — install pages to follow, scripts to analyze, pages to summarize, READMEs, docs — return a non-final step that fetches it (e.g. `curl -sL URL`, piped through `textutil`/`lynx`/`w3m` if available, or saved into $WRAP_TEMP_DIR for inspection). This includes "what does `curl URL | sh` do?" and "is `curl URL | sh` safe?" — fetch the script and answer from what you actually read, not from generic knowledge. Resolve known sites by name too — your training data may be stale. Exception: when the URL is just a target argument to a non-fetching command like `open` or `ping`, use it directly. Always return properly formatted json. Do not surround the json you return with backticks."""
 
         # All fields typed as str to avoid DSPy's JSON adapter trying structured
         # output (which fails with Anthropic's temperature limits). The bridge
         # receives the actual typed values from forward(**kwargs) regardless.
         memory: str = dspy.InputField(
             desc="Scoped memory facts about the user's environment (JSON dict)",
-            default="",
-        )
-        tools: str = dspy.InputField(
-            desc="Structured tool probe result (JSON with available/unavailable arrays)",
             default="",
         )
         cwd: str = dspy.InputField(
@@ -134,12 +135,8 @@ def make_signature(schema_text: str):
             desc="Whether stdout is piped to another program",
             default="",
         )
-        cwd_files: str = dspy.InputField(
-            desc="Listing of files in the current working directory (by mtime)",
-            default="",
-        )
         extra_messages: str = dspy.InputField(
-            desc="Prior conversation turns (non-final step responses + captured outputs) for multi-round eval",
+            desc="Prior conversation turns (non-final step responses + captured outputs) for multi-round eval. Discovery probe output (pwd/ls/which) is encoded here too — the runtime discovery skill emits it as transcript turns.",
             default="",
         )
         last_round: str = dspy.InputField(
@@ -175,7 +172,6 @@ class WrapPredictor(dspy.Module):
             for d in (self.predict.demos or [])
         ]
 
-        cwd_files = kwargs.get("cwd_files")
         extra_messages = kwargs.get("extra_messages")
         last_round = kwargs.get("last_round", False)
         attached_input = kwargs.get("attached_input")
@@ -184,11 +180,9 @@ class WrapPredictor(dspy.Module):
             demos=demos,
             schema_text=self.schema_text,
             memory=kwargs["memory"],
-            tools=kwargs["tools"],
             cwd=kwargs["cwd"],
             piped=kwargs.get("piped", False),
             query=kwargs["natural_language_query"],
-            cwd_files=cwd_files,
             extra_messages=extra_messages,
             last_round=last_round,
             attached_input=attached_input if attached_input else None,
@@ -215,7 +209,7 @@ def _example_key(ex):
     em = getattr(ex, "extra_messages", None)
     if em:
         extra_msg_hash = hashlib.md5(json.dumps(em, sort_keys=True).encode()).hexdigest()[:8]
-    return (ex.natural_language_query, ex.cwd, ex.piped, getattr(ex, "cwd_files", None), extra_msg_hash, assertions_hash, getattr(ex, "attached_input", None))
+    return (ex.natural_language_query, ex.cwd, ex.piped, extra_msg_hash, assertions_hash, getattr(ex, "attached_input", None))
 
 
 def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) -> float:
@@ -230,28 +224,14 @@ def wrap_metric(example: dspy.Example, prediction: dspy.Prediction, trace=None) 
 
 
 # Defaults applied to every example unless overridden.
-# At runtime the LLM always sees system facts + tools output,
-# so eval samples should reflect that.
 DEFAULT_CWD = "/Users/talater/project"
 DEFAULT_MEMORY = {"/": [{"fact": "Runs macOS on arm64 (Apple Silicon)"}, {"fact": "Default shell is zsh"}]}
-DEFAULT_TOOLS = {
-    "available": [
-        "/opt/homebrew/bin/brew", "/usr/bin/git", "/opt/homebrew/bin/python3",
-        "/usr/local/bin/node", "/Users/tal/.bun/bin/bun", "/usr/bin/curl",
-        "/usr/bin/jq", "/opt/homebrew/bin/eza", "/usr/bin/pbcopy", "/usr/bin/pbpaste",
-    ],
-    "unavailable": [
-        "apt", "dnf", "pacman", "yum", "docker", "kubectl",
-        "tldr", "rg", "fd", "bat", "xclip", "xsel", "wl-copy", "wl-paste",
-    ],
-}
 
 
 def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
-    """Convert examples to DSPy Example objects with raw fields.
-
-    The bridge handles context formatting — examples pass raw data
-    (memory dict, tools output, cwd, piped) instead of pre-formatted text.
+    """Probe state (tools, cwd files) belongs in `extra_messages` as
+    transcript turns — the bridge no longer accepts top-level `tools` /
+    `cwd_files` fields.
     """
     dspy_examples = []
     for ex in examples:
@@ -264,16 +244,14 @@ def examples_to_dspy(examples: list[dict]) -> list[dspy.Example]:
         dspy_examples.append(
             dspy.Example(
                 memory=memory,
-                tools=ex.get("tools", DEFAULT_TOOLS),
                 cwd=ex.get("cwd", DEFAULT_CWD),
                 piped=ex.get("piped", False),
-                cwd_files=ex.get("cwd_files"),
                 extra_messages=ex.get("extra_messages"),
                 last_round=ex.get("last_round", False),
                 attached_input=ex.get("attachedInput", ex.get("pipedInput")),
                 natural_language_query=ex["input"],
                 assertions=ex["assertions"],
-            ).with_inputs("memory", "tools", "cwd", "piped", "cwd_files", "extra_messages", "last_round", "attached_input", "natural_language_query")
+            ).with_inputs("memory", "cwd", "piped", "extra_messages", "last_round", "attached_input", "natural_language_query")
         )
     return dspy_examples
 
@@ -342,14 +320,14 @@ def build_prompt_hash_manifest(
         ["FEW_SHOT_SEPARATOR", CONSTANTS["fewShotSeparator"]],
         ["SECTION_SYSTEM_FACTS", CONSTANTS["sectionSystemFacts"]],
         ["SECTION_FACTS_ABOUT", CONSTANTS["sectionFactsAbout"]],
-        ["SECTION_DETECTED_TOOLS", CONSTANTS["sectionDetectedTools"]],
-        ["SECTION_UNAVAILABLE_TOOLS", CONSTANTS["sectionUnavailableTools"]],
-        ["SECTION_CWD_FILES", CONSTANTS["sectionCwdFiles"]],
         ["SECTION_USER_REQUEST", CONSTANTS["sectionUserRequest"]],
-        ["CWD_PREFIX", CONSTANTS["cwdPrefix"]],
         ["PIPED_OUTPUT_INSTRUCTION", CONSTANTS["pipedOutputInstruction"]],
         ["SECTION_ATTACHED_INPUT", CONSTANTS["sectionAttachedInput"]],
         ["ATTACHED_INPUT_INSTRUCTION", CONSTANTS["attachedInputInstruction"]],
+        # Bumping PROBED_TOOLS changes the discovery skill's `which` command
+        # and therefore what the LLM sees in transcript turns at runtime —
+        # hash it so prompt drift is detected.
+        ["PROBED_TOOLS", PROBED_TOOLS],
         ["FEW_SHOT_EXAMPLES", demos or []],
     ]
 
@@ -384,19 +362,20 @@ def bridge_evaluate(examples, split, instruction, demos, schema_text):
     """Evaluate the winning prompt through the bridge. Returns (avg_score, results_list)."""
     results = []
     for ex in examples:
-        cwd_files = getattr(ex, "cwd_files", None)
         attached_input = getattr(ex, "attached_input", None)
+        extra_messages = getattr(ex, "extra_messages", None)
+        last_round = getattr(ex, "last_round", False)
         response, error_type = call_bridge_execute(
             instruction=instruction,
             demos=demos,
             schema_text=schema_text,
             memory=ex.memory,
-            tools=ex.tools,
             cwd=ex.cwd,
             piped=ex.piped,
             query=ex.natural_language_query,
-            cwd_files=cwd_files,
             attached_input=attached_input if attached_input else None,
+            extra_messages=extra_messages,
+            last_round=last_round,
         )
         s = 0.0 if error_type else score(response, ex.assertions)
         results.append({
@@ -428,7 +407,7 @@ def save_eval_results(
         _trial_scores.items(),
         key=lambda x: sum(s for s, _ in x[1]) / len(x[1]),
     ):
-        query, cwd, piped, _cwd_files, _extra_msg_hash, _assertions_hash, attached_input = key
+        query, cwd, piped, _extra_msg_hash, _assertions_hash, attached_input = key
         total = len(entries)
         perfect = sum(1 for s, _ in entries if s >= 1.0)
         avg = sum(s for s, _ in entries) / total
