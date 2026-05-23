@@ -509,6 +509,7 @@ def main():
         metric=wrap_metric,
         auto=budget,
         reflection_lm=reflection_lm,
+        reflection_minibatch_size=10,
         num_threads=num_threads,
         log_dir="/app/eval/gepa-logs",
         track_stats=True,
