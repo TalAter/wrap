@@ -2046,3 +2046,27 @@
   mutated: '""'
   reason: 'cosmetic fallback placeholder text — LLM context gets empty string instead of "(no output)" when command produces nothing'
   added: 2026-05-23
+- file: src/skills/commit.ts
+  mutator: ConditionalExpression
+  original: '!result || result.exitCode !== 0'
+  mutated: 'false'
+  reason: 'equivalent — removing the null/exitCode guard causes a throw on null result, but runTask wraps task.run() in .catch(() => null), and runSkills line 105 independently filters !result || exitCode !== 0'
+  added: 2026-05-23
+- file: src/skills/commit.ts
+  mutator: LogicalOperator
+  original: '!result || result.exitCode !== 0'
+  mutated: '!result && result.exitCode !== 0'
+  reason: 'equivalent — with &&, null result throws (caught by runTask .catch → null → filtered by runSkills); non-zero exitCode with non-empty output passes through gitProbe but runSkills line 105 filters it'
+  added: 2026-05-23
+- file: src/skills/commit.ts
+  mutator: ConditionalExpression
+  original: 'result.exitCode !== 0'
+  mutated: 'false'
+  reason: 'equivalent — exitCode check in gitProbe is redundant with runSkills line 105 which independently filters non-zero exitCode results'
+  added: 2026-05-23
+- file: src/skills/commit.ts
+  mutator: MethodExpression
+  original: 'result.output.trim()'
+  mutated: 'result.output'
+  reason: 'equivalent in practice — .trim() only diverges on whitespace-only output; git status/diff/diff--cached never produce whitespace-only output (either empty string or content-bearing)'
+  added: 2026-05-23
