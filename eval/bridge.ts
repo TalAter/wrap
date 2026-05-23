@@ -100,15 +100,39 @@ const scaffold = buildPromptScaffold(
   contextString,
 );
 
-// Seed the transcript: bare first user turn, then any extra simulated turns
-// the harness supplied (probe responses + captured outputs). The harness uses
-// raw {role, content} pairs; we map them to assistant / step Turn kinds so
-// `buildPromptInput` projects them the same way runtime does.
-const transcript: Transcript = [{ kind: "user", text: input.query }];
+// Seed the transcript: `extraMessages` carries everything that came BEFORE
+// the current user query — prior user/assistant turns from past rounds and
+// simulated skill emissions (discovery's pwd/ls/which, commit's
+// status/diff). `input.query` is always the latest user turn and is pushed
+// LAST so it sits at the end of the transcript. Mirrors runtime where
+// `seedFirstUserTurn` splices skill turns in before the user prompt and
+// where prior-round turns naturally precede the new user message.
+//
+// Step-shaped user messages (those projected from a `kind: "step"` turn,
+// which start with the `## Captured output` section header) are mapped
+// back to step turns so `buildPromptInput`'s first-user-turn framing skips
+// them — the framing must wrap a real user request, not a captured probe
+// output. Without this remap, e.g. a discovery skill simulation
+// `[assistant which, user "## Captured output..."]` would have framing
+// attach to the captured-output turn instead of `input.query`.
+const STEP_PREFIX = `${promptConstants.sectionCapturedOutput}\n`;
+const transcript: Transcript = [];
 if (Array.isArray(input.extraMessages)) {
   for (const msg of input.extraMessages) {
     if (msg.role === "user") {
-      transcript.push({ kind: "user", text: msg.content });
+      if (msg.content.startsWith(STEP_PREFIX)) {
+        const output = msg.content.slice(STEP_PREFIX.length);
+        transcript.push({
+          kind: "step",
+          command: "",
+          exit_code: 0,
+          output,
+          shell: "",
+          source: "model",
+        });
+      } else {
+        transcript.push({ kind: "user", text: msg.content });
+      }
     } else if (msg.role === "assistant") {
       // The harness sends raw JSON command-response text; parse it back so
       // the assistant turn projects through `projectResponseForEcho`.
@@ -122,6 +146,7 @@ if (Array.isArray(input.extraMessages)) {
     }
   }
 }
+transcript.push({ kind: "user", text: input.query });
 
 const promptInput = buildPromptInput(transcript, scaffold, {
   liveContext: undefined,

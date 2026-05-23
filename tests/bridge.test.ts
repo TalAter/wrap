@@ -100,7 +100,11 @@ describe("bridge — assemble mode", () => {
     expect(requestMsg.content).not.toContain("terminal response");
   });
 
-  test("extraMessages appends conversation turns after initial prompt", async () => {
+  test("extraMessages are prior turns; current query is the last user message", async () => {
+    // extraMessages = everything that came BEFORE the current user query
+    // (prior round turns + simulated skill emissions). `input.query` is
+    // always the latest/current user turn and sits at the end. Mirrors
+    // runtime where skill turns precede the user prompt.
     const result = await bridgeResult({
       ...baseInput,
       mode: "assemble",
@@ -110,15 +114,52 @@ describe("bridge — assemble mode", () => {
       ],
     });
     const msgs = result.promptInput.messages;
+    // Last message: the current user query.
     const lastMsg = msgs.at(-1);
     expect(lastMsg.role).toBe("user");
-    expect(lastMsg.content).toContain("Probe output");
-    const assistantMsg = msgs.at(-2);
+    expect(lastMsg.content).toContain("list files");
+    // Second to last: the probe output (last entry in extraMessages).
+    const probeOutMsg = msgs.at(-2);
+    expect(probeOutMsg.role).toBe("user");
+    expect(probeOutMsg.content).toContain("Probe output");
+    // Third to last: the assistant probe turn (first entry in extraMessages).
+    const assistantMsg = msgs.at(-3);
     expect(assistantMsg.role).toBe("assistant");
     expect(assistantMsg.content).toContain("probe");
   });
 
-  test("extraMessages + lastRound: instruction comes after conversation", async () => {
+  test("captured-output user messages in extraMessages don't consume request framing", async () => {
+    // A skill/probe simulation puts an assistant probe + a captured-output
+    // user turn into extraMessages. The captured-output message must be
+    // mapped to a step turn so request framing attaches to the actual
+    // current query, not to the probe output. Mirrors runtime where step
+    // turns are `kind: "step"` and `firstUserSeen` ignores them.
+    const result = await bridgeResult({
+      ...baseInput,
+      mode: "assemble",
+      extraMessages: [
+        {
+          role: "assistant",
+          content: '{"type":"command","final":false,"content":"which ffmpeg","risk_level":"low"}',
+        },
+        { role: "user", content: "## Captured output\n/opt/homebrew/bin/ffmpeg" },
+      ],
+    });
+    const msgs = result.promptInput.messages;
+    const lastMsg = msgs.at(-1);
+    expect(lastMsg.role).toBe("user");
+    // Framing landed on the current query, not on the probe output.
+    expect(lastMsg.content).toContain("## User's request\nlist files");
+    // Probe output is still present as a step-projected user message.
+    const stepMsg = msgs.at(-2);
+    expect(stepMsg.role).toBe("user");
+    expect(stepMsg.content).toContain("## Captured output");
+    expect(stepMsg.content).toContain("/opt/homebrew/bin/ffmpeg");
+    // No double-framing on the step message.
+    expect(stepMsg.content).not.toContain("## User's request");
+  });
+
+  test("extraMessages + lastRound: instruction is last; current query precedes it", async () => {
     const result = await bridgeResult({
       ...baseInput,
       mode: "assemble",
@@ -129,10 +170,12 @@ describe("bridge — assemble mode", () => {
       lastRound: true,
     });
     const msgs = result.promptInput.messages;
-    // Last message: last-round instruction
+    // Last message: last-round instruction.
     expect(msgs.at(-1).content).toContain("terminal response");
-    // Second to last: probe output
-    expect(msgs.at(-2).content).toContain("Probe output");
+    // Second to last: the current user query.
+    expect(msgs.at(-2).content).toContain("list files");
+    // Third to last: the probe output (last entry in extraMessages).
+    expect(msgs.at(-3).content).toContain("Probe output");
   });
 
   test("few-shot examples become user/assistant pairs with separator", async () => {
