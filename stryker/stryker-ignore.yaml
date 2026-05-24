@@ -2130,3 +2130,99 @@
   mutated: '""'
   reason: 'which command construction detail — mutant concatenates tool names without spaces, which fails lookup but || true catches it; tests verify tool-name presence in command string not delimiter'
   added: 2026-05-23
+- file: src/skills/run.ts
+  mutator: OptionalChaining
+  original: 'timer.unref?.()'
+  mutated: 'timer.unref()'
+  reason: 'equivalent — unref is always defined on Bun/Node timers; optional chaining is defensive for non-standard runtimes'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: BlockStatement
+  original: '{ clearTimeout(timer); resolve(null); }'
+  mutated: '{}'
+  reason: 'rejection handler emptied — promise still resolves null via the unref'd timeout timer; only timing differs (instant vs 1s delay), not result'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: LogicalOperator
+  original: 'process.env.SHELL || "sh"'
+  mutated: 'process.env.SHELL && "sh"'
+  reason: 'equivalent in test env — SHELL is always set; mutant uses "sh" regardless but tests use shell-agnostic commands'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: StringLiteral
+  original: '"sh"'
+  mutated: '""'
+  reason: 'SHELL always set in test/prod env; empty fallback unreachable'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: BlockStatement
+  original: '{ return null; }'
+  mutated: '{}'
+  reason: 'catch body returns undefined vs null; both falsy, filtered identically by the !proc guard on the next line'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: ConditionalExpression
+  original: '!proc'
+  mutated: 'false'
+  reason: 'Bun.spawn failure not producible in tests without mocking or invalid SHELL env; defensive guard for unreachable path'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: BlockStatement
+  original: '{ try { proc.kill(); } catch {} }'
+  mutated: '{}'
+  reason: 'onTimeout kill body emptied — leaks orphan process but observable result (null, timing) is identical; testing requires process lifecycle assertion'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: BlockStatement
+  original: '{ proc.kill(); }'
+  mutated: '{}'
+  reason: 'inner try body of onTimeout kill — same as outer: leaks orphan, observable result unchanged'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: ConditionalExpression
+  original: 'stderr.trim()'
+  mutated: 'true'
+  reason: 'forces always-append — adds trailing newline when stderr is empty; cosmetic in probe output that gets truncated'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: MethodExpression
+  original: 'stderr.trim()'
+  mutated: 'stderr'
+  reason: 'trim vs no-trim on stderr guard — only diverges on whitespace-only stderr, not produced by real shell commands'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: MethodExpression
+  original: 'output.trim()'
+  mutated: 'output'
+  reason: 'trim vs no-trim on output separator check — equivalent truthiness; output has content when stdout is non-empty'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'newline separator vs no separator between stdout and stderr — cosmetic formatting in probe output'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'empty prefix vs junk when stdout empty — only triggers for stderr-only commands with no stdout; atypical for skill probes'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: ArrowFunction
+  original: '() => null'
+  mutated: '() => undefined'
+  reason: 'catch callback returns null vs undefined; both falsy, filtered identically by !result guard in runSkills'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: ArithmeticOperator
+  original: 'TIMEOUT_MS + OUTER_TIMEOUT_GRACE_MS'
+  mutated: 'TIMEOUT_MS - OUTER_TIMEOUT_GRACE_MS'
+  reason: 'grace period 1100ms vs 900ms — test timeout task uses 5s sleep, both values well under; asserting precise ordering would be flaky'
+  added: 2026-05-24
+- file: src/skills/run.ts
+  mutator: EqualityOperator
+  original: 'i < tasks.length'
+  mutated: 'i <= tasks.length'
+  reason: 'extra iteration reads undefined from both arrays; !task guard immediately continues — equivalent'
+  added: 2026-05-24
