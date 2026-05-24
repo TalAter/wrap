@@ -104,6 +104,20 @@ describe("Shell exec (no `run`)", () => {
     expect(probe.output).toContain("hi");
   });
 
+  test("stderr is appended when command writes to both streams", async () => {
+    const skill: Skill = {
+      name: "s",
+      trigger: { kind: "always" },
+      tasks: () => [{ command: "echo out && echo err >&2" }],
+    };
+    const turns = await runSkills([skill], "anything");
+    expect(turns).toHaveLength(1);
+    const probe = turns[0];
+    if (probe?.kind !== "probe") throw new Error("expected probe");
+    expect(probe.output).toContain("out");
+    expect(probe.output).toContain("err");
+  });
+
   test("non-zero exit (e.g. `false`) drops the pair silently", async () => {
     const skill: Skill = {
       name: "s",
