@@ -20,8 +20,14 @@
  * so the always-on mocks don't suppress pass/fail/summary output.
  */
 import { beforeEach } from "bun:test";
+import { DARK_THEME, setTheme } from "../src/core/theme.ts";
 import { mockStderr } from "./helpers/mock-stderr.ts";
 import { mockStdout } from "./helpers/mock-stdout.ts";
+
+// Set the wrap-extended theme so getWrapTheme() returns a complete WrapTheme.
+// Without this, the global theme store holds DARK_CORE (CoreThemeTokens),
+// and wrap-specific token groups (wizard, risk, forget) would be undefined.
+setTheme(DARK_THEME);
 
 // 1. Pin shell ────────────────────────────────────────────────────────
 process.env.SHELL = "/bin/sh";

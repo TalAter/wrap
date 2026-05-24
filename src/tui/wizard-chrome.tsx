@@ -1,9 +1,10 @@
-import { getTheme, type ThemeTokens } from "../core/theme.ts";
+import type { PillSegment } from "wrap-core/tui";
+import type { WrapTheme } from "../core/theme.ts";
 import type { ProviderScreen } from "../wizard/state.ts";
-import type { PillSegment } from "./pill.tsx";
+import { getWrapTheme } from "./hooks.ts";
 
 export function getWizardStops() {
-  return getTheme().wizard.frame;
+  return getWrapTheme().wizard.frame;
 }
 
 export const WIZARD_CONTENT_WIDTH = 70;
@@ -42,18 +43,18 @@ export function stepIndexFromScreen(tag: ProviderScreen["tag"]): number {
   }
 }
 
-function wizardSeg(t: ThemeTokens): PillSegment {
+function wizardSeg(t: WrapTheme): PillSegment {
   return { ...t.wizard.labelPill, label: "🧙 Setup Wizard", bold: true };
 }
 
 export function wizardLabelPill(): PillSegment[] {
-  return [wizardSeg(getTheme())];
+  return [wizardSeg(getWrapTheme())];
 }
 
 // Narrow variant: drops the "Setup Wizard" label; shows all steps (done/active/future)
 // so the user still sees where they are in the flow when the wide pill doesn't fit.
 export function wizardCrumbPillNarrow(stepIndex: number, nerd: boolean): PillSegment[] {
-  const t = getTheme();
+  const t = getWrapTheme();
   const segs: PillSegment[] = [];
   WIZARD_STEPS.forEach((step, i) => {
     if (i < stepIndex) {
@@ -79,7 +80,7 @@ export function wizardCrumbPill(
   nerd: boolean,
   activeProvider?: ActiveProvider,
 ): PillSegment[] {
-  const t = getTheme();
+  const t = getWrapTheme();
   const segs: PillSegment[] = [wizardSeg(t)];
   const activeStep = WIZARD_STEPS[stepIndex];
   // On the default-picker screen the per-provider key/model steps are noise —

@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
-import { __resetColorLevelCache } from "../src/core/output.ts";
-import {
-  bottomBorderSegments,
-  fitTop,
-  type TopBadge,
-  topBorderSegments,
-} from "../src/tui/border.ts";
+import { __resetColorLevelCache, resolveColorHex } from "wrap-core/ansi";
+import { getTheme } from "wrap-core/theme";
+import { bottomBorderSegments, fitTop, type TopBadge, topBorderSegments } from "wrap-core/tui";
 import { getRiskPreset } from "../src/tui/risk-presets.ts";
 import { seedTestConfig } from "./helpers.ts";
 
@@ -44,7 +40,7 @@ function renderTop(
   nerd = false,
 ) {
   const prepared = fitTop(top, width - 2, nerd);
-  return topBorderSegments(width, stops, prepared);
+  return topBorderSegments(width, stops, undefined, prepared);
 }
 
 describe("topBorderSegments with risk pill", () => {
@@ -169,7 +165,7 @@ describe("fitTop + topBorderSegments alignment + fit", () => {
   });
 
   test("topBorderSegments ignores undefined prepared", () => {
-    const text = plainText(topBorderSegments(60, stops, undefined));
+    const text = plainText(topBorderSegments(60, stops, undefined, undefined));
     expect(stringWidth(text)).toBe(60);
     expect(text).toMatch(/^╭/);
     expect(text).toMatch(/╮$/);
@@ -222,43 +218,47 @@ describe("fitTop + topBorderSegments alignment + fit", () => {
 
 describe("bottomBorderSegments", () => {
   const stops = preset("medium").stops;
+  const sc = () => resolveColorHex(getTheme().dialog.status);
 
   test("starts with ╰ and ends with ╯", () => {
-    const visual = plainText(bottomBorderSegments(60, stops));
+    const visual = plainText(bottomBorderSegments(60, stops, undefined, sc()));
     expect(visual).toMatch(/^╰/);
     expect(visual).toMatch(/╯$/);
   });
 
   test("visual width matches requested width", () => {
-    expect(stringWidth(plainText(bottomBorderSegments(60, stops)))).toBe(60);
+    expect(stringWidth(plainText(bottomBorderSegments(60, stops, undefined, sc())))).toBe(60);
   });
 
   test("uses the gradient's end color throughout", () => {
-    const border = bottomBorderSegments(60, stops);
+    const border = bottomBorderSegments(60, stops, undefined, sc());
     expect(border.every((segment) => segment.color === "#3c3c64")).toBe(true);
   });
 });
 
 describe("bottomBorderSegments with status", () => {
   const stops = preset("medium").stops;
+  const sc = () => resolveColorHex(getTheme().dialog.status);
 
   test("renders status text embedded in left side", () => {
-    const border = bottomBorderSegments(60, stops, "⢎ Reticulating splines...");
+    const border = bottomBorderSegments(60, stops, undefined, sc(), "⢎ Reticulating splines...");
     expect(plainText(border)).toContain("⢎ Reticulating splines...");
   });
 
   test("starts with ╰─ and ends with ╯", () => {
-    const visual = plainText(bottomBorderSegments(60, stops, "⢎ Loading"));
+    const visual = plainText(bottomBorderSegments(60, stops, undefined, sc(), "⢎ Loading"));
     expect(visual).toMatch(/^╰─/);
     expect(visual).toMatch(/╯$/);
   });
 
   test("visual width matches requested width", () => {
-    expect(stringWidth(plainText(bottomBorderSegments(60, stops, "⢎ Loading")))).toBe(60);
+    expect(
+      stringWidth(plainText(bottomBorderSegments(60, stops, undefined, sc(), "⢎ Loading"))),
+    ).toBe(60);
   });
 
   test("status text is rendered in white, dashes/corners stay dim", () => {
-    const border = bottomBorderSegments(60, stops, "⢎ Loading");
+    const border = bottomBorderSegments(60, stops, undefined, sc(), "⢎ Loading");
     const statusSegment = border.find((s) => s.text.includes("Loading"));
     expect(statusSegment?.color).toBe("#d2d2e1");
     const left = border.find((s) => s.text === "╰");
@@ -268,14 +268,20 @@ describe("bottomBorderSegments with status", () => {
   });
 
   test("width stays constant across different status lengths", () => {
-    expect(stringWidth(plainText(bottomBorderSegments(60, stops, "⢎ Hi")))).toBe(60);
+    expect(stringWidth(plainText(bottomBorderSegments(60, stops, undefined, sc(), "⢎ Hi")))).toBe(
+      60,
+    );
     expect(
-      stringWidth(plainText(bottomBorderSegments(60, stops, "⢎ Reticulating splines..."))),
+      stringWidth(
+        plainText(bottomBorderSegments(60, stops, undefined, sc(), "⢎ Reticulating splines...")),
+      ),
     ).toBe(60);
   });
 
   test("truncates status with ellipsis when it does not fit at full length", () => {
-    const visual = plainText(bottomBorderSegments(20, stops, "⢎ Reticulating splines..."));
+    const visual = plainText(
+      bottomBorderSegments(20, stops, undefined, sc(), "⢎ Reticulating splines..."),
+    );
     expect(stringWidth(visual)).toBe(20);
     expect(visual).toContain("…");
     expect(visual).toMatch(/^╰─/);
@@ -284,7 +290,7 @@ describe("bottomBorderSegments with status", () => {
   });
 
   test("falls back to plain border when even one ellipsis cannot fit", () => {
-    const border = bottomBorderSegments(7, stops, "⢎ Reticulating splines...");
+    const border = bottomBorderSegments(7, stops, undefined, sc(), "⢎ Reticulating splines...");
     expect(stringWidth(plainText(border))).toBe(7);
     expect(plainText(border)).not.toContain("…");
     expect(plainText(border)).not.toContain("Reticulating");

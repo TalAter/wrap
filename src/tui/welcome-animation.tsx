@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import { useEffect, useState } from "react";
-import { getTheme } from "../core/theme.ts";
-import { interpolateGradient } from "./gradient.ts";
+import { interpolateGradient } from "./gradient-shim.ts";
+import { getWrapTheme } from "./hooks.ts";
 import {
   type AnimationFrame,
   CANVAS_HEIGHT,
@@ -36,7 +36,7 @@ export function WelcomeAnimation() {
     return () => clearTimeout(id);
   }, [frameIndex]);
 
-  const stops = getTheme().wizard.welcomeBrain;
+  const stops = getWrapTheme().wizard.welcomeBrain;
   const frame = FRAMES[frameIndex] ?? FRAMES[0];
   if (!frame) return null;
 

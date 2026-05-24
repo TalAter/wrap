@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
+import { ThemeProvider } from "wrap-core/tui";
 import { stripAnsi } from "../src/core/ansi.ts";
 import { _setClipboardTestHooks } from "../src/core/clipboard.ts";
+import { DARK_THEME } from "../src/core/theme.ts";
 import type { AppEvent } from "../src/session/state.ts";
 import {
   foldCommand,
@@ -10,7 +12,6 @@ import {
   ResponseDialog,
   truncateCommand,
 } from "../src/tui/response-dialog.tsx";
-import { ThemeProvider } from "../src/tui/theme-context.tsx";
 import {
   makeComposing,
   makeComposingInteractive,
@@ -60,7 +61,7 @@ describe("Dialog — confirming", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -76,7 +77,7 @@ describe("Dialog — confirming", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -87,7 +88,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -101,7 +102,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -114,7 +115,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -126,7 +127,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -138,7 +139,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -150,7 +151,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -162,7 +163,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -175,7 +176,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -189,7 +190,7 @@ describe("Dialog — confirming", () => {
     });
     const { dispatch, events } = captureDispatch();
     const { stdin, lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -205,7 +206,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch } = captureDispatch();
     const { stdin, lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -226,7 +227,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming({ response: makeResponse({ content: "ls -la" }) });
     const { dispatch } = captureDispatch();
     const { stdin, lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -243,7 +244,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -257,7 +258,7 @@ describe("Dialog — confirming", () => {
     const state = makeConfirming();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -274,7 +275,7 @@ describe("Dialog — editing", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -288,7 +289,7 @@ describe("Dialog — editing", () => {
     });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -303,7 +304,7 @@ describe("Dialog — editing", () => {
     });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -320,7 +321,7 @@ describe("Dialog — editing", () => {
     });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -333,7 +334,7 @@ describe("Dialog — editing", () => {
     const state = makeEditing();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -347,7 +348,7 @@ describe("Dialog — composing", () => {
     const state = makeComposing({ draft: "" });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -359,7 +360,7 @@ describe("Dialog — composing", () => {
     const state = makeComposing({ draft: "be safer" });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -373,7 +374,7 @@ describe("Dialog — composing", () => {
     const state = makeComposing({ draft: "  " });
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -386,7 +387,7 @@ describe("Dialog — composing", () => {
     const state = makeComposing();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -398,7 +399,7 @@ describe("Dialog — composing", () => {
     const state = makeComposing({ draft: "" });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -411,7 +412,7 @@ describe("Dialog — continuation badge", () => {
     const state = makeComposingInteractive({ draft: "" });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog
           state={state}
           dispatch={dispatch}
@@ -426,7 +427,7 @@ describe("Dialog — continuation badge", () => {
     const state = makeComposingInteractive({ draft: "" });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -437,7 +438,7 @@ describe("Dialog — continuation badge", () => {
     const state = makeProcessingInteractive({ draft: "ok do it" });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} continuationPrompt="how do I deploy" />
       </ThemeProvider>,
     );
@@ -448,7 +449,7 @@ describe("Dialog — continuation badge", () => {
     const state = makeConfirming({ response: makeResponse({ content: "ls", risk_level: "low" }) });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} continuationPrompt="how do I deploy" />
       </ThemeProvider>,
     );
@@ -461,7 +462,7 @@ describe("Dialog — processing", () => {
     const state = makeProcessing({ draft: "the draft" });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -472,7 +473,7 @@ describe("Dialog — processing", () => {
     const state = makeProcessing({ status: "Probing the database" });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -483,7 +484,7 @@ describe("Dialog — processing", () => {
     const state = makeProcessing();
     const { dispatch, events } = captureDispatch();
     const { stdin } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -504,13 +505,13 @@ describe("Dialog — rerender behaviour", () => {
     });
     const { dispatch } = captureDispatch();
     const { rerender, lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state1} dispatch={dispatch} />
       </ThemeProvider>,
     );
     expect(stripAnsi(lastFrame() ?? "")).toContain("first cmd");
     rerender(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state2} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -633,7 +634,7 @@ describe("Dialog — multi-step slots", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -649,7 +650,7 @@ describe("Dialog — multi-step slots", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -663,7 +664,7 @@ describe("Dialog — multi-step slots", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -681,7 +682,7 @@ describe("Dialog — multi-step slots", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );
@@ -701,7 +702,7 @@ describe("Dialog — multi-step slots", () => {
     });
     const { dispatch } = captureDispatch();
     const { lastFrame } = render(
-      <ThemeProvider>
+      <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
         <ResponseDialog state={state} dispatch={dispatch} />
       </ThemeProvider>,
     );

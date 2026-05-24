@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { __resetColorLevelCache } from "../src/core/output.ts";
-import { getTheme, themeHex } from "../src/core/theme.ts";
-import { gradientRow, interpolateGradient } from "../src/tui/gradient.ts";
+import { __resetColorLevelCache, resolveColorHex } from "wrap-core/ansi";
+import { getTheme } from "wrap-core/theme";
+import { gradientRow, interpolateGradient } from "../src/tui/gradient-shim.ts";
 import { getRiskPreset } from "../src/tui/risk-presets.ts";
 import { isolateEnv, seedTestConfig } from "./helpers.ts";
 
@@ -92,13 +92,13 @@ describe("gradient fallback (below truecolor)", () => {
   });
 
   test("interpolateGradient returns the primary text hex regardless of stops", () => {
-    const expected = themeHex(getTheme().copy.body);
+    const expected = resolveColorHex(getTheme().copy.body);
     expect(interpolateGradient(0, 10, preset("medium").stops)).toBe(expected);
     expect(interpolateGradient(5, 10, preset("high").stops)).toBe(expected);
   });
 
   test("gradientRow returns a row of primary text hex of the requested length", () => {
-    const expected = themeHex(getTheme().copy.body);
+    const expected = resolveColorHex(getTheme().copy.body);
     const row = gradientRow(4, preset("medium").stops);
     expect(row).toHaveLength(4);
     expect(row.every((c) => c === expected)).toBe(true);

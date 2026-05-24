@@ -1,13 +1,13 @@
+import type { Color } from "wrap-core/ansi";
+import type { PillSegment } from "wrap-core/tui";
 import type { RiskLevel } from "../command-response.schema.ts";
-import type { Color } from "../core/ansi.ts";
-import { getTheme } from "../core/theme.ts";
-import type { PillSegment } from "./pill.tsx";
+import { getWrapTheme } from "./hooks.ts";
 
 type RiskPreset = { stops: Color[]; pill: PillSegment };
 
 // Call at render time — setTheme must have run.
 export function getRiskPreset(level: RiskLevel): RiskPreset {
-  const t = getTheme();
+  const t = getWrapTheme();
   switch (level) {
     case "low":
       return {

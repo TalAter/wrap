@@ -1,12 +1,16 @@
 import { Box, Text } from "ink";
 import { useState } from "react";
 import stringWidth from "string-width";
-import { getTheme } from "../core/theme.ts";
+import {
+  ActionBar,
+  type ActionItem,
+  Checklist,
+  type ChecklistItem,
+  Dialog,
+  useKeyBindings,
+} from "wrap-core/tui";
 import { type Footprint, formatFootprint, type Unit } from "../subcommands/forget-footprint.ts";
-import { ActionBar, type ActionItem } from "./action-bar.tsx";
-import { Checklist, type ChecklistItem } from "./checklist.tsx";
-import { Dialog } from "./dialog.tsx";
-import { useKeyBindings } from "./key-bindings.ts";
+import { getWrapTheme } from "./hooks.ts";
 
 export type Footprints = {
   memory: Footprint;
@@ -60,7 +64,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
     });
   };
 
-  const t = getTheme();
+  const t = getWrapTheme();
   const stops = t.forget.frame;
 
   return (

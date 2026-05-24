@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import stringWidth from "string-width";
-import { type PillSegment, pillSegments, pillWidth } from "../src/tui/pill.tsx";
+import { type PillSegment, pillSegments, pillWidth } from "wrap-core/tui";
 import { seedTestConfig } from "./helpers.ts";
 
 beforeAll(() => {

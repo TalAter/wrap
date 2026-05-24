@@ -1,21 +1,28 @@
 import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
 import { useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
+import { resolveColorHex } from "wrap-core/ansi";
+import {
+  ActionBar,
+  type ActionItem,
+  Dialog,
+  dialogInnerWidth,
+  formatContinuationBadge,
+  InputFrame,
+  type KeyBinding,
+  Pill,
+  TextInput,
+  useKeyBindings,
+  useNerdFonts,
+} from "wrap-core/tui";
 import { getConfig } from "../config/store.ts";
 import { copyToClipboard, resolveClipboardTool } from "../core/clipboard.ts";
 import { resolveEditor, spawnEditor } from "../core/editor.ts";
 import { registerExitTeardown, SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
-import type { ThemeTokens } from "../core/theme.ts";
-import { themeHex } from "../core/theme.ts";
+import type { WrapTheme } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
-import { ActionBar, type ActionItem } from "./action-bar.tsx";
-import { formatContinuationBadge } from "./continuation-badge.ts";
-import { Dialog, dialogInnerWidth } from "./dialog.tsx";
-import { type KeyBinding, useKeyBindings } from "./key-bindings.ts";
-import { Pill } from "./pill.tsx";
+import { useWrapTheme } from "./hooks.ts";
 import { getRiskPreset } from "./risk-presets.ts";
-import { InputFrame, TextInput } from "./text-input.tsx";
-import { useTheme } from "./theme-context.tsx";
 
 type ResponseDialogProps = {
   state: AppState;
@@ -193,9 +200,10 @@ function FoldedCommand({
   head: string;
   hiddenCount: number;
   tail: string;
-  theme: ThemeTokens;
+  theme: WrapTheme;
 }) {
-  const textColor = themeHex(theme.input.text);
+  const textColor = resolveColorHex(theme.input.text);
+  const nerdFonts = useNerdFonts();
   return (
     <InputFrame>
       <Box flexDirection="column">
@@ -204,6 +212,7 @@ function FoldedCommand({
           label={`${hiddenCount} lines hidden`}
           fg={theme.dialog.foldIndicator.fg}
           bg={theme.dialog.foldIndicator.bg}
+          nerdFonts={nerdFonts}
         />
         {tail ? <Text color={textColor}>{tail}</Text> : null}
       </Box>
@@ -212,7 +221,7 @@ function FoldedCommand({
 }
 
 export function ResponseDialog({ state, dispatch, continuationPrompt }: ResponseDialogProps) {
-  const theme = useTheme();
+  const theme = useWrapTheme();
   // Local presentation state. Pure UI — no application state depends on it.
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -312,7 +321,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
       label,
       primary: a.primary,
     };
-    if (flashing) item.flashColor = themeHex(theme.actionBar.success);
+    if (flashing) item.flashColor = resolveColorHex(theme.actionBar.success);
     return item;
   });
 
@@ -549,7 +558,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
       >
         {badge && (
           <Box paddingLeft={1}>
-            <Text color={themeHex(composeTheme.copy.note)}>{badge}</Text>
+            <Text color={resolveColorHex(composeTheme.copy.note)}>{badge}</Text>
           </Box>
         )}
         {state.tag === "composing-interactive" ? (
@@ -572,7 +581,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
         )}
         {truncatedBanner && (
           <Box paddingLeft={1}>
-            <Text color={themeHex(composeTheme.copy.note)}>
+            <Text color={resolveColorHex(composeTheme.copy.note)}>
               paste truncated — for large input, pipe with cat file | w
             </Text>
           </Box>
@@ -601,16 +610,18 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
     >
       {badge && (
         <Box paddingLeft={1}>
-          <Text color={themeHex(theme.copy.note)}>{badge}</Text>
+          <Text color={resolveColorHex(theme.copy.note)}>{badge}</Text>
         </Box>
       )}
       {outputSlot !== undefined && (
         <>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.dialog.outputLabel)}>Output:</Text>
+            <Text color={resolveColorHex(theme.dialog.outputLabel)}>Output:</Text>
           </Box>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.dialog.outputText)}>{formatOutputSlot(outputSlot)}</Text>
+            <Text color={resolveColorHex(theme.dialog.outputText)}>
+              {formatOutputSlot(outputSlot)}
+            </Text>
           </Box>
           <Text> </Text>
         </>
@@ -639,7 +650,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.dialog.explanation)}>{explanation}</Text>
+            <Text color={resolveColorHex(theme.dialog.explanation)}>{explanation}</Text>
           </Box>
         </>
       )}
@@ -647,7 +658,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
         <>
           <Text> </Text>
           <Box paddingLeft={1}>
-            <Text color={themeHex(theme.dialog.plan)}>Plan: {plan}</Text>
+            <Text color={resolveColorHex(theme.dialog.plan)}>Plan: {plan}</Text>
           </Box>
         </>
       )}
@@ -687,7 +698,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
           <ActionBar items={EXECUTING_STEP_ACTIONS} />
         ) : (
           <Text>
-            <Text color={themeHex(theme.dialog.prompt)}>{"Run command? "}</Text>
+            <Text color={resolveColorHex(theme.dialog.prompt)}>{"Run command? "}</Text>
             <ActionBar items={confirmingBarItems} focusedIndex={selectedIndex} dividerAfter={[1]} />
           </Text>
         )}

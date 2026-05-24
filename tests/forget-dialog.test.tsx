@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
+import { ThemeProvider } from "wrap-core/tui";
 import { stripAnsi } from "../src/core/ansi.ts";
+import { DARK_THEME } from "../src/core/theme.ts";
 import type { Footprints } from "../src/tui/forget-dialog.tsx";
 import { ForgetDialog } from "../src/tui/forget-dialog.tsx";
 import { seedTestConfig, waitFor } from "./helpers.ts";
+
+function TP({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
+      {children}
+    </ThemeProvider>
+  );
+}
 
 const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
@@ -44,7 +54,9 @@ describe("ForgetDialog", () => {
   test("renders all four buckets with footprint labels", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(
-      <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
+      <TP>
+        <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     const text = stripAnsi(lastFrame() ?? "");
@@ -60,16 +72,18 @@ describe("ForgetDialog", () => {
   test("shows (empty) for buckets with nothing to delete", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(
-      <ForgetDialog
-        footprints={{
-          memory: { state: "empty" },
-          logs: { state: "empty" },
-          cache: { state: "empty" },
-          scratch: { state: "empty" },
-        }}
-        onSubmit={cb.onSubmit}
-        onCancel={cb.onCancel}
-      />,
+      <TP>
+        <ForgetDialog
+          footprints={{
+            memory: { state: "empty" },
+            logs: { state: "empty" },
+            cache: { state: "empty" },
+            scratch: { state: "empty" },
+          }}
+          onSubmit={cb.onSubmit}
+          onCancel={cb.onCancel}
+        />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("(empty)"));
   });
@@ -77,14 +91,16 @@ describe("ForgetDialog", () => {
   test("shows (unreadable) for corrupt memory", async () => {
     const cb = makeCallbacks();
     const { lastFrame } = render(
-      <ForgetDialog
-        footprints={{
-          ...FULL_FOOTPRINTS,
-          memory: { state: "unreadable" },
-        }}
-        onSubmit={cb.onSubmit}
-        onCancel={cb.onCancel}
-      />,
+      <TP>
+        <ForgetDialog
+          footprints={{
+            ...FULL_FOOTPRINTS,
+            memory: { state: "unreadable" },
+          }}
+          onSubmit={cb.onSubmit}
+          onCancel={cb.onCancel}
+        />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("(unreadable)"));
   });
@@ -92,7 +108,9 @@ describe("ForgetDialog", () => {
   test("all four items checked by default — Enter submits all", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(
-      <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
+      <TP>
+        <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     stdin.write("\r");
@@ -103,16 +121,18 @@ describe("ForgetDialog", () => {
   test("empty buckets still checked by default", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(
-      <ForgetDialog
-        footprints={{
-          memory: { state: "empty" },
-          logs: { state: "empty" },
-          cache: { state: "empty" },
-          scratch: { state: "empty" },
-        }}
-        onSubmit={cb.onSubmit}
-        onCancel={cb.onCancel}
-      />,
+      <TP>
+        <ForgetDialog
+          footprints={{
+            memory: { state: "empty" },
+            logs: { state: "empty" },
+            cache: { state: "empty" },
+            scratch: { state: "empty" },
+          }}
+          onSubmit={cb.onSubmit}
+          onCancel={cb.onCancel}
+        />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("(empty)"));
     stdin.write("\r");
@@ -123,7 +143,9 @@ describe("ForgetDialog", () => {
   test("Space toggles the focused item off, Enter submits the rest", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(
-      <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
+      <TP>
+        <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     // Cursor starts on first item (memory) — toggle it off.
@@ -138,7 +160,9 @@ describe("ForgetDialog", () => {
   test("Esc triggers onCancel", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(
-      <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
+      <TP>
+        <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     stdin.write("\x1b");
@@ -149,7 +173,9 @@ describe("ForgetDialog", () => {
   test("Empty submit (all toggled off + Enter) fires onSubmit with []", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(
-      <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />,
+      <TP>
+        <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />
+      </TP>,
     );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
     // Toggle each of the four items off (cursor stays on row 0 across toggles? no, space just toggles current row)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatContinuationBadge } from "../src/tui/continuation-badge.ts";
+import { formatContinuationBadge } from "wrap-core/tui";
 
 describe("formatContinuationBadge", () => {
   test("returns the prefixed text untouched when it fits", () => {

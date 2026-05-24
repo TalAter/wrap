@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
+import { ActionBar, type ActionItem, ThemeProvider } from "wrap-core/tui";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { ActionBar, type ActionItem } from "../src/tui/action-bar.tsx";
+import { DARK_THEME } from "../src/core/theme.ts";
 import { waitFor } from "./helpers.ts";
+
+function TP({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
+      {children}
+    </ThemeProvider>
+  );
+}
 
 describe("ActionBar", () => {
   test("renders approve-style letter items with their labels", async () => {
@@ -10,7 +19,11 @@ describe("ActionBar", () => {
       { glyph: "Y", label: "Yes", primary: true },
       { glyph: "N", label: "No", primary: true },
     ];
-    const { lastFrame } = render(<ActionBar items={items} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Yes"));
     expect(stripAnsi(lastFrame() ?? "")).toContain("No");
   });
@@ -20,7 +33,11 @@ describe("ActionBar", () => {
       { glyph: "⏎", label: "to run", primary: true },
       { glyph: "Esc", label: "to cancel" },
     ];
-    const { lastFrame } = render(<ActionBar items={items} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("⏎ to run"));
     expect(stripAnsi(lastFrame() ?? "")).toContain("Esc to cancel");
   });
@@ -30,7 +47,11 @@ describe("ActionBar", () => {
       { glyph: "⏎", label: "to run" },
       { glyph: "Esc", label: "to cancel" },
     ];
-    const { lastFrame } = render(<ActionBar items={items} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("│"));
   });
 
@@ -39,14 +60,22 @@ describe("ActionBar", () => {
       { glyph: "Y", label: "Yes", primary: true },
       { glyph: "N", label: "No", primary: true },
     ];
-    const { lastFrame } = render(<ActionBar items={items} focusedIndex={1} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} focusedIndex={1} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Yes"));
     expect(stripAnsi(lastFrame() ?? "")).toContain("No");
   });
 
   test("focusedIndex out of range does not crash", async () => {
     const items: ActionItem[] = [{ glyph: "Y", label: "Yes" }];
-    const { lastFrame } = render(<ActionBar items={items} focusedIndex={5} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} focusedIndex={5} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Yes"));
   });
 
@@ -55,7 +84,11 @@ describe("ActionBar", () => {
       { glyph: "Y", label: "Yes", primary: true },
       { glyph: "Esc", label: "to cancel" },
     ];
-    const { lastFrame } = render(<ActionBar items={items} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Yes"));
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Esc to cancel");
@@ -64,7 +97,11 @@ describe("ActionBar", () => {
 
   test("renders items flush with no built-in left padding", async () => {
     // Callers own left indentation via Box paddingLeft; ActionBar is pure items.
-    const { lastFrame } = render(<ActionBar items={[{ glyph: "⏎", label: "x" }]} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={[{ glyph: "⏎", label: "x" }]} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "").startsWith("⏎")).toBe(true));
   });
 
@@ -74,7 +111,11 @@ describe("ActionBar", () => {
       { glyph: "B", label: "Beta" },
       { glyph: "G", label: "Gamma" },
     ];
-    const { lastFrame } = render(<ActionBar items={items} dividerAfter={[]} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} dividerAfter={[]} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Alpha"));
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).not.toContain("│");
@@ -84,7 +125,11 @@ describe("ActionBar", () => {
 
   test("flashColor on an approve-style item still renders the full label", async () => {
     const items: ActionItem[] = [{ glyph: "C", label: "Copied", flashColor: "#ff00ff" }];
-    const { lastFrame } = render(<ActionBar items={items} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Copied"));
   });
 
@@ -95,7 +140,11 @@ describe("ActionBar", () => {
       { glyph: "G", label: "Gamma" },
       { glyph: "D", label: "Delta" },
     ];
-    const { lastFrame } = render(<ActionBar items={items} dividerAfter={[1]} />);
+    const { lastFrame } = render(
+      <TP>
+        <ActionBar items={items} dividerAfter={[1]} />
+      </TP>,
+    );
     await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Alpha"));
     const text = stripAnsi(lastFrame() ?? "");
     const pipeCount = (text.match(/│/g) ?? []).length;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import * as appearance from "../src/core/detect-appearance.ts";
+import * as appearance from "wrap-core/theme";
 import { main } from "../src/main.ts";
 import { mockStdout } from "./helpers/mock-stdout.ts";
 

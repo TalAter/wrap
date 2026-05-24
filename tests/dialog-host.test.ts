@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chooseDialogStdin } from "../src/session/dialog-host.ts";
+import { chooseDialogStdin } from "wrap-core/tui";
 
 describe("chooseDialogStdin", () => {
   test("returns process.stdin when parent has a TTY", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
-import { type KeyBinding, useKeyBindings } from "../src/tui/key-bindings.ts";
+import { type KeyBinding, useKeyBindings } from "wrap-core/tui";
 import { waitFor } from "./helpers.ts";
 
 const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));

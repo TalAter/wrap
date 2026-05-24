@@ -7,7 +7,8 @@ import {
   parseOsc11Response,
   queryTerminalBackground,
   resolveAppearance,
-} from "../src/core/detect-appearance.ts";
+} from "wrap-core/theme";
+import { wrapFs } from "../src/fs/home.ts";
 import { mockStderr } from "./helpers/mock-stderr.ts";
 import { mockStdin } from "./helpers/mock-stdin.ts";
 import { isolateEnv } from "./helpers.ts";
@@ -81,60 +82,55 @@ describe("getCachedAppearance / cacheAppearance round-trip", () => {
   beforeEach(clearCache);
 
   test("returns dark appearance written by cacheAppearance", () => {
-    cacheAppearance("dark");
-    expect(getCachedAppearance()).toBe("dark");
+    cacheAppearance(wrapFs, "dark");
+    expect(getCachedAppearance(wrapFs)).toBe("dark");
   });
 
   test("returns light appearance written by cacheAppearance", () => {
-    cacheAppearance("light");
-    expect(getCachedAppearance()).toBe("light");
+    cacheAppearance(wrapFs, "light");
+    expect(getCachedAppearance(wrapFs)).toBe("light");
   });
 
   test("returns null when no cache file exists", () => {
-    expect(getCachedAppearance()).toBeNull();
+    expect(getCachedAppearance(wrapFs)).toBeNull();
   });
 
   test("returns null for malformed cache JSON", () => {
     writeCache("not valid json{");
-    expect(getCachedAppearance()).toBeNull();
+    expect(getCachedAppearance(wrapFs)).toBeNull();
   });
 
   test("returns null for unrecognized appearance value", () => {
     writeCache(JSON.stringify({ appearance: "midnight", ts: Date.now() }));
-    expect(getCachedAppearance()).toBeNull();
+    expect(getCachedAppearance(wrapFs)).toBeNull();
   });
 
   test("returns null when ts is the wrong type", () => {
     writeCache(JSON.stringify({ appearance: "dark", ts: "yesterday" }));
-    expect(getCachedAppearance()).toBeNull();
+    expect(getCachedAppearance(wrapFs)).toBeNull();
   });
 
   test("returns null for cache older than the 1h TTL", () => {
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     writeCache(JSON.stringify({ appearance: "dark", ts: twoHoursAgo }));
-    expect(getCachedAppearance()).toBeNull();
+    expect(getCachedAppearance(wrapFs)).toBeNull();
   });
 
   test("returns cached value when 30 minutes old (within TTL)", () => {
     const halfHourAgo = Date.now() - 30 * 60 * 1000;
     writeCache(JSON.stringify({ appearance: "dark", ts: halfHourAgo }));
-    expect(getCachedAppearance()).toBe("dark");
+    expect(getCachedAppearance(wrapFs)).toBe("dark");
   });
 });
 
 describe("resolveAppearance", () => {
-  // Regression: probe used to be fire-and-forget. On cache-miss it raced
-  // with Ink dialog mount — probe's setRawMode(false) cleanup fired after
-  // Ink claimed stdin, leaving the terminal cooked while Ink thought raw.
-  // Keys echoed to the shell instead of the dialog. Fix: await the probe
-  // so no raw-mode toggling overlaps with any dialog lifecycle.
   test("awaits probe on cache-miss", async () => {
     clearCache();
     const prevTheme = process.env.WRAP_THEME;
     delete process.env.WRAP_THEME;
-    const stderr = mockStderr({ isTTY: false }); // isTTY:false → probe returns null fast
+    const stderr = mockStderr({ isTTY: false });
     try {
-      const result = resolveAppearance(undefined);
+      const result = resolveAppearance({ envVarName: "WRAP_THEME" });
       expect(result).toBeInstanceOf(Promise);
       expect(await result).toBe("dark");
     } finally {
@@ -145,35 +141,41 @@ describe("resolveAppearance", () => {
 });
 
 describe("resolveAppearance precedence", () => {
-  // Precedence chain: WRAP_THEME env > explicit config > disk cache >
-  // probe > default-dark. Each test pins one tier dominating a competing
-  // value at the next tier down. (Probe vs default isn't covered here
-  // — see "awaits probe on cache-miss" above.)
   isolateEnv(["WRAP_THEME"]);
   beforeEach(clearCache);
 
   test("WRAP_THEME=dark wins over conflicting config", async () => {
     process.env.WRAP_THEME = "dark";
-    expect(await resolveAppearance("light")).toBe("dark");
+    expect(await resolveAppearance({ envVarName: "WRAP_THEME", configAppearance: "light" })).toBe(
+      "dark",
+    );
   });
 
   test("WRAP_THEME=light wins over conflicting config", async () => {
     process.env.WRAP_THEME = "light";
-    expect(await resolveAppearance("dark")).toBe("light");
+    expect(await resolveAppearance({ envVarName: "WRAP_THEME", configAppearance: "dark" })).toBe(
+      "light",
+    );
   });
 
   test("config 'dark' wins over conflicting cache", async () => {
-    cacheAppearance("light");
-    expect(await resolveAppearance("dark")).toBe("dark");
+    cacheAppearance(wrapFs, "light");
+    expect(
+      await resolveAppearance({ envVarName: "WRAP_THEME", configAppearance: "dark", fs: wrapFs }),
+    ).toBe("dark");
   });
 
   test("config 'light' wins over conflicting cache", async () => {
-    cacheAppearance("dark");
-    expect(await resolveAppearance("light")).toBe("light");
+    cacheAppearance(wrapFs, "dark");
+    expect(
+      await resolveAppearance({ envVarName: "WRAP_THEME", configAppearance: "light", fs: wrapFs }),
+    ).toBe("light");
   });
 
   test("cache hit returns cached value when env + config are absent/auto", async () => {
-    cacheAppearance("light");
-    expect(await resolveAppearance("auto")).toBe("light");
+    cacheAppearance(wrapFs, "light");
+    expect(
+      await resolveAppearance({ envVarName: "WRAP_THEME", configAppearance: "auto", fs: wrapFs }),
+    ).toBe("light");
   });
 });

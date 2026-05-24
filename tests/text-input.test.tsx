@@ -1,14 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
+import { TextInput, ThemeProvider } from "wrap-core/tui";
 import { stripAnsi } from "../src/core/ansi.ts";
-import { TextInput } from "../src/tui/text-input.tsx";
+import { DARK_THEME } from "../src/core/theme.ts";
 import { waitFor } from "./helpers.ts";
+
+function TP({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider theme={DARK_THEME} nerdFonts={false}>
+      {children}
+    </ThemeProvider>
+  );
+}
 
 describe("TextInput — editable", () => {
   test("renders the value", () => {
     const { lastFrame } = render(
-      <TextInput value="hello" onChange={() => {}} onSubmit={() => {}} />,
+      <TP>
+        <TextInput value="hello" onChange={() => {}} onSubmit={() => {}} />
+      </TP>,
     );
     expect(stripAnsi(lastFrame() ?? "")).toContain("hello");
   });
@@ -16,13 +27,15 @@ describe("TextInput — editable", () => {
   test("calls onSubmit on Enter", async () => {
     let submitted: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value="abc"
-        onChange={() => {}}
-        onSubmit={(v) => {
-          submitted = v;
-        }}
-      />,
+      <TP>
+        <TextInput
+          value="abc"
+          onChange={() => {}}
+          onSubmit={(v) => {
+            submitted = v;
+          }}
+        />
+      </TP>,
     );
     stdin.write("\r");
     await waitFor(() => expect(submitted).toBe("abc"));
@@ -31,13 +44,15 @@ describe("TextInput — editable", () => {
   test("calls onChange when typing", async () => {
     let captured: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value="ab"
-        onChange={(v) => {
-          captured = v;
-        }}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value="ab"
+          onChange={(v) => {
+            captured = v;
+          }}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     stdin.write("c");
     await waitFor(() => expect(captured).toBe("abc"));
@@ -45,21 +60,27 @@ describe("TextInput — editable", () => {
 
   test("renders placeholder when value is empty", () => {
     const { lastFrame } = render(
-      <TextInput value="" placeholder="actually..." onChange={() => {}} onSubmit={() => {}} />,
+      <TP>
+        <TextInput value="" placeholder="actually..." onChange={() => {}} onSubmit={() => {}} />
+      </TP>,
     );
     expect(stripAnsi(lastFrame() ?? "")).toContain("actually...");
   });
 
   test("does not render placeholder when value is non-empty", () => {
     const { lastFrame } = render(
-      <TextInput value="hi" placeholder="actually..." onChange={() => {}} onSubmit={() => {}} />,
+      <TP>
+        <TextInput value="hi" placeholder="actually..." onChange={() => {}} onSubmit={() => {}} />
+      </TP>,
     );
     expect(stripAnsi(lastFrame() ?? "")).not.toContain("actually...");
   });
 
   test("masked mode renders dots instead of characters", () => {
     const { lastFrame } = render(
-      <TextInput value="secret" masked onChange={() => {}} onSubmit={() => {}} />,
+      <TP>
+        <TextInput value="secret" masked onChange={() => {}} onSubmit={() => {}} />
+      </TP>,
     );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).not.toContain("secret");
@@ -69,14 +90,16 @@ describe("TextInput — editable", () => {
   test("masked mode still calls onSubmit with real value", async () => {
     let submitted: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value="key123"
-        masked
-        onChange={() => {}}
-        onSubmit={(v) => {
-          submitted = v;
-        }}
-      />,
+      <TP>
+        <TextInput
+          value="key123"
+          masked
+          onChange={() => {}}
+          onSubmit={(v) => {
+            submitted = v;
+          }}
+        />
+      </TP>,
     );
     stdin.write("\r");
     await waitFor(() => expect(submitted).toBe("key123"));
@@ -85,13 +108,15 @@ describe("TextInput — editable", () => {
   test("does not handle Esc (parent owns it)", async () => {
     let changed = false;
     const { stdin } = render(
-      <TextInput
-        value="abc"
-        onChange={() => {
-          changed = true;
-        }}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value="abc"
+          onChange={() => {
+            changed = true;
+          }}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     stdin.write("\x1b");
     await new Promise((r) => setTimeout(r, 50));
@@ -103,14 +128,16 @@ describe("TextInput — multiline", () => {
   test("plain Enter submits in multiline mode too", async () => {
     let submitted: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value="abc"
-        multiline
-        onChange={() => {}}
-        onSubmit={(v) => {
-          submitted = v;
-        }}
-      />,
+      <TP>
+        <TextInput
+          value="abc"
+          multiline
+          onChange={() => {}}
+          onSubmit={(v) => {
+            submitted = v;
+          }}
+        />
+      </TP>,
     );
     stdin.write("\r");
     await waitFor(() => expect(submitted).toBe("abc"));
@@ -119,14 +146,16 @@ describe("TextInput — multiline", () => {
   test("empty-buffer Enter is a no-op", async () => {
     let submitted = false;
     const { stdin } = render(
-      <TextInput
-        value=""
-        multiline
-        onChange={() => {}}
-        onSubmit={() => {
-          submitted = true;
-        }}
-      />,
+      <TP>
+        <TextInput
+          value=""
+          multiline
+          onChange={() => {}}
+          onSubmit={() => {
+            submitted = true;
+          }}
+        />
+      </TP>,
     );
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 30));
@@ -136,14 +165,16 @@ describe("TextInput — multiline", () => {
   test("backslash-Enter inserts newline (strips trailing backslash)", async () => {
     let captured: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value={"foo\\"}
-        multiline
-        onChange={(v) => {
-          captured = v;
-        }}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value={"foo\\"}
+          multiline
+          onChange={(v) => {
+            captured = v;
+          }}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     stdin.write("\r");
     await waitFor(() => expect(captured).toBe("foo\n"));
@@ -152,14 +183,16 @@ describe("TextInput — multiline", () => {
   test("Ctrl+J inserts newline", async () => {
     let captured: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value="ab"
-        multiline
-        onChange={(v) => {
-          captured = v;
-        }}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value="ab"
+          multiline
+          onChange={(v) => {
+            captured = v;
+          }}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     // Ctrl+J without kitty: raw 0x0A byte; Ink reports input === "\n", key.return === false.
     stdin.write("\n");
@@ -174,13 +207,15 @@ describe("TextInput — multiline", () => {
     // a multi-char string appears as one input event.
     let captured: string | undefined;
     const { stdin } = render(
-      <TextInput
-        value=""
-        onChange={(v) => {
-          captured = v;
-        }}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value=""
+          onChange={(v) => {
+            captured = v;
+          }}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     stdin.write("hi\nthere");
     // Single-line: newline stripped, rest inserted.
@@ -192,15 +227,17 @@ describe("TextInput — multiline", () => {
   test("editingExternal renders a label and swallows input", async () => {
     let changed = false;
     const { stdin, lastFrame } = render(
-      <TextInput
-        value="buffer text"
-        multiline
-        editingExternal
-        onChange={() => {
-          changed = true;
-        }}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value="buffer text"
+          multiline
+          editingExternal
+          onChange={() => {
+            changed = true;
+          }}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     const text = stripAnsi(lastFrame() ?? "");
     expect(text).toContain("Save and close editor");
@@ -215,14 +252,16 @@ describe("TextInput — multiline", () => {
     // wrapWidth=20, maxRows=3 → output must not exceed 3 visual rows of width 20.
     const text = "a".repeat(2000);
     const { lastFrame } = render(
-      <TextInput
-        value={text}
-        multiline
-        maxRows={3}
-        wrapWidth={20}
-        onChange={() => {}}
-        onSubmit={() => {}}
-      />,
+      <TP>
+        <TextInput
+          value={text}
+          multiline
+          maxRows={3}
+          wrapWidth={20}
+          onChange={() => {}}
+          onSubmit={() => {}}
+        />
+      </TP>,
     );
     const out = stripAnsi(lastFrame() ?? "");
     const lines = out.split("\n");
@@ -241,7 +280,9 @@ describe("TextInput — multiline", () => {
   test("maxRows clips logical lines below the cursor to stay within budget", () => {
     const text = ["l1", "l2", "l3", "l4", "l5", "l6"].join("\n");
     const { lastFrame } = render(
-      <TextInput value={text} multiline maxRows={3} onChange={() => {}} onSubmit={() => {}} />,
+      <TP>
+        <TextInput value={text} multiline maxRows={3} onChange={() => {}} onSubmit={() => {}} />
+      </TP>,
     );
     const out = stripAnsi(lastFrame() ?? "");
     // Cursor initializes at text end → last 3 rows should be visible, first 3 hidden.
@@ -255,7 +296,9 @@ describe("TextInput — multiline", () => {
 
   test("multiline value with \\n renders on multiple rows", () => {
     const { lastFrame } = render(
-      <TextInput value={"line1\nline2"} multiline onChange={() => {}} onSubmit={() => {}} />,
+      <TP>
+        <TextInput value={"line1\nline2"} multiline onChange={() => {}} onSubmit={() => {}} />
+      </TP>,
     );
     const text = stripAnsi(lastFrame() ?? "");
     const rows = (lastFrame() ?? "").split("\n").length;
@@ -267,14 +310,22 @@ describe("TextInput — multiline", () => {
 
 describe("TextInput — readOnly", () => {
   test("renders the value", () => {
-    const { lastFrame } = render(<TextInput value="frozen text" readOnly />);
+    const { lastFrame } = render(
+      <TP>
+        <TextInput value="frozen text" readOnly />
+      </TP>,
+    );
     expect(stripAnsi(lastFrame() ?? "")).toContain("frozen text");
   });
 
   test("does not consume input", async () => {
     // readOnly callers don't supply onChange/onSubmit. Verify typing doesn't crash
     // and the rendered output never shows the typed character.
-    const { stdin, lastFrame } = render(<TextInput value="abc" readOnly />);
+    const { stdin, lastFrame } = render(
+      <TP>
+        <TextInput value="abc" readOnly />
+      </TP>,
+    );
     stdin.write("X");
     await new Promise((r) => setTimeout(r, 30));
     expect(stripAnsi(lastFrame() ?? "")).not.toContain("X");
@@ -286,11 +337,13 @@ describe("TextInput — readOnly", () => {
     // empty — otherwise the future processing-followup state would lose
     // visual parity with composing-followup if it briefly had no text.
     const { lastFrame } = render(
-      <Box flexDirection="column">
-        <Text>top</Text>
-        <TextInput value="" readOnly />
-        <Text>bottom</Text>
-      </Box>,
+      <TP>
+        <Box flexDirection="column">
+          <Text>top</Text>
+          <TextInput value="" readOnly />
+          <Text>bottom</Text>
+        </Box>
+      </TP>,
     );
     // Row count: 3 (top, input row, bottom) — collapsed input would give 2.
     expect(lastFrame()?.split("\n").length).toBe(3);

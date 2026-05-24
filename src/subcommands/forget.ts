@@ -117,14 +117,15 @@ async function showDialog(footprints: {
   cache: Footprint;
   scratch: Footprint;
 }): Promise<string[] | null> {
-  const [ink, react, forgetDialog, theme] = await Promise.all([
+  const [ink, react, forgetDialog, tui] = await Promise.all([
     import("ink"),
     import("react"),
     import("../tui/forget-dialog.tsx"),
-    import("../tui/theme-context.tsx"),
+    import("wrap-core/tui"),
   ]);
   const { ForgetDialog } = forgetDialog;
-  const { ThemeProvider } = theme;
+  const { ThemeProvider } = tui;
+  const { getTheme } = await import("../core/theme.ts");
 
   return new Promise<string[] | null>((resolve) => {
     const onSubmit = (values: string[]) => {
@@ -136,11 +137,11 @@ async function showDialog(footprints: {
       resolve(null);
     };
     const app = ink.render(
-      react.createElement(
-        ThemeProvider,
-        null,
-        react.createElement(ForgetDialog, { footprints, onSubmit, onCancel }),
-      ),
+      react.createElement(ThemeProvider, {
+        theme: getTheme(),
+        nerdFonts: getConfig().nerdFonts ?? false,
+        children: react.createElement(ForgetDialog, { footprints, onSubmit, onCancel }),
+      }),
       {
         stdout: process.stderr,
         patchConsole: false,

@@ -1,21 +1,25 @@
 import { Select } from "@inkjs/ui";
 import { Box, Text } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { resolveColorHex } from "wrap-core/ansi";
+import {
+  ActionBar,
+  Checklist,
+  type ChecklistItem,
+  Dialog,
+  TextInput,
+  useKeyBindings,
+  useNerdFonts,
+} from "wrap-core/tui";
 import type { ProviderEntry } from "../config/config.ts";
 import { getConfig, updateConfig } from "../config/store.ts";
-import { isNerdFonts } from "../core/output.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
-import { getTheme, themeHex } from "../core/theme.ts";
 import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initProviderWizardState, type ProviderWizardAction, reduce } from "../wizard/state.ts";
-import { ActionBar } from "./action-bar.tsx";
-import { Checklist, type ChecklistItem } from "./checklist.tsx";
-import { Dialog } from "./dialog.tsx";
-import { useKeyBindings } from "./key-bindings.ts";
+import { getWrapTheme } from "./hooks.ts";
 import { NerdIconsSection } from "./nerd-icons-section.tsx";
-import { TextInput } from "./text-input.tsx";
 import { WelcomeSection } from "./welcome-section.tsx";
 import {
   getWizardStops,
@@ -87,7 +91,7 @@ export function ProvidersSection({
   );
 
   const { screen } = state;
-  const nerd = isNerdFonts();
+  const nerd = useNerdFonts();
   const stepIdx = stepIndexFromScreen(screen.tag);
   const activeProviderName =
     screen.tag === "entering-key" || screen.tag === "picking-model" || screen.tag === "disclaimer"
@@ -301,7 +305,8 @@ function ApiKeyScreen({
       <Text bold>{api?.displayName ?? provider} API key</Text>
       {api?.apiKeyUrl && (
         <Text>
-          Get one: <Text color={themeHex(getTheme().wizard.providerLink)}>{api.apiKeyUrl}</Text>
+          Get one:{" "}
+          <Text color={resolveColorHex(getWrapTheme().wizard.providerLink)}>{api.apiKeyUrl}</Text>
         </Text>
       )}
       <Text> </Text>

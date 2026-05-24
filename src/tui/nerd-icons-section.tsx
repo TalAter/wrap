@@ -1,9 +1,8 @@
 import { Box, Text } from "ink";
 import { useState } from "react";
-import { getTheme, themeHex } from "../core/theme.ts";
-import { ActionBar } from "./action-bar.tsx";
-import { Dialog } from "./dialog.tsx";
-import { useKeyBindings } from "./key-bindings.ts";
+import { resolveColorHex } from "wrap-core/ansi";
+import { ActionBar, Dialog, useKeyBindings } from "wrap-core/tui";
+import { getWrapTheme } from "./hooks.ts";
 import { getWizardStops, WIZARD_CONTENT_WIDTH, wizardLabelPill } from "./wizard-chrome.tsx";
 
 // Star Wars Nerd Font glyphs for detection
@@ -36,10 +35,10 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
     "No — they look like boxes or question marks",
   ];
 
-  const t = getTheme();
-  const active = themeHex(t.wizard.nerdChoiceMarker);
-  const muted = themeHex(t.wizard.nerdChoiceLabel);
-  const bright = themeHex(t.wizard.nerdChoiceSelectedLabel);
+  const t = getWrapTheme();
+  const active = resolveColorHex(t.wizard.nerdChoiceMarker);
+  const muted = resolveColorHex(t.wizard.nerdChoiceLabel);
+  const bright = resolveColorHex(t.wizard.nerdChoiceSelectedLabel);
 
   return (
     <Dialog

@@ -1,15 +1,16 @@
 import { chmod, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { resolveAppearance } from "wrap-core/theme";
 import { ensureConfig } from "./config/ensure.ts";
 import { applyModelOverride, resolveSettings } from "./config/resolve.ts";
 import { getConfig, setConfig } from "./config/store.ts";
 import { buildAttachedInputPreview, readAttachedInput } from "./core/attached-input.ts";
-import { resolveAppearance } from "./core/detect-appearance.ts";
 import { type ModifierSpec, parseArgs } from "./core/input.ts";
 import { chrome } from "./core/output.ts";
 import { resolvePath } from "./core/paths.ts";
 import { resolveTheme, setTheme } from "./core/theme.ts";
 import { verbose } from "./core/verbose.ts";
+import { wrapFs } from "./fs/home.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
@@ -44,7 +45,7 @@ export async function main() {
 
     // Early theme: WRAP_THEME env + cache work before config is loaded.
     // Covers --help, the wizard, and any other pre-config code path.
-    if (!isVersion) setTheme(resolveTheme(await resolveAppearance(undefined)));
+    if (!isVersion) setTheme(resolveTheme(await resolveAppearance({ envVarName: "WRAP_THEME" })));
 
     // Seed config from CLI + env + defaults so we have an initial state
     // even before reading config file. The session path re-resolves with
@@ -83,7 +84,11 @@ export async function main() {
     setConfig(applyModelOverride(base, modifiers, process.env));
 
     // Re-resolve theme now that config.appearance is available.
-    const appearance = await resolveAppearance(getConfig().appearance);
+    const appearance = await resolveAppearance({
+      envVarName: "WRAP_THEME",
+      configAppearance: getConfig().appearance,
+      fs: wrapFs,
+    });
     setTheme(resolveTheme(appearance));
 
     const resolved = resolveProvider(getConfig());

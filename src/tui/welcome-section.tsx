@@ -1,10 +1,15 @@
 import { Box, Text, useWindowSize } from "ink";
+import { resolveColorHex } from "wrap-core/ansi";
+import {
+  ActionBar,
+  DIALOG_CHROME_HEIGHT,
+  DIALOG_CHROME_WIDTH,
+  Dialog,
+  useKeyBindings,
+} from "wrap-core/tui";
 import { LOGO } from "../core/logo.ts";
-import { getTheme, themeHex } from "../core/theme.ts";
-import { ActionBar } from "./action-bar.tsx";
-import { DIALOG_CHROME_HEIGHT, DIALOG_CHROME_WIDTH, Dialog } from "./dialog.tsx";
-import { interpolateGradient } from "./gradient.ts";
-import { useKeyBindings } from "./key-bindings.ts";
+import { interpolateGradient } from "./gradient-shim.ts";
+import { getWrapTheme } from "./hooks.ts";
 import { WelcomeAnimation } from "./welcome-animation.tsx";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./welcome-animation-frames.ts";
 import { getWizardStops, WIZARD_CONTENT_WIDTH } from "./wizard-chrome.tsx";
@@ -29,9 +34,9 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
     { on: "return", do: onDone },
   ]);
 
-  const theme = getTheme();
-  const highlight = themeHex(theme.copy.pop);
-  const success = themeHex(theme.copy.success);
+  const theme = getWrapTheme();
+  const highlight = resolveColorHex(theme.copy.pop);
+  const success = resolveColorHex(theme.copy.success);
   const logoRowColor = (i: number): string =>
     interpolateGradient(i, LOGO.length, theme.wizard.welcomeLogo);
 
