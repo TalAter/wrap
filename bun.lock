@@ -475,7 +475,7 @@
 
     "wrap-ansi": ["wrap-ansi@10.0.0", "", { "dependencies": { "ansi-styles": "^6.2.3", "string-width": "^8.2.0", "strip-ansi": "^7.1.2" } }, "sha512-SGcvg80f0wUy2/fXES19feHMz8E0JoXv2uNgHOu4Dgi2OrCy1lqwFYEJz1BLbDI0exjPMe/ZdzZ/YpGECBG/aQ=="],
 
-    "wrap-core": ["wrap-core@github:TalAter/wrap-core#71d17c1", { "peerDependencies": { "typescript": "^5.9.3" } }, "TalAter-wrap-core-71d17c1", "sha512-bZQTK1vcAq11uwCpojCaVaOJaFvTkWIqTwpOR/ujQEZLZBBQwJnQXHm6Vr9dtrdLDe8P6iyX6Vk7u8EzWYSu4g=="],
+    "wrap-core": ["wrap-core@github:TalAter/wrap-core#3de07ca", { "dependencies": { "string-width": "^8.2.1" }, "peerDependencies": { "@inkjs/ui": "^2", "ink": "^7", "react": "^19", "typescript": "^5.9.3" } }, "TalAter-wrap-core-3de07ca", "sha512-CH/p3kwZXaxtoHD8A7IfSZgfBgeFHOMHfggopXYsqvUfZEqKJQDSapS1GvNQmOI2JXBp1DNQGTVfgKHBYk8OMw=="],
 
     "ws": ["ws@8.20.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA=="],
 
