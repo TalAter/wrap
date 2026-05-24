@@ -2226,3 +2226,9 @@
   mutated: 'i <= tasks.length'
   reason: 'extra iteration reads undefined from both arrays; !task guard immediately continues — equivalent'
   added: 2026-05-24
+- file: src/tui/gradient-shim.ts
+  mutator: ArrayDeclaration
+  original: 'new Array<string>(totalWidth)'
+  mutated: 'new Array()'
+  reason: 'pre-sizing is a performance hint; the for-loop fills every index 0..totalWidth-1 via out[i]=… regardless of initial allocation — equivalent'
+  added: 2026-05-24
