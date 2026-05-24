@@ -84,3 +84,4 @@
 - src/skills/discovery.ts
 - src/skills/index.ts
 - src/skills/run.ts
+- src/skills/types.ts
