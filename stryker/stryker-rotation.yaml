@@ -87,3 +87,4 @@
 - src/skills/types.ts
 - src/tui/gradient-shim.ts
 - src/tui/hooks.ts
+- src/watchlist.ts

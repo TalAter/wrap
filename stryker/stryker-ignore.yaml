@@ -2232,3 +2232,21 @@
   mutated: 'new Array()'
   reason: 'pre-sizing is a performance hint; the for-loop fills every index 0..totalWidth-1 via out[i]=… regardless of initial allocation — equivalent'
   added: 2026-05-24
+- file: src/watchlist.ts
+  mutator: MethodExpression
+  original: 'wrapFs.read(WATCHLIST_FILE)?.trim()'
+  mutated: 'wrapFs.read(WATCHLIST_FILE)'
+  reason: 'equivalent — trim only differs on whitespace-only content; JSON.parse handles leading/trailing whitespace, and whitespace-only input throws SyntaxError caught to return []'
+  added: 2026-05-25
+- file: src/watchlist.ts
+  mutator: ConditionalExpression
+  original: 'if (!raw) return [];'
+  mutated: 'if (false) return [];'
+  reason: 'equivalent — without the early return, falsy raw (null, "", undefined) falls through to JSON.parse which throws SyntaxError, caught returns same []'
+  added: 2026-05-25
+- file: src/watchlist.ts
+  mutator: ConditionalExpression
+  original: 'if (!Array.isArray(parsed)) return [];'
+  mutated: 'if (false) return [];'
+  reason: 'equivalent — without the guard, non-array parsed values reach .filter() which throws TypeError, caught returns same []'
+  added: 2026-05-25
