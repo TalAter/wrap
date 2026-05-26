@@ -215,4 +215,60 @@ describe("cursor leak guard", () => {
       }
     });
   });
+
+  test("SIGINT handler restores the cursor and exits with code 130", () => {
+    withGuardCapture(({ sigintListeners, writes }) => {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      const origExit = process.exit;
+      let exitCode: number | undefined;
+      process.exit = ((code: number) => {
+        exitCode = code;
+      }) as never;
+      try {
+        writes.length = 0;
+        for (const listener of sigintListeners) listener();
+        expect(writes.some((w) => w.includes(SHOW_CURSOR))).toBe(true);
+        expect(exitCode).toBe(130);
+      } finally {
+        process.exit = origExit;
+        stop();
+      }
+    });
+  });
+
+  test("SIGTERM handler restores the cursor and exits with code 143", () => {
+    withGuardCapture(({ sigtermListeners, writes }) => {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      const origExit = process.exit;
+      let exitCode: number | undefined;
+      process.exit = ((code: number) => {
+        exitCode = code;
+      }) as never;
+      try {
+        writes.length = 0;
+        for (const listener of sigtermListeners) listener();
+        expect(writes.some((w) => w.includes(SHOW_CURSOR))).toBe(true);
+        expect(exitCode).toBe(143);
+      } finally {
+        process.exit = origExit;
+        stop();
+      }
+    });
+  });
+});
+
+describe("frame cycling", () => {
+  beforeEach(() => seedTestConfig());
+
+  test("never renders out-of-bounds frame data", async () => {
+    const stderr = mockStderr({ isTTY: true });
+    try {
+      const stop = startChromeSpinner(SPINNER_TEXT);
+      await new Promise((r) => setTimeout(r, SPINNER_INTERVAL * 5 + 30));
+      stop();
+      expect(stderr.text).not.toContain("undefined");
+    } finally {
+      stderr.restore();
+    }
+  });
 });
