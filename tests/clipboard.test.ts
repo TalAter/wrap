@@ -97,6 +97,16 @@ describe("copyToClipboard", () => {
     }
   });
 
+  test("preserves interior newlines while stripping trailing ones", () => {
+    const calls: SpawnCall[] = [];
+    const fake = makeFakeSpawn(calls);
+    copyToClipboard("echo hello\necho world\n", {
+      which: (cmd) => (cmd === "pbcopy" ? "/usr/bin/pbcopy" : null),
+      spawn: fake.spawn,
+    });
+    expect(fake.stdinWrites).toEqual(["echo hello\necho world"]);
+  });
+
   test("spawns with piped stdin, ignored stdout/stderr, and unrefs immediately", () => {
     const calls: SpawnCall[] = [];
     const fake = makeFakeSpawn(calls);
