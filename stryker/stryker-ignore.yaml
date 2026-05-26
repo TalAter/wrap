@@ -2244,3 +2244,27 @@
   mutated: 'expanded.endsWith("/")'
   reason: 'existing test resolvePath(".", tmp) covers the relative-path-with-cwd code path. Survival is suspected Stryker command-runner artifact — the command runner treats the whole suite as one test and may not detect the failure properly in this environment.'
   added: 2026-05-26
+- file: src/core/spinner.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: 'line 20 listenersInstalled initial value. Tests reset this via resetExitGuard(), so mutation is equivalent within the test environment; module-level init state cannot be re-imported.'
+  added: 2026-05-26
+- file: src/core/spinner.ts
+  mutator: ConditionalExpression
+  original: 'cursorTeardownUnregister'
+  mutated: 'false'
+  reason: 'line 61 ensureCursorTeardown guard. Equivalent — teardownBytes is a Set, so re-adding SHOW_CURSOR is idempotent. The lost unregister callback is never called externally.'
+  added: 2026-05-26
+- file: src/core/spinner.ts
+  mutator: ConditionalExpression
+  original: 'stopped'
+  mutated: 'false'
+  reason: 'stop-idempotency guards at lines 104, 128, 132. Double-calling stop writes an extra clear-line to an already-cleared terminal line (harmless); clearInterval prevents interval re-fire regardless of the flag.'
+  added: 2026-05-26
+- file: src/core/spinner.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: 'stopped = true at lines 105, 133. Same as the ConditionalExpression stopped → false ignores — clearInterval prevents re-fire, and double-stop writes are idempotent on the terminal.'
+  added: 2026-05-26
