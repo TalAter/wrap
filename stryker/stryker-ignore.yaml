@@ -2183,3 +2183,52 @@
   mutated: '""'
   reason: cosmetic logo art line — visual decoration in --help output, no runtime logic reads individual line content
   added: 2026-05-26
+- file: src/core/clipboard.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      try {
+        return Bun.which(cmd);
+      } catch {
+        return null;
+      }
+    }
+  mutated: '{}'
+  reason: 'defaultWhich is only used when callers don''t inject `which`; tests always inject a mock. Exercising defaultWhich requires stubbing Bun.which globally (binds implementation) or relying on the host PATH (flaky).'
+  added: 2026-05-26
+- file: src/core/clipboard.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return Bun.which(cmd);
+      }
+  mutated: '{}'
+  reason: 'defaultWhich try block — tests always inject a mock `which`, so this code path is never exercised. Same as the outer defaultWhich body ignore.'
+  added: 2026-05-26
+- file: src/core/clipboard.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return null;
+      }
+  mutated: '{}'
+  reason: 'defaultWhich catch block — tests always inject a mock `which`, so this code path is never exercised. Same as the outer defaultWhich body ignore.'
+  added: 2026-05-26
+- file: src/core/clipboard.ts
+  mutator: ConditionalExpression
+  original: 'opts.resolve !== undefined'
+  mutated: 'true'
+  reason: 'equivalent — _setClipboardTestHooks is test-only. When opts.resolve is undefined and mutant forces assignment, resolveOverride becomes undefined which is falsy; the `if (resolveOverride)` guard in resolveClipboardTool treats undefined and null identically.'
+  added: 2026-05-26
+- file: src/core/clipboard.ts
+  mutator: ConditionalExpression
+  original: 'opts.copy !== undefined'
+  mutated: 'true'
+  reason: 'equivalent — _setClipboardTestHooks is test-only. When opts.copy is undefined and mutant forces assignment, copyOverride becomes undefined which is falsy; the `if (copyOverride)` guard in copyToClipboard treats undefined and null identically.'
+  added: 2026-05-26
+- file: src/core/clipboard.ts
+  mutator: ConditionalExpression
+  original: '!tool'
+  mutated: 'false'
+  reason: 'equivalent — skipping the early return when tool is null causes spawn([null, ...CLIPBOARD_ARGS[null]]) to throw, caught by the outer try/catch. Both paths result in silent no-op (no clipboard write, no error surfaced).'
+  added: 2026-05-26
