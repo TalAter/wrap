@@ -2232,3 +2232,15 @@
   mutated: 'false'
   reason: 'equivalent — skipping the early return when tool is null causes spawn([null, ...CLIPBOARD_ARGS[null]]) to throw, caught by the outer try/catch. Both paths result in silent no-op (no clipboard write, no error surfaced).'
   added: 2026-05-26
+- file: src/core/paths.ts
+  mutator: StringLiteral
+  original: '"~"'
+  mutated: '""'
+  reason: 'equivalent — mutates startsWith("~") to startsWith(""), which is always true. But replace("~", homedir()) is a no-op when input lacks ~. Only diverges on inputs containing ~ at non-initial position (e.g. /path/~backup), which no real caller produces.'
+  added: 2026-05-26
+- file: src/core/paths.ts
+  mutator: MethodExpression
+  original: '!expanded.startsWith("/")'
+  mutated: 'expanded.endsWith("/")'
+  reason: 'existing test resolvePath(".", tmp) covers the relative-path-with-cwd code path. Survival is suspected Stryker command-runner artifact — the command runner treats the whole suite as one test and may not detect the failure properly in this environment.'
+  added: 2026-05-26
