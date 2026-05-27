@@ -1,532 +1,3 @@
-- file: src/subcommands/forget-footprint.ts
-  mutator: ConditionalExpression
-  original: 'memBytes > 0'
-  mutated: 'true'
-  reason: 'line 25 in memoryFootprint. Equivalent — the preceding early return on `memBytes === 0 && wlBytes === 0` means this block is only reached when at least one file exists. When memBytes === 0 (memory.json missing) and wlBytes > 0, the mutant enters the block and calls loadMemory(), which returns `{}` for a missing file; countFacts({}) is 0, so count stays 0 either way. Observable result is identical.'
-  added: 2026-05-16
-- file: src/subcommands/forget-footprint.ts
-  mutator: EqualityOperator
-  original: 'memBytes > 0'
-  mutated: 'memBytes >= 0'
-  reason: 'line 25 in memoryFootprint. Equivalent — diverges only when memBytes === 0, in which case loadMemory() returns `{}` for a missing memory.json and countFacts({}) is 0; same result as skipping the block. Paired with the ConditionalExpression mutant on the same line.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'cn <= 0.04045'
-  mutated: 'cn < 0.04045'
-  reason: 'srgbToLinear boundary at line 38. cn = c/255 with integer c, so cn === 0.04045 requires c === 10.31475 — unreachable. The mutation diverges only at that exact value.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: 'cn / 12.92'
-  mutated: 'cn * 12.92'
-  reason: 'srgbToLinear `cn ≤ 0.04045` branch arithmetic at line 38. Triggered only for very small RGB components (c < 11). Existing endpoint round-trip tests cover c ∈ {0, 128, 255}; c=0 collapses (0/12.92 === 0 === 0*12.92), and 128/255 take the else branch. Adding a small-c case would paraphrase the sRGB→linear curve constants.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'c <= 0.0031308'
-  mutated: 'c < 0.0031308'
-  reason: 'linearToSrgb boundary at line 42. Linear-space input is continuous (from OKLAB inversion), and the exact 0.0031308 value is only reached on contrived inputs — boundary equivalent in practice.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: 'c * 12.92'
-  mutated: 'c / 12.92'
-  reason: 'linearToSrgb `c ≤ 0.0031308` branch arithmetic at line 42. Mirror of the srgbToLinear small-value mutant — only matters at very low linear values; pinning the output would paraphrase the inverse sRGB curve.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ConditionalExpression
-  original: 'stops.length === 1'
-  mutated: 'false'
-  reason: 'interpolateOklab 1-stop guard at line 81. Production callers (theme FrameStops, SPECTRUM in help.ts, welcomeBrain) always pass ≥2 stops; the fallthrough computes segments = 0, seg = -1 (via Math.min(0, -1)), and dereferences stops[-1] (undefined) → TypeError. The guard exists for input-validation completeness but the bad input is not producible.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: 't * segments'
-  mutated: 't / segments'
-  reason: 'interpolateOklab seg index arithmetic at line 83. Diverges only for ≥3-stop arrays at t past the first segment; killing it requires asserting a specific OKLAB-interpolated color at an asymmetric t, which paraphrases the perceptual interpolation algorithm.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: 't * segments - seg'
-  mutated: 't * segments + seg'
-  reason: 'interpolateOklab segT sign mutation at line 84. Same multi-stop interpolation internals as the seg arithmetic mutant — catching this would pin an OKLAB extrapolation past stops[seg+1], paraphrase of the lerp.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: 't * segments'
-  mutated: 't / segments'
-  reason: 'interpolateOklab segT factor mutation at line 84. Same multi-stop interpolation internals — paraphrase-only kill.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'd < bestDist'
-  mutated: 'd <= bestDist'
-  reason: 'nearest16 tie-break at line 126. Diverges only on RGB inputs equidistant from two ANSI16 palette entries; the chosen slot in a tie is a soft preference (either nearest match is equally valid).'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'i < CUBE_LEVELS.length'
-  mutated: 'i <= CUBE_LEVELS.length'
-  reason: 'nearestCubeIndex bound at line 141. The extra iteration reads CUBE_LEVELS[6] (undefined), Math.abs(v - undefined) === NaN, and NaN < bestDist is false, so best is never updated. Equivalent on every input.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'd < bestDist'
-  mutated: 'd <= bestDist'
-  reason: 'nearestCubeIndex tie-break at line 143. Diverges only on values equidistant from two adjacent cube levels (e.g., v=115 between 95 and 135); the chosen index is a soft preference.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArrayDeclaration
-  original: '[0, 0, 0]'
-  mutated: '[]'
-  reason: 'code16ToRgb fallback at line 183. code16ToRgb is only invoked by quantizeColor at level 1, where the input code comes from nearest16 which always returns a valid 30–37/90–97 code → idx ∈ [0, 15]. The fallback for ANSI16_RGBS[idx] === undefined is unreachable.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ConditionalExpression
-  original: 'len === 0'
-  mutated: 'false'
-  reason: 'gradientCells empty-text early return at line 227. Equivalent — without the guard, new Array(0) is [], the for-loop never executes (i < 0 is false), and the function returns the same empty array.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArrayDeclaration
-  original: 'new Array(len)'
-  mutated: 'new Array()'
-  reason: 'gradientCells cells array pre-sizing at line 228. Equivalent — cells[i] = … assignments still build the array; pre-sizing is an implementation hint, not observable in the returned content.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ConditionalExpression
-  original: 'level > 0 && level < 3'
-  mutated: 'true && level < 3'
-  reason: 'gradientCells solid-computation left half at line 229. Diverges only at level=0, where original solid=null and mutated solid=stops[0]; but the loop''s `if (level <= 0)` at line 238 returns before solid is consulted. Equivalent.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'level > 0'
-  mutated: 'level >= 0'
-  reason: 'gradientCells solid-computation boundary at line 229. Only diverges at level=0, where the loop''s `if (level <= 0)` returns first and solid is never consulted. Equivalent.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: StringLiteral
-  original: '""'
-  mutated: '"Stryker was here!"'
-  reason: 'gradientCells solidEsc fallback at line 230. Read only when `if (solid)` is true at line 242; when solid is null (levels 0 or 3) the fallback value is never used.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ConditionalExpression
-  original: 'level <= 0'
-  mutated: 'false'
-  reason: 'gradientCells level=0 shortcut at line 238. Without it, level=0 falls through past `if (solid)` (solid is null when level=0) into the interpolation path; fgCode(_, _, _, 0) returns "", so cells[i] = "" + ch = ch. Same observable result as the shortcut.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'level <= 0'
-  mutated: 'level < 0'
-  reason: 'gradientCells level=0 shortcut boundary at line 238. Only diverges at level=0; fallthrough path collapses to cells[i] = ch as above. Equivalent.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: BlockStatement
-  original: '{ cells[i] = ch; continue; }'
-  mutated: '{}'
-  reason: 'gradientCells level=0 shortcut body at line 238. Empty body falls through to the interpolation path, which produces fgCode return "" and cells[i] = ch anyway. Equivalent.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ConditionalExpression
-  original: 'shinePos !== undefined'
-  mutated: 'true'
-  reason: 'gradientCells shine guard at line 249. When shinePos is undefined, the block computes dist = Math.abs(i - undefined) = NaN; NaN < shineRadius is false, so the boost branch never executes and lab is unchanged.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: EqualityOperator
-  original: 'dist < shineRadius'
-  mutated: 'dist <= shineRadius'
-  reason: 'gradientCells shine radius boundary at line 251. Only diverges at dist === shineRadius, where boost = (1 - 1)^2 = 0 and lerpOklab with t=0 is the identity — no-op.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: '1 - dist / shineRadius'
-  mutated: '1 + dist / shineRadius'
-  reason: 'gradientCells shine boost formula (sign mutation) at line 252. Killing this would require asserting an exact rendered color at a non-center shine position — a paraphrase of the boost curve. Shine is documented as a soft visual decoration.'
-  added: 2026-05-16
-- file: src/core/ansi.ts
-  mutator: ArithmeticOperator
-  original: 'dist / shineRadius'
-  mutated: 'dist * shineRadius'
-  reason: 'gradientCells shine boost formula (factor mutation) at line 252. Same as the sign mutant — paraphrase-only kill of the boost curve.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: '!content'
-  mutated: 'false'
-  reason: 'equivalent — without the early return, content='''' splits to [''''], JSON.parse('''') throws and corrupt becomes 1; the next-branch `valid.length===0 && corrupt===0` is then false, but the subsequent `results.length===0` early return prints the same ''No log entries yet.'' message and returns before the corrupt-warning line. Same observable stderr.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'n !== null'
-  mutated: 'true'
-  reason: 'equivalent — when n is null, rawLines.slice(-null) === rawLines.slice(0) returns the same array; mutating to `true` is identical to skipping the conditional.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BooleanLiteral
-  original: 'false'
-  mutated: 'true'
-  reason: 'initial `let raw = false` flipped to true. In tests (non-TTY) writer selection collapses to writeRaw via `raw || !isTTY()` either way; killing requires an in-process TTY test with cleared PATH (so hasJq()=false) — invasive setup for cosmetic writer-mode signal.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          raw = true;
-        }
-  mutated: '{}'
-  reason: 'empties the `if (arg === ''--raw'') { raw = true }` body. In non-TTY tests, `raw || !isTTY()` is true regardless, so writeRaw is used either way; only TTY-mode tests with PATH-cleared no-jq setup would distinguish.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BooleanLiteral
-  original: 'true'
-  mutated: 'false'
-  reason: 'flips `raw = true` to `raw = false` inside the --raw branch. Same as the BlockStatement mutant on the same line — observable only in TTY mode where writePretty would otherwise fire.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: Regex
-  original: '/^-\d+$/'
-  mutated: '/^-\d+/'
-  reason: 'drops the `$` anchor — only diverges on contrived args like `-3foo` that have a negative-number prefix with trailing content. Tightening would paraphrase the regex anchor.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: Regex
-  original: '/^-\d+$/'
-  mutated: '/-\d+$/'
-  reason: 'drops the `^` anchor — only diverges on contrived args like `foo-3` that match the trailing negative-number pattern but aren''t real CLI inputs. Tightening would paraphrase the regex anchor.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"Usage: w --log [search] [N] [--raw]"'
-  mutated: '""'
-  reason: 'Usage hint line printed after ''Invalid argument: N must be a non-negative integer.'' Cosmetic help-text companion to the error; killing would require asserting the exact Usage literal (paraphrase).'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: LogicalOperator
-  original: '!Number.isNaN(parsed) && parsed >= 0 && String(parsed) === arg'
-  mutated: '!Number.isNaN(parsed) && parsed >= 0 || String(parsed) === arg'
-  reason: 'swaps last `&&` to `||` in the integer-validation chain. Only diverges on fractional-but-parseable inputs like ''3.14'' (parseInt=3, String(3)!==''3.14'') which the user has no reason to pass to --log; killing requires asserting how ''3.14'' is treated, which paraphrases the strict-equality intent.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: '!Number.isNaN(parsed) && parsed >= 0'
-  mutated: 'true'
-  reason: 'left-hand of the integer check forced true; the surviving `String(parsed) === arg` constraint already filters non-integer strings (''NaN'' equals ''NaN'' is the only weird case, and no real --log caller passes ''NaN''). Equivalent on producible inputs.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: LogicalOperator
-  original: '!Number.isNaN(parsed) && parsed >= 0'
-  mutated: '!Number.isNaN(parsed) || parsed >= 0'
-  reason: 'swaps inner `&&` to `||`. Diverges only when parsed is NaN OR parsed<0 (but not both); the regex above already errors on negative-integer args, and String(parsed)===arg filters parseable-but-not-integer strings. No producible input distinguishes.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'parsed >= 0'
-  mutated: 'true'
-  reason: '`parsed >= 0` forced true. The regex on line 53 already catches `/^-\d+$/` negative integers; remaining negative-parseable inputs (like ''-3.5'') fail the trailing String(parsed)===arg check. No producible distinguishing input.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'String(parsed) === arg'
-  mutated: 'true'
-  reason: 'round-trip integer check forced true. Would accept ''3.14'' as n=3; valid arg shape but the user-facing semantic of --log N is integer N, and accepting fractional N is contrived input. Killing would bind to a niche parsing decision.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'arg === ""'
-  mutated: 'false'
-  reason: '`arg === ''''` empty-string branch forced false. Empty-string args are not naturally producible via shells; the only producible case is explicit `wrap ''--log'' ''''` which is contrived. The empty-string branch is documented as defensive (`// Empty string search treated as no search`).'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '""'
-  mutated: '"Stryker was here!"'
-  reason: 'literal '''' compared against arg mutated to ''Stryker was here!''. No real arg ever equals that mutated literal, so the branch effectively never fires. Equivalent on all producible inputs.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"Usage: w --log [search] [N] [--raw]"'
-  mutated: '""'
-  reason: 'Usage hint line printed after ''Only one search term allowed.'' Same as the negative-int companion — cosmetic help-text, paraphrase-only kill.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BlockStatement
-  original: |-
-    {
-      if (isTTY() && hasJq()) {
-        const jsonl = `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`;
-        const proc = Bun.spawn(["jq", "-C", "."], {
-          stdin: "pipe",
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        proc.stdin.write(jsonl);
-        proc.stdin.end();
-        await proc.exited;
-        return;
-      }
-      process.stdout.write(`${entries.map((e) => JSON.stringify(e, null, 2)).join("\n\n")}\n`);
-    }
-  mutated: '{}'
-  reason: 'empties the entire writePretty function body. writePretty fires only in TTY mode; in tests (non-TTY) writeRaw is selected via the `raw || !isTTY()` ternary. Killing requires in-process TTY test with cleared PATH — pairs with the L48/L116 ignores.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'isTTY() && hasJq()'
-  mutated: 'true'
-  reason: 'forces entry into the jq branch even when jq is absent; Bun.spawn([''jq'', ...]) throws ENOENT, producing a crash. Detecting this requires a TTY-mode test with deterministic jq presence/absence — invasive in-process setup.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'isTTY() && hasJq()'
-  mutated: 'false'
-  reason: 'forces skip of the jq branch; output falls through to the JSON.stringify(e, null, 2) fallback. Difference is jq-colorized vs plain pretty-JSON — only observable in TTY mode with jq installed (env-dependent).'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: LogicalOperator
-  original: 'isTTY() && hasJq()'
-  mutated: 'isTTY() || hasJq()'
-  reason: 'swaps `&&` to `||` in jq-path guard; enters jq branch when either isTTY or hasJq is true. Same invasive-setup requirements as the conditional mutants on this line.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        const jsonl = `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`;
-        const proc = Bun.spawn(["jq", "-C", "."], {
-          stdin: "pipe",
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        proc.stdin.write(jsonl);
-        proc.stdin.end();
-        await proc.exited;
-        return;
-      }
-  mutated: '{}'
-  reason: 'empties the jq-branch body. Same as the writePretty top-body ignore — TTY-only path requiring invasive setup to test.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '`${entries.map((e) => JSON.stringify(e)).join("\n")}\n`'
-  mutated: '``'
-  reason: 'jq input template literal collapsed to ``. TTY+jq path only; same env-dependent invasive setup.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ArrowFunction
-  original: '(e) => JSON.stringify(e)'
-  mutated: '() => undefined'
-  reason: 'JSON.stringify map function collapsed to () => undefined inside the jq path. TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"\n"'
-  mutated: '""'
-  reason: '`\n` separator inside the jq-input template literal. jq accepts space- and newline-separated objects, so the mutant `''''` joiner would still feed jq concatenated JSON; output difference is jq''s parse behavior — fragile env-dependent assertion.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ArrayDeclaration
-  original: '["jq", "-C", "."]'
-  mutated: '[]'
-  reason: 'jq spawn cmd array collapsed to []. Bun.spawn([]) throws; TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"jq"'
-  mutated: '""'
-  reason: 'jq command name literal. Bun.spawn(['''', ''-C'', ''.'']) fails; TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"-C"'
-  mutated: '""'
-  reason: 'jq `-C` color flag. Cosmetic — controls whether jq emits color escapes; output diff is color presence, observable only in TTY+jq env.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"."'
-  mutated: '""'
-  reason: 'jq `.` identity filter. Mutant `''''` makes jq error or behave differently; TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ObjectLiteral
-  original: |-
-    {
-          stdin: "pipe",
-          stdout: "inherit",
-          stderr: "inherit",
-        }
-  mutated: '{}'
-  reason: 'Bun.spawn options object collapsed to {}. Without `stdin: ''pipe''`, proc.stdin.write would fail; TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"pipe"'
-  mutated: '""'
-  reason: '`stdin: ''pipe''` value mutated to ''''. Bun.spawn would reject the malformed option; TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"inherit"'
-  mutated: '""'
-  reason: '`stdout: ''inherit''` value. Same — Bun.spawn option, TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"inherit"'
-  mutated: '""'
-  reason: '`stderr: ''inherit''` value. Same — Bun.spawn option, TTY+jq path only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '`${entries.map((e) => JSON.stringify(e, null, 2)).join("\n\n")}\n`'
-  mutated: '``'
-  reason: 'pretty-fallback template literal collapsed to ``. process.stdout.write('''') produces no output; TTY-mode path (no-jq fallback) only. Pairs with the L80 ignore.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ArrowFunction
-  original: '(e) => JSON.stringify(e, null, 2)'
-  mutated: '() => undefined'
-  reason: 'pretty-fallback JSON.stringify map function collapsed to () => undefined. TTY-mode path (no-jq fallback) only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"\n\n"'
-  mutated: '""'
-  reason: '`\n\n` separator between pretty-printed entries. TTY-mode path only; separator is a formatting choice, killing would paraphrase the literal.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"command"'
-  mutated: '""'
-  reason: '`kind: ''command''` discriminator. dispatch.ts matches on `.flag` not `.kind`; renderFlagHelp only branches on `kind === ''option''` which is false either way for logCmd. No runtime read of the literal value.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"log"'
-  mutated: '""'
-  reason: '`id: ''log''` field. The id is not read at runtime in any code path — discriminator/structural metadata only.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ArrayDeclaration
-  original: |-
-    [
-        "Arguments:",
-        "  search    Filter entries containing this term",
-        "  N         Show only the last N entries",
-        "  --raw     Output raw JSONL instead of pretty-printed",
-      ]
-  mutated: '[]'
-  reason: '`help` array collapsed to []. Result: [].join(''\n'') === '''', so renderFlagHelp''s `if (flag.help)` skips the help block. Visible only via `w --help log`; killing would paraphrase the help-text contract.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"Arguments:"'
-  mutated: '""'
-  reason: '''Arguments:'' header line in the --help log block. Cosmetic help text, paraphrase-only kill.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"  search    Filter entries containing this term"'
-  mutated: '""'
-  reason: 'search-arg help description line. Cosmetic help text.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"  N         Show only the last N entries"'
-  mutated: '""'
-  reason: 'N-arg help description line. Cosmetic help text.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"  --raw     Output raw JSONL instead of pretty-printed"'
-  mutated: '""'
-  reason: '--raw-arg help description line. Cosmetic help text.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"\n"'
-  mutated: '""'
-  reason: '`\n` join separator for help-array. Cosmetic help-text formatting.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: '!parsed'
-  mutated: 'false'
-  reason: '`!parsed` → false. Mutant skips the early return; subsequent `const { n, search, raw } = parsed` destructures null and throws. exitCode is still non-zero and stderr still contains the parseArgs chrome message that was printed before returning null; killing would require asserting stderr does NOT contain the crash trace, which binds to runtime error format.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          process.exitCode = 1;
-          return;
-        }
-  mutated: '{}'
-  reason: 'empties the `if (!parsed) { process.exitCode = 1; return; }` body. Same as the conditional mutant — destructuring null throws downstream, exitCode non-zero either way, chrome message already printed; killing binds to crash-output format.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'raw || !isTTY()'
-  mutated: 'true'
-  reason: '`raw || !isTTY()` → `true`. Forces writeRaw always; in non-TTY tests this is the default branch anyway. Pairs with the writePretty-body ignores — TTY-only observable behavior.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'valid.length === 0 && corrupt === 0'
-  mutated: 'false'
-  reason: '`valid.length === 0 && corrupt === 0` → false. Without the early return, results=[] reaches the next `results.length === 0` branch which prints the same ''No log entries yet.'' message and returns before the corrupt-warning. Equivalent observable.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'corrupt === 0'
-  mutated: 'true'
-  reason: '`corrupt === 0` → true. Combined: `valid.length === 0 && true` ≡ `valid.length === 0`. The case it differs on (valid=[] corrupt>0) still ends up at the next results-empty branch printing ''No log entries yet.'' Equivalent.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          chrome("No log entries yet.");
-          return;
-        }
-  mutated: '{}'
-  reason: 'empties the early-return body. Same as the conditional mutant — falls through to the next results-empty branch which prints the same message. Equivalent.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: EqualityOperator
-  original: 'corrupt === 0'
-  mutated: 'corrupt !== 0'
-  reason: '`corrupt === 0` → `corrupt !== 0`. Combined: `valid.length === 0 && corrupt !== 0`. Triggers early return only when valid=[] AND corrupt>0; in the only other distinguishing case (valid=[] corrupt=0), the original returns from this branch but the mutant falls through to the next results-empty branch which prints the same message. Equivalent.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'search && n !== null'
-  mutated: 'true'
-  reason: '`search && n !== null` → true, forcing slice always. When search is null, results=valid (n-already-sliced in readLog); slice(-null) === slice(0) returns the whole array. When n is null with search, slice(-null) === slice(0) again. Equivalent on all branches.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: LogicalOperator
-  original: 'search && n !== null'
-  mutated: 'search || n !== null'
-  reason: '`&&` → `||`. When search=null n=2: original skips, mutant slices; but readLog already sliced rawLines by n so results.slice(-2) returns the same array. When search=''x'' n=null: mutant slices with -null=0 (whole array). Equivalent.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: ConditionalExpression
-  original: 'n !== null'
-  mutated: 'true'
-  reason: '`n !== null` → true. Same as the outer conditional ignore — slice(-null)===slice(0) on the no-N branch; equivalent.'
-  added: 2026-05-16
-- file: src/subcommands/log.ts
-  mutator: StringLiteral
-  original: '"No log entries yet."'
-  mutated: '""'
-  reason: '`''No log entries yet.''` → `''''` in the search-falsy ternary fallback. Only fires when results=[] AND search=null AND we didn''t already early-return at line 123 — i.e., valid=[] with corrupt>0 (all log lines corrupt, no search). Edge of edge: corrupt-warning still emits, but the no-entries chrome becomes empty. Killing requires an all-corrupt-no-search test, which is a contrived input shape vs the corrupt-mixed-valid case the existing tests already cover.'
-  added: 2026-05-16
 - file: src/core/detect-appearance.ts
   mutator: Regex
   original: '/\]11;rgb:([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})/'
@@ -2268,3 +1739,531 @@
   mutated: 'false'
   reason: 'stopped = true at lines 105, 133. Same as the ConditionalExpression stopped → false ignores — clearInterval prevents re-fire, and double-stop writes are idempotent on the terminal.'
   added: 2026-05-26
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [210, 210, 225], bg: [60, 60, 100] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[210, 210, 225]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[60, 60, 100]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [120, 180, 255],\n      [60, 60, 100],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[120, 180, 255]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[60, 60, 100]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[40, 90, 60]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[130, 220, 160]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[180, 200, 255]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[60, 80, 160]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [100, 100, 140], bg: [50, 50, 80] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[100, 100, 140]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[50, 50, 80]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[115, 115, 140]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [179, 179, 179],\n      [255, 255, 255],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[179, 179, 179]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[255, 255, 255]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [245, 186, 74],\n      [206, 114, 255],\n      [94, 214, 255],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[245, 186, 74]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[94, 214, 255]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[206, 114, 255]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [255, 60, 80],\n      [60, 60, 100],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[255, 60, 80]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[60, 60, 100]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n  ...LIGHT_CORE,\n  dialog: {\n    ...LIGHT_CORE.dialog,\n    outputLabel: [105, 105, 130],\n    outputText: [45, 45, 7...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n    ...LIGHT_CORE.dialog,\n    outputLabel: [105, 105, 130],\n    outputText: [45, 45, 70],\n    explanation: [105, 10...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[105, 105, 130]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[45, 45, 70]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[105, 105, 130]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[25, 90, 190]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [45, 45, 70], bg: [210, 215, 230] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[45, 45, 70]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[210, 215, 230]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [15, 125, 55], bg: [215, 238, 220] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[15, 125, 55]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[215, 238, 220]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n    frame: [\n      [25, 90, 190],\n      [170, 170, 195],\n    ],\n    labelPill: { fg: [10, 20, 90], bg: [150, 175, 2...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [25, 90, 190],\n      [170, 170, 195],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[25, 90, 190]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[170, 170, 195]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [10, 20, 90], bg: [150, 175, 220] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[10, 20, 90]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[150, 175, 220]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [15, 110, 55], bg: [210, 240, 215] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[15, 110, 55]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[210, 240, 215]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [30, 75, 190], bg: [210, 225, 250] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[30, 75, 190]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[210, 225, 250]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [130, 130, 155], bg: [220, 220, 230] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[130, 130, 155]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[220, 220, 230]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[105, 105, 130]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[255, 165, 50]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[105, 105, 130]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[0, 0, 0]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [160, 121, 191],\n      [79, 94, 133],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[160, 121, 191]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[79, 94, 133]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [211, 76, 243],\n      [29, 227, 235],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[211, 76, 243]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[29, 227, 235]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n    low: {\n      frame: [\n        [15, 150, 130],\n        [170, 170, 195],\n      ],\n      pill: { fg: [15, 125, 55]...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n      frame: [\n        [15, 150, 130],\n        [170, 170, 195],\n      ],\n      pill: { fg: [15, 125, 55], bg: [215,...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n        [15, 150, 130],\n        [170, 170, 195],\n      ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[15, 150, 130]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[170, 170, 195]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [15, 125, 55], bg: [215, 238, 220] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[15, 125, 55]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[215, 238, 220]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n      frame: [\n        [175, 35, 115],\n        [170, 170, 195],\n      ],\n      pill: { fg: [160, 95, 0], bg: [248, ...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n        [175, 35, 115],\n        [170, 170, 195],\n      ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[175, 35, 115]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[170, 170, 195]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [160, 95, 0], bg: [248, 232, 200] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[160, 95, 0]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[248, 232, 200]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n      frame: [\n        [190, 25, 45],\n        [170, 170, 195],\n      ],\n      pill: { fg: [190, 25, 45], bg: [248, ...'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n        [190, 25, 45],\n        [170, 170, 195],\n      ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[190, 25, 45]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[170, 170, 195]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{ fg: [190, 25, 45], bg: [248, 218, 218] }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[190, 25, 45]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[248, 218, 218]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ObjectLiteral
+  original: '{\n    frame: [\n      [190, 25, 45],\n      [170, 170, 195],\n    ],\n  }'
+  mutated: '{}'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[\n      [190, 25, 45],\n      [170, 170, 195],\n    ]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[190, 25, 45]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27
+- file: src/core/theme.ts
+  mutator: ArrayDeclaration
+  original: '[170, 170, 195]'
+  mutated: '[]'
+  reason: pure color-data constant in theme object; mutating visual appearance only, no behavioral change
+  added: 2026-05-27

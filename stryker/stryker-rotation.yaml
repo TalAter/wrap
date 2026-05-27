@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/core/theme.ts
 - src/core/verbose.ts
 - src/fs/home.ts
 - src/fs/temp.ts
@@ -88,3 +87,4 @@
 - src/core/clipboard.ts
 - src/core/paths.ts
 - src/core/spinner.ts
+- src/core/theme.ts
