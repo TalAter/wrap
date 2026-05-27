@@ -63,6 +63,14 @@ describe("verbose module", () => {
     expect(parseElapsed(lines[1] ?? "")).toBeGreaterThan(parseElapsed(lines[0] ?? ""));
   });
 
+  test("elapsed time starts from first verbose call, not process start", async () => {
+    seedTestConfig({ verbose: true });
+    await new Promise((r) => setTimeout(r, 200));
+    verbose("first call");
+    const elapsed = parseElapsed(stderr.text.trim().split("\n")[0] ?? "");
+    expect(elapsed).toBeLessThan(0.1);
+  });
+
   test("elapsed time is reported in seconds, not milliseconds", async () => {
     seedTestConfig({ verbose: true });
     verbose("first");
