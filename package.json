@@ -5,7 +5,6 @@
   "version": "0.0.6-rc.1",
   "license": "MIT",
   "scripts": {
-    "setup": "./scripts/setup",
     "start": "bun run src/index.ts",
     "build:watch": "watchexec -w src bun run scripts/build.ts",
     "build": "bun run scripts/build.ts",
