@@ -10,7 +10,7 @@ function gitProbe(command: string): SkillTask {
     command,
     run: async () => {
       const result = await execTaskInShell(command);
-      if (!result || result.exitCode !== 0 || result.output.trim() === "") return null;
+      if (result?.exitCode !== 0 || result.output.trim() === "") return null;
       return result;
     },
   };

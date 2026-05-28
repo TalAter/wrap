@@ -43,7 +43,7 @@ function captureFromResult(
       finishReason?: string;
     };
     const rawRequestWire = buildWireRequest(r.request?.body);
-    if (!rawRequestWire || rawRequestWire.kind !== "http") {
+    if (rawRequestWire?.kind !== "http") {
       return {
         raw_response,
         wire_capture_error: "ai-sdk result.request.body is missing or not an object",
