@@ -1663,3 +1663,9 @@
   mutated: '{}'
   reason: "safeStringify feeds the raw_response field of WireCapture (logging only). Mutation affects captured string content, never observable to callers."
   added: 2026-05-29
+- file: src/llm/types.ts
+  mutator: StringLiteral
+  original: '"(default)"'
+  mutated: '""'
+  reason: 'formatProvider output is a display label for verbose logs and RoundError messages. Fallback shown only for claude-code with no model; mutant would render "claude-code / " instead of "claude-code / (default)" — same information, cosmetic.'
+  added: 2026-05-29
