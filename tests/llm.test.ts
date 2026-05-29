@@ -16,6 +16,10 @@ const ANTHROPIC_RESOLVED: ResolvedProvider = {
   model: "claude-haiku-4-5",
 };
 const OPENAI_RESOLVED: ResolvedProvider = { name: "openai", model: "gpt-4o-mini" };
+const OPENROUTER_RESOLVED: ResolvedProvider = {
+  name: "openrouter",
+  model: "anthropic/claude-3.5-sonnet",
+};
 const CLAUDE_CODE_RESOLVED: ResolvedProvider = {
   name: "claude-code",
   model: "haiku",
@@ -39,6 +43,11 @@ describe("initProvider factory", () => {
 
   test("returns a provider for openai", () => {
     const provider = initProvider(OPENAI_RESOLVED);
+    expect(typeof provider.runPrompt).toBe("function");
+  });
+
+  test("returns a provider for openrouter", () => {
+    const provider = initProvider(OPENROUTER_RESOLVED);
     expect(typeof provider.runPrompt).toBe("function");
   });
 
