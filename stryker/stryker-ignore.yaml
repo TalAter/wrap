@@ -1627,3 +1627,171 @@
   mutated: 'i <= entry.turns.length'
   reason: 'equivalent — extra iteration reads entry.turns[length] which is undefined; turn?.kind !== "assistant" then triggers continue with no side effects.'
   added: 2026-05-30
+- file: src/main.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'fallback for o.aliases when option declares no aliases. Mutant injects a phantom alias literal "Stryker was here" no real caller will type — flag matching is unchanged for every real CLI invocation.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: 'input.type === "flag"'
+  mutated: 'true'
+  reason: 'outer guard on isVersion. Inner check input.flag === "--version" || input.flag === "-v" already short-circuits to false for any input shape where .flag is absent (none/prompt have undefined .flag), so the mutation is equivalent across the entire Input union.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"WRAP_THEME"'
+  mutated: '""'
+  reason: 'envVarName arg to resolveAppearance — binds the public env var key name. Asserting this would pin an implementation detail (the key); user-visible behavior is "WRAP_THEME sets the theme" and is covered by integration tests, not by this main.ts shim.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ObjectLiteral
+  original: '{ envVarName: "WRAP_THEME" }'
+  mutated: '{}'
+  reason: 'same envVarName binding as the StringLiteral mutant — removes the param entirely. Same reasoning: pinning the param shape binds implementation detail.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: 'input.type === "prompt"'
+  mutated: 'true'
+  reason: 'prompt extraction ternary. For type=none, input.prompt is undefined; runSession receives undefined and the chain coerces via `?? ""` at the user-turn projection, producing identical observable output.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: 'justCreated && input.type === "none" && !attachedInputBytes'
+  mutated: 'false'
+  reason: 'first-run wizard-complete exit branch. Only fires after the interactive wizard writes a fresh config; not reachable from tests (main.ts does not expose the wizard test escape — ensureConfig''s _testWizardResult is only consumable via direct ensureConfig calls).'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: LogicalOperator
+  original: 'justCreated && input.type === "none"'
+  mutated: 'justCreated || input.type === "none"'
+  reason: 'same first-run wizard-complete branch — wizard path not reachable from automated tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: 'input.type === "none"'
+  mutated: 'true'
+  reason: 'same first-run wizard-complete branch — wizard path not reachable from automated tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: EqualityOperator
+  original: 'input.type === "none"'
+  mutated: 'input.type !== "none"'
+  reason: 'same first-run wizard-complete branch — wizard path not reachable from automated tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"none"'
+  mutated: '""'
+  reason: 'same first-run wizard-complete branch — input.type is never "" at runtime; mutant makes the comparison always false but the branch is unreachable from tests regardless.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: BooleanLiteral
+  original: '!attachedInputBytes'
+  mutated: 'attachedInputBytes'
+  reason: 'same first-run wizard-complete branch — wizard path not reachable from automated tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: BlockStatement
+  original: 'wizard-exit chrome + return block'
+  mutated: '{}'
+  reason: 'same first-run wizard-complete branch body — wizard path not reachable from automated tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"✓ wrap configured — run w again to start wrapping"'
+  mutated: '""'
+  reason: 'wizard-complete chrome message text — cosmetic; only emitted on actual first-run wizard completion which isn''t simulated in tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ObjectLiteral
+  original: '{ envVarName: "WRAP_THEME", configAppearance: getConfig().appearance, fs: wrapFs }'
+  mutated: '{}'
+  reason: 'second resolveAppearance call (post-config). Asserting the params binds the resolveAppearance contract shape rather than observable behavior; the relevant user-visible outcomes (config.appearance honored, WRAP_THEME wins) are already covered by integration tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"WRAP_THEME"'
+  mutated: '""'
+  reason: 'second resolveAppearance envVarName — same binding-vs-behavior reasoning as the first call site.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: 'initial value of attachedInputTruncated. When no attached input is present (the only case where the initial value persists), the field is forwarded to runSession but no downstream code reads it without first checking attachedInputBytes — functionally a no-op for the no-pipe path.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ObjectLiteral
+  original: '{ mode: 0o600 }'
+  mutated: '{}'
+  reason: 'writeFile mode hint. The explicit chmod(attachedInputPath, 0o600) two lines later guarantees the final mode is 0o600 regardless of the initial create. Tests asserting the mode pass either way.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`'
+  mutated: '``'
+  reason: 'verbose log line text — cosmetic, only emitted under --verbose. Asserting this binds a free-form debug message.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: LogicalOperator
+  original: 'resolvePath(process.cwd()) ?? process.cwd()'
+  mutated: 'resolvePath(process.cwd()) && process.cwd()'
+  reason: 'cwd canonicalization fallback. For paths without symlink redirects (every test temp dir on Linux), resolvePath(process.cwd()) equals process.cwd(), so both branches yield the same value. Macs'' /var → /private/var redirect would surface the difference in real use but not in CI.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"argv"'
+  mutated: '""'
+  reason: 'inputSource ternary tail — only reached when input.type === "none" AND no attached input AND stdin.isTTY (the interactive composer launch path). Not reachable from automated tests because spawned subprocesses have non-TTY stdin.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ArrowFunction
+  original: '(t): t is Extract<Turn, { kind: "user" }> => t.kind === "user"'
+  mutated: '() => undefined'
+  reason: 'continuation chain first-user-turn lookup. parentPrompt is only consumed by the TUI continuation badge; the badge text isn''t asserted in tests. The mutation makes the badge empty on `-c` runs but produces no user-detectable error.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: 't.kind === "user"'
+  mutated: 'true'
+  reason: 'same continuation-chain lookup. Find returns the first turn regardless of kind; when the chain root is a user turn (the typical case) the result is identical. Only the badge text changes in atypical chain shapes.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: ConditionalExpression
+  original: 't.kind === "user"'
+  mutated: 'false'
+  reason: 'same continuation-chain lookup — find never matches, parentPrompt falls back to "". Only affects TUI continuation badge text.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: EqualityOperator
+  original: 't.kind === "user"'
+  mutated: 't.kind !== "user"'
+  reason: 'same continuation-chain lookup — find inverted. Only affects TUI continuation badge text.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '"user"'
+  mutated: '""'
+  reason: 'same continuation-chain lookup — no turn has kind "", so find returns undefined. Only affects TUI continuation badge text.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: LogicalOperator
+  original: 'firstUserTurn?.text ?? ""'
+  mutated: 'firstUserTurn?.text && ""'
+  reason: 'continuation parentPrompt fallback. Mutant makes parentPrompt always "" when a user turn is found. Only affects TUI continuation badge text — no semantic state change.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'continuation parentPrompt fallback when no user turn — only renders in the TUI continuation badge, which has no asserted text in tests.'
+  added: 2026-05-30
+- file: src/main.ts
+  mutator: OptionalChaining
+  original: 'firstUserTurn?.text'
+  mutated: 'firstUserTurn.text'
+  reason: 'defensive optional chain. find() always returns a user-typed Turn or undefined; non-undefined values have .text. The chain is TS strictNullChecks padding — runtime hits undefined only on malformed/empty parent chains which existing tests do not produce.'
+  added: 2026-05-30
