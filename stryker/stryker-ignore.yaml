@@ -1615,3 +1615,15 @@
   mutated: '""'
   reason: 'formatProvider output is a display label for verbose logs and RoundError messages. Fallback shown only for claude-code with no model; mutant would render "claude-code / " instead of "claude-code / (default)" — same information, cosmetic.'
   added: 2026-05-29
+- file: src/logging/writer.ts
+  mutator: ConditionalExpression
+  original: 'attempt.response_wire !== undefined'
+  mutated: 'true'
+  reason: 'equivalent — when response_wire is undefined, mutant assigns traced.response_wire = undefined and runs a no-op delete. JSON.stringify omits undefined-valued keys, so the serialized sidecar is byte-identical to the unmutated path.'
+  added: 2026-05-30
+- file: src/logging/writer.ts
+  mutator: EqualityOperator
+  original: 'i < entry.turns.length'
+  mutated: 'i <= entry.turns.length'
+  reason: 'equivalent — extra iteration reads entry.turns[length] which is undefined; turn?.kind !== "assistant" then triggers continue with no side effects.'
+  added: 2026-05-30
