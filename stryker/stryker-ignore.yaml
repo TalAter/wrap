@@ -1795,3 +1795,18 @@
   mutated: 'firstUserTurn.text'
   reason: 'defensive optional chain. find() always returns a user-typed Turn or undefined; non-undefined values have .text. The chain is TS strictNullChecks padding — runtime hits undefined only on malformed/empty parent chains which existing tests do not produce.'
   added: 2026-05-30
+- file: src/memory/init-prompt.ts
+  mutator: StringLiteral
+  original: |-
+    `You are analyzing raw output from system probe commands. Parse the results into concise, human-readable facts about the user's environment.
+    
+    Rules:
+    - Return one fact per line, plain text (not JSON, not markdown)
+    - Infer implicit facts (e.g., Darwin → macOS, arm64 → Apple Silicon)
+    - Include: OS + version + architecture, shell + config file location
+    - Be concise — each fact should be a single short line
+    - Do not include facts that cannot be determined from the probe output
+    - Do not add bullet points or numbering`
+  mutated: '``'
+  reason: 'INIT_SYSTEM_PROMPT template literal — system prompt text sent to the LLM during memory initialization. Pure data: no behavioral test would catch prompt-emptying without binding wording/length, which is implementation detail.'
+  added: 2026-05-31

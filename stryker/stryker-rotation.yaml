@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/memory/init-prompt.ts
 - src/memory/types.ts
 - src/session/dialog-host.ts
 - src/session/session.ts
@@ -88,3 +87,4 @@
 - src/llm/utils.ts
 - src/logging/writer.ts
 - src/main.ts
+- src/memory/init-prompt.ts
