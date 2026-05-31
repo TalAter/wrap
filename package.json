@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "start": "bun run src/index.ts",
-    "build:watch": "watchexec -w src bun run scripts/build.ts",
+    "build:watch": "watchexec -w src -w node_modules/wrap-core/src bun run scripts/build.ts",
     "build": "bun run scripts/build.ts",
     "release": "bun run scripts/release.ts",
     "test": "bun test",
