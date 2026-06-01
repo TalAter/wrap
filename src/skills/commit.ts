@@ -16,6 +16,28 @@ function gitProbe(command: string): SkillTask {
   };
 }
 
+// `git diff` omits untracked files, so a new file gets only a one-line `??`
+// mention in status with no content — the LLM commits the tracked changes and
+// silently leaves it behind. Enumerate untracked files (honoring .gitignore;
+// this also expands an untracked dir like `?? scripts/` into its files) and
+// show each as an addition. `diff --no-index` exits 1 when files differ, which
+// runSkills would otherwise drop — normalize to 0 and drop on empty output
+// instead. stderr is suppressed so a non-repo yields no output (and drops)
+// rather than emitting a fatal message.
+function untrackedProbe(): SkillTask {
+  const command =
+    "git ls-files --others --exclude-standard -z 2>/dev/null | " +
+    "xargs -0 -I{} git --no-pager diff --no-index --no-color -- /dev/null {} 2>/dev/null";
+  return {
+    command,
+    run: async () => {
+      const result = await execTaskInShell(command);
+      if (!result || result.output.trim() === "") return null;
+      return { output: result.output, exitCode: 0 };
+    },
+  };
+}
+
 export const commitSkill: Skill = {
   name: "commit",
   trigger: { kind: "match", pattern: /\bcommit\b/i },
@@ -25,5 +47,6 @@ export const commitSkill: Skill = {
     gitProbe("git status --short"),
     gitProbe("git diff --cached"),
     gitProbe("git diff"),
+    untrackedProbe(),
   ],
 };

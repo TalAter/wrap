@@ -94,6 +94,23 @@ describe("commit skill — execution", () => {
     expect(turns[2]?.output).toContain("unstaged-line");
   });
 
+  test("untracked file in a new dir: content shown as an addition", async () => {
+    await initGitRepo(tmpDir);
+    await writeFile(join(tmpDir, "tracked.txt"), "x\n");
+    await execIn(tmpDir, "git add tracked.txt");
+    await execIn(tmpDir, "git commit -q -m init");
+    // New file inside a never-added dir — reproduces the `?? scripts/` bug
+    // where status mentions the dir but git diff shows nothing.
+    await execIn(tmpDir, "mkdir sub");
+    await writeFile(join(tmpDir, "sub", "new.ts"), "export const brandNew = 1;\n");
+
+    const turns = await runSkills([commitSkill], "commit my changes");
+    const untracked = turns.find((t) => t.command.includes("ls-files --others"));
+    expect(untracked).toBeDefined();
+    expect(untracked?.output).toContain("sub/new.ts");
+    expect(untracked?.output).toContain("brandNew");
+  });
+
   test("staged only: unstaged diff drops, status + cached emit", async () => {
     await initGitRepo(tmpDir);
     await writeFile(join(tmpDir, "hello.txt"), "hello\n");

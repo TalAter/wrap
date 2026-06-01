@@ -22,7 +22,7 @@ False-positive matches are cheap: wasted IO beats a saved LLM round.
 ## Bundled skills
 
 - **discovery** — always-on. `pwd`, `ls`, `which <PROBED_TOOLS ∪ watchlist>`. Replaces what `formatContext` used to emit as `## Detected tools` / `## Files in CWD` sections — observations flow through the transcript now. See [[discovery]].
-- **commit** — fires on `/\bcommit\b/i`. `git status --short`, `git diff --cached`, `git diff`. Each task drops its probe on empty output, so clean repos stay silent.
+- **commit** — fires on `/\bcommit\b/i`. `git status --short`, `git diff --cached`, `git diff`, plus an untracked-files probe showing each untracked file's content as an addition (since `git diff` omits untracked files, the LLM would otherwise leave new files behind). Each task drops its probe on empty output, so clean repos stay silent.
 
 ## Turn placement — the trust fence
 
