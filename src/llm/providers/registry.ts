@@ -147,6 +147,7 @@ export const API_PROVIDERS: Record<string, ApiProvider> = {
   ollama: {
     displayName: "Ollama (local)",
     kind: "openai-compat",
+    supportsStructuredOutputs: true,
     baseURL: "http://localhost:11434/v1",
     validate: requiresBaseURL("ollama"),
     nerdIcon: "\udb80\udd9a", // nf-fa-horse_head

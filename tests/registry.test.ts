@@ -114,12 +114,14 @@ describe("getRegistration", () => {
     expect(getRegistration("openai").supportsStructuredOutputs).toBe(true);
     expect(getRegistration("groq").supportsStructuredOutputs).toBe(true);
     expect(getRegistration("mistral").supportsStructuredOutputs).toBe(true);
+    // Ollama forwards json_schema response_format; without this the SDK drops
+    // the schema and the model omits required fields (e.g. risk_level).
+    expect(getRegistration("ollama").supportsStructuredOutputs).toBe(true);
   });
 
   test("supportsStructuredOutputs is false/undefined for non-strict providers", () => {
     // openrouter does not consult this flag (its own SDK handles strictness),
-    // but ollama and unknowns still flow through the openai-compat path.
-    expect(getRegistration("ollama").supportsStructuredOutputs).toBeFalsy();
+    // and unknown user-defined endpoints stay lenient.
     expect(getRegistration("somebody").supportsStructuredOutputs).toBeFalsy();
   });
 });
