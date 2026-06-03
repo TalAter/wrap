@@ -170,6 +170,19 @@ describe("ForgetDialog", () => {
     expect(cb.result.submitted).toBeNull();
   });
 
+  test("Ctrl+C triggers onCancel", async () => {
+    const cb = makeCallbacks();
+    const { stdin, lastFrame } = render(
+      <TP>
+        <ForgetDialog footprints={FULL_FOOTPRINTS} onSubmit={cb.onSubmit} onCancel={cb.onCancel} />
+      </TP>,
+    );
+    await waitFor(() => expect(stripAnsi(lastFrame() ?? "")).toContain("Memory"));
+    stdin.write("\x03"); // Ctrl+C
+    await waitFor(() => expect(cb.result.cancelled).toBe(true));
+    expect(cb.result.submitted).toBeNull();
+  });
+
   test("Empty submit (all toggled off + Enter) fires onSubmit with []", async () => {
     const cb = makeCallbacks();
     const { stdin, lastFrame } = render(

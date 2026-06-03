@@ -26,6 +26,7 @@
  */
 
 import { isTTY as _isTTY } from "wrap-core/ansi";
+import { chromeRaw as coreChromeRaw } from "wrap-core/chrome";
 import { getConfig } from "../config/store.ts";
 import { emit } from "./notify.ts";
 
@@ -68,7 +69,7 @@ export function chrome(text: string, icon?: string): void {
 
 /** Write raw chrome output to stderr — no trailing newline. For ANSI escapes, partial writes. */
 export function chromeRaw(msg: string): void {
-  process.stderr.write(msg);
+  coreChromeRaw(msg);
 }
 
 // ── Nerd Fonts ─────────────────────────────────────────────────────

@@ -50,8 +50,14 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
     () => new Set<string>(ROWS.map((r) => r.value)),
   );
 
-  // Esc is the dialog's own. ↑↓/Space/Enter belong to Checklist.
-  useKeyBindings([{ on: "escape", do: onCancel }]);
+  // Esc and Ctrl+C cancel — the dialog's own. ↑↓/Space/Enter belong to
+  // Checklist. Ctrl+C is bound explicitly because the dialog mounts with
+  // exitOnCtrlC: false, so it dismisses the dialog rather than killing the
+  // process.
+  useKeyBindings([
+    { on: "escape", do: onCancel },
+    { on: { key: "c", ctrl: true }, do: onCancel },
+  ]);
 
   const items: ChecklistItem[] = ROWS.map((r) => toItem(r, footprints[r.value]));
 

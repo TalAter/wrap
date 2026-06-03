@@ -21,12 +21,11 @@ export type WizardResult = {
 };
 
 type ResponseModules = {
-  ink: typeof import("ink");
   react: typeof import("react");
   ResponseDialog: typeof import("../tui/response-dialog.tsx").ResponseDialog;
   ThemeProvider: typeof import("wrap-core/tui").ThemeProvider;
-  chooseDialogStdin: typeof import("wrap-core/tui").chooseDialogStdin;
-  DIALOG_INK_OPTIONS: typeof import("wrap-core/tui").DIALOG_INK_OPTIONS;
+  renderDialog: typeof import("wrap-core/tui").renderDialog;
+  openDialog: typeof import("wrap-core/tui").openDialog;
 };
 
 type WizardModule = {
@@ -44,19 +43,22 @@ let wizardCached: WizardModule | null = null;
  */
 export async function preloadResponseDialogModules(): Promise<void> {
   if (responseCached) return;
-  const [ink, react, responseDialogModule, tuiModule] = await Promise.all([
-    import("ink"),
+  const [react, responseDialogModule, tuiModule] = await Promise.all([
     import("react"),
     import("../tui/response-dialog.tsx"),
-    import("wrap-core/tui"),
+    import("wrap-core/tui").then(async (m) => {
+      // Warm Ink into wrap-core's cache in the same parallel batch so the
+      // ink import still overlaps the first LLM call.
+      await m.preloadDialogRuntime();
+      return m;
+    }),
   ]);
   responseCached = {
-    ink,
     react,
     ResponseDialog: responseDialogModule.ResponseDialog,
     ThemeProvider: tuiModule.ThemeProvider,
-    chooseDialogStdin: tuiModule.chooseDialogStdin,
-    DIALOG_INK_OPTIONS: tuiModule.DIALOG_INK_OPTIONS,
+    renderDialog: tuiModule.renderDialog,
+    openDialog: tuiModule.openDialog,
   };
 }
 
@@ -68,15 +70,7 @@ export function mountResponseDialog(props: {
   if (!responseCached) {
     throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
   }
-  const {
-    ink,
-    react,
-    ResponseDialog,
-    ThemeProvider: TP,
-    chooseDialogStdin,
-    DIALOG_INK_OPTIONS,
-  } = responseCached;
-  const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
+  const { react, ResponseDialog, ThemeProvider: TP, renderDialog } = responseCached;
   const nerdFonts = getConfig().nerdFonts ?? false;
   const mkTree = (p: typeof props) =>
     react.createElement(TP, {
@@ -84,16 +78,13 @@ export function mountResponseDialog(props: {
       nerdFonts,
       children: react.createElement(ResponseDialog, p),
     });
-  const app = ink.render(mkTree(props), { ...DIALOG_INK_OPTIONS, stdin });
+  const app = renderDialog(mkTree(props));
   return {
     rerender(nextProps) {
       app.rerender(mkTree(nextProps));
     },
     unmount() {
       app.unmount();
-      if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
-        (stdin as { destroy: () => void }).destroy();
-      }
     },
   };
 }
@@ -113,37 +104,25 @@ export async function mountConfigWizardDialog(callbacks: {
     const m = await import("../tui/config-wizard-dialog.tsx");
     wizardCached = { ConfigWizardDialog: m.ConfigWizardDialog };
   }
-  // biome-ignore lint/style/noNonNullAssertion: populated by the awaits above
-  const { ink, react, ThemeProvider: TP, chooseDialogStdin, DIALOG_INK_OPTIONS } = responseCached!;
+  const {
+    react,
+    ThemeProvider: TP,
+    openDialog,
+    // biome-ignore lint/style/noNonNullAssertion: populated by the awaits above
+  } = responseCached!;
   const { ConfigWizardDialog } = wizardCached;
 
-  return new Promise<WizardResult | null>((resolve) => {
-    const { stream: stdin, fd: ownedFd } = chooseDialogStdin();
-    const cleanup = () => {
-      app.unmount();
-      if (ownedFd !== null && typeof (stdin as { destroy?: () => void }).destroy === "function") {
-        (stdin as { destroy: () => void }).destroy();
-      }
-    };
+  return openDialog<WizardResult | null>((close) => {
     const props: WizardCallbacks = {
       ...callbacks,
-      onDone: (result) => {
-        cleanup();
-        resolve(result);
-      },
-      onCancel: () => {
-        cleanup();
-        resolve(null);
-      },
+      onDone: close,
+      onCancel: () => close(null),
     };
-    const app = ink.render(
-      react.createElement(TP, {
-        theme: getTheme(),
-        nerdFonts: getConfig().nerdFonts ?? false,
-        children: react.createElement(ConfigWizardDialog, props),
-      }),
-      { ...DIALOG_INK_OPTIONS, stdin },
-    );
+    return react.createElement(TP, {
+      theme: getTheme(),
+      nerdFonts: getConfig().nerdFonts ?? false,
+      children: react.createElement(ConfigWizardDialog, props),
+    });
   });
 }
 

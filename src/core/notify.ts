@@ -14,6 +14,7 @@
  * multiple subscribers because tests need it.
  */
 
+import { writeChromeLine } from "wrap-core/chrome";
 import type { WireCapture } from "../logging/entry.ts";
 
 /** Pre-formatted lines emitted by chrome producers. */
@@ -85,8 +86,7 @@ export function resetNotifications(): void {
 export function writeNotificationToStderr(n: Notification): void {
   switch (n.kind) {
     case "chrome": {
-      const line = n.icon ? `${n.icon} ${n.text}\n` : `${n.text}\n`;
-      process.stderr.write(line);
+      writeChromeLine(n.text, n.icon);
       return;
     }
     case "verbose":

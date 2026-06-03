@@ -117,36 +117,27 @@ async function showDialog(footprints: {
   cache: Footprint;
   scratch: Footprint;
 }): Promise<string[] | null> {
-  const [ink, react, forgetDialog, tui] = await Promise.all([
-    import("ink"),
+  const [react, forgetDialog, tui] = await Promise.all([
     import("react"),
     import("../tui/forget-dialog.tsx"),
-    import("wrap-core/tui"),
+    import("wrap-core/tui").then(async (m) => {
+      await m.preloadDialogRuntime();
+      return m;
+    }),
   ]);
   const { ForgetDialog } = forgetDialog;
-  const { ThemeProvider } = tui;
+  const { ThemeProvider, openDialog } = tui;
   const { getTheme } = await import("../core/theme.ts");
 
-  return new Promise<string[] | null>((resolve) => {
-    const onSubmit = (values: string[]) => {
-      app.unmount();
-      resolve(values);
-    };
-    const onCancel = () => {
-      app.unmount();
-      resolve(null);
-    };
-    const app = ink.render(
-      react.createElement(ThemeProvider, {
-        theme: getTheme(),
-        nerdFonts: getConfig().nerdFonts ?? false,
-        children: react.createElement(ForgetDialog, { footprints, onSubmit, onCancel }),
+  return openDialog<string[] | null>((close) =>
+    react.createElement(ThemeProvider, {
+      theme: getTheme(),
+      nerdFonts: getConfig().nerdFonts ?? false,
+      children: react.createElement(ForgetDialog, {
+        footprints,
+        onSubmit: close,
+        onCancel: () => close(null),
       }),
-      {
-        stdout: process.stderr,
-        patchConsole: false,
-        alternateScreen: true,
-      },
-    );
-  });
+    }),
+  );
 }
