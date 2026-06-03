@@ -12,7 +12,7 @@ import { getConfig } from "../config/store.ts";
 // Re-exported here so wrap's callers keep importing from `../core/spinner.ts`.
 export { registerExitTeardown, resetExitGuard, SPINNER_FRAMES, SPINNER_INTERVAL, SPINNER_TEXT };
 
-/** Test-only alias that also resets the cursor teardown singleton. */
+/** Test-only — delegates to wrap-core's `resetExitGuard`. */
 export function _resetExitTeardownRegistryForTests(): void {
   resetExitGuard();
 }

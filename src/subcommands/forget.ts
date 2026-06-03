@@ -126,18 +126,14 @@ async function showDialog(footprints: {
     }),
   ]);
   const { ForgetDialog } = forgetDialog;
-  const { ThemeProvider, openDialog } = tui;
-  const { getTheme } = await import("../core/theme.ts");
+  const { openDialog } = tui;
+  const { currentDialogTheme } = await import("../core/theme.ts");
 
-  return openDialog<string[] | null>((close) =>
-    react.createElement(ThemeProvider, {
-      theme: getTheme(),
-      nerdFonts: getConfig().nerdFonts ?? false,
-      children: react.createElement(ForgetDialog, {
-        footprints,
-        onSubmit: close,
-        onCancel: () => close(null),
-      }),
+  return openDialog<string[] | null>(currentDialogTheme(), (close) =>
+    react.createElement(ForgetDialog, {
+      footprints,
+      onSubmit: close,
+      onCancel: () => close(null),
     }),
   );
 }

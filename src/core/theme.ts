@@ -14,6 +14,7 @@ import {
   LIGHT_CORE,
   setTheme,
 } from "wrap-core/theme";
+import { getConfig } from "../config/store.ts";
 
 // ── Re-exports ────────────────────────────────────────────────────
 
@@ -23,6 +24,13 @@ export { getTheme, resolveColor, resolveColorHex, setTheme };
 /** Map appearance to wrap's extended theme (DARK_THEME or LIGHT_THEME). */
 export function resolveTheme(appearance: Appearance): WrapTheme {
   return appearance === "light" ? LIGHT_THEME : DARK_THEME;
+}
+
+/** The `{ theme, nerdFonts }` every wrap dialog is opened with: the active
+ *  theme plus the configured nerd-font preference. Pass straight to
+ *  `renderDialog`/`openDialog`. */
+export function currentDialogTheme(): { theme: CoreThemeTokens; nerdFonts: boolean } {
+  return { theme: getTheme(), nerdFonts: getConfig().nerdFonts ?? false };
 }
 
 // ── WrapTheme ─────────────────────────────────────────────────────

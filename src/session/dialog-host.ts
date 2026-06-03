@@ -1,6 +1,5 @@
 import type { ProviderEntry } from "../config/config.ts";
-import { getConfig } from "../config/store.ts";
-import { getTheme } from "../core/theme.ts";
+import { currentDialogTheme } from "../core/theme.ts";
 import type { WizardCallbacks } from "../tui/config-wizard-dialog.tsx";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import type { AppEvent, AppState } from "./state.ts";
@@ -23,7 +22,6 @@ export type WizardResult = {
 type ResponseModules = {
   react: typeof import("react");
   ResponseDialog: typeof import("../tui/response-dialog.tsx").ResponseDialog;
-  ThemeProvider: typeof import("wrap-core/tui").ThemeProvider;
   renderDialog: typeof import("wrap-core/tui").renderDialog;
   openDialog: typeof import("wrap-core/tui").openDialog;
 };
@@ -56,7 +54,6 @@ export async function preloadResponseDialogModules(): Promise<void> {
   responseCached = {
     react,
     ResponseDialog: responseDialogModule.ResponseDialog,
-    ThemeProvider: tuiModule.ThemeProvider,
     renderDialog: tuiModule.renderDialog,
     openDialog: tuiModule.openDialog,
   };
@@ -70,15 +67,9 @@ export function mountResponseDialog(props: {
   if (!responseCached) {
     throw new Error("mountResponseDialog: preloadResponseDialogModules() must resolve first");
   }
-  const { react, ResponseDialog, ThemeProvider: TP, renderDialog } = responseCached;
-  const nerdFonts = getConfig().nerdFonts ?? false;
-  const mkTree = (p: typeof props) =>
-    react.createElement(TP, {
-      theme: getTheme(),
-      nerdFonts,
-      children: react.createElement(ResponseDialog, p),
-    });
-  const app = renderDialog(mkTree(props));
+  const { react, ResponseDialog, renderDialog } = responseCached;
+  const mkTree = (p: typeof props) => react.createElement(ResponseDialog, p);
+  const app = renderDialog(mkTree(props), currentDialogTheme());
   return {
     rerender(nextProps) {
       app.rerender(mkTree(nextProps));
@@ -106,23 +97,18 @@ export async function mountConfigWizardDialog(callbacks: {
   }
   const {
     react,
-    ThemeProvider: TP,
     openDialog,
     // biome-ignore lint/style/noNonNullAssertion: populated by the awaits above
   } = responseCached!;
   const { ConfigWizardDialog } = wizardCached;
 
-  return openDialog<WizardResult | null>((close) => {
+  return openDialog<WizardResult | null>(currentDialogTheme(), (close) => {
     const props: WizardCallbacks = {
       ...callbacks,
       onDone: close,
       onCancel: () => close(null),
     };
-    return react.createElement(TP, {
-      theme: getTheme(),
-      nerdFonts: getConfig().nerdFonts ?? false,
-      children: react.createElement(ConfigWizardDialog, props),
-    });
+    return react.createElement(ConfigWizardDialog, props);
   });
 }
 
