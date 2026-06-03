@@ -8,7 +8,6 @@
 # See vault/agents/stryker-agent.md for the full workflow.
 
 - src/session/session.ts
-- src/session/state.ts
 - src/subcommands/dispatch.ts
 - src/subcommands/forget-delete.ts
 - src/subcommands/forget.ts
@@ -88,3 +87,4 @@
 - src/memory/init-prompt.ts
 - src/memory/types.ts
 - src/session/dialog-host.ts
+- src/session/state.ts
