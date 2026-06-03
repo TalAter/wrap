@@ -1,8 +1,8 @@
 ---
 name: theme
 description: Color tokens, dark/light appearances, color depth detection, graceful degradation
-Source: src/core/theme.ts, src/core/detect-appearance.ts, src/core/ansi.ts, src/tui/theme-context.tsx
-Last-synced: b4d3829
+Source: src/core/theme.ts, src/core/detect-appearance.ts, src/core/ansi.ts
+Last-synced: 4b5e321
 ---
 
 # Theme
@@ -21,7 +21,7 @@ Gradients are two OKLAB endpoints, interpolated. Tuning a gradient is editing tw
 
 ## Consuming
 
-Non-Ink code resolves the active theme + color level at the render site. Ink components use a context hook. Hex passed to Ink must always be quantized first because Ink emits truecolor regardless of `FORCE_COLOR`. `@inkjs/ui` components with hardcoded colors need explicit theme remapping.
+Non-Ink code resolves the active theme + color level at the render site. Ink components read theme through wrap-core's `useTheme`/`useNerdFonts` context hooks; the dialog API (`renderDialog`/`openDialog`) installs the provider from the `{ theme, nerdFonts }` each dialog is opened with, so wrap dialog components never wrap themselves. `currentDialogTheme()` (`src/core/theme.ts`) builds that pair from the active theme plus the configured nerd-font preference. Hex passed to Ink must always be quantized first because Ink emits truecolor regardless of `FORCE_COLOR`. `@inkjs/ui` components with hardcoded colors need explicit theme remapping.
 
 ## Appearance detection
 

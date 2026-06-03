@@ -2,24 +2,27 @@
 name: tui
 description: Ink dialog, three output tiers, custom borders, text input, action bar
 Source: src/tui/, src/session/dialog-host.ts, src/session/notification-router.ts
-Last-synced: 0a22f2a
+Last-synced: 4b5e321
 ---
 
 # TUI
 
 Ink 7 powers every interactive surface (confirmation dialog, [[wizard]], [[interactive-mode]]). Lazy-loaded — Ink + React + Yoga add ~1MB and 50–100ms; the common path (low-risk auto-exec) never pays. The first LLM call preloads dialog modules in parallel so they're warm by the time a dialog is needed.
 
+The Ink/terminal mount mechanics live in **wrap-core** (`wrap-core/tui`: `renderDialog`, `openDialog`, `preloadDialogRuntime` — see `vault/wrap-core-api/tui.md`). Wrap owns the *content components* (`ResponseDialog`, `ConfigWizardDialog`, `ForgetDialog`) and the *session controller* that drives the live response dialog; it states intent (theme + content + what-to-do) and lets wrap-core own the mount, stdin/tty/fd handling, alt-screen options, and the `ThemeProvider` wrap. `src/session/dialog-host.ts` mounts the response dialog via `renderDialog(element, currentDialogTheme())` (the session drives `rerender`/`unmount`); the wizard and `[[forget]]` mount via `openDialog(currentDialogTheme(), (close) => element)` for the open-await-one-answer-close shape.
+
 ## Three output tiers
 
 1. **Static chrome** — plain text to stderr.
-2. **Animated chrome** — pre-Ink spinners using cursor control. Exists so "thinking…" doesn't force an Ink load.
+2. **Animated chrome** — pre-Ink spinners using cursor control. Exists so "thinking…" doesn't force an Ink load. The spinner + raw stderr writers live in wrap-core (`wrap-core/chrome`); `src/core/spinner.ts` is a thin wrapper that injects wrap's `config.noAnimation` policy. See `vault/wrap-core-api/chrome.md`.
 3. **Interactive UI** — Ink. Dialog, wizard, interactive mode.
 
 ## Ink configuration
 
-- Renders to stderr in alt-screen. Stdout stays clean (invariant 1); resize artifacts can't corrupt scrollback; unmount drops back to main buffer with history intact.
-- Cursor restore on unmount works around a Bun bug that leaves the cursor hidden.
-- **Stdin drain on mount and every state transition.** Buffered keystrokes must never auto-confirm a dangerous command. Safety invariant — see [[session]].
+wrap-core's `renderDialog` owns the terminal mechanics — alt-screen render to stderr (stdout stays clean per invariant 1; resize artifacts can't corrupt scrollback; unmount drops back to the main buffer with history intact), `exitOnCtrlC: false`, stdin/tty/fd selection, and cursor restore on unmount (works around a Bun bug that leaves the cursor hidden). See `vault/wrap-core-api/tui.md`. What stays wrap-side:
+
+- **Stdin drain on mount and every state transition.** Lives in the response-dialog component, not the mount primitive — buffered keystrokes must never auto-confirm a dangerous command. Safety invariant — see [[session]].
+- **Explicit Ctrl+C handling.** Because dialogs mount with `exitOnCtrlC: false`, each content component binds Ctrl+C itself (e.g. `ForgetDialog` → cancel).
 
 ## Dialog layout
 

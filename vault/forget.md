@@ -2,7 +2,7 @@
 name: forget
 description: `w --forget` — delete Wrap's persisted user data
 Source: src/subcommands/forget.ts, src/subcommands/forget-footprint.ts, src/subcommands/forget-delete.ts, src/tui/forget-dialog.tsx
-Last-synced: 0a22f2a
+Last-synced: 4b5e321
 ---
 
 # `w --forget`
@@ -23,7 +23,7 @@ Excluded: the user's own config and the bundled schema. Config is user-intention
 
 ## UX
 
-Dialog uses the shared checklist component. Rows always render even when a bucket is empty or unreadable, so cursor behaviour stays stable across runs. Empty submit equals cancel: exit 0, nothing deleted, no output.
+Dialog uses the shared checklist component, mounted via wrap-core's `openDialog` (open → await selection → close; see [[tui]]). Rows always render even when a bucket is empty or unreadable, so cursor behaviour stays stable across runs. Both Esc and Ctrl+C cancel — the dialog mounts with `exitOnCtrlC: false`, so `ForgetDialog` binds Ctrl+C explicitly to dismiss rather than letting Ink hard-kill the process. Empty submit equals cancel: exit 0, nothing deleted, no output.
 
 Output is a single stderr line with a trash glyph (per the stdout-is-useful invariant). Emitted only when something was actually removed — fresh installs and cancellations are silent.
 
