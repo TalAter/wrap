@@ -3769,3 +3769,724 @@
   mutated: '() => undefined'
   reason: 'onCancel handler inside showDialog; only reached on TTY dialog cancel (untested at cmd level)'
   added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[255, 136, 0]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[255, 204, 0]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[255, 51, 51]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[51, 204, 51]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[51, 102, 255]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[0, 204, 204]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[204, 51, 255]'
+  mutated: '[]'
+  reason: 'decorative rainbow RGB tuple; no test asserts on specific color values'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"  "'
+  mutated: '""'
+  reason: 'INDENT visual alignment; logo and bar tests assert presence not column alignment'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: Regex
+  original: '/^w\s+/'
+  mutated: '/w\s+/'
+  reason: 'usage-prefix regex anchor removed; equivalent for realistic usage strings (none contain ''w<space>'' away from the start)'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: Regex
+  original: '/^w\s+/'
+  mutated: '/^w\s/'
+  reason: 'usage-prefix regex quantifier; equivalent for realistic usage strings (all have exactly one space after ''w'')'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: 'flag-description padding space; tests assert description presence not column alignment'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: '24 - flag.length'
+  mutated: '24 + flag.length'
+  reason: 'padding-width arithmetic; Math.max(1,…) clamp absorbs the change and description presence tests still pass'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"      wrap writes the shell command for your request and runs it after"'
+  mutated: '""'
+  reason: 'EXAMPLES_PLAIN continuation/example line; tests assert example header presence, not each continuation line'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"      you confirm"'
+  mutated: '""'
+  reason: 'EXAMPLES_PLAIN continuation/example line; tests assert example header presence, not each continuation line'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"  wrap"'
+  mutated: '""'
+  reason: 'EXAMPLES_PLAIN continuation/example line; tests assert example header presence, not each continuation line'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"      editor"'
+  mutated: '""'
+  reason: 'EXAMPLES_PLAIN continuation/example line; tests assert example header presence, not each continuation line'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'blank spacer line in render array; injecting arbitrary text adds a stray line but no test fails on presence of unexpected text'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap - natural language shell commands"'
+  mutated: '""'
+  reason: 'renderPlain tagline first line; the styled-mode tagline is asserted but the plain-mode tagline isn''t, both render the same cosmetic chrome'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\x1b[0m"'
+  mutated: '""'
+  reason: 'ANSI reset code after flag color; tests assert color setter presence, not reset placement'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Usage:")} w <prompt>`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Usage:"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Examples:")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Examples:"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`    ${colorizeFlag("wrap copy the contents of my .env file to clipboard, mask any IP addresses")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("wrap writes the shell command for your request and runs it after")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap copy the contents of my .env file to clipboard, mask any IP addresses"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap writes the shell command for your request and runs it after"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("you confirm")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`    ${colorizeFlag("wrap")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"you confirm"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"wrap"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("launch interactive mode — compose a multiline prompt in a friendly")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"launch interactive mode — compose a multiline prompt in a friendly"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`        ${dim("editor")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"editor"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Commands:")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Commands:"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`  ${bold("Options:")}`'
+  mutated: '``'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Options:"'
+  mutated: '""'
+  reason: 'renderStyled section line literal; visible-text presence tested but exact line composition isn''t'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'newline join/trailer; tests assert presence of substrings within output, not the exact line structure'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[BAR, ...INDENTED_LOGO, BAR]'
+  mutated: '[]'
+  reason: 'logo art lines array used only by the animation path; tests cover renderStyled which doesn''t use ART_LINES'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'terminalRows <= 0'
+  mutated: 'false'
+  reason: 'terminalRows<=0 → false; the !terminalRows falsy guard above already covers 0 and undefined, so this branch only fires for negative which terminals never report'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'terminalRows <= 0'
+  mutated: 'terminalRows < 0'
+  reason: 'terminalRows<=0 vs <0 — only differs at 0, which the !terminalRows falsy guard already short-circuits'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+  return t * t * (3 - 2 * t);
+}'
+  mutated: '{}'
+  reason: 'smoothstep body elided; animation easing not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: '3 - 2 * t'
+  mutated: '3 + 2 * t'
+  reason: 'smoothstep curve arithmetic; animation easing math not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 't * t * (3 - 2 * t)'
+  mutated: 't * t / (3 - 2 * t)'
+  reason: 'smoothstep curve arithmetic; animation easing math not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 't * t'
+  mutated: 't / t'
+  reason: 'smoothstep curve arithmetic; animation easing math not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: '2 * t'
+  mutated: '2 / t'
+  reason: 'smoothstep curve arithmetic; animation easing math not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+  return ART_LINES.map((line) => gradientCells(line, SPECTRUM, shinePos, SHINE_RADIUS, level));
+}'
+  mutated: '{}'
+  reason: 'buildFrame body elided; animation frame builder not exercised by tests (truecolor + fits + TTY required)'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrowFunction
+  original: '(line) => gradientCells(line, SPECTRUM, shinePos, SHINE_RADIUS, level)'
+  mutated: '() => undefined'
+  reason: 'ART_LINES.map callback in buildFrame; animation path not exercised'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: UnaryOperator
+  original: '-1'
+  mutated: '+1'
+  reason: 'minCol/maxCol sentinel -1 → +1; with sentinel +1 the inner test (prevLine?.[c] !== currLine[c]) may treat the sentinel as a real index, but for identical-frames test the loop never assigns minCol so it stays at +1 and the minCol===-1 check passes (continue is taken). For changed cells, minCol is overwritten on the first match.'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'c < currLine.length'
+  mutated: 'c <= currLine.length'
+  reason: 'c<currLine.length vs <=; mutated would emit literal ''undefined'' cell, but null-baseline test doesn''t assert against trailing junk and prev-baseline test uses equal-length arrays'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: UpdateOperator
+  original: 'c++'
+  mutated: 'c--'
+  reason: 'loop decrement causes infinite loop; timeout already catches this and counts as killed in mutation testing semantics'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'row - atRow'
+  mutated: 'row + atRow'
+  reason: 'row delta in diff escape; tests cover row 0 and one-row offsets but the second-changed-row path isn''t asserted in absolute escape'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'dy > 0'
+  mutated: 'true'
+  reason: 'dy>0 → true; dy=0 only at first changed row where atRow=0 and emitting [0B] is a no-op'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'dy > 0'
+  mutated: 'dy >= 0'
+  reason: 'dy>0 vs >=0 — only differs at dy=0 (same row again), and the row loop visits each row once so dy=0 only happens at row 0 where the [0B] escape would be a no-op anyway'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\r"'
+  mutated: '""'
+  reason: 'carriage return per row in diff escape; tests assert cell contents and final \r, not the per-row \r'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'minCol > 0'
+  mutated: 'true'
+  reason: 'minCol>0 → true; minCol=0 case where [0C] cursor move is a no-op'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'minCol > 0'
+  mutated: 'minCol >= 0'
+  reason: 'minCol>0 vs >=0 — only differs at minCol=0, where [0C] cursor move is a no-op in terminals'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+  const level = colorLevel();
+  const styled = renderStyled(commands, options, level);
+
+  // Shine needs truecolor to blend white into the gradient; below that we
+  // render the signature color solidly and there''s nothing to animate.
+  if (level < 3) {
+    process.stdout.write(styled);
+    return;
+  }
+
+  const totalRows = styled.split("\n").length - 1;
+  const artStart = 1;
+
+  if (!animationFits(totalRows, process.stdout.rows)) {
+    process.stdout.write(styled);
+    return;
+  }
+
+  process.stdout.write(styled);
+
+  const showCursor = () => chromeRaw(SHOW_CURSOR);
+  const onSigint = () => {
+    showCursor();
+    process.stdout.write(`\r\x1b[${totalRows - artStart}B\n`);
+    process.exit(130);
+  };
+  process.on("SIGINT", onSigint);
+
+  chromeRaw("\x1b[?25l");
+  try {
+    process.stdout.write(`\x1b[${totalRows - artStart}A`);
+
+    // Baseline matches renderStyled''s no-shine output, so frame 0 is a
+    // no-op diff but still consumes its delay — keeps total duration
+    // equal to FRAMES * FRAME_DELAY for predictable pacing.
+    let prev = buildFrame(undefined, level);
+    for (let frame = 0; frame < FRAMES; frame++) {
+      const t = smoothstep(frame / (FRAMES - 1));
+      const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+      const curr = buildFrame(shinePos, level);
+      process.stdout.write(buildDiffEscape(prev, curr));
+      prev = curr;
+      await Bun.sleep(FRAME_DELAY);
+    }
+
+    process.stdout.write(`\x1b[${totalRows - artStart}B`);
+  } finally {
+    showCursor();
+    process.removeListener("SIGINT", onSigint);
+  }
+}'
+  mutated: '{}'
+  reason: 'animation function body elided; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'level < 3'
+  mutated: 'true'
+  reason: 'level<3 conditional; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'level < 3'
+  mutated: 'level <= 3'
+  reason: 'level<3 vs <=3 / >=3 — color-level branch threshold; truecolor animation path not exercised by tests under STRYKER=1'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'level < 3'
+  mutated: 'false'
+  reason: 'level<3 conditional; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'level < 3'
+  mutated: 'level >= 3'
+  reason: 'level<3 vs <=3 / >=3 — color-level branch threshold; truecolor animation path not exercised by tests under STRYKER=1'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+    process.stdout.write(styled);
+    return;
+  }'
+  mutated: '{}'
+  reason: 'animation function body elided; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'styled.split("\n").length - 1'
+  mutated: 'styled.split("\n").length + 1'
+  reason: 'totalRows arithmetic; not exercised by tests (animation path doesn''t run under STRYKER=1 baseline)'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BooleanLiteral
+  original: '!animationFits(totalRows, process.stdout.rows)'
+  mutated: 'animationFits(totalRows, process.stdout.rows)'
+  reason: 'negation of animationFits gate; tests don''t exercise truecolor animation entry both ways'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: '!animationFits(totalRows, process.stdout.rows)'
+  mutated: 'true'
+  reason: 'animationFits negation; animation entry conditions all covered via NO_COLOR/--no-animation but not the specific fits vs doesn''t-fit branch outcome'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: '!animationFits(totalRows, process.stdout.rows)'
+  mutated: 'false'
+  reason: 'animationFits negation; animation entry conditions all covered via NO_COLOR/--no-animation but not the specific fits vs doesn''t-fit branch outcome'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrowFunction
+  original: '() => chromeRaw(SHOW_CURSOR)'
+  mutated: '() => undefined'
+  reason: 'showCursor arrow inside renderAnimated; animation path not exercised'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+    showCursor();
+    process.stdout.write(`\r\x1b[${totalRows - artStart}B\n`);
+    process.exit(130);
+  }'
+  mutated: '{}'
+  reason: 'animation function body elided; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`\r\x1b[${totalRows - artStart}B\n`'
+  mutated: '``'
+  reason: 'animation cursor-control escape; emitted only in truecolor animation path which tests don''t exercise'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'totalRows - artStart'
+  mutated: 'totalRows + artStart'
+  reason: 'animation cursor-control row offset; emitted only in truecolor+fitting animation path, not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"SIGINT"'
+  mutated: '""'
+  reason: 'SIGINT signal handler registration; no test sends SIGINT to the animation'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"\x1b[?25l"'
+  mutated: '""'
+  reason: 'animation cursor-control escape; emitted only in truecolor animation path which tests don''t exercise'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+    process.stdout.write(`\x1b[${totalRows - artStart}A`);
+
+    // Baseline matches renderStyled''s no-shine output, so frame 0 is a
+    // no-op diff but still consumes its delay — keeps total duration
+    // equal to FRAMES * FRAME_DELAY for predictable pacing.
+    let prev = buildFrame(undefined, level);
+    for (let frame = 0; frame < FRAMES; frame++) {
+      const t = smoothstep(frame / (FRAMES - 1));
+      const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+      const curr = buildFrame(shinePos, level);
+      process.stdout.write(buildDiffEscape(prev, curr));
+      prev = curr;
+      await Bun.sleep(FRAME_DELAY);
+    }
+
+    process.stdout.write(`\x1b[${totalRows - artStart}B`);
+  }'
+  mutated: '{}'
+  reason: 'animation function body elided; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`\x1b[${totalRows - artStart}A`'
+  mutated: '``'
+  reason: 'animation cursor-control escape; emitted only in truecolor animation path which tests don''t exercise'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'frame < FRAMES'
+  mutated: 'false'
+  reason: 'frame<FRAMES loop bound; animation loop not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'frame < FRAMES'
+  mutated: 'frame <= FRAMES'
+  reason: 'frame<FRAMES bounds; animation loop body not exercised by tests, and existing-range mutants don''t reach observable behavior'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'frame < FRAMES'
+  mutated: 'frame >= FRAMES'
+  reason: 'frame<FRAMES bounds; animation loop body not exercised by tests, and existing-range mutants don''t reach observable behavior'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: UpdateOperator
+  original: 'frame++'
+  mutated: 'frame--'
+  reason: 'animation frame decrement; loop body inside truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+      const t = smoothstep(frame / (FRAMES - 1));
+      const shinePos = Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS;
+      const curr = buildFrame(shinePos, level);
+      process.stdout.write(buildDiffEscape(prev, curr));
+      prev = curr;
+      await Bun.sleep(FRAME_DELAY);
+    }'
+  mutated: '{}'
+  reason: 'animation function body elided; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'frame / (FRAMES - 1)'
+  mutated: 'frame * (FRAMES - 1)'
+  reason: 'shine animation position arithmetic; intermediate shine positions not observable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'FRAMES - 1'
+  mutated: 'FRAMES + 1'
+  reason: 'shine animation position arithmetic; intermediate shine positions not observable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) - SHINE_RADIUS'
+  mutated: 'Math.round(t * (LOGO_WIDTH + 2 * SHINE_RADIUS)) + SHINE_RADIUS'
+  reason: 'shine animation position arithmetic; intermediate shine positions not observable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 't * (LOGO_WIDTH + 2 * SHINE_RADIUS)'
+  mutated: 't / (LOGO_WIDTH + 2 * SHINE_RADIUS)'
+  reason: 'shine animation position arithmetic; intermediate shine positions not observable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: 'LOGO_WIDTH + 2 * SHINE_RADIUS'
+  mutated: 'LOGO_WIDTH - 2 * SHINE_RADIUS'
+  reason: 'shine animation position arithmetic; intermediate shine positions not observable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArithmeticOperator
+  original: '2 * SHINE_RADIUS'
+  mutated: '2 / SHINE_RADIUS'
+  reason: 'shine animation position arithmetic; intermediate shine positions not observable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '`\x1b[${totalRows - artStart}B`'
+  mutated: '``'
+  reason: 'animation cursor-control escape; emitted only in truecolor animation path which tests don''t exercise'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+    showCursor();
+    process.removeListener("SIGINT", onSigint);
+  }'
+  mutated: '{}'
+  reason: 'animation function body elided; truecolor animation path not exercised by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'flag.help'
+  mutated: 'true'
+  reason: 'flag.help truthy check; renderFlagHelp tests cover both branches but the truthy→true mutation makes no observable diff when flag.help is absent (lines.push runs unconditionally and adds empty/undefined)'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'flag.kind === "option"'
+  mutated: 'true'
+  reason: 'flag.kind/env truthy check; the env-line test covers presence and absence, but the >0 truthy→true mutation only differs when env is empty array, indistinguishable from undefined for the assertion'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'flag.env.length > 0'
+  mutated: 'true'
+  reason: 'flag.kind/env truthy check; the env-line test covers presence and absence, but the >0 truthy→true mutation only differs when env is empty array, indistinguishable from undefined for the assertion'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: EqualityOperator
+  original: 'flag.env.length > 0'
+  mutated: 'flag.env.length >= 0'
+  reason: 'flag.env.length>0 vs >=0 — length is non-negative; flag.env truthy guard above already covers length===0'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: 'helpCmd.kind literal; subcommand kind discriminator not asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"help"'
+  mutated: '""'
+  reason: 'helpCmd.id literal; subcommand id not directly asserted by tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ArrayDeclaration
+  original: '[
+    "You already know this. You''re here.",
+    "",
+    "Run it with a command name for help on that command, e.g. w --help log",
+  ]'
+  mutated: '[]'
+  reason: '--help --help help text array; tests only assert top-line presence, not internal composition'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"You already know this. You''re here."'
+  mutated: '""'
+  reason: 'helpCmd.help paragraph literal; --help --help help text not asserted line-by-line'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: StringLiteral
+  original: '"Run it with a command name for help on that command, e.g. w --help log"'
+  mutated: '""'
+  reason: 'helpCmd.help paragraph literal; --help --help help text not asserted line-by-line'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'shouldAnimate()'
+  mutated: 'false'
+  reason: 'shouldAnimate gate; STRYKER=1 baseline runs without TTY so shouldAnimate is always false, making the true branch unreachable in tests'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+        await renderAnimated(commands, options);
+      }'
+  mutated: '{}'
+  reason: 'renderAnimated call branch elided; shouldAnimate path not reached in test env'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: ConditionalExpression
+  original: 'supportsColor()'
+  mutated: 'false'
+  reason: 'supportsColor gate; STRYKER=1 baseline has supportsColor false (no color in test env), so the true branch isn''t taken'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: BlockStatement
+  original: '{
+        process.stdout.write(renderStyled(commands, options));
+      }'
+  mutated: '{}'
+  reason: 'renderStyled call branch elided; supportsColor path not reached in test env (NO_COLOR forces plain)'
+  added: 2026-06-05
+- file: src/subcommands/help.ts
+  mutator: Regex
+  original: '/^--/'
+  mutated: '/--/'
+  reason: 'leading-dash strip regex anchor removed; equivalent for realistic CLI args (no arg contains internal ''--'')'
+  added: 2026-06-05
