@@ -3495,3 +3495,277 @@
   mutated: '{}'
   reason: 'defensive catch for OS-level rmSync errors (EACCES, EBUSY, etc.); force:true already silences ENOENT, and the container test env runs as root so chmod-based triggers no-op'
   added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: 'Command.kind is a TS discriminator; runtime dispatch (subcommands/dispatch.ts) routes by flag, not kind. Equivalent mutant.'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"forget"'
+  mutated: '""'
+  reason: 'Command.id is never read at runtime — only Option.id is consumed via MODIFIER_SPECS in main.ts. Equivalent mutant.'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"Delete persisted user data (memory, logs, cache, temp files)"'
+  mutated: '""'
+  reason: 'cosmetic --help description text; tests that check exact wording would paraphrase the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"w --forget [--yolo]"'
+  mutated: '""'
+  reason: 'cosmetic --help --forget usage line; tests that check exact wording would paraphrase the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ArrayDeclaration
+  original: |-
+    [
+        "Interactive multi-select dialog. Select which of the four buckets to wipe:",
+        "  Memory        ~/.wrap/memory.json + ~/.wrap/tool-watchlist.json",
+        "  Logs          ~/.wrap/logs/ (wrap.jsonl + trace sidecars)",
+        "  Cache         ~/.wrap/cache/",
+        "  Temp files    $TMPDIR/wrap-scratch-*",
+        "",
+        "--yolo skips the dialog and deletes all four.",
+        "config.jsonc is never touched — use `rm` if you want it gone.",
+      ]
+  mutated: '[]'
+  reason: 'cosmetic --help --forget detail block; emptying just elides the detail — tests asserting exact wording paraphrase the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"Interactive multi-select dialog. Select which of the four buckets to wipe:"'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Memory        ~/.wrap/memory.json + ~/.wrap/tool-watchlist.json"'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Logs          ~/.wrap/logs/ (wrap.jsonl + trace sidecars)"'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Cache         ~/.wrap/cache/"'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"  Temp files    $TMPDIR/wrap-scratch-*"'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'empty separator line in --help --forget detail; testing for absence of the mutator marker is an anti-pattern'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"--yolo skips the dialog and deletes all four."'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"config.jsonc is never touched — use `rm` if you want it gone."'
+  mutated: '""'
+  reason: 'cosmetic --help --forget detail line; binding exact wording paraphrases the implementation'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'cosmetic — help-array joiner ("\n"); mutation just concatenates lines without separators, only affects --help --forget display'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          memory: memoryFootprint(),
+          logs: logsFootprint(),
+          cache: cacheFootprint(),
+          scratch: scratchFootprint(tmpBase),
+        }
+  mutated: '{}'
+  reason: 'footprints is only consumed by the dialog path; --yolo (and all cmd-level tests) ignore it. Dialog rendering is covered by forget-dialog.test.tsx'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: '!process.stdin.isTTY'
+  mutated: 'true'
+  reason: 'test harness pipes stdin (no TTY) so the original is already true under all tests; cannot distinguish from forced-true without a TTY-capable rig'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values === null || values.length === 0'
+  mutated: 'true'
+  reason: 'guards the dialog return path (cancel/empty-selection no-op); only reachable when showDialog() returns, which requires a TTY rig not present in tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values === null || values.length === 0'
+  mutated: 'false'
+  reason: 'guards the dialog return path (cancel/empty-selection no-op); only reachable when showDialog() returns, which requires a TTY rig not present in tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: LogicalOperator
+  original: 'values === null || values.length === 0'
+  mutated: 'values === null && values.length === 0'
+  reason: 'guards the dialog return path; only reachable on TTY dialog return, not exercised by unit tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values === null'
+  mutated: 'false'
+  reason: 'dialog cancel guard (values === null); only reachable when showDialog() returns null (TTY cancel), not exercised by unit tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: EqualityOperator
+  original: 'values === null'
+  mutated: 'values !== null'
+  reason: 'dialog cancel guard (values === null); only reachable on TTY dialog return, not exercised by unit tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'values.length === 0'
+  mutated: 'false'
+  reason: 'dialog empty-selection guard (values.length === 0); only reachable on TTY dialog return, not exercised by unit tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: EqualityOperator
+  original: 'values.length === 0'
+  mutated: 'values.length !== 0'
+  reason: 'dialog empty-selection guard (values.length === 0); only reachable on TTY dialog return, not exercised by unit tests'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            chrome(`Forget error: could not remove ${path}.`);
+            anyFailure = true;
+          }
+  mutated: '{}'
+  reason: 'defensive error-report loop for filesystem delete failures; container test env runs as root so EACCES/EBUSY triggers no-op (mirrors the forget-delete.ts errors.push ignore added 2026-06-05)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '`Forget error: could not remove ${path}.`'
+  mutated: '``'
+  reason: 'error message inside the unreachable error-report loop (see BlockStatement ignore for L74)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: 'anyFailure flag inside the unreachable error-report loop; root container env cannot produce rmSync errors'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ConditionalExpression
+  original: 'anyFailure'
+  mutated: 'false'
+  reason: 'process.exit(1) gate fed by anyFailure; only triggered when rmSync fails, which the root container test env cannot induce'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"\uf1f8"'
+  mutated: '""'
+  reason: 'nerd-font glyph (\uf1f8) for the Forgotten line; cosmetic — the "Forgotten." text remains and is what tests assert on'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: StringLiteral
+  original: '"🗑️"'
+  mutated: '""'
+  reason: 'fallback trash emoji for the Forgotten line; cosmetic — the "Forgotten." text remains and is what tests assert on'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      const [react, forgetDialog, tui] = await Promise.all([
+        import("react"),
+        import("../tui/forget-dialog.tsx"),
+        import("wrap-core/tui").then(async (m) => {
+          await m.preloadDialogRuntime();
+          return m;
+        }),
+      ]);
+      const { ForgetDialog } = forgetDialog;
+      const { openDialog } = tui;
+      const { currentDialogTheme } = await import("../core/theme.ts");
+    
+      return openDialog<string[] | null>(currentDialogTheme(), (close) =>
+        react.createElement(ForgetDialog, {
+          footprints,
+          onSubmit: close,
+          onCancel: () => close(null),
+        }),
+      );
+    }
+  mutated: '{}'
+  reason: 'entire showDialog body; only reached on the TTY dialog flow which is not unit-tested at this level (forget-dialog.test.tsx covers the inner component)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ArrayDeclaration
+  original: |-
+    [
+        import("react"),
+        import("../tui/forget-dialog.tsx"),
+        import("wrap-core/tui").then(async (m) => {
+          await m.preloadDialogRuntime();
+          return m;
+        }),
+      ]
+  mutated: '[]'
+  reason: 'Promise.all import array inside showDialog; only reached on the TTY dialog flow (untested at cmd level)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          await m.preloadDialogRuntime();
+          return m;
+        }
+  mutated: '{}'
+  reason: 'wrap-core/tui dynamic-import then-block inside showDialog; only reached on the TTY dialog flow (untested at cmd level)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ArrowFunction
+  original: |-
+    (close) =>
+        react.createElement(ForgetDialog, {
+          footprints,
+          onSubmit: close,
+          onCancel: () => close(null),
+        })
+  mutated: '() => undefined'
+  reason: 'openDialog render callback inside showDialog; only reached on the TTY dialog flow (untested at cmd level)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          footprints,
+          onSubmit: close,
+          onCancel: () => close(null),
+        }
+  mutated: '{}'
+  reason: 'ForgetDialog props object inside showDialog; only reached on the TTY dialog flow (untested at cmd level)'
+  added: 2026-06-05
+- file: src/subcommands/forget.ts
+  mutator: ArrowFunction
+  original: '() => close(null)'
+  mutated: '() => undefined'
+  reason: 'onCancel handler inside showDialog; only reached on TTY dialog cancel (untested at cmd level)'
+  added: 2026-06-05

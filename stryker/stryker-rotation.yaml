@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/subcommands/forget.ts
 - src/subcommands/help.ts
 - src/subcommands/registry.ts
 - src/subcommands/types.ts
@@ -88,3 +87,4 @@
 - src/session/session.ts
 - src/subcommands/dispatch.ts
 - src/subcommands/forget-delete.ts
+- src/subcommands/forget.ts
