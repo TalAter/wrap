@@ -76,6 +76,15 @@ describe("topBorderSegments with risk pill", () => {
     expect(badgeSeg?.bold).toBe(true);
   });
 
+  test("low and high risk badges render bold", () => {
+    for (const level of ["low", "high"] as const) {
+      const segs = renderTop(60, preset(level).stops, riskTop(level), false);
+      const badgeSeg = segs.find((segment) => segment.text.includes(`${level} risk`));
+      expect(badgeSeg).toBeDefined();
+      expect(badgeSeg?.bold).toBe(true);
+    }
+  });
+
   test("low risk badge uses ✔ glyph and 'low risk' label", () => {
     const text = plainText(renderTop(60, preset("low").stops, riskTop("low")));
     expect(text).toContain("✔");
