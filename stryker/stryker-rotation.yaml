@@ -7,12 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/tui/border.ts
-- src/tui/clamp-buffer.ts
-- src/tui/cursor.ts
-- src/tui/gradient.ts
-- src/tui/key-bindings.ts
-- src/tui/risk-presets.ts
 - src/wizard/write-config.ts
 - src/command-response.schema.ts
 - src/core/parse-response.ts
@@ -22,7 +16,6 @@
 - src/core/shell.ts
 - src/config/resolve.ts
 - src/memory/memory.ts
-- src/discovery/init-probes.ts
 - src/logging/entry.ts
 - src/session/reducer.ts
 - src/llm/providers/registry.ts
@@ -34,13 +27,10 @@
 - src/wizard/models-filter.ts
 - src/core/attached-input.ts
 - src/core/input.ts
-- src/discovery/cwd-files.ts
-- src/discovery/watchlist.ts
 - src/llm/context.ts
 - src/subcommands/forget-footprint.ts
 - src/core/ansi.ts
 - src/subcommands/log.ts
-- src/core/detect-appearance.ts
 - src/subcommands/completion.ts
 - src/session/notification-router.ts
 - src/core/notify.ts
@@ -49,7 +39,6 @@
 - src/config/ensure.ts
 - src/config/config.ts
 - src/logging/lookup.ts
-- src/tui/continuation-badge.ts
 - src/config/settings.ts
 - src/config/store.ts
 - src/memory/memory-init-probes.ts
@@ -88,3 +77,4 @@
 - src/subcommands/registry.ts
 - src/subcommands/types.ts
 - src/subcommands/version.ts
+- src/tui/risk-presets.ts
