@@ -1,118 +1,3 @@
-- file: src/core/logo.ts
-  mutator: StringLiteral
-  original: '"██║    ██║██╔══██╗██╔══██╗██╔══██╗"'
-  mutated: '""'
-  reason: cosmetic logo art line — visual decoration in --help output, no runtime logic reads individual line content
-  added: 2026-05-26
-- file: src/core/logo.ts
-  mutator: StringLiteral
-  original: '"██║ █╗ ██║██████╔╝███████║██████╔╝"'
-  mutated: '""'
-  reason: cosmetic logo art line — visual decoration in --help output, no runtime logic reads individual line content
-  added: 2026-05-26
-- file: src/core/logo.ts
-  mutator: StringLiteral
-  original: '"██║███╗██║██╔══██╗██╔══██║██╔═══╝ "'
-  mutated: '""'
-  reason: cosmetic logo art line — visual decoration in --help output, no runtime logic reads individual line content
-  added: 2026-05-26
-- file: src/core/logo.ts
-  mutator: StringLiteral
-  original: '"╚███╔███╔╝██║  ██║██║  ██║██║     "'
-  mutated: '""'
-  reason: cosmetic logo art line — visual decoration in --help output, no runtime logic reads individual line content
-  added: 2026-05-26
-- file: src/core/logo.ts
-  mutator: StringLiteral
-  original: '" ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     "'
-  mutated: '""'
-  reason: cosmetic logo art line — visual decoration in --help output, no runtime logic reads individual line content
-  added: 2026-05-26
-- file: src/core/clipboard.ts
-  mutator: BlockStatement
-  original: |-
-    {
-      try {
-        return Bun.which(cmd);
-      } catch {
-        return null;
-      }
-    }
-  mutated: '{}'
-  reason: 'defaultWhich is only used when callers don''t inject `which`; tests always inject a mock. Exercising defaultWhich requires stubbing Bun.which globally (binds implementation) or relying on the host PATH (flaky).'
-  added: 2026-05-26
-- file: src/core/clipboard.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        return Bun.which(cmd);
-      }
-  mutated: '{}'
-  reason: 'defaultWhich try block — tests always inject a mock `which`, so this code path is never exercised. Same as the outer defaultWhich body ignore.'
-  added: 2026-05-26
-- file: src/core/clipboard.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        return null;
-      }
-  mutated: '{}'
-  reason: 'defaultWhich catch block — tests always inject a mock `which`, so this code path is never exercised. Same as the outer defaultWhich body ignore.'
-  added: 2026-05-26
-- file: src/core/clipboard.ts
-  mutator: ConditionalExpression
-  original: 'opts.resolve !== undefined'
-  mutated: 'true'
-  reason: 'equivalent — _setClipboardTestHooks is test-only. When opts.resolve is undefined and mutant forces assignment, resolveOverride becomes undefined which is falsy; the `if (resolveOverride)` guard in resolveClipboardTool treats undefined and null identically.'
-  added: 2026-05-26
-- file: src/core/clipboard.ts
-  mutator: ConditionalExpression
-  original: 'opts.copy !== undefined'
-  mutated: 'true'
-  reason: 'equivalent — _setClipboardTestHooks is test-only. When opts.copy is undefined and mutant forces assignment, copyOverride becomes undefined which is falsy; the `if (copyOverride)` guard in copyToClipboard treats undefined and null identically.'
-  added: 2026-05-26
-- file: src/core/clipboard.ts
-  mutator: ConditionalExpression
-  original: '!tool'
-  mutated: 'false'
-  reason: 'equivalent — skipping the early return when tool is null causes spawn([null, ...CLIPBOARD_ARGS[null]]) to throw, caught by the outer try/catch. Both paths result in silent no-op (no clipboard write, no error surfaced).'
-  added: 2026-05-26
-- file: src/core/paths.ts
-  mutator: StringLiteral
-  original: '"~"'
-  mutated: '""'
-  reason: 'equivalent — mutates startsWith("~") to startsWith(""), which is always true. But replace("~", homedir()) is a no-op when input lacks ~. Only diverges on inputs containing ~ at non-initial position (e.g. /path/~backup), which no real caller produces.'
-  added: 2026-05-26
-- file: src/core/paths.ts
-  mutator: MethodExpression
-  original: '!expanded.startsWith("/")'
-  mutated: 'expanded.endsWith("/")'
-  reason: 'existing test resolvePath(".", tmp) covers the relative-path-with-cwd code path. Survival is suspected Stryker command-runner artifact — the command runner treats the whole suite as one test and may not detect the failure properly in this environment.'
-  added: 2026-05-26
-- file: src/core/spinner.ts
-  mutator: BooleanLiteral
-  original: 'false'
-  mutated: 'true'
-  reason: 'line 20 listenersInstalled initial value. Tests reset this via resetExitGuard(), so mutation is equivalent within the test environment; module-level init state cannot be re-imported.'
-  added: 2026-05-26
-- file: src/core/spinner.ts
-  mutator: ConditionalExpression
-  original: 'cursorTeardownUnregister'
-  mutated: 'false'
-  reason: 'line 61 ensureCursorTeardown guard. Equivalent — teardownBytes is a Set, so re-adding SHOW_CURSOR is idempotent. The lost unregister callback is never called externally.'
-  added: 2026-05-26
-- file: src/core/spinner.ts
-  mutator: ConditionalExpression
-  original: 'stopped'
-  mutated: 'false'
-  reason: 'stop-idempotency guards at lines 104, 128, 132. Double-calling stop writes an extra clear-line to an already-cleared terminal line (harmless); clearInterval prevents interval re-fire regardless of the flag.'
-  added: 2026-05-26
-- file: src/core/spinner.ts
-  mutator: BooleanLiteral
-  original: 'true'
-  mutated: 'false'
-  reason: 'stopped = true at lines 105, 133. Same as the ConditionalExpression stopped → false ignores — clearInterval prevents re-fire, and double-stop writes are idempotent on the terminal.'
-  added: 2026-05-26
 - file: src/core/theme.ts
   mutator: ObjectLiteral
   original: '{ fg: [210, 210, 225], bg: [60, 60, 100] }'
@@ -4490,3 +4375,33 @@
   mutated: '/--/'
   reason: 'leading-dash strip regex anchor removed; equivalent for realistic CLI args (no arg contains internal ''--'')'
   added: 2026-06-05
+- file: src/subcommands/registry.ts
+  mutator: ConditionalExpression
+  original: 'entry[1].flag.length > 0'
+  mutated: 'true'
+  reason: 'equivalent — every SETTINGS entry with a `flag` has at least one element (type `readonly [string, ...string[]]` enforces it). The mutated branch (flag exists but length is 0) is unreachable.'
+  added: 2026-06-06
+- file: src/subcommands/registry.ts
+  mutator: EqualityOperator
+  original: 'entry[1].flag.length > 0'
+  mutated: 'entry[1].flag.length >= 0'
+  reason: 'equivalent — array length is always >= 0, so the mutant collapses to true. Combined with the outer `!!entry[1].flag` guard, it diverges only when `flag = []`, which never occurs (type enforces non-empty tuple).'
+  added: 2026-06-06
+- file: src/subcommands/registry.ts
+  mutator: ConditionalExpression
+  original: 'aliases.length > 0'
+  mutated: 'true'
+  reason: 'equivalent — `aliases: []` vs `aliases: undefined` are indistinguishable to all consumers (`o.aliases ?? []` in main.ts/completion.ts and `c.aliases?.includes(flag)` in dispatch.ts behave identically for both).'
+  added: 2026-06-06
+- file: src/subcommands/registry.ts
+  mutator: EqualityOperator
+  original: 'aliases.length > 0'
+  mutated: 'aliases.length >= 0'
+  reason: 'equivalent — same as the ConditionalExpression `true` mutant above; both force `aliases: []` instead of `aliases: undefined`, which is indistinguishable to all consumers.'
+  added: 2026-06-06
+- file: src/subcommands/registry.ts
+  mutator: StringLiteral
+  original: '`w ${primary}`'
+  mutated: '``'
+  reason: 'equivalent — the `s.usage ??` fallback is never reached because every SETTINGS entry with a `flag` (verbose, yolo, continue, noAnimation, model, logTraces) supplies its own `usage` string. Flagless entries are filtered out by `hasFlag` before reaching `settingToOption`.'
+  added: 2026-06-06
