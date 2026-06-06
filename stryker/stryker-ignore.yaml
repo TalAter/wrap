@@ -4405,3 +4405,15 @@
   mutated: '``'
   reason: 'equivalent — the `s.usage ??` fallback is never reached because every SETTINGS entry with a `flag` (verbose, yolo, continue, noAnimation, model, logTraces) supplies its own `usage` string. Flagless entries are filtered out by `hasFlag` before reaching `settingToOption`.'
   added: 2026-06-06
+- file: src/subcommands/version.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: 'equivalent — `kind` is a TS-only tagged-union discriminator; no runtime branch checks `kind === "command"` (only `kind === "option"`), so commands with `kind: ""` behave identically.'
+  added: 2026-06-06
+- file: src/subcommands/version.ts
+  mutator: StringLiteral
+  original: '"version"'
+  mutated: '""'
+  reason: 'equivalent — Command.id is never read at runtime (only Option.id is, in main.ts MODIFIER_SPECS). The version command is dispatched by flag/aliases match, not by id.'
+  added: 2026-06-06
