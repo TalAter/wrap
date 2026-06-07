@@ -1,5 +1,5 @@
+import { truncateMiddle } from "wrap-core/text";
 import { getConfig } from "../config/store.ts";
-import { truncateMiddle } from "../core/truncate.ts";
 import type { ProbeTurn } from "../logging/entry.ts";
 import type { Skill, SkillTask, Trigger } from "./types.ts";
 

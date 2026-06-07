@@ -1,3 +1,4 @@
+import { truncateMiddle } from "wrap-core/text";
 import { getConfig } from "../config/store.ts";
 import { resolveEditor, spawnEditor } from "../core/editor.ts";
 import { notifications } from "../core/notify.ts";
@@ -11,7 +12,6 @@ import {
 } from "../core/runner.ts";
 import { executeShellCommand } from "../core/shell.ts";
 import type { Transcript } from "../core/transcript.ts";
-import { truncateMiddle } from "../core/truncate.ts";
 import { verbose } from "../core/verbose.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
 import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
