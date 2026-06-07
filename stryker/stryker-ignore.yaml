@@ -3871,3 +3871,15 @@
   mutated: '""'
   reason: 'equivalent — Command.id is never read at runtime (only Option.id is, in main.ts MODIFIER_SPECS). The version command is dispatched by flag/aliases match, not by id.'
   added: 2026-06-06
+- file: src/core/parse-response.ts
+  mutator: StringLiteral
+  original: '"StructuredOutputError"'
+  mutated: '""'
+  reason: 'cosmetic — error.name is never read at runtime (isStructuredOutputError checks instanceof + message, never .name).'
+  added: 2026-06-07
+- file: src/core/parse-response.ts
+  mutator: Regex
+  original: '/^```\w*\s*\n([\s\S]*)\n```$/'
+  mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
+  reason: 'equivalent on realistic input — \s* vs \S* only differs when the language tag is followed by trailing whitespace before the newline; no LLM emits this.'
+  added: 2026-06-07
