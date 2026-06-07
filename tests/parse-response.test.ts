@@ -37,6 +37,11 @@ describe("stripFences", () => {
     expect(stripFences(input)).toBe(input.trim());
   });
 
+  test("does not strip when prose follows a code block", () => {
+    const input = '```json\n{"type": "command"}\n```\nSome trailing prose';
+    expect(stripFences(input)).toBe(input);
+  });
+
   test("trims whitespace inside the captured fenced block", () => {
     const input = '```json\n   {"type": "command"}   \n```';
     expect(stripFences(input)).toBe('{"type": "command"}');
