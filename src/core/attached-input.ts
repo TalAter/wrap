@@ -1,4 +1,4 @@
-import { truncateMiddle } from "wrap-core/text";
+import { truncateMiddle } from "./truncate.ts";
 
 type StdinSource = {
   isTTY: boolean | undefined;
