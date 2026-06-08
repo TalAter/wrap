@@ -1,4 +1,3 @@
-import { truncateMiddle } from "wrap-core/text";
 import { getConfig } from "../config/store.ts";
 import type { PromptScaffold } from "../llm/build-prompt.ts";
 import type { Provider } from "../llm/types.ts";
@@ -10,6 +9,7 @@ import { prettyPath, resolvePath } from "./paths.ts";
 import { runRound } from "./round.ts";
 import { executeShellCommand } from "./shell.ts";
 import type { Transcript } from "./transcript.ts";
+import { truncateMiddle } from "./truncate.ts";
 import { verbose } from "./verbose.ts";
 
 export type LoopState = {
