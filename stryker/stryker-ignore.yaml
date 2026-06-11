@@ -3178,3 +3178,169 @@
   mutated: 'turn.attempts.length + 1'
   reason: 'L209 kill covered by tests/round.test.ts "json-retry echoes the failed assistant text back to the LLM"; L238 (scratchpad-path mirror) shares match-key — survives in the 4-call edge but auto-filters via this entry.'
   added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: Regex
+  original: '/^\s*(curl|wget)\b[^\n]*https?:\/\//'
+  mutated: '/\s*(curl|wget)\b[^\n]*https?:\/\//'
+  reason: 'fetchesUrl regex — selects 🌐 vs 🔍 icon for inline-step chrome line; the `^` anchor is intentional but only affects emoji choice on multi-command lines like `echo; curl https://x`, which is purely cosmetic UI signal'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'response.memory_updates_message'
+  mutated: 'true'
+  reason: 'handleMemoryUpdates branch — guards a chrome notification when memory_updates_message is present; the chrome side effect is covered by integration tests around session/dialog, not the runLoop unit surface'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 's !== null'
+  mutated: 'true'
+  reason: 'handleMemoryUpdates filter — drops null/root scopes before picking the deepest; chrome notification path, not the runLoop unit surface'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'scopes.sort((a, b) => b.length - a.length)'
+  mutated: 'scopes'
+  reason: 'handleMemoryUpdates scope sort — picks the deepest scope to prefix the chrome message; chrome notification path, not the runLoop unit surface'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ArrowFunction
+  original: '(a, b) => b.length - a.length'
+  mutated: '() => undefined'
+  reason: 'handleMemoryUpdates scope sort callback — picks the deepest scope to prefix the chrome message; chrome notification path, not the runLoop unit surface'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ArithmeticOperator
+  original: 'b.length - a.length'
+  mutated: 'b.length + a.length'
+  reason: 'handleMemoryUpdates scope sort comparator — picks the deepest scope to prefix the chrome message; chrome notification path, not the runLoop unit surface'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.budgetRemaining > 0'
+  mutated: 'state.budgetRemaining >= 0'
+  reason: 'while-loop bound `budgetRemaining > 0` — equivalent to `>= 0` because every code path inside the loop returns when budgetRemaining hits 0 (isLastRound guards at L213, command/answer returns at L198/L209). The loop check never sees budgetRemaining === 0.'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'state.roundNum > 1'
+  mutated: 'true'
+  reason: 'verbose-only `Round N/M` log — not asserted by tests; affects --verbose output only'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.roundNum > 1'
+  mutated: 'state.roundNum >= 1'
+  reason: 'verbose-only `Round N/M` log — not asserted by tests; affects --verbose output only'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'isLastRound'
+  mutated: 'true'
+  reason: 'verbose-only `Final round` log — not asserted by tests; affects --verbose output only'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object" && "turn" in e'
+  mutated: 'true'
+  reason: 'RoundError defensive type-check — runRound''s contract guarantees it throws RoundError (which carries `turn`); the typeof/`in` check is defensive for runtime safety and the negative branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object" && "turn" in e'
+  mutated: 'e !== null && typeof e === "object" || "turn" in e'
+  reason: 'RoundError defensive type-check — runRound''s contract guarantees it throws RoundError (which carries `turn`); the typeof/`in` check is defensive for runtime safety and the negative branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'true'
+  reason: 'RoundError defensive type-check — runRound''s contract guarantees it throws RoundError (which carries `turn`); the typeof/`in` check is defensive for runtime safety and the negative branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'e !== null || typeof e === "object"'
+  reason: 'RoundError defensive type-check — runRound''s contract guarantees it throws RoundError (which carries `turn`); the typeof/`in` check is defensive for runtime safety and the negative branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null'
+  mutated: 'true'
+  reason: 'RoundError defensive type-check — runRound''s contract guarantees it throws RoundError (which carries `turn`); the typeof/`in` check is defensive for runtime safety and the negative branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'typeof e === "object"'
+  mutated: 'true'
+  reason: 'RoundError defensive type-check — runRound''s contract guarantees it throws RoundError (which carries `turn`); the typeof/`in` check is defensive for runtime safety and the negative branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'partial'
+  mutated: 'true'
+  reason: '`if (partial)` defensive guard — partial is always truthy when the catch path runs (runRound always throws RoundError carrying turn), so the false branch is unreachable in tests'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: '!response'
+  mutated: 'false'
+  reason: '`if (!response)` defensive throw — runRound''s contract guarantees a CommandResponse on success; the throw is unreachable when the contract holds and unobservable when it doesn''t'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          // runRound's contract guarantees a response on success — defensive.
+          throw new Error("runRound returned an assistant turn without a response");
+        }
+  mutated: '{}'
+  reason: 'defensive-throw block body — runRound''s contract guarantees a CommandResponse on success; the throw is unreachable when the contract holds'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"runRound returned an assistant turn without a response"'
+  mutated: '""'
+  reason: 'defensive-throw error message — cosmetic message text for an unreachable defensive throw'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'true'
+  reason: 'stderr.trim() truthiness — only differs when stderr is whitespace-only (e.g. `printf ''  '' >&2`); no real caller produces whitespace-only stderr with no other content'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'exec.stderr'
+  reason: 'stderr.trim() vs stderr — only differs when stderr is whitespace-only; no real caller produces whitespace-only stderr'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'stepOutput.trim()'
+  mutated: 'stepOutput'
+  reason: 'stepOutput.trim() vs stepOutput — only differs when stdout is whitespace-only (e.g. printf ''   ''); no real caller produces whitespace-only stdout with stderr present'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'empty-stdout separator literal — when stdout is empty and stderr is present, the `""` keeps stderr unprefixed; testing this would require asserting absence of the specific mutated literal, which binds to the mutator semantic rather than a clean behavioral contract'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"model"'
+  mutated: '""'
+  reason: 'transcript step turn `source` tag — `"model"` distinguishes inline-step from user-confirmed steps for downstream logging only; the receiving reducer/log path tolerates an empty tag in the runLoop unit surface'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: '{ type: "exhausted" }'
+  mutated: '{}'
+  reason: 'L254 outer-loop `return { type: "exhausted" }` — unreachable; the inline-step path at L213 returns exhausted before the while loop can exit naturally, and command/answer paths return at L198/L209'
+  added: 2026-06-11
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"exhausted"'
+  mutated: '""'
+  reason: 'L254 `"exhausted"` literal — same as #154, the L254 return is unreachable from the runLoop surface'
+  added: 2026-06-11
