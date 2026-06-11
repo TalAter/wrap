@@ -1,18 +1,3 @@
-- file: src/memory/init-prompt.ts
-  mutator: StringLiteral
-  original: |-
-    `You are analyzing raw output from system probe commands. Parse the results into concise, human-readable facts about the user's environment.
-    
-    Rules:
-    - Return one fact per line, plain text (not JSON, not markdown)
-    - Infer implicit facts (e.g., Darwin → macOS, arm64 → Apple Silicon)
-    - Include: OS + version + architecture, shell + config file location
-    - Be concise — each fact should be a single short line
-    - Do not include facts that cannot be determined from the probe output
-    - Do not add bullet points or numbering`
-  mutated: '``'
-  reason: 'INIT_SYSTEM_PROMPT template literal — system prompt text sent to the LLM during memory initialization. Pure data: no behavioral test would catch prompt-emptying without binding wording/length, which is implementation detail.'
-  added: 2026-05-31
 - file: src/session/dialog-host.ts
   mutator: BlockStatement
   original: |-
@@ -3023,3 +3008,173 @@
   mutated: '/^```\w*\S*\n([\s\S]*)\n```$/'
   reason: 'equivalent on realistic input — \s* vs \S* only differs when the language tag is followed by trailing whitespace before the newline; no LLM emits this.'
   added: 2026-06-07
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'NoObjectGeneratedError.isInstance(e)'
+  mutated: 'true'
+  reason: 'extractFailedText callers (callOne, round-level retry) only pass NoObjectGeneratedError, StructuredOutputError, or generic Error; with the first branch forced true, e.text ?? "" returns the correct .text for both structured-error classes and "" for generic Errors — same observable result.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"RoundError"'
+  mutated: '""'
+  reason: 'error.name is debug metadata; runtime never branches on it. Cosmetic.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'n.kind === "llm-wire"'
+  mutated: 'true'
+  reason: 'within a single LLM call no other notification kinds fire concurrently; n.wire is undefined for non-wire notifications, so the assignment overwrites captured to undefined (same end state as not assigning).'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'performance.now() - t0'
+  mutated: 'performance.now() + t0'
+  reason: 'computes attempt.llm_ms — a debug/log field. No runtime code branches on the duration value.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'captured?.wire_capture_error !== undefined'
+  mutated: 'false'
+  reason: 'wire_capture_error is a debug field on AttemptMeta surfacing only in JSONL logs; no runtime behavior depends on it.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        attempt.wire_capture_error = captured.wire_capture_error;
+      }
+  mutated: '{}'
+  reason: 'wire_capture_error is a debug-only field; dropping its assignment is invisible at runtime.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'a.llm_ms ?? 0'
+  mutated: 'a.llm_ms && 0'
+  reason: 'sumAttemptMs feeds turn.llm_ms — a debug field; no runtime branches on the total.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'options.requestFraming'
+  mutated: 'true'
+  reason: 'equivalent — assigning undefined to baseDirectives.requestFraming is indistinguishable downstream from never assigning (both fail the same truthy check in transcript.ts).'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'options.requestFraming'
+  mutated: 'false'
+  reason: 'mutation drops the framing forwarding, but the only test that would catch it (assert context-string appears in the prompt) would bind to buildPromptInput''s projection of directives — implementation detail.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error, retrying..."'
+  mutated: '""'
+  reason: 'verbose() debug log text; no runtime behavior.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'turn.attempts[turn.attempts.length - 1]?.raw_response'
+  mutated: 'turn.attempts[turn.attempts.length - 1].raw_response'
+  reason: 'callOne pushed onto turn.attempts before returning, so attempts[length-1] is always defined; the optional chain is defensive padding.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'fallback is only used when attempts[length-1] is missing — callOne always pushes first, so the fallback never triggers in practice.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'last?.error?.message'
+  mutated: 'last?.error.message'
+  reason: 'the parse-failure branch in callOne always sets attempt.error before returning undefined; last.error is guaranteed defined when this fallback runs.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: OptionalChaining
+  original: 'last?.error'
+  mutated: 'last.error'
+  reason: 'same — last is always pushed by callOne, and error is set on the parse-failure branch before this path is reached.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM parse error"'
+  mutated: '""'
+  reason: 'fallback string for an undefined error.message; in practice the parse-failure path always sets error.message. Even if hit, the user-facing RoundError carries the model label separately.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'response.type === "command"'
+  mutated: 'true'
+  reason: 'equivalent — when response.type is "reply", response.risk_level is undefined and undefined === "high" is false; the scratchpad-retry block never enters either way.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ rejectedResponse: response }'
+  mutated: '{}'
+  reason: 'tests would need to assert the rejected-response payload made it into the prompt — binds to buildPromptInput''s projection of directive content (implementation detail).'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse === undefined'
+  mutated: 'false'
+  reason: 'the inner json-retry runs only when both the scratchpad call AND its retry fail to parse — a 4-call edge no real run hits in tests.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            verbose("LLM parse error, retrying...");
+            const failedText = turn.attempts[turn.attempts.length - 1]?.raw_response ?? "";
+            scratchResponse = await callOne(provider, turn, appendJsonRetry(scratchInput, failedText));
+          }
+  mutated: '{}'
+  reason: 'kills the scratchpad-json-retry block — same 4-call edge; not worth a dedicated kill test for a path real callers rarely exercise.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse !== undefined'
+  mutated: 'false'
+  reason: 'comment in source says ''we keep the original response'' when scratch retry fails; mutation breaks that intent, but only matters on the 4-call edge where scratch path''s parse-retry also fails.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'scratchResponse !== undefined'
+  mutated: 'true'
+  reason: 'would overwrite response with undefined when scratchResponse is undefined; but reachable only when the scratchpad call+retry both parsed-failed (4-call edge).'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: EqualityOperator
+  original: 'scratchResponse !== undefined'
+  mutated: 'scratchResponse === undefined'
+  reason: 'same 4-call edge as the other L242 mutants; assigns undefined into response only when scratchResponse is defined, which then errors at verboseResponse — not testable without binding the 4-call retry sequence.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'last'
+  mutated: 'true'
+  reason: 'callOne always pushes an attempt before returning, so attempts[length-1] === last is always truthy.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM returned an empty response."'
+  mutated: '""'
+  reason: 'internal error.message field on the attempt; the user-facing RoundError thrown on the next line carries the same string for surface display.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '`LLM error: ${errMsg}`'
+  mutated: '``'
+  reason: 'verbose() debug log; the user-facing RoundError on the next line carries the model + errMsg for actual surface display.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'turn.attempts[turn.attempts.length - 1]?.raw_response ?? ""'
+  mutated: 'turn.attempts[turn.attempts.length - 1]?.raw_response && ""'
+  reason: 'L209 kill covered by tests/round.test.ts "json-retry echoes the failed assistant text back to the LLM"; L238 (scratchpad-path mirror) shares match-key — survives in the 4-call edge but auto-filters via this entry.'
+  added: 2026-06-11
+- file: src/core/round.ts
+  mutator: ArithmeticOperator
+  original: 'turn.attempts.length - 1'
+  mutated: 'turn.attempts.length + 1'
+  reason: 'L209 kill covered by tests/round.test.ts "json-retry echoes the failed assistant text back to the LLM"; L238 (scratchpad-path mirror) shares match-key — survives in the 4-call edge but auto-filters via this entry.'
+  added: 2026-06-11
