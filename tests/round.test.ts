@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
+import { StructuredOutputError } from "../src/core/parse-response.ts";
 import { RoundError, runRound } from "../src/core/round.ts";
 import type { Transcript } from "../src/core/transcript.ts";
 import { resetVerboseTimer } from "../src/core/verbose.ts";
@@ -330,6 +331,30 @@ describe("runRound", () => {
     const last = msgs[msgs.length - 1];
     expect(last?.role).toBe("user");
     expect(last?.content).toBe(promptConstants.jsonRetryInstruction);
+  });
+
+  test("json-retry echoes the failed assistant text back to the LLM", async () => {
+    let calls = 0;
+    let retryInput: { messages: { role: string; content: string }[] } | undefined;
+    const provider: Provider = {
+      runPrompt: async (input) => {
+        calls += 1;
+        if (calls === 1) {
+          throw new StructuredOutputError("invalid JSON: oops", "garbled output");
+        }
+        retryInput = input;
+        return { type: "command", content: "ls", risk_level: "low" } as CommandResponse;
+      },
+    };
+    await runRound(provider, makeTranscript(), scaffold, {
+      isLastRound: false,
+      model: "test",
+      showSpinner: false,
+    });
+    const msgs = retryInput?.messages ?? [];
+    const echo = msgs[msgs.length - 2];
+    expect(echo?.role).toBe("assistant");
+    expect(echo?.content).toBe("garbled output");
   });
 
   test("applyCapture survives a provider error before any llm-wire notification with logTraces on", async () => {
