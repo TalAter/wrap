@@ -1,8 +1,8 @@
 ---
 name: multi-step
 description: Non-final commands, the final flag, risk × final matrix, temp directory, echo projection
-Source: src/command-response.schema.ts, src/core/, src/session/, src/fs/temp.ts
-Last-synced: 0a22f2a
+Source: src/command-response.schema.ts, src/core/, src/session/, src/fs/temp.ts, src/llm/framing.ts
+Last-synced: eb05626
 ---
 
 # Multi-step

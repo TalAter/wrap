@@ -1,8 +1,8 @@
 ---
 name: scratchpad
 description: Forced pre-commit planning slot in the LLM response schema — first position, visible in logs/verbose
-Source: src/command-response.schema.ts, src/core/round.ts
-Last-synced: 0a22f2a
+Source: src/command-response.schema.ts, src/core/round.ts, src/llm/framing.ts
+Last-synced: eb05626
 ---
 
 # Scratchpad

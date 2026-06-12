@@ -80,7 +80,7 @@ Forward-leaning framing: the default posture is "opt in for reads." Defensive ph
 
 No schema refinement — the field is advisory; the runtime gate enforces the risk and side-effect constraints. This avoids adding a structured-output-retry loop just to coerce a flag.
 
-Echo projection (`projectResponseForEcho` in `src/core/transcript.ts`) adds `retry_on_error` when set, so the LLM sees its own declaration in subsequent rounds.
+Echo projection (`projectResponseForEcho` in `src/llm/framing.ts`) adds `retry_on_error` when set, so the LLM sees its own declaration in subsequent rounds.
 
 **Before editing the schema comment:** read `.claude/skills/editing-prompts.md` (per CLAUDE.md). The Python source of truth and TS runtime mirror must stay in sync; editing only one silently breaks the optimizer or runtime.
 
@@ -162,7 +162,7 @@ When any eligibility condition is false at dispatch time, Wrap uses today's `mod
 
 ## Transcript shape
 
-No new turn kind. Always push a `step` turn. `step` and `confirmed_step` render identically (see `transcript.ts:37-41`: "Shape identical to `step` and rendered the same way — the LLM does not need to distinguish model-authored from user-confirmed steps"), so `step` is correct for every retry. `SessionOutcome.run.source` cannot discriminate dialog-confirmed from auto-exec — both arrive as `source: "model"` — so attempting to pick between step/confirmed_step here would misclassify.
+No new turn kind. Always push a `step` turn. Dialog-confirmed and model-authored steps already share the `step` kind (the framer renders them identically — the LLM does not need to distinguish them), so `step` is correct for every retry. `SessionOutcome.run.source` cannot discriminate dialog-confirmed from auto-exec — both arrive as `source: "model"` — so attempting any finer classification here would misclassify.
 
 The turn's `response` retains `final: true` (no lie). The LLM sees an assistant turn with `final: true`, followed by the step-body user turn (`=== OUTPUT ===\n<stderr>\nExit code: N`), followed by an explicit **retry-prompt user turn** instructing the LLM to propose a fix. The explicit prompt makes the intent unambiguous — the `final: true` shape is unusual in a step position (it never occurs today), so the retry-prompt carries the disambiguation.
 
@@ -197,7 +197,7 @@ Config type (`src/config/config.ts`): `retryOnError?: boolean` on `Config`, `ret
 
 Add `retry_on_error: z.boolean().optional()` inside the SCHEMA_START / SCHEMA_END markers. The comment above the field is the source text that DSPy lifts into the prompt. Before editing, read `.claude/skills/editing-prompts.md` — the Python source of truth and TS mirror must stay in sync.
 
-### 2. Transcript echo — `src/core/transcript.ts`
+### 2. Echo projection — `src/llm/framing.ts`
 
 In `projectResponseForEcho`, emit `retry_on_error` when truthy. (Follow the `pipe_stdin` precedent — only set when truthy to keep echoes terse.)
 

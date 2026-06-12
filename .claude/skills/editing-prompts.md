@@ -12,7 +12,8 @@ Wrap's LLM prompt is split across several files. Editing the wrong one silently 
 |---|---|---|
 | **Instruction text** (the behavioral rules the LLM sees) | `src/prompt.optimized.json` `instruction` field | Yes — hand-edit for immediate use. The next `bun run optimize` (GEPA) will evolve a new instruction from scratch, so hand-edits are temporary. |
 | **Schema with comments** (the Zod schema text the LLM sees) | `src/command-response.schema.ts` between `// SCHEMA_START` and `// SCHEMA_END` | Yes — DSPy reads it via `read_schema.py`; the next optimize run regenerates `schemaText` in `prompt.optimized.json` from this source |
-| **Constant sections** (section headers, voice instructions, last-round instruction, retry instructions, etc.) | `src/prompt.constants.json` | Yes — single source of truth |
+| **Constant sections** (section headers, voice instructions, last-round instruction, scratchpad-retry instruction, etc.) | `src/prompt.constants.json` | Yes — single source of truth |
+| **JSON-parse-retry instruction** (the corrective text after a malformed reply) | wrap-core: `src/llm/prompt-constants.json` (here: `node_modules/wrap-core/src/llm/prompt-constants.json`) | No — core-owned (impl-spec decision 8). The optimizer reads it from `node_modules` for its PROMPT_HASH manifest; overriding the text from wrap is a non-goal. Change it in wrap-core itself. |
 | **Prompt hash** | `src/prompt.optimized.json` `promptHash` | **No.** Leave it stale when you edit the instruction. The next `bun run optimize` recomputes it. |
 
 ## The instruction text
@@ -33,5 +34,5 @@ GEPA is an instruction-only optimizer — it evolves the instruction from scratc
 
 ## Sanity check after editing
 
-- `bun test tests/prompt.test.ts` — confirms `prompt.optimized.json` parses and prompt assembly works
+- `bun test tests/schema-order.test.ts tests/build-prompt.test.ts` — confirms `prompt.optimized.json` parses, the `schemaText` mirror matches the schema source, and prompt assembly works
 - `bun run check` — full lint + test pass

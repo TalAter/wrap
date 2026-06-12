@@ -30,9 +30,9 @@ All stryker-related files live under `stryker/` at the repo root.
 
 - `stryker/stryker-ignore.yaml` — survivors you've decided to suppress. Array of entries:
   ```yaml
-  - file: src/core/parse-response.ts
+  - file: src/core/round.ts
     mutator: StringLiteral
-    original: '"StructuredOutputError"'
+    original: '"RoundError"'
     mutated: '""'
     reason: error.name is cosmetic, runtime never reads it
     added: 2026-04-21
@@ -61,8 +61,6 @@ All stryker-related files live under `stryker/` at the repo root.
    - `src/index.ts` — one-line entry trampoline
    - `**/*.tsx` — Ink render components; tests are snapshot-ish, low behavioral signal
    - `src/tui/welcome-animation-frames.ts` — pure data (thousands of frames)
-   - `src/llm/providers/test.ts` — fake stub provider
-   - `src/llm/providers/claude-code.ts` — thin external-SDK wrapper, no dedicated test
    - anything non-`.ts` (JSON, schemas, constants)
 
    If your picked file no longer exists (deleted since it joined the rotation), remove it from the list, commit the rotation update, and re-pick.
@@ -102,7 +100,7 @@ All stryker-related files live under `stryker/` at the repo root.
 
 ## Fix stage
 
-Write the draft test at its final path (e.g. `tests/parse-response.test.ts`). Do not commit yet. Do not touch anything outside `tests/`.
+Write the draft test at its final path (e.g. `tests/round.test.ts`). Do not commit yet. Do not touch anything outside `tests/`.
 
 ## Review stage (fixes only)
 

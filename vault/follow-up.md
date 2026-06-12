@@ -1,8 +1,8 @@
 ---
 name: follow-up
 description: In-dialog command refinement — composing, processing, transcript, round budget
-Source: src/session/, src/core/transcript.ts
-Last-synced: 0a22f2a
+Source: src/session/, src/llm/framing.ts
+Last-synced: eb05626
 ---
 
 # Follow-up

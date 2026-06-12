@@ -94,7 +94,7 @@ src/
   core/                            pure loop — [[session]], [[safety]], [[theme]], [[piped-input]]
   session/                         stateful loop + dialog lifecycle — [[session]]
   tui/                             Ink presentation — [[tui]], [[theme]]
-  llm/                             providers, prompt scaffold — [[llm]]
+  llm/                             prompt scaffold, framing, core wiring — [[llm]]
   config/                          sources, precedence, store — [[config]]
   wizard/                          first-run wizard — [[wizard]]
   skills/                          deterministic pre-LLM bundles — [[skills]], [[discovery]]
@@ -126,7 +126,7 @@ Runtime data at `~/.wrap/` (overridable via `$WRAP_HOME`): `config.jsonc`, `memo
 - [[piped-input]] — stdin materialization + file-based prompt framing
 
 ### LLM
-- [[llm]] — providers, prompt scaffold, structured output
+- [[llm]] — prompt scaffold, add-time framing, scratchpad retry, wrap-core seam
 - [[memory]] — scoped facts
 - [[discovery]] — init probes, tool watchlist, cwd files
 - [[scratchpad]] — scratchpad field

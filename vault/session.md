@@ -2,7 +2,7 @@
 name: session
 description: Five-layer session architecture — runner generator, pure reducer, state-driven dialog, coordinator, notification bus
 Source: src/core/, src/session/
-Last-synced: 0a22f2a
+Last-synced: eb05626
 ---
 
 # Session
@@ -11,8 +11,8 @@ Five layers, each with a narrow job. Split lets us test the LLM loop without Ink
 
 ## Runner (core)
 
-- **Transcript** — conversation history as semantic turns (user, assistant step, confirmed step, candidate command, answer). Not provider-shaped messages. Projected to a per-round prompt input. Meta-directives (last-round, retry pairs) live only inside one projection call — no stale-instruction cleanup needed.
-- **Round** — single LLM call with in-round retries (parse failure, probe risk, scratchpad required). Owns its own spinner. Throws an error carrying the partial round on failure.
+- **Transcript** — conversation history as semantic turns (user, assistant step, confirmed step, candidate command, answer). Not provider-shaped messages. Turns are framed into the live conversation as they are added (see [[llm]]). Meta-directives (last-round, retry echoes) are transient adds consumed by one send — no stale-instruction cleanup needed.
+- **Round** — up to two conversation sends (initial + scratchpad domain retry), each with core's invisible parse retry inside. Owns its own spinner. Throws an error carrying the partial round on failure.
 - **Loop** — async generator. Drives rounds, executes non-final low-risk steps inline, yields lifecycle events, returns a typed outcome (`command | answer | exhausted | aborted`).
 
 ## State machine

@@ -45,7 +45,7 @@ All remaining implementation tasks. Completed features are omitted — see `vaul
 ## LLM Integration
 
 - [ ] Context assembly — curated env vars (PATH, EDITOR, SHELL), thread history
-- [ ] Add Google (Gemini) support. Bundle `@ai-sdk/google`, add a `kind: "google"` branch in `src/llm/providers/registry.ts` + factory wiring in `src/llm/providers/ai-sdk.ts`, and uncomment the `google` entry in `API_PROVIDERS` in `src/llm/providers/registry.ts`. Google's OpenAI-compat endpoint has gaps in structured-output support, so going through the dedicated SDK is required rather than optional.
+- [ ] Add Google (Gemini) support. Lands in wrap-core: bundle `@ai-sdk/google`, add a `kind: "google"` branch in wrap-core's `src/llm/registry.ts` + factory wiring in `src/llm/ai-sdk.ts`, and uncomment the `google` entry in `API_PROVIDERS`. Google's OpenAI-compat endpoint has gaps in structured-output support, so going through the dedicated SDK is required rather than optional.
 
 ## Logging (see [[logging]])
 

@@ -41,8 +41,9 @@ formatContext({memory, cwd, piped, attachedInput*, constants}) → string
 
 buildPromptScaffold(config, contextString, ...) → PromptScaffold
   Pure function. Assembles system message from config (instruction + schema +
-  memory/voice instructions). Builds messages array (few-shot pairs, separator,
-  user message with context + query). No side effects.
+  memory/voice instructions). Builds the few-shot prefix messages (pairs +
+  separator) and carries contextString + sectionUserRequest for the turn
+  framer, which wraps the first user turn at add time. No side effects.
 
 assemblePromptScaffold(queryContext) → PromptScaffold
   Runtime wrapper. Reads both JSON files. Calls formatContext with runtime state
@@ -149,7 +150,7 @@ The bridge uses the existing `WRAP_CONFIG` environment variable. Docker sets thi
 WRAP_CONFIG='{"providers":{"anthropic":{"model":"claude-sonnet-4-6","apiKey":"$ANTHROPIC_API_KEY"}},"defaultProvider":"anthropic"}'
 ```
 
-The bridge calls `loadConfig()` → `initProvider()` using the existing config loading path. No new config code.
+The bridge calls `loadConfig()` → `resolveProvider()` → `initLlm()` using the existing config loading path. No new config code.
 
 **Why not pass provider config per request?** WRAP_CONFIG reuses existing infrastructure. The provider stays the same for the entire optimization run. Sending API key on every subprocess call (hundreds of times) is unnecessary. WRAP_CONFIG is set once in the Docker environment.
 
@@ -203,7 +204,7 @@ DONE
 User: w find all typescript files
    │
    ▼
-loadConfig() → initProvider()
+loadConfig() → resolveProvider() → initLlm()
 ensureMemory()
 runSkills() → emits transcript turns (discovery: pwd / ls / which; commit: status / diffs)
    │
@@ -215,9 +216,10 @@ assemblePromptScaffold(queryContext)
    │  calls buildPromptScaffold(config, contextString, ...) → PromptScaffold
    │
    ▼
-callWithRetry(provider, promptInput)
-   │  calls provider.runPrompt once
-   │  retries once on structured output failure (runtime-only policy)
+conversation.send(CommandResponseSchema)
+   │  turns are framed into the conversation as they happen (add-time framing)
+   │  core retries once inside send on structured-output failure
+   │  (runtime-only policy — the bridge always sends with retry: false)
    │
    ▼
 Process response (execute command / print answer / save memory)
