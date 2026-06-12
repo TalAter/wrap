@@ -1,5 +1,5 @@
+import { getRegistration, isKnownProvider, validateProviderEntry } from "wrap-core/llm";
 import type { Config, ProviderEntry } from "../config/config.ts";
-import { getRegistration, isKnownProvider, validateProviderEntry } from "./providers/registry.ts";
 import { isTestProviderSelected, TEST_RESOLVED_PROVIDER } from "./providers/test.ts";
 import type { ResolvedProvider } from "./types.ts";
 

@@ -2,6 +2,7 @@ import { Select } from "@inkjs/ui";
 import { Box, Text } from "ink";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { resolveColorHex } from "wrap-core/ansi";
+import { API_PROVIDERS, CLI_PROVIDERS } from "wrap-core/llm";
 import {
   ActionBar,
   Checklist,
@@ -14,7 +15,6 @@ import {
 import type { ProviderEntry } from "../config/config.ts";
 import { getConfig, updateConfig } from "../config/store.ts";
 import { SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
-import { API_PROVIDERS, CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { initProviderWizardState, type ProviderWizardAction, reduce } from "../wizard/state.ts";

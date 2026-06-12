@@ -3,11 +3,11 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, jsonSchema, type LanguageModel, Output } from "ai";
+import { getRegistration } from "wrap-core/llm";
 import { type ZodType, z } from "zod";
 import { notifications } from "../../core/notify.ts";
 import { scrubApiKey, type WireCapture, type WireRequest } from "../../logging/entry.ts";
 import type { Provider, ResolvedProvider } from "../types.ts";
-import { getRegistration } from "./registry.ts";
 
 /**
  * Strip `system` and `messages` from the SDK's raw request body — those

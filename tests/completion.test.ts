@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { API_PROVIDERS, CLI_PROVIDERS } from "../src/llm/providers/registry.ts";
+import { API_PROVIDERS, CLI_PROVIDERS } from "wrap-core/llm";
 import {
   generateBashCompletion,
   generateCompletion,

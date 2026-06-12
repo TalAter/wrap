@@ -1,7 +1,7 @@
+import { CLI_PROVIDERS } from "wrap-core/llm";
 import { chrome } from "../core/output.ts";
 import { fetchCached } from "../fs/cache.ts";
 import { wrapFs } from "../fs/home.ts";
-import { CLI_PROVIDERS } from "../llm/providers/registry.ts";
 import { mountConfigWizardDialog, type WizardResult } from "../session/dialog-host.ts";
 import type { ModelsDevData } from "../wizard/models-filter.ts";
 import { writeWizardConfig } from "../wizard/write-config.ts";

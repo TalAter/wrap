@@ -1,10 +1,5 @@
+import { API_PROVIDERS, CLI_PROVIDERS, isCliProvider, providerNeedsApiKey } from "wrap-core/llm";
 import type { ProviderEntry } from "../config/config.ts";
-import {
-  API_PROVIDERS,
-  CLI_PROVIDERS,
-  isCliProvider,
-  providerNeedsApiKey,
-} from "../llm/providers/registry.ts";
 import {
   applyRecommendation,
   filterAndSortModels,

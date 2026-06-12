@@ -185,7 +185,7 @@ export function generateCompletion(
 
 async function loadRegistry(): Promise<Registry> {
   const { commands, options } = await import("./registry.ts");
-  const { API_PROVIDERS, CLI_PROVIDERS } = await import("../llm/providers/registry.ts");
+  const { API_PROVIDERS, CLI_PROVIDERS } = await import("wrap-core/llm");
   return {
     commands,
     options,

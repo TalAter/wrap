@@ -1,6 +1,6 @@
+import { validateProviderEntry } from "wrap-core/llm";
 import { CONFIG_FILENAME, type Config, type ProviderEntry } from "../config/config.ts";
 import { wrapFs } from "../fs/home.ts";
-import { validateProviderEntry } from "../llm/providers/registry.ts";
 import type { WizardResult } from "../session/dialog-host.ts";
 
 /**

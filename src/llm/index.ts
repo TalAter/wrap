@@ -1,7 +1,7 @@
+import { getRegistration } from "wrap-core/llm";
 import { type CommandResponse, CommandResponseSchema } from "../command-response.schema.ts";
 import { aiSdkProvider } from "./providers/ai-sdk.ts";
 import { claudeCodeProvider } from "./providers/claude-code.ts";
-import { getRegistration } from "./providers/registry.ts";
 import { testProvider } from "./providers/test.ts";
 import type { PromptInput, Provider, ResolvedProvider } from "./types.ts";
 
