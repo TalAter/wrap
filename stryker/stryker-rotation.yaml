@@ -6,8 +6,6 @@
 # appended to the bottom when the run ends.
 #
 # See vault/agents/stryker-agent.md for the full workflow.
-
-- src/core/transcript.ts
 - src/core/shell.ts
 - src/config/resolve.ts
 - src/memory/memory.ts
@@ -78,3 +76,4 @@
 - src/core/parse-response.ts
 - src/core/round.ts
 - src/core/runner.ts
+- src/core/transcript.ts
