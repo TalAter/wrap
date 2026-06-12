@@ -13,8 +13,10 @@ export function buildConfig(
   nerdFonts?: boolean,
 ): Config {
   for (const [name, entry] of Object.entries(entries)) {
+    // Core's validator messages are bare plain language — wrap's category
+    // prefix is applied here, at the surfacing site.
     const err = validateProviderEntry(name, entry);
-    if (err) throw new Error(err);
+    if (err) throw new Error(`Config error: ${err}`);
   }
   return { providers: entries, defaultProvider, nerdFonts: nerdFonts ?? false };
 }

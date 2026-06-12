@@ -90,9 +90,11 @@ export function resolveProvider(
 
   // Per-entry validation runs before the no-model check so a structurally
   // invalid entry (e.g. ollama without baseURL) reports the actionable error
-  // even when other fields are also missing.
+  // even when other fields are also missing. Core's validator messages are
+  // bare plain language — wrap's category prefix is applied here, at the
+  // surfacing site.
   const validationError = validateProviderEntry(providerName, entry);
-  if (validationError) throw new Error(validationError);
+  if (validationError) throw new Error(`Config error: ${validationError}`);
 
   const model = entry.model;
   if (!model && !getRegistration(providerName).modelOptional) {
