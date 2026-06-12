@@ -1,10 +1,9 @@
 import { wrapFs } from "../fs/home.ts";
-import type { PromptInput } from "../llm/types.ts";
-import type { AttemptMeta, LogEntry, WireRequest, WireResponse } from "./entry.ts";
+import type { AttemptMeta, LogEntry, LoggedRequest, WireRequest, WireResponse } from "./entry.ts";
 import { serializeEntry } from "./entry.ts";
 
 type TracedAttempt = {
-  request?: PromptInput;
+  request?: LoggedRequest;
   request_wire?: WireRequest;
   response_wire?: WireResponse;
   raw_response?: string;

@@ -6,15 +6,17 @@
 # appended to the bottom when the run ends.
 #
 # See vault/agents/stryker-agent.md for the full workflow.
+
+- src/core/round.ts
+- src/core/runner.ts
+- src/core/shell.ts
 - src/config/resolve.ts
 - src/memory/memory.ts
 - src/logging/entry.ts
 - src/session/reducer.ts
-- src/llm/providers/registry.ts
 - src/llm/resolve-provider.ts
 - src/llm/format-context.ts
 - src/wizard/state.ts
-- src/core/truncate.ts
 - src/llm/build-prompt.ts
 - src/wizard/models-filter.ts
 - src/core/attached-input.ts
@@ -51,10 +53,6 @@
 - src/core/verbose.ts
 - src/fs/home.ts
 - src/fs/temp.ts
-- src/llm/index.ts
-- src/llm/providers/ai-sdk.ts
-- src/llm/types.ts
-- src/llm/utils.ts
 - src/logging/writer.ts
 - src/main.ts
 - src/memory/init-prompt.ts
@@ -72,8 +70,3 @@
 - src/tui/risk-presets.ts
 - src/wizard/write-config.ts
 - src/command-response.schema.ts
-- src/core/parse-response.ts
-- src/core/round.ts
-- src/core/runner.ts
-- src/core/transcript.ts
-- src/core/shell.ts

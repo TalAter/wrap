@@ -19,7 +19,7 @@ import { verbose, verboseHighlight } from "./verbose.ts";
 export type RunRoundOptions = {
   isLastRound: boolean;
   /** Display label for the active provider, for the error message wrapper. */
-  model: string;
+  label: string;
   /**
    * Show the chrome spinner around the LLM call. The session passes `true`
    * for the initial loop in `thinking` (no dialog), `false` for follow-up
@@ -207,7 +207,7 @@ export async function runRound(
     const message = e instanceof Error ? e.message : String(e);
     verbose(`LLM error: ${message}`);
     collect();
-    return new RoundError(`LLM error (${options.model}): ${message}`, turn);
+    return new RoundError(`LLM error (${options.label}): ${message}`, turn);
   };
 
   try {

@@ -14,7 +14,6 @@ import { wrapFs } from "./fs/home.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initLlm } from "./llm/llm-config.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
-import { formatProvider } from "./llm/types.ts";
 import type { Turn } from "./logging/entry.ts";
 import {
   assembleContinuationChain,
@@ -92,15 +91,15 @@ export async function main() {
     setTheme(resolveTheme(appearance));
 
     const resolved = resolveProvider(getConfig());
-    const label = formatProvider(resolved);
-    verbose(`Config loaded (${label})`);
+    verbose("Config loaded");
 
     // ONE Llm handle per invocation — memory init and the session's
     // conversation share it (and, for the test provider, its playback
     // cursor). createLlm validates eagerly, so this is the "provider
-    // initialized" moment.
+    // initialized" moment. `llm.label` is the one source for the
+    // provider/model display string everywhere.
     const llm = initLlm(resolved);
-    verbose(`Provider initialized (${label})`);
+    verbose(`Provider initialized (${llm.label})`);
 
     let attachedInputPath: string | undefined;
     let attachedInputSize: number | undefined;

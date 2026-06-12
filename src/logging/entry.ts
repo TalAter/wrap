@@ -1,42 +1,23 @@
+import type { LlmMessage } from "wrap-core/llm";
 import pkg from "../../package.json";
 import type { CommandResponse } from "../command-response.schema.ts";
-import type { PromptInput, ResolvedProvider } from "../llm/types.ts";
+import type { ResolvedProvider } from "../llm/resolve-provider.ts";
 import type { Memory } from "../memory/types.ts";
+
+/**
+ * The assembled request persisted on a traced attempt — system text plus the
+ * full message list core sent. Derived from core's `Attempt.request` at
+ * record-build time (round.ts); only present under `logTraces`.
+ */
+export type LoggedRequest = {
+  system: string;
+  messages: LlmMessage[];
+};
 
 function redactProvider(provider: ResolvedProvider): ResolvedProvider {
   if (!provider.apiKey) return provider;
   const suffix = provider.apiKey.length >= 4 ? `...${provider.apiKey.slice(-4)}` : "...";
   return { ...provider, apiKey: suffix };
-}
-
-/**
- * Defensive scan — replace every occurrence of `apiKey` inside any string
- * field of `body` (an object/array payload) with its redacted form. Meant
- * to catch the theoretical case where a provider serializes the key into
- * the request body. The primary redaction already happens at the
- * ResolvedProvider layer; this is belt-and-braces.
- *
- * Skips when `apiKey` is short enough that substring matching would be
- * unsafe (< 8 chars — common noise). Returns the input unchanged if
- * `body` is null/undefined.
- */
-export function scrubApiKey<T>(body: T, apiKey: string | undefined): T {
-  if (body == null) return body;
-  if (!apiKey || apiKey.length < 8) return body;
-  const replacement = apiKey.length >= 4 ? `...${apiKey.slice(-4)}` : "...";
-  const walk = (node: unknown): unknown => {
-    if (typeof node === "string") {
-      return node.includes(apiKey) ? node.split(apiKey).join(replacement) : node;
-    }
-    if (Array.isArray(node)) return node.map(walk);
-    if (node && typeof node === "object") {
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(node)) out[k] = walk(v);
-      return out;
-    }
-    return node;
-  };
-  return walk(body) as T;
 }
 
 /**
@@ -53,20 +34,6 @@ export type WireResponse =
   | { kind: "http"; body: unknown; usage?: unknown; finishReason?: string }
   | { kind: "subprocess"; stdout: string; stderr?: string; exit_code: number }
   | { kind: "test" };
-
-/**
- * Bundle emitted by a parked legacy provider after a physical LLM call.
- * Nothing drains it anymore — attempts now derive from core conversation
- * entries — and it dies with those providers in Unit 7. A broken
- * wire-builder surfaces as `wire_capture_error`; the invocation still
- * succeeds.
- */
-export type WireCapture = {
-  request_wire?: WireRequest;
-  response_wire?: WireResponse;
-  raw_response?: string;
-  wire_capture_error?: string;
-};
 
 /**
  * Categorical error reported per AttemptMeta. Parsing failures, provider
@@ -97,12 +64,11 @@ export type AttemptMeta = {
    * containing assistant turn, not here.
    */
   parsed?: CommandResponse;
-  request?: PromptInput;
+  request?: LoggedRequest;
   request_wire?: WireRequest;
   raw_response?: string;
   response_wire?: WireResponse;
   error?: AttemptError;
-  wire_capture_error?: string;
   llm_ms?: number;
 };
 

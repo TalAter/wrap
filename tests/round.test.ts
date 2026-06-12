@@ -14,7 +14,7 @@ beforeEach(() => {
   resetVerboseTimer();
 });
 
-const defaultOptions = { isLastRound: false, model: "test", showSpinner: false };
+const defaultOptions = { isLastRound: false, label: "test", showSpinner: false };
 
 /** The assembled request behind the LAST physical call of the round. */
 function lastRequest(chat: Conversation) {
@@ -120,7 +120,7 @@ describe("runRound", () => {
     const chat = makeChat("ERROR:network down");
     let thrown: unknown;
     try {
-      await runRound(chat, { ...defaultOptions, model: "test / model" });
+      await runRound(chat, { ...defaultOptions, label: "test / model" });
     } catch (e) {
       thrown = e;
     }
@@ -140,7 +140,7 @@ describe("runRound", () => {
     const chat = makeChat("not json at all");
     let thrown: unknown;
     try {
-      await runRound(chat, { ...defaultOptions, model: "test / model" });
+      await runRound(chat, { ...defaultOptions, label: "test / model" });
     } catch (e) {
       thrown = e;
     }
@@ -324,7 +324,7 @@ describe("runRound — scratchpad retry (domain logic)", () => {
     const chat = makeChat([rejected, "ERROR:rate limited"]);
     let thrown: unknown;
     try {
-      await runRound(chat, { ...defaultOptions, model: "test / model" });
+      await runRound(chat, { ...defaultOptions, label: "test / model" });
     } catch (e) {
       thrown = e;
     }

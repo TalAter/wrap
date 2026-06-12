@@ -13,7 +13,7 @@ import {
   LlmConfigError,
   type TestResponses,
 } from "wrap-core/llm";
-import type { ResolvedProvider } from "./types.ts";
+import type { ResolvedProvider } from "./resolve-provider.ts";
 
 /**
  * Build core's `LlmConfig` from wrap's env contract + a `ResolvedProvider`.

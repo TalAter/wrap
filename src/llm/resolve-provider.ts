@@ -1,9 +1,38 @@
 import { getRegistration, isKnownProvider, validateProviderEntry } from "wrap-core/llm";
 import type { Config, ProviderEntry } from "../config/config.ts";
-import { isTestProviderSelected, TEST_RESOLVED_PROVIDER } from "./providers/test.ts";
-import type { ResolvedProvider } from "./types.ts";
 
 const NO_LLM_ERROR = "Config error: no LLM configured. Edit ~/.wrap/config.jsonc.";
+
+/** Final state after override resolution — what `initLlm` builds core's
+ *  `LlmConfig` from, and what the log entry records as `provider`. */
+export type ResolvedProvider = {
+  name: string;
+  /**
+   * Final model string. Optional because `claude-code` entries may omit it —
+   * the `claude` CLI picks its own default when `--model` is not passed.
+   * All other providers must have a model by the time they reach runtime.
+   */
+  model?: string;
+  apiKey?: string;
+  baseURL?: string;
+};
+
+/**
+ * Sentinel `ResolvedProvider` for the test provider. Not user-facing — it's
+ * selected by the `WRAP_TEST_RESPONSE`/`WRAP_TEST_RESPONSES` env vars and
+ * bypasses the providers map entirely. Test-provider *selection* is wrap
+ * policy (core names no env vars); the same env vars that select this
+ * sentinel also make `buildLlmConfig` emit core's canned-playback test
+ * config. No `model` — the env-selected config has none.
+ */
+export const TEST_RESOLVED_PROVIDER: ResolvedProvider = { name: "test" };
+
+/** True when one of the test-provider env vars is set, regardless of value. */
+export function isTestProviderSelected(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.WRAP_TEST_RESPONSE !== undefined || env.WRAP_TEST_RESPONSES !== undefined;
+}
 
 /**
  * Parse a `--model`/`WRAP_MODEL` override string into the provider + optional
@@ -58,8 +87,9 @@ export function parseModelOverride(
 }
 
 /**
- * Resolve a merged `Config` into the final `ResolvedProvider` used by
- * `initProvider`. See `specs/llm.md` for the full resolution rules.
+ * Resolve a merged `Config` into the final `ResolvedProvider` that
+ * `initLlm` builds core's `LlmConfig` from. See `specs/llm.md` for the
+ * full resolution rules.
  *
  * Assumes any `--model`/`WRAP_MODEL` override has already been normalized
  * into `config.defaultProvider` and `config.providers[name].model` by

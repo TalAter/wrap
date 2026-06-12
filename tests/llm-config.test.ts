@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildLlmConfig, initLlm } from "../src/llm/llm-config.ts";
-import type { ResolvedProvider } from "../src/llm/types.ts";
+import type { ResolvedProvider } from "../src/llm/resolve-provider.ts";
 
 const RESOLVED: ResolvedProvider = {
   name: "anthropic",

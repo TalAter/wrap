@@ -20,7 +20,7 @@ import {
   type Transcript,
   type TurnFramer,
 } from "../llm/framing.ts";
-import { formatProvider, type ResolvedProvider } from "../llm/types.ts";
+import type { ResolvedProvider } from "../llm/resolve-provider.ts";
 import { createLogEntry, type LogEntry, type Turn } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
@@ -152,10 +152,13 @@ export async function runSession(
     await seedFirstUserTurn(options.skills, prompt, appendTurn);
   }
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
-  const model = formatProvider(options.resolvedProvider);
+  // One label source: core's `llm.label` — the same string memory-init and
+  // main.ts verbose lines use. `options.resolvedProvider` is what built the
+  // handle, so the two never disagree in production.
+  const label = llm.label;
   const baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner"> = {
     cwd: options.cwd,
-    model,
+    label,
   };
 
   // Kicked off in parallel with the first LLM call so the first-mount

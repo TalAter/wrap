@@ -21,7 +21,7 @@ export type LoopState = {
 export type LoopOptions = {
   cwd: string;
   /** Display label for the active provider, e.g. "anthropic / claude-sonnet-4-6". */
-  model: string;
+  label: string;
   signal?: AbortSignal;
   /**
    * Forwarded to `runRound` per iteration. The session sets this true for the
@@ -143,13 +143,13 @@ export async function* runLoop(
     if (isLastRound) {
       verbose("Final round: must return command or answer");
     }
-    verbose(`Calling ${options.model}...`);
+    verbose(`Calling ${options.label}...`);
 
     let turn: AssistantTurn;
     try {
       turn = await runRound(chat, {
         isLastRound,
-        model: options.model,
+        label: options.label,
         showSpinner: options.showSpinner,
         signal: options.signal,
       });

@@ -1,4 +1,4 @@
-import type { ConversationMessage } from "./types.ts";
+import type { LlmMessage } from "wrap-core/llm";
 
 export type PromptConfig = {
   instruction: string;
@@ -31,7 +31,7 @@ export type PromptScaffold = {
    * Empty if the prompt config has no examples. Treated as immutable after
    * assembly.
    */
-  prefixMessages: ReadonlyArray<ConversationMessage>;
+  prefixMessages: ReadonlyArray<LlmMessage>;
   /**
    * The formatted context block (memory/tools/cwd/attached input). Wrapped
    * around the first user turn by the framer's request framing. May be empty.
@@ -59,7 +59,7 @@ export function buildPromptScaffold(config: PromptConfig, contextString: string)
     systemParts.push(`${config.schemaInstruction}\n${config.schemaText}`);
   }
 
-  const prefixMessages: ConversationMessage[] = [];
+  const prefixMessages: LlmMessage[] = [];
   if (config.fewShotExamples.length > 0) {
     for (const example of config.fewShotExamples) {
       prefixMessages.push({ role: "user", content: example.input });

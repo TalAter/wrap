@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fetchesUrl } from "../src/core/runner.ts";
 import { SPINNER_TEXT } from "../src/core/spinner.ts";
-import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
+import { TEST_RESOLVED_PROVIDER } from "../src/llm/resolve-provider.ts";
 import { runSession } from "../src/session/session.ts";
 import { makeLlm } from "./helpers/llm-fixtures.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
@@ -99,24 +99,27 @@ describe("parse retry in runSession", () => {
     expect(assistant.attempts[0].error.kind).toBe("provider");
   });
 
-  test("wraps LLM errors with attempted provider/model label", async () => {
+  test("wraps LLM errors with the attempted provider/model label", async () => {
     // Anthropic's 404 body literally is `{"message":"model: gpt-4o-mini"}` —
     // the bare message gives no clue which provider rejected which model.
-    // runSession must wrap thrown errors with the resolved provider label so
-    // the user sees what was actually attempted.
+    // runSession must wrap thrown errors with the provider label — core's
+    // `llm.label`, the one label source — so the user sees what was actually
+    // attempted. The fixture handle's label is "test / (default)"; in
+    // production the handle is built from the resolved provider, so the
+    // label names the real provider/model.
     const llm = makeLlm("ERROR:model: gpt-4o-mini");
     let thrown: Error | undefined;
     try {
       await runSession("test", llm, {
         cwd: "/tmp",
-        resolvedProvider: { name: "anthropic", model: "gpt-4o-mini" },
+        resolvedProvider: TEST_RESOLVED_PROVIDER,
       });
     } catch (e) {
       thrown = e as Error;
     }
     expect(thrown).toBeDefined();
-    // Wrapping shows attempted provider/model so the user knows what was tried.
-    expect(thrown?.message).toContain("anthropic / gpt-4o-mini");
+    // Wrapping shows the handle's label so the user knows what was tried.
+    expect(thrown?.message).toContain("LLM error (test / (default)):");
     // Original provider message is preserved inside the wrapper.
     expect(thrown?.message).toContain("model: gpt-4o-mini");
   });

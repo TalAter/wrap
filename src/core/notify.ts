@@ -15,21 +15,12 @@
  */
 
 import { writeChromeLine } from "wrap-core/chrome";
-import type { WireCapture } from "../logging/entry.ts";
 
 /** Pre-formatted lines emitted by chrome producers. */
 export type Notification =
   | { kind: "chrome"; text: string; icon?: string }
   | { kind: "verbose"; line: string }
-  | { kind: "step-output"; text: string }
-  /**
-   * Wire-level capture from a provider, one per physical LLM call. Listener-
-   * only (no stderr fallback). Only the parked legacy providers still emit
-   * it — nothing subscribes anymore (attempts derive from core conversation
-   * entries), so the events drop on the floor; the kind dies with those
-   * providers in Unit 7.
-   */
-  | { kind: "llm-wire"; wire: WireCapture };
+  | { kind: "step-output"; text: string };
 
 export type NotificationListener = (n: Notification) => void;
 
@@ -95,12 +86,6 @@ export function writeNotificationToStderr(n: Notification): void {
       return;
     case "step-output":
       // Dialog-only — no stderr fallback. See JSDoc above.
-      return;
-    case "llm-wire":
-      // Listener-only. Only the parked legacy providers emit it (it dies
-      // with them in Unit 7); no sensible stderr rendering — would flood
-      // the terminal with raw JSON during thinking. See JSDoc on the
-      // Notification union.
       return;
   }
 }

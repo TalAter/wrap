@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { assemblePromptScaffold } from "../src/llm/context.ts";
-import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
+import { TEST_RESOLVED_PROVIDER } from "../src/llm/resolve-provider.ts";
 import { resetDialogHostCache } from "../src/session/dialog-host.ts";
 import { runSession } from "../src/session/session.ts";
 import type { Skill } from "../src/skills/index.ts";

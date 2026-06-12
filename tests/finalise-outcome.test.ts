@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CommandResponse } from "../src/command-response.schema.ts";
-import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
+import { TEST_RESOLVED_PROVIDER } from "../src/llm/resolve-provider.ts";
 import { createLogEntry, type LogEntry, type Turn } from "../src/logging/entry.ts";
 import { finaliseOutcome } from "../src/session/session.ts";
 

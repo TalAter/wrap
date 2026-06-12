@@ -11,7 +11,7 @@
  * assemble-mode `promptInput`) are a cross-language contract with
  * `eval/dspy/optimize.py` — keep them stable.
  */
-import { createLlm, type Llm, LlmParseError } from "wrap-core/llm";
+import { createLlm, type Llm, type LlmMessage, LlmParseError } from "wrap-core/llm";
 import { z } from "zod";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
@@ -21,8 +21,11 @@ import { formatContext } from "../src/llm/format-context.ts";
 import { createTurnFramer, type Transcript } from "../src/llm/framing.ts";
 import { initLlm } from "../src/llm/llm-config.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
-import type { ConversationMessage, PromptInput } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
+
+/** Assemble-mode stdout shape (`{ system, messages }`) — a cross-language
+ *  contract with `eval/dspy/optimize.py`; keep it byte-stable. */
+type PromptInput = { system: string; messages: LlmMessage[] };
 
 // Strict so stale callers (e.g. seed.jsonl still carrying `tools`/`cwdFiles`)
 // fail loudly instead of silently degrading the eval signal.
@@ -74,7 +77,7 @@ async function assembleRequest(promptInput: PromptInput): Promise<PromptInput> {
   if (!request) throw new Error("assemble failed: conversation recorded no attempt.");
   return {
     system: request.system,
-    messages: request.messages as ConversationMessage[],
+    messages: [...request.messages],
   };
 }
 
@@ -179,7 +182,7 @@ const framer = createTurnFramer({
   contextString,
   sectionUserRequest: promptConstants.sectionUserRequest,
 });
-const messages: ConversationMessage[] = [...scaffold.prefixMessages];
+const messages: LlmMessage[] = [...scaffold.prefixMessages];
 for (const turn of transcript) messages.push(...framer.frame(turn));
 if (input.lastRound === true) {
   messages.push({ role: "user", content: promptConstants.lastRoundInstruction });
@@ -223,6 +226,6 @@ try {
   }
 }
 
-// AI SDK HTTP clients keep connections alive, preventing Bun from exiting.
+// wrap-core's AI SDK HTTP clients keep connections alive, preventing Bun from exiting.
 // Force exit after output is written so the Python subprocess doesn't hang.
 process.exit(0);

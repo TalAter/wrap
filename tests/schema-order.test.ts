@@ -7,7 +7,7 @@ import promptOptimized from "../src/prompt.optimized.json";
 // Provider-side reordering (Anthropic tool-use runtime, OpenAI strict mode
 // runtime) is vendor behavior and cannot be detected here. If scratchpad
 // quality on a new provider regresses, check whether the provider reorders
-// tool-input properties. This test only covers Wrap → ai-sdk → SDK.
+// tool-input properties. This test only covers Wrap → wrap-core (ai-sdk) → vendor SDK.
 describe("CommandResponseSchema key order", () => {
   test("_scratchpad is the first key of CommandResponseJsonSchema", () => {
     const props = (CommandResponseJsonSchema as { properties: Record<string, unknown> }).properties;

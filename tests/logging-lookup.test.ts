@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
+import { TEST_RESOLVED_PROVIDER } from "../src/llm/resolve-provider.ts";
 import { createLogEntry, type LogEntry, serializeEntry } from "../src/logging/entry.ts";
 import {
   assembleContinuationChain,

@@ -7,17 +7,17 @@ const EMPTY_ENV: Record<string, string | undefined> = {};
 describe("resolveProvider — test sentinel", () => {
   test("WRAP_TEST_RESPONSE set returns test sentinel regardless of config", () => {
     const result = resolveProvider({}, { WRAP_TEST_RESPONSE: "{}" });
-    expect(result).toEqual({ name: "test", model: "test" });
+    expect(result).toEqual({ name: "test" });
   });
 
   test("WRAP_TEST_RESPONSE empty string still triggers sentinel (env present)", () => {
     const result = resolveProvider({}, { WRAP_TEST_RESPONSE: "" });
-    expect(result).toEqual({ name: "test", model: "test" });
+    expect(result).toEqual({ name: "test" });
   });
 
   test("WRAP_TEST_RESPONSES (array variant) also triggers sentinel", () => {
     const result = resolveProvider({}, { WRAP_TEST_RESPONSES: "[]" });
-    expect(result).toEqual({ name: "test", model: "test" });
+    expect(result).toEqual({ name: "test" });
   });
 
   test("sentinel ignores config state", () => {
@@ -26,7 +26,7 @@ describe("resolveProvider — test sentinel", () => {
       defaultProvider: "anthropic",
     };
     const result = resolveProvider(config, { WRAP_TEST_RESPONSE: "x" });
-    expect(result).toEqual({ name: "test", model: "test" });
+    expect(result).toEqual({ name: "test" });
   });
 });
 

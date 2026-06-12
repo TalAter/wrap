@@ -35,7 +35,7 @@ function stubChat(send: (opts?: { signal?: AbortSignal }) => Promise<unknown>): 
 function makeOptions(overrides?: Partial<LoopOptions>): LoopOptions {
   return {
     cwd: "/tmp",
-    model: "test / model",
+    label: "test / model",
     showSpinner: false,
     ...overrides,
   };
