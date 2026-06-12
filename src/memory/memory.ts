@@ -1,12 +1,12 @@
+import type { Llm } from "wrap-core/llm";
 import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
 import { verbose } from "../core/verbose.ts";
 import { wrapFs } from "../fs/home.ts";
-import type { Provider } from "../llm/types.ts";
 import { INIT_SYSTEM_PROMPT } from "./init-prompt.ts";
 import { runProbes } from "./memory-init-probes.ts";
-import { countFacts, type Fact, type Memory } from "./types.ts";
+import { countFacts, type Memory } from "./types.ts";
 
 const MEMORY_FILE = "memory.json";
 
@@ -67,23 +67,30 @@ export function appendFacts(updates: Array<{ fact: string; scope: string }>, cwd
   return memory;
 }
 
-/** Parse LLM init response (one fact per line) into Fact[]. */
-export function parseInitResponse(response: string): Fact[] {
-  return response
-    .split("\n")
-    .map((line) => line.trim().replace(/^[-•]\s*/, ""))
-    .filter((line) => line.length > 0)
-    .map((fact) => ({ fact }));
-}
+/**
+ * Typed shape of the init send — replaces the old one-fact-per-line parsing.
+ * The transform keeps the old line-parser's hygiene: sloppy model output must
+ * not persist empty or untrimmed facts to memory.json forever.
+ */
+const InitFactsSchema = z.object({
+  facts: z.array(z.string()).transform((fs) => fs.map((s) => s.trim()).filter(Boolean)),
+});
 
-/** Load existing memory or initialize by probing the system and asking the LLM. */
-export async function ensureMemory(provider: Provider): Promise<Memory> {
+/**
+ * Load existing memory or initialize by probing the system and asking the
+ * LLM. Init is a one-send conversation: the probe dump is the single user
+ * message, and the facts arrive through the send's typed result.
+ * `initialized` reports whether the init send actually ran — main.ts uses
+ * it to keep the legacy query loop's test-playback cursor aligned while the
+ * old and new LLM machineries coexist.
+ */
+export async function ensureMemory(llm: Llm): Promise<{ memory: Memory; initialized: boolean }> {
   const existing = loadMemory();
   if (Object.keys(existing).length > 0) {
     const total = countFacts(existing);
     const globalCount = (existing["/"] ?? []).length;
     verbose(`Memory: ${total} facts (${globalCount} global, ${total - globalCount} scoped)`);
-    return existing;
+    return { memory: existing, initialized: false };
   }
 
   chrome("Learning about your system...", "✨");
@@ -91,17 +98,29 @@ export async function ensureMemory(provider: Provider): Promise<Memory> {
   verbose("Init: probing OS and shell...");
   const probeOutput = runProbes();
   verbose("Init: calling LLM to extract system facts...");
-  const response = await provider.runPrompt({
-    system: INIT_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: probeOutput }],
-  });
-  const facts = parseInitResponse(response as string);
+  // `retry: false` preserves the legacy exactly-one-physical-call semantics —
+  // and keeps shared WRAP_TEST_RESPONSES consumption deterministic while the
+  // query loop still runs the legacy provider machinery. Revisit at the
+  // main-loop flip.
+  const chat = llm.startConversation({ system: INIT_SYSTEM_PROMPT });
+  chat.add({ role: "user", content: probeOutput });
+  let facts: string[];
+  try {
+    ({ facts } = await chat.send(InitFactsSchema, { retry: false }));
+  } catch (e) {
+    // Send failures (provider, parse) propagate to main's catch — prefixed
+    // here so the user-facing message keeps wrap's voice (vault invariant 3).
+    // LlmConfigError can't reach this catch: createLlm validates eagerly, and
+    // initLlm prefixes those with "Config error:" at its own site.
+    const message = e instanceof Error ? e.message : String(e);
+    throw new Error(`LLM error (${llm.label}): ${message}`);
+  }
   verbose(`Init: ${facts.length} facts extracted`);
-  const memory: Memory = { "/": facts };
+  const memory: Memory = { "/": facts.map((fact) => ({ fact })) };
 
   saveMemory(memory);
 
   chrome("Detected OS and shell", "🧠");
 
-  return memory;
+  return { memory, initialized: true };
 }

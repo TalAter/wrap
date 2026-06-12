@@ -144,15 +144,15 @@ describe("verbose e2e", () => {
 
   test("--verbose shows init sub-steps on first run", async () => {
     const wrapHome = tmpHome();
-    // No memory.json — triggers init
+    // No memory.json — triggers init. The facts-shaped first entry feeds the
+    // structured memory-init send; the reply feeds the query send.
     const { stderr } = await wrap("--verbose hello", {
       WRAP_HOME: wrapHome,
       WRAP_CONFIG: JSON.stringify({}),
-      WRAP_TEST_RESPONSE: JSON.stringify({
-        type: "reply",
-        content: "world",
-        risk_level: "low",
-      }),
+      WRAP_TEST_RESPONSES: JSON.stringify([
+        { facts: ["Runs macOS on arm64"] },
+        { type: "reply", content: "world", risk_level: "low" },
+      ]),
     });
     expect(stderr).toContain("Init: probing OS and shell...");
     expect(stderr).toContain("Init: calling LLM to extract system facts...");

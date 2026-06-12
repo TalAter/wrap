@@ -5,8 +5,13 @@
  * Two modes:
  *   assemble — build prompt only, return PromptInput
  *   execute  — build prompt, call LLM once, return validated response
+ *
+ * Both modes run on wrap-core's conversation abstraction. The stdout shapes
+ * (`ok` / `invalid_json` / `invalid_schema` / `provider_error`, and the
+ * assemble-mode `promptInput`) are a cross-language contract with
+ * `eval/dspy/optimize.py` — keep them stable.
  */
-import { NoObjectGeneratedError } from "ai";
+import { createLlm, type Llm, LlmParseError } from "wrap-core/llm";
 import { z } from "zod";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
@@ -15,8 +20,9 @@ import type { Transcript } from "../src/core/transcript.ts";
 import { buildPromptInput } from "../src/core/transcript.ts";
 import { buildPromptScaffold } from "../src/llm/build-prompt.ts";
 import { formatContext } from "../src/llm/format-context.ts";
-import { initProvider } from "../src/llm/index.ts";
+import { initLlm } from "../src/llm/llm-config.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
+import type { ConversationMessage, PromptInput } from "../src/llm/types.ts";
 import promptConstants from "../src/prompt.constants.json";
 
 // Strict so stale callers (e.g. seed.jsonl still carrying `tools`/`cwdFiles`)
@@ -46,13 +52,31 @@ function out(value: object): void {
   console.log(JSON.stringify(value));
 }
 
-function tryParseJson(text: string): boolean {
+/**
+ * Recover the assembled request through core's own machinery: drive a
+ * test-provider conversation whose canned response never parses, send once
+ * with retry disabled, and read the request off the sealed entry's attempt
+ * forensics. Assemble mode thereby reports what a real send would carry —
+ * core's assembly, not a parallel local reconstruction.
+ */
+async function assembleRequest(promptInput: PromptInput): Promise<PromptInput> {
+  const llm = createLlm({ name: "test", responses: "assemble probe (never parses)" });
+  const chat = llm.startConversation({ system: promptInput.system });
+  for (const message of promptInput.messages) chat.add(message);
   try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
+    await chat.send(CommandResponseSchema, { retry: false });
+  } catch (e) {
+    // Expected: the canned response is deliberately unparseable, so only the
+    // parse failure is swallowed. Anything else is a core regression and must
+    // not silently degrade assemble output.
+    if (!(e instanceof LlmParseError)) throw e;
   }
+  const request = chat.entries.at(-1)?.attempts?.[0]?.request;
+  if (!request) throw new Error("assemble failed: conversation recorded no attempt.");
+  return {
+    system: request.system,
+    messages: request.messages as ConversationMessage[],
+  };
 }
 
 let input: z.infer<typeof BridgeInputSchema>;
@@ -158,45 +182,36 @@ const promptInput = buildPromptInput(transcript, scaffold, {
 });
 
 if (input.mode === "assemble") {
-  out({ ok: true, promptInput });
+  out({ ok: true, promptInput: await assembleRequest(promptInput) });
   process.exit(0);
 }
 
-// Execute mode: call LLM once (no retry — malformed output is optimization signal)
-const config = loadConfig();
-let provider: ReturnType<typeof initProvider>;
+// Execute mode: call LLM once (retry: false — malformed output is the
+// optimization signal, so the in-send parse retry must stay off).
+let llm: Llm;
 try {
+  const config = loadConfig();
   const normalized = applyModelOverride(
     config,
     { flags: new Set(), values: new Map() },
     process.env,
   );
-  const resolved = resolveProvider(normalized);
-  provider = initProvider(resolved);
+  // initLlm surfaces core config errors in wrap's voice ("Config error: …").
+  llm = initLlm(resolveProvider(normalized));
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
   process.exit(1);
 }
 
 try {
-  const response = await provider.runPrompt(promptInput, CommandResponseSchema);
+  const chat = llm.startConversation({ system: promptInput.system });
+  for (const message of promptInput.messages) chat.add(message);
+  const response = await chat.send(CommandResponseSchema, { retry: false });
   out({ ok: true, response });
 } catch (error) {
-  // AI SDK: NoObjectGeneratedError carries raw LLM text
-  if (NoObjectGeneratedError.isInstance(error)) {
-    const rawText = error.text ?? "";
-    out({
-      ok: false,
-      error: tryParseJson(rawText) ? "invalid_schema" : "invalid_json",
-      rawText,
-      message: String(error),
-    });
-  } else if (error instanceof SyntaxError) {
-    // JSON.parse failure (e.g. test provider)
-    out({ ok: false, error: "invalid_json", message: String(error) });
-  } else if (error != null && typeof error === "object" && "issues" in error) {
-    // ZodError from schema.parse (e.g. test provider)
-    out({ ok: false, error: "invalid_schema", message: String(error) });
+  if (error instanceof LlmParseError) {
+    // send's own classification — never re-derived by re-parsing rawText.
+    out({ ok: false, error: error.reason, rawText: error.rawText, message: String(error) });
   } else {
     // Network, auth, or other provider failure
     out({ ok: false, error: "provider_error", message: String(error) });

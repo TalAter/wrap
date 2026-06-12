@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { wrap, wrapMock } from "./helpers.ts";
+import { tmpHome, wrap, wrapMock } from "./helpers.ts";
 
 describe("wrap", () => {
   test("shows help and exits 0 with no args", async () => {
@@ -143,7 +143,12 @@ describe("wrap", () => {
   });
 
   test("errors on invalid JSON from LLM", async () => {
+    // Seed memory so the bad response exercises the query loop, not the
+    // (now structured) memory-init send.
+    const home = tmpHome();
+    writeFileSync(join(home, "memory.json"), '{"/":[{"fact":"test"}]}');
     const { exitCode, stdout, stderr } = await wrap("hello", {
+      WRAP_HOME: home,
       WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSE: "not json",
     });
@@ -383,10 +388,15 @@ describe("wrap", () => {
   });
 
   test("e2e: first run inits memory, then query succeeds", async () => {
-    const response = JSON.stringify({ type: "command", content: "echo hi", risk_level: "low" });
+    // First-run flows carry two canned responses: the structured memory-init
+    // send consumes the facts-shaped first entry, the query send (legacy
+    // machinery) gets the command response.
     const { exitCode, stdout, stderr, wrapHome } = await wrap("say hi", {
       WRAP_CONFIG: JSON.stringify({}),
-      WRAP_TEST_RESPONSE: response,
+      WRAP_TEST_RESPONSES: JSON.stringify([
+        { facts: ["Runs macOS on arm64"] },
+        { type: "command", content: "echo hi", risk_level: "low" },
+      ]),
     });
     expect(exitCode).toBe(0);
     expect(stdout).toBe("hi\n");
@@ -398,7 +408,7 @@ describe("wrap", () => {
     expect(typeof memory).toBe("object");
     expect(memory["/"]).toBeDefined();
     expect(memory["/"].length).toBeGreaterThan(0);
-    expect(memory["/"][0]).toHaveProperty("fact");
+    expect(memory["/"][0]).toEqual({ fact: "Runs macOS on arm64" });
   });
 
   test("memory_updates: display prefix based on scope", async () => {

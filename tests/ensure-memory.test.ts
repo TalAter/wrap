@@ -1,75 +1,68 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Provider } from "../src/llm/types.ts";
-import { ensureMemory, parseInitResponse } from "../src/memory/memory.ts";
+import { createLlm, type Llm, type LlmMessage } from "wrap-core/llm";
+import { ensureMemory } from "../src/memory/memory.ts";
+import { seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr } from "./preload.ts";
 import { TEST_HOME } from "./wrap-home-preload.ts";
 
 const MEMORY_PATH = join(TEST_HOME, "memory.json");
 
-function mockProvider(response: string): Provider {
-  return {
-    runPrompt: async () => response,
-  };
+/** Core test-provider Llm whose init send returns the given facts. */
+function factsLlm(facts: string[]): Llm {
+  return createLlm({ name: "test", responses: [{ facts }] });
 }
 
-describe("parseInitResponse", () => {
-  test("splits lines into Fact objects", () => {
-    const response = "Runs macOS on arm64\nDefault shell is zsh\nHas git installed";
-    const entries = parseInitResponse(response);
-    expect(entries).toEqual([
-      { fact: "Runs macOS on arm64" },
-      { fact: "Default shell is zsh" },
-      { fact: "Has git installed" },
-    ]);
-  });
+/** Llm that throws as a provider error if any send actually happens. */
+function explodingLlm(message = "should not be called"): Llm {
+  return createLlm({ name: "test", responses: `ERROR:${message}` });
+}
 
-  test("trims whitespace and filters empty lines", () => {
-    const response = "  fact one  \n\n  fact two  \n  \n";
-    const entries = parseInitResponse(response);
-    expect(entries).toEqual([{ fact: "fact one" }, { fact: "fact two" }]);
-  });
-
-  test("returns empty array for empty response", () => {
-    expect(parseInitResponse("")).toEqual([]);
-    expect(parseInitResponse("  \n  \n  ")).toEqual([]);
-  });
-
-  test("strips leading bullet markers", () => {
-    const response = "- fact one\n- fact two\n• fact three";
-    const entries = parseInitResponse(response);
-    expect(entries).toEqual([{ fact: "fact one" }, { fact: "fact two" }, { fact: "fact three" }]);
-  });
-});
+/** Fake Llm capturing the conversation wiring; send returns `sendResult`. */
+function captureLlm(sendResult: object): {
+  llm: Llm;
+  captured: { system: string | undefined; messages: LlmMessage[] };
+} {
+  const captured = { system: undefined as string | undefined, messages: [] as LlmMessage[] };
+  const llm = {
+    label: "test / capture",
+    startConversation: (options: { system: string }) => {
+      captured.system = options.system;
+      return {
+        add: (message: LlmMessage) => {
+          captured.messages.push(message);
+        },
+        entries: [],
+        send: async () => sendResult,
+      };
+    },
+  } as unknown as Llm;
+  return { llm, captured };
+}
 
 describe("ensureMemory", () => {
   beforeEach(() => {
     rmSync(MEMORY_PATH, { force: true });
+    // verbose() reads the global config store; seed it so this file passes
+    // standalone, not just after a suite-mate happens to call setConfig.
+    seedTestConfig();
   });
 
-  test("loads existing memory without calling LLM", async () => {
+  test("loads existing memory without calling the LLM", async () => {
     const memory = { "/": [{ fact: "Runs macOS" }] };
     writeFileSync(MEMORY_PATH, JSON.stringify(memory));
 
-    let llmCalled = false;
-    const provider: Provider = {
-      runPrompt: async () => {
-        llmCalled = true;
-        return "";
-      },
-    };
-
-    const result = await ensureMemory(provider);
-    expect(result).toEqual(memory);
-    expect(llmCalled).toBe(false);
+    // explodingLlm would reject the promise if a send happened.
+    const result = await ensureMemory(explodingLlm());
+    expect(result.memory).toEqual(memory);
+    expect(result.initialized).toBe(false);
   });
 
   test("runs init when no memory exists", async () => {
-    const provider = mockProvider("Runs macOS on arm64\nDefault shell is zsh");
-
-    const result = await ensureMemory(provider);
-    expect(result).toEqual({
+    const result = await ensureMemory(factsLlm(["Runs macOS on arm64", "Default shell is zsh"]));
+    expect(result.initialized).toBe(true);
+    expect(result.memory).toEqual({
       "/": [{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }],
     });
     const output = stderr.text;
@@ -78,57 +71,59 @@ describe("ensureMemory", () => {
   });
 
   test("persists memory after init", async () => {
-    const provider = mockProvider("Runs macOS on arm64");
+    await ensureMemory(factsLlm(["Runs macOS on arm64"]));
 
-    await ensureMemory(provider);
-
-    // Second call should load from disk, not call LLM
-    let llmCalled = false;
-    const provider2: Provider = {
-      runPrompt: async () => {
-        llmCalled = true;
-        return "";
-      },
-    };
-    const result = await ensureMemory(provider2);
-    expect(result).toEqual({ "/": [{ fact: "Runs macOS on arm64" }] });
-    expect(llmCalled).toBe(false);
+    // Second call should load from disk, not call the LLM.
+    const result = await ensureMemory(explodingLlm());
+    expect(result.memory).toEqual({ "/": [{ fact: "Runs macOS on arm64" }] });
+    expect(result.initialized).toBe(false);
   });
 
-  test("throws when LLM fails", async () => {
-    const provider: Provider = {
-      runPrompt: async () => {
-        throw new Error("network error");
-      },
-    };
-
-    expect(ensureMemory(provider)).rejects.toThrow("network error");
+  test("throws when the LLM fails, prefixed in wrap's voice", async () => {
+    await expect(ensureMemory(explodingLlm("network error"))).rejects.toThrow(
+      /^LLM error \(test \/ \(default\)\): network error$/,
+    );
     expect(stderr.text).toContain("Learning about your system");
     expect(stderr.text).not.toContain("Detected");
+    expect(existsSync(MEMORY_PATH)).toBe(false);
   });
 
-  test("passes probe output as user message to LLM", async () => {
-    let capturedInput: unknown;
-    const provider: Provider = {
-      runPrompt: async (input) => {
-        capturedInput = input;
-        return "some fact";
-      },
-    };
+  test("init send makes exactly one attempt — no parse retry", async () => {
+    // Matches the legacy one-physical-call semantics, and keeps shared
+    // WRAP_TEST_RESPONSES consumption deterministic while the query loop
+    // still runs the legacy provider machinery. With a parse retry, the
+    // second canned entry would satisfy the schema and init would succeed.
+    const llm = createLlm({ name: "test", responses: ["not json", { facts: ["x"] }] });
+    await expect(ensureMemory(llm)).rejects.toThrow(/^LLM error \(test \/ \(default\)\): .*JSON/);
+    expect(existsSync(MEMORY_PATH)).toBe(false);
+  });
 
-    await ensureMemory(provider);
-    const { messages } = capturedInput as { messages: { content: string }[] };
-    const first = messages[0];
-    if (!first) throw new Error("expected at least one message");
+  test("schema-mismatch reply rejects instead of saving garbage", async () => {
+    const llm = createLlm({ name: "test", responses: [{ wrong: "shape" }] });
+    await expect(ensureMemory(llm)).rejects.toThrow(/^LLM error \(test \/ \(default\)\): .*schema/);
+    expect(existsSync(MEMORY_PATH)).toBe(false);
+  });
+
+  test("passes probe output as the single user message", async () => {
+    const { llm, captured } = captureLlm({ facts: ["some fact"] });
+    await ensureMemory(llm);
+    expect(captured.system).toContain("system probe commands");
+    expect(captured.messages).toHaveLength(1);
+    const first = captured.messages[0];
+    if (!first) throw new Error("expected a probe message");
+    expect(first.role).toBe("user");
     expect(first.content).toContain("## OS");
     expect(first.content).toContain("## Shell");
   });
 
   test("facts saved under / scope in new map format", async () => {
-    const provider = mockProvider("fact one\nfact two");
+    const result = await ensureMemory(factsLlm(["fact one", "fact two"]));
+    expect(result.memory).toEqual({ "/": [{ fact: "fact one" }, { fact: "fact two" }] });
+    expect(result.memory["/"]).toHaveLength(2);
+  });
 
-    const result = await ensureMemory(provider);
-    expect(result).toEqual({ "/": [{ fact: "fact one" }, { fact: "fact two" }] });
-    expect(result["/"]).toHaveLength(2);
+  test("trims facts and drops empty ones — sloppy output never persists", async () => {
+    const result = await ensureMemory(factsLlm(["  Runs macOS  ", "", "   ", "Uses zsh"]));
+    expect(result.memory).toEqual({ "/": [{ fact: "Runs macOS" }, { fact: "Uses zsh" }] });
   });
 });

@@ -13,6 +13,7 @@ import { verbose } from "./core/verbose.ts";
 import { wrapFs } from "./fs/home.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
 import { initProvider } from "./llm/index.ts";
+import { advanceTestResponses, initLlm } from "./llm/llm-config.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
 import { formatProvider } from "./llm/types.ts";
 import type { Turn } from "./logging/entry.ts";
@@ -98,6 +99,11 @@ export async function main() {
     const provider = initProvider(resolved);
     verbose(`Provider initialized (${label})`);
 
+    // Memory init runs on the promoted core LLM; the query loop below still
+    // runs the legacy provider machinery (sanctioned old/new coexistence
+    // until the main-loop flip).
+    const llm = initLlm(resolved);
+
     let attachedInputPath: string | undefined;
     let attachedInputSize: number | undefined;
     let attachedInputPreview: string | undefined;
@@ -124,7 +130,13 @@ export async function main() {
       verbose(`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`);
     }
 
-    const memory = await ensureMemory(provider);
+    const { memory, initialized } = await ensureMemory(llm);
+    // Transitional: the init send consumed the first entry of the shared
+    // WRAP_TEST_RESPONSES playback on its own (core) test provider, while
+    // the legacy query loop's test provider keeps a separate cursor over
+    // the same env list. Shift the list so both machineries read one
+    // playback in order. Dies with the legacy loop.
+    if (initialized) advanceTestResponses(1);
 
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
 

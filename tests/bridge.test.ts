@@ -217,6 +217,8 @@ describe("bridge — execute mode", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toBe("invalid_json");
+    // The raw model text is the optimizer's signal — it must ride along.
+    expect(result.rawText).toBe("Sure! Here is the command...");
   });
 
   test("invalid_schema: JSON doesn't match CommandResponseSchema", async () => {
@@ -226,6 +228,18 @@ describe("bridge — execute mode", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toBe("invalid_schema");
+    expect(result.rawText).toBe('{"type":"unknown","content":"x"}');
+  });
+
+  test("execute makes exactly one attempt — no parse retry", async () => {
+    // Malformed output is the optimization signal: with a retry, the second
+    // canned entry would parse and the failure would be hidden as a success.
+    const result = await bridgeResult(
+      { ...baseInput, mode: "execute" },
+      { ...TEST_PROVIDER_ENV, WRAP_TEST_RESPONSES: JSON.stringify(["not json", validResponse]) },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("invalid_json");
   });
 
   test("provider_error: provider throws", async () => {
