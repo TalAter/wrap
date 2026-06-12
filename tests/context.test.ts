@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildPromptInput, type Transcript } from "../src/core/transcript.ts";
 import { assemblePromptScaffold, type QueryContext } from "../src/llm/context.ts";
+import { createTurnFramer } from "../src/llm/framing.ts";
 import promptOptimized from "../src/prompt.optimized.json";
 
 const SYSTEM_PROMPT = promptOptimized.instruction;
@@ -24,14 +24,12 @@ function contextText(ctx: QueryContext): string {
 /** Render the first user message the LLM sees for `prompt` under context `ctx`. */
 function userMessageText(ctx: QueryContext, prompt: string): string {
   const scaffold = assemblePromptScaffold(ctx);
-  const transcript: Transcript = [{ kind: "user", text: prompt }];
-  const input = buildPromptInput(transcript, scaffold, {
-    requestFraming: {
-      contextString: scaffold.contextString,
-      sectionUserRequest: scaffold.sectionUserRequest,
-    },
+  const framer = createTurnFramer({
+    contextString: scaffold.contextString,
+    sectionUserRequest: scaffold.sectionUserRequest,
   });
-  const lastUser = [...input.messages].reverse().find((m) => m.role === "user");
+  const messages = framer.frame({ kind: "user", text: prompt });
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
   return lastUser?.content ?? "";
 }
 

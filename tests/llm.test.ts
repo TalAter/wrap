@@ -1,7 +1,8 @@
+// Legacy provider machinery (src/llm/{index,types,providers}) — off the
+// runtime path since the main-loop flip onto wrap-core/llm. These tests
+// keep the parked code honest until Unit 7 deletes it together with them.
 import { describe, expect, test } from "bun:test";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
-import { StructuredOutputError } from "../src/core/parse-response.ts";
-import { isStructuredOutputError } from "../src/core/round.ts";
 import { initProvider, runCommandPrompt } from "../src/llm/index.ts";
 import { TEST_RESOLVED_PROVIDER, testProvider } from "../src/llm/providers/test.ts";
 import type { PromptInput, ResolvedProvider } from "../src/llm/types.ts";
@@ -85,11 +86,10 @@ describe("testProvider error simulation", () => {
 
 describe("testProvider", () => {
   describe("runPrompt (no schema)", () => {
-    test("returns last user message content", async () => {
-      const provider = testProvider();
-      const result = await provider.runPrompt(input);
-      expect(result).toBe("hello world");
-    });
+    // The echo-the-last-user-message fallback pin died at the main-loop
+    // flip: it existed only for the schemaless path the always-structured
+    // core abolishes — no-responses-configured is now a config error at
+    // createLlm (pinned in llm-config.test.ts).
 
     test("returns WRAP_TEST_RESPONSE when set", async () => {
       const prev = process.env.WRAP_TEST_RESPONSE;
@@ -159,29 +159,5 @@ describe("runCommandPrompt", () => {
       if (prev === undefined) delete process.env.WRAP_TEST_RESPONSE;
       else process.env.WRAP_TEST_RESPONSE = prev;
     }
-  });
-});
-
-describe("claudeCodeProvider", () => {
-  test("throws retryable StructuredOutputError on invalid schema", async () => {
-    // Simulate what claudeCodeProvider does after spawnAndRead returns:
-    // stripFences → JSON.parse → safeParse. When the schema fails, the thrown
-    // error must be a StructuredOutputError recognised by isStructuredOutputError
-    // so callWithRetry can retry with the raw text.
-    const { stripFences } = await import("../src/core/parse-response.ts");
-    const raw = JSON.stringify({
-      type: "command",
-      content: "git diff main",
-      risk_level: "none", // invalid enum
-    });
-    const cleaned = stripFences(raw);
-    const json = JSON.parse(cleaned);
-    const result = CommandResponseSchema.safeParse(json);
-    expect(result.success).toBe(false);
-
-    // This is what claude-code.ts now throws:
-    const err = new StructuredOutputError("LLM returned an invalid response.", cleaned);
-    expect(isStructuredOutputError(err)).toBe(true);
-    expect(err.text).toBe(raw);
   });
 });

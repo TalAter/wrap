@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { advanceTestResponses, buildLlmConfig, initLlm } from "../src/llm/llm-config.ts";
+import { buildLlmConfig, initLlm } from "../src/llm/llm-config.ts";
 import type { ResolvedProvider } from "../src/llm/types.ts";
 
 const RESOLVED: ResolvedProvider = {
@@ -81,26 +81,5 @@ describe("initLlm", () => {
     // An empty responses list is a config error at createLlm (core); wrap's
     // voice prefix is applied at this surfacing site.
     expect(() => initLlm(RESOLVED, { WRAP_TEST_RESPONSES: "[]" })).toThrow(/^Config error: /);
-  });
-});
-
-describe("advanceTestResponses", () => {
-  test("shifts the WRAP_TEST_RESPONSES list by count", () => {
-    const env = { WRAP_TEST_RESPONSES: JSON.stringify(["a", "b", "c"]) };
-    advanceTestResponses(1, env);
-    expect(env.WRAP_TEST_RESPONSES).toBe(JSON.stringify(["b", "c"]));
-  });
-
-  test("no-op when WRAP_TEST_RESPONSES is unset", () => {
-    const env: Record<string, string | undefined> = { WRAP_TEST_RESPONSE: "single" };
-    advanceTestResponses(1, env);
-    expect(env.WRAP_TEST_RESPONSE).toBe("single");
-    expect(env.WRAP_TEST_RESPONSES).toBeUndefined();
-  });
-
-  test("no-op when WRAP_TEST_RESPONSES is not a JSON array", () => {
-    const env = { WRAP_TEST_RESPONSES: "not json" };
-    advanceTestResponses(1, env);
-    expect(env.WRAP_TEST_RESPONSES).toBe("not json");
   });
 });

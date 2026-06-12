@@ -1,15 +1,14 @@
+import { type Conversation, LlmAbortError } from "wrap-core/llm";
 import { truncateMiddle } from "wrap-core/text";
 import { getConfig } from "../config/store.ts";
-import type { PromptScaffold } from "../llm/build-prompt.ts";
-import type { Provider } from "../llm/types.ts";
-import type { AssistantTurn } from "../logging/entry.ts";
+import type { Transcript } from "../llm/framing.ts";
+import type { AssistantTurn, Turn } from "../logging/entry.ts";
 import { appendFacts } from "../memory/memory.ts";
 import { addToWatchlist } from "../watchlist.ts";
 import { chrome } from "./output.ts";
 import { prettyPath, resolvePath } from "./paths.ts";
 import { runRound } from "./round.ts";
 import { executeShellCommand } from "./shell.ts";
-import type { Transcript } from "./transcript.ts";
 import { verbose } from "./verbose.ts";
 
 export type LoopState = {
@@ -29,14 +28,6 @@ export type LoopOptions = {
    * initial loop in `thinking`, false for follow-up loops in `processing`.
    */
   showSpinner: boolean;
-  /**
-   * Per-call framing for the first user turn (applied at projection time
-   * via `requestFraming`). The session builds this once from the current
-   * `contextString` and pinned `sectionUserRequest` and forwards it every
-   * round so the LLM sees the proper framing without it polluting storage.
-   * Optional so direct-runner tests can skip the framing.
-   */
-  requestFraming?: { contextString: string; sectionUserRequest: string };
 };
 
 export type LoopEvent =
@@ -103,10 +94,15 @@ function handleMemoryUpdates(
  *
  * Per iteration:
  *   1. Check options.signal — if aborted, return `{ type: "aborted" }`.
- *   2. Call runRound. Re-check options.signal IMMEDIATELY after the await.
- *      If aborted, return `{ type: "aborted" }` WITHOUT pushing to the
- *      transcript or yielding assistant-turn (orphan-turn prevention).
+ *   2. Call runRound (sends on the session's conversation). An
+ *      `LlmAbortError` from the round returns `{ type: "aborted" }` — the
+ *      aborted send sealed its conversation entry with no replayable
+ *      message and the round produced no turn. Re-check options.signal
+ *      after the await as well (belt and braces — it also closes the abort
+ *      race around step execution below).
  *   3. Push the assistant turn onto the transcript (which IS entry.turns).
+ *      Its echo already entered the conversation through the send (or the
+ *      round's explicit settled add) — the runner records, never re-adds.
  *      Yield assistant-turn so the consumer can observe.
  *   4. Apply side effects: memory updates, watchlist additions.
  *   5. Route by response shape:
@@ -123,9 +119,9 @@ function handleMemoryUpdates(
  * and yield assistant-turn (so the consumer logs it), then re-throw.
  */
 export async function* runLoop(
-  provider: Provider,
+  chat: Conversation,
+  appendTurn: (turn: Turn) => void,
   transcript: Transcript,
-  scaffold: PromptScaffold,
   state: LoopState,
   options: LoopOptions,
 ): AsyncGenerator<LoopEvent, LoopReturn> {
@@ -151,13 +147,16 @@ export async function* runLoop(
 
     let turn: AssistantTurn;
     try {
-      turn = await runRound(provider, transcript, scaffold, {
+      turn = await runRound(chat, {
         isLastRound,
         model: options.model,
         showSpinner: options.showSpinner,
-        requestFraming: options.requestFraming,
+        signal: options.signal,
       });
     } catch (e) {
+      // An aborted send leaves no turn at all — today's parity: the JSONL
+      // record never shows the round the user walked away from.
+      if (e instanceof LlmAbortError) return { type: "aborted" };
       // RoundError carries the partial assistant turn so we record it
       // before the throw propagates.
       const partial =
@@ -171,11 +170,10 @@ export async function* runLoop(
       throw e;
     }
 
-    // Orphan-turn prevention: if the signal fired while we were awaiting the
-    // LLM call, drop the result without pushing to the transcript or yielding
-    // assistant-turn. The consumer's signal-check guard also catches this,
-    // but the runner closes the race so a slow provider can't leave a stale
-    // turn in the shared transcript that the next pumpLoop would see.
+    // Orphan-turn prevention, belt and braces: a mid-send abort already
+    // rejects with LlmAbortError above (core races the signal), so this
+    // check should never fire for the LLM await itself — it guards the
+    // generator against any future await sneaking in before the push.
     if (options.signal?.aborted) return { type: "aborted" };
 
     transcript.push(turn);
@@ -240,7 +238,10 @@ export async function* runLoop(
     stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
 
     yield { type: "step-output", text: stepOutput };
-    transcript.push({
+    // Step turns land through the session's `appendTurn` gate — onto the
+    // transcript AND (framed) the live conversation — so the next send
+    // assembles them without any per-round re-projection.
+    appendTurn({
       kind: "step",
       command: response.content,
       exit_code: exec.exitCode,

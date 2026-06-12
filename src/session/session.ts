@@ -1,3 +1,4 @@
+import type { Conversation, Llm } from "wrap-core/llm";
 import { truncateMiddle } from "wrap-core/text";
 import { getConfig } from "../config/store.ts";
 import { resolveEditor, spawnEditor } from "../core/editor.ts";
@@ -11,10 +12,15 @@ import {
   runLoop,
 } from "../core/runner.ts";
 import { executeShellCommand } from "../core/shell.ts";
-import type { Transcript } from "../core/transcript.ts";
 import { verbose } from "../core/verbose.ts";
 import { assemblePromptScaffold } from "../llm/context.ts";
-import { formatProvider, type Provider, type ResolvedProvider } from "../llm/types.ts";
+import {
+  createTurnFramer,
+  formatCommandEcho,
+  type Transcript,
+  type TurnFramer,
+} from "../llm/framing.ts";
+import { formatProvider, type ResolvedProvider } from "../llm/types.ts";
 import { createLogEntry, type LogEntry, type Turn } from "../logging/entry.ts";
 import { appendLogEntry } from "../logging/writer.ts";
 import type { Memory } from "../memory/types.ts";
@@ -73,7 +79,7 @@ export type SessionOptions = {
  */
 export async function runSession(
   prompt: string,
-  provider: Provider,
+  llm: Llm,
   options: SessionOptions,
 ): Promise<number> {
   const config = getConfig();
@@ -91,47 +97,66 @@ export async function runSession(
     promptHash: PROMPT_HASH,
     inputSource: options.inputSource,
   });
-  if (options.continuationParent) {
-    entry.parent_id = options.continuationParent.parentId;
-    entry.turns.push(...options.continuationParent.assembledTurns);
-  }
 
-  const buildScaffold = () =>
-    assemblePromptScaffold({
-      cwd: options.cwd,
-      memory,
-      attachedInputPath: options.attachedInputPath,
-      attachedInputSize: options.attachedInputSize,
-      attachedInputPreview: options.attachedInputPreview,
-      attachedInputTruncated: options.attachedInputTruncated,
-      piped: !process.stdout.isTTY,
-    });
+  const scaffold = assemblePromptScaffold({
+    cwd: options.cwd,
+    memory,
+    attachedInputPath: options.attachedInputPath,
+    attachedInputSize: options.attachedInputSize,
+    attachedInputPreview: options.attachedInputPreview,
+    attachedInputTruncated: options.attachedInputTruncated,
+    piped: !process.stdout.isTTY,
+  });
+
+  // ONE conversation per invocation. The scaffold's few-shot prefix enters
+  // as real adds at conversation start; every turn after is framed into
+  // `add`s as it happens (no per-round re-projection). Assistant echoes
+  // enter through the send itself via wrap's echo predicate.
+  const chat: Conversation = llm.startConversation({
+    system: scaffold.system,
+    formatEcho: formatCommandEcho,
+  });
+  for (const message of scaffold.prefixMessages) chat.add(message);
+  const framer: TurnFramer = createTurnFramer({
+    contextString: scaffold.contextString,
+    sectionUserRequest: scaffold.sectionUserRequest,
+  });
 
   // Interactive mode: no args + TTY means the user has not typed a prompt yet.
   // The dialog's `composing-interactive` state is the entry point; the
   // transcript stays empty until submit so we don't send an unqualified
   // context blurb to the LLM.
   const isInteractiveBootstrap = prompt === "" && process.stdin.isTTY === true;
-  const scaffold = buildScaffold();
 
-  // The transcript IS entry.turns — one shape, two consumers.
+  // The transcript IS entry.turns — one shape, two consumers. `appendTurn`
+  // is the one gate where a new turn lands on both records: wrap's own
+  // turns array AND (framed) the live conversation. Every non-assistant
+  // turn goes through it, including the runner's inline step turns.
+  // Assistant turns bypass it — their echo already entered the conversation
+  // through the send, so they push onto the transcript alone.
   const transcript: Transcript = entry.turns;
+  const appendTurn = (turn: Turn): void => {
+    transcript.push(turn);
+    for (const message of framer.frame(turn)) chat.add(message);
+  };
+
+  if (options.continuationParent) {
+    entry.parent_id = options.continuationParent.parentId;
+    // Continuation re-adds the ancestor chain with THIS invocation's framing
+    // (fresh context wraps the chain's first user turn). `final` turns
+    // re-enter as <wrap-note> messages — the only time they're projected.
+    for (const turn of options.continuationParent.assembledTurns) appendTurn(turn);
+  }
+
   if (!isInteractiveBootstrap) {
-    await seedFirstUserTurn(options.skills, prompt, transcript);
+    await seedFirstUserTurn(options.skills, prompt, appendTurn);
   }
   const loopState: LoopState = { budgetRemaining: maxRounds, roundNum: 0 };
   const model = formatProvider(options.resolvedProvider);
-  // Thunk — `scaffold` is reassigned on interactive bootstrap, so each pump
-  // captures the current scaffold's contextString rather than the one that
-  // existed at session start.
-  const makeBaseLoopOptions = (): Omit<LoopOptions, "signal" | "showSpinner"> => ({
+  const baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner"> = {
     cwd: options.cwd,
     model,
-    requestFraming: {
-      contextString: scaffold.contextString,
-      sectionUserRequest: scaffold.sectionUserRequest,
-    },
-  });
+  };
 
   // Kicked off in parallel with the first LLM call so the first-mount
   // await is free in practice. The .catch surfaces a failed dynamic import
@@ -190,14 +215,14 @@ export async function runSession(
       // in the transcript; we push a follow-up user turn so the LLM sees
       // `[..., assistant, user]` — no message-history hygiene needed.
       const followupText = state.draft;
-      transcript.push({ kind: "user", text: followupText });
+      appendTurn({ kind: "user", text: followupText });
       loopState.budgetRemaining = maxRounds;
       startPumpLoop();
     }
     if (entered && state.tag === "processing-interactive") {
       // submit-interactive just landed on an empty transcript. Run skills
       // first (silent, ≤1s/task), then seed [skill turns..., user turn].
-      // Framing is applied per-call by `requestFraming`. The chrome spinner
+      // Framing happens at add time inside `appendTurn`. The chrome spinner
       // is suppressed automatically because startPumpLoop reads
       // isDialogTag(state.tag) — dialog is up.
       const draft = state.draft;
@@ -238,7 +263,7 @@ export async function runSession(
       }
       stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
       notifications.emit({ kind: "step-output", text: stepOutput });
-      transcript.push({
+      appendTurn({
         kind: "step",
         command: response.content,
         exit_code: exec.exitCode,
@@ -264,7 +289,7 @@ export async function runSession(
     const ctrl = new AbortController();
     currentLoopAbort = ctrl;
     try {
-      await seedFirstUserTurn(options.skills, draft, transcript);
+      await seedFirstUserTurn(options.skills, draft, appendTurn);
       if (ctrl.signal.aborted) return;
       loopState.budgetRemaining = maxRounds;
       startPumpLoop();
@@ -343,11 +368,11 @@ export async function runSession(
     // dialog tags and never produce the initial loop).
     const isInitialLoop = state.tag === "thinking";
     void pumpLoop({
-      provider,
+      chat,
+      appendTurn,
       transcript,
-      scaffold,
       loopState,
-      baseLoopOptions: makeBaseLoopOptions(),
+      baseLoopOptions,
       signal: ctrl.signal,
       isInitialLoop,
       showSpinner,
@@ -403,24 +428,26 @@ function appendLogEntryIgnoreErrors(entry: LogEntry): void {
 // user's natural-language request is the last (and freshest) message —
 // the trust-fence guard for false-positive trigger matches. Called from
 // both entry points where a new user prompt enters the transcript: argv
-// at session start, and `state.draft` on interactive submit.
+// at session start, and `state.draft` on interactive submit. `append` is
+// the session's appendTurn gate (turns land on the record AND, framed, on
+// the conversation).
 async function seedFirstUserTurn(
   skills: readonly Skill[] | undefined,
   prompt: string,
-  transcript: Transcript,
+  append: (turn: Turn) => void,
 ): Promise<void> {
   if (skills) {
     const skillTurns = await runSkills(skills, prompt);
     verbose(`Skill turns: ${skillTurns.length}`);
-    if (skillTurns.length) transcript.push(...skillTurns);
+    for (const turn of skillTurns) append(turn);
   }
-  transcript.push({ kind: "user", text: prompt });
+  append({ kind: "user", text: prompt });
 }
 
 type PumpLoopArgs = {
-  provider: Provider;
+  chat: Conversation;
+  appendTurn: (turn: Turn) => void;
   transcript: Transcript;
-  scaffold: ReturnType<typeof assemblePromptScaffold>;
   loopState: LoopState;
   baseLoopOptions: Omit<LoopOptions, "signal" | "showSpinner">;
   signal: AbortSignal;
@@ -459,7 +486,7 @@ async function pumpLoop(args: PumpLoopArgs): Promise<void> {
   }
 
   try {
-    const generator = runLoop(args.provider, args.transcript, args.scaffold, args.loopState, {
+    const generator = runLoop(args.chat, args.appendTurn, args.transcript, args.loopState, {
       ...args.baseLoopOptions,
       signal,
       showSpinner,

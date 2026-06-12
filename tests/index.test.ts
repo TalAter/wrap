@@ -388,9 +388,10 @@ describe("wrap", () => {
   });
 
   test("e2e: first run inits memory, then query succeeds", async () => {
-    // First-run flows carry two canned responses: the structured memory-init
-    // send consumes the facts-shaped first entry, the query send (legacy
-    // machinery) gets the command response.
+    // First-run flows carry two canned responses on ONE shared playback
+    // cursor (one Llm handle per invocation): the structured memory-init
+    // send consumes the facts-shaped first entry, the query send gets the
+    // command response.
     const { exitCode, stdout, stderr, wrapHome } = await wrap("say hi", {
       WRAP_CONFIG: JSON.stringify({}),
       WRAP_TEST_RESPONSES: JSON.stringify([

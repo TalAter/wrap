@@ -24,9 +24,10 @@ export type Notification =
   | { kind: "step-output"; text: string }
   /**
    * Wire-level capture from a provider, one per physical LLM call. Listener-
-   * only (no stderr fallback); `runRound` subscribes per attempt. Memory-init
-   * and other code paths also emit unconditionally — events with no subscriber
-   * are dropped on the floor.
+   * only (no stderr fallback). Only the parked legacy providers still emit
+   * it — nothing subscribes anymore (attempts derive from core conversation
+   * entries), so the events drop on the floor; the kind dies with those
+   * providers in Unit 7.
    */
   | { kind: "llm-wire"; wire: WireCapture };
 
@@ -96,9 +97,10 @@ export function writeNotificationToStderr(n: Notification): void {
       // Dialog-only — no stderr fallback. See JSDoc above.
       return;
     case "llm-wire":
-      // Listener-only. Consumers (like runRound) subscribe to capture wire
-      // bodies; no sensible stderr rendering — would flood the terminal with
-      // raw JSON during thinking. See JSDoc on the Notification union.
+      // Listener-only. Only the parked legacy providers emit it (it dies
+      // with them in Unit 7); no sensible stderr rendering — would flood
+      // the terminal with raw JSON during thinking. See JSDoc on the
+      // Notification union.
       return;
   }
 }

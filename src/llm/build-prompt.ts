@@ -20,25 +20,24 @@ export type PromptConfig = {
  * The static, per-session pieces of the prompt: system text, few-shot
  * example messages (as a flat conversation prefix), and the formatted
  * `contextString` (memory, tools, cwd, attached input). The session passes
- * `contextString` + `sectionUserRequest` to `buildPromptInput` as a
- * `requestFraming` directive so the first user turn is wrapped at
- * projection time — storage is bare, framing is per-invocation.
+ * `contextString` + `sectionUserRequest` to the turn framer so the first
+ * user turn is wrapped as it is added to the conversation — storage is
+ * bare, framing is per-invocation.
  */
 export type PromptScaffold = {
   system: string;
   /**
-   * Few-shot examples + separator, prepended verbatim to every round's
-   * messages array by `buildPromptInput`. Empty if the prompt config has
-   * no examples. Treated as immutable after assembly.
+   * Few-shot examples + separator, added verbatim at conversation start.
+   * Empty if the prompt config has no examples. Treated as immutable after
+   * assembly.
    */
   prefixMessages: ReadonlyArray<ConversationMessage>;
   /**
    * The formatted context block (memory/tools/cwd/attached input). Wrapped
-   * around the first user turn at projection time via `requestFraming`. May
-   * be empty.
+   * around the first user turn by the framer's request framing. May be empty.
    */
   contextString: string;
-  /** Pinned section header — paired with `contextString` in `requestFraming`. */
+  /** Pinned section header — paired with `contextString` in the framing. */
   sectionUserRequest: string;
 };
 

@@ -12,8 +12,7 @@ import { resolveTheme, setTheme } from "./core/theme.ts";
 import { verbose } from "./core/verbose.ts";
 import { wrapFs } from "./fs/home.ts";
 import { ensureTempDir, formatSize } from "./fs/temp.ts";
-import { initProvider } from "./llm/index.ts";
-import { advanceTestResponses, initLlm } from "./llm/llm-config.ts";
+import { initLlm } from "./llm/llm-config.ts";
 import { resolveProvider } from "./llm/resolve-provider.ts";
 import { formatProvider } from "./llm/types.ts";
 import type { Turn } from "./logging/entry.ts";
@@ -96,13 +95,12 @@ export async function main() {
     const label = formatProvider(resolved);
     verbose(`Config loaded (${label})`);
 
-    const provider = initProvider(resolved);
-    verbose(`Provider initialized (${label})`);
-
-    // Memory init runs on the promoted core LLM; the query loop below still
-    // runs the legacy provider machinery (sanctioned old/new coexistence
-    // until the main-loop flip).
+    // ONE Llm handle per invocation — memory init and the session's
+    // conversation share it (and, for the test provider, its playback
+    // cursor). createLlm validates eagerly, so this is the "provider
+    // initialized" moment.
     const llm = initLlm(resolved);
+    verbose(`Provider initialized (${label})`);
 
     let attachedInputPath: string | undefined;
     let attachedInputSize: number | undefined;
@@ -130,13 +128,7 @@ export async function main() {
       verbose(`Input file: ${attachedInputPath} (${formatSize(attachedInputSize)})`);
     }
 
-    const { memory, initialized } = await ensureMemory(llm);
-    // Transitional: the init send consumed the first entry of the shared
-    // WRAP_TEST_RESPONSES playback on its own (core) test provider, while
-    // the legacy query loop's test provider keeps a separate cursor over
-    // the same env list. Shift the list so both machineries read one
-    // playback in order. Dies with the legacy loop.
-    if (initialized) advanceTestResponses(1);
+    const memory = await ensureMemory(llm);
 
     const cwd = resolvePath(process.cwd()) ?? process.cwd();
 
@@ -146,7 +138,7 @@ export async function main() {
     const inputSource: "argv" | "pipe" | "tui" =
       input.type === "prompt" ? "argv" : attachedInputBytes ? "pipe" : "argv";
 
-    process.exitCode = await runSession(prompt, provider, {
+    process.exitCode = await runSession(prompt, llm, {
       memory,
       cwd,
       resolvedProvider: resolved,

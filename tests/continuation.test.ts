@@ -119,6 +119,47 @@ describe("continuation — basic chain", () => {
   });
 });
 
+describe("continuation — replay framing", () => {
+  test("ancestor chain is re-framed with the child invocation's context", async () => {
+    const wrapHome = freshHome();
+    await run("how do I deploy", {
+      wrapHome,
+      responses: [{ type: "reply", content: "you run deploy.sh", risk_level: "low" }],
+    });
+    // logTraces on the child exposes the assembled request the LLM saw.
+    const child = await run("-c ok do it", {
+      wrapHome,
+      responses: [{ type: "command", content: "echo deploying", risk_level: "low" }],
+      env: { WRAP_CONFIG: JSON.stringify({ logTraces: true }) },
+    });
+    expect(child.exitCode).toBe(0);
+
+    const entries = readEntries(wrapHome);
+    const childEntry = entries[entries.length - 1];
+    const trace = JSON.parse(
+      readFileSync(join(wrapHome, "logs", "traces", `${childEntry?.id as string}.json`), "utf-8"),
+    ) as {
+      turn_attempts: Record<
+        string,
+        Array<{ request: { messages: Array<{ role: string; content: string }> } }>
+      >;
+    };
+    const attempts = Object.values(trace.turn_attempts)[0];
+    const messages = attempts?.[0]?.request.messages ?? [];
+    const userContents = messages.filter((m) => m.role === "user").map((m) => m.content);
+    // The chain's FIRST user turn carries the CHILD's fresh framing —
+    // continuation inherits the conversation, not the environment.
+    const framed = userContents.filter((c) => c.includes("## User's request"));
+    expect(framed).toHaveLength(1);
+    expect(framed[0]).toContain("## User's request\nhow do I deploy");
+    // The child's own prompt replays bare, later in the assembly.
+    expect(userContents).toContain("ok do it");
+    // The parent's reply replays as a projected assistant echo.
+    const assistantContents = messages.filter((m) => m.role === "assistant").map((m) => m.content);
+    expect(assistantContents.some((c) => c.includes("you run deploy.sh"))).toBe(true);
+  });
+});
+
 describe("continuation — refusal", () => {
   test("empty log: exit 1 with Continue error", async () => {
     const wrapHome = freshHome();

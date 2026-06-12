@@ -1,31 +1,20 @@
-import { NoObjectGeneratedError } from "ai";
-import type { CommandResponse } from "../command-response.schema.ts";
+import {
+  type Attempt,
+  type Conversation,
+  type WireResponse as CoreWireResponse,
+  type Entry,
+  LlmAbortError,
+  type LlmMessage,
+  LlmParseError,
+} from "wrap-core/llm";
+import { type CommandResponse, CommandResponseSchema } from "../command-response.schema.ts";
 import { getConfig } from "../config/store.ts";
 import { formatTempDirSection } from "../fs/temp.ts";
-import type { PromptScaffold } from "../llm/build-prompt.ts";
-import { runCommandPrompt } from "../llm/index.ts";
-import type { PromptInput, Provider } from "../llm/types.ts";
-import type { AssistantTurn, AttemptMeta, WireCapture } from "../logging/entry.ts";
+import { echoText, isScratchpadRejected } from "../llm/framing.ts";
+import type { AssistantTurn, AttemptMeta, WireResponse } from "../logging/entry.ts";
 import promptConstants from "../prompt.constants.json";
-import { subscribe } from "./notify.ts";
-import { StructuredOutputError } from "./parse-response.ts";
 import { SPINNER_TEXT, startChromeSpinner } from "./spinner.ts";
-import { type AttemptDirectives, buildPromptInput, type Transcript } from "./transcript.ts";
 import { verbose, verboseHighlight } from "./verbose.ts";
-
-export function isStructuredOutputError(e: unknown): boolean {
-  return (
-    NoObjectGeneratedError.isInstance(e) ||
-    (e instanceof Error &&
-      (e.message.includes("invalid JSON") || e.message.includes("invalid response")))
-  );
-}
-
-export function extractFailedText(e: unknown): string {
-  if (NoObjectGeneratedError.isInstance(e)) return e.text ?? "";
-  if (e instanceof StructuredOutputError) return e.text;
-  return "";
-}
 
 export type RunRoundOptions = {
   isLastRound: boolean;
@@ -37,8 +26,9 @@ export type RunRoundOptions = {
    * loops in `processing` (the dialog has its own bottom-border spinner).
    */
   showSpinner: boolean;
-  /** Per-call framing for the first user turn. Forwarded as a directive. */
-  requestFraming?: { contextString: string; sectionUserRequest: string };
+  /** Forwarded into each send. An abort rejects with `LlmAbortError`; the
+   *  round leaves no turn (the runner maps it to its aborted return). */
+  signal?: AbortSignal;
 };
 
 /**
@@ -73,186 +63,204 @@ function verboseResponse(response: CommandResponse): void {
   }
 }
 
-/** Append an assistant+user turn pair suffixing a retry onto an input. */
-function appendJsonRetry(input: PromptInput, failedText: string): PromptInput {
-  return {
-    system: input.system,
-    messages: [
-      ...input.messages,
-      { role: "assistant", content: failedText },
-      { role: "user", content: promptConstants.jsonRetryInstruction },
-    ],
-  };
-}
-
 /**
- * Execute a single physical LLM call, append an `AttemptMeta` to
- * `turn.attempts`, and return the parsed response OR `undefined` when a
- * parse failure should trigger the ladder's next retry step. Provider
- * errors re-throw so the coordinator can wrap them.
+ * Add this round's per-call directives as ordered transient adds: the live
+ * temp-dir listing, then (on the scratchpad retry) the raw rejected JSON as
+ * an assistant/user echo pair, then the last-round instruction. Transients
+ * are consumed by the send they precede — the scratchpad retry re-adds
+ * whatever still applies because a later send never resurrects them.
  */
-async function callOne(
-  provider: Provider,
-  turn: AssistantTurn,
-  input: PromptInput,
-): Promise<CommandResponse | undefined> {
-  const attempt: AttemptMeta = {};
-  turn.attempts.push(attempt);
-
-  const logTraces = getConfig().logTraces;
-
-  let captured: WireCapture | undefined;
-  const unsub = subscribe((n) => {
-    if (n.kind === "llm-wire") captured = n.wire;
-  });
-
-  const t0 = performance.now();
-  try {
-    const response = (await runCommandPrompt(provider, input)) as CommandResponse;
-    attempt.llm_ms = Math.round(performance.now() - t0);
-    attempt.parsed = response;
-    turn.response = response;
-    applyCapture(attempt, captured, logTraces, input);
-    return response;
-  } catch (e) {
-    attempt.llm_ms = Math.round(performance.now() - t0);
-    applyCapture(attempt, captured, logTraces, input);
-    if (isStructuredOutputError(e)) {
-      // Prefer the raw text from the error (what the model actually emitted).
-      // The wire capture's raw_response may have been populated from a
-      // successful emit before the SDK raised NoObjectGeneratedError.
-      attempt.raw_response = extractFailedText(e);
-      attempt.error = {
-        kind: "parse",
-        message: e instanceof Error ? e.message : String(e),
-      };
-      return undefined;
-    }
-    const msg = e instanceof Error ? e.message : String(e);
-    attempt.error = { kind: "provider", message: msg };
-    throw e;
-  } finally {
-    unsub();
-  }
-}
-
-/**
- * Merge the captured wire bundle into the attempt, respecting the logTraces
- * gate. When `logTraces` is false: strip `request`, `request_wire`, and
- * `response_wire`. `raw_response` stays under its original rule — always on
- * parse failure (written by the caller after this), never on success.
- */
-function applyCapture(
-  attempt: AttemptMeta,
-  captured: WireCapture | undefined,
-  logTraces: boolean,
-  input: PromptInput,
+function addRoundDirectives(
+  chat: Conversation,
+  directives: {
+    liveContext: string;
+    isLastRound: boolean;
+    scratchpadRejected?: CommandResponse;
+  },
 ): void {
-  if (captured?.wire_capture_error !== undefined) {
-    attempt.wire_capture_error = captured.wire_capture_error;
+  chat.add({ role: "user", content: directives.liveContext }, { transient: true });
+  if (directives.scratchpadRejected) {
+    // Intentional raw stringify — the whole point is to show the model that
+    // `_scratchpad` came back null so it knows what to fix.
+    chat.add(
+      { role: "assistant", content: JSON.stringify(directives.scratchpadRejected) },
+      { transient: true },
+    );
+    chat.add(
+      { role: "user", content: promptConstants.scratchpadRequiredInstruction },
+      { transient: true },
+    );
   }
-  if (!logTraces) return;
-  attempt.request = input;
-  if (captured?.request_wire) attempt.request_wire = captured.request_wire;
-  if (captured?.response_wire) attempt.response_wire = captured.response_wire;
-  if (captured?.raw_response !== undefined) attempt.raw_response = captured.raw_response;
+  if (directives.isLastRound) {
+    chat.add({ role: "user", content: promptConstants.lastRoundInstruction }, { transient: true });
+  }
 }
 
-function sumAttemptMs(turn: AssistantTurn): number {
-  let total = 0;
-  for (const a of turn.attempts) total += a.llm_ms ?? 0;
-  return total;
+/** The round's settled assistant echo, added explicitly when the predicate
+ *  rejected the response but wrap accepted it anyway (no-retry-storm rule)
+ *  or kept it after a failed scratchpad retry. */
+function addSettledEcho(chat: Conversation, response: CommandResponse): void {
+  chat.add({ role: "assistant", content: echoText(response) });
+}
+
+/** Core subprocess wires carry `exitCode`; wrap's on-disk schema says `exit_code`. */
+function toWrapResponseWire(wire: CoreWireResponse): WireResponse {
+  if (wire.kind === "subprocess") {
+    const { exitCode, ...rest } = wire;
+    return { ...rest, exit_code: exitCode };
+  }
+  return wire;
 }
 
 /**
- * Run a single LLM round. Drives the retry ladder directly — up to four
- * physical calls per round, each appended as an `AttemptMeta` before the
- * ladder decides whether to continue:
+ * Map one core `Attempt` to wrap's on-disk `AttemptMeta`.
  *
- *   1. Initial call.
- *   2. If parse failed → json-retry (echo failed text + `jsonRetryInstruction`).
- *   3. If parsed a high-risk command with null scratchpad → scratchpad-retry.
- *   4. If 3 failed to parse → json-retry of the scratchpad attempt.
+ * - `parsed` lands on the (single) error-free attempt of a send — `parsed`
+ *   lives on the sealed entry, and only the attempt that produced it lacks
+ *   an error.
+ * - `raw_response` keeps its rule: always on parse failure (the
+ *   default-config debugging breadcrumb), otherwise only under `logTraces`.
+ * - `request`/wires are trace-gated here, at wrap's record-build time —
+ *   trace-verbosity gating is wrap policy, not core's.
+ * - wrap's `empty` error kind is a post-parse domain annotation added by
+ *   the caller, never derived from core.
+ */
+function toAttemptMeta(attempt: Attempt, parsed: unknown, logTraces: boolean): AttemptMeta {
+  const meta: AttemptMeta = {};
+  if (attempt.error === undefined && parsed !== undefined) {
+    meta.parsed = parsed as CommandResponse;
+  }
+  if (logTraces) {
+    meta.request = {
+      system: attempt.request.system,
+      messages: [...attempt.request.messages] as LlmMessage[],
+    };
+    if (attempt.requestWire) meta.request_wire = attempt.requestWire;
+    if (attempt.responseWire) meta.response_wire = toWrapResponseWire(attempt.responseWire);
+    if (attempt.rawText !== undefined) meta.raw_response = attempt.rawText;
+  }
+  if (attempt.error) {
+    meta.error = { kind: attempt.error.kind, message: attempt.error.message };
+    if (attempt.error.kind === "parse" && attempt.rawText !== undefined) {
+      meta.raw_response = attempt.rawText;
+    }
+  }
+  meta.llm_ms = attempt.durationMs;
+  return meta;
+}
+
+/** Flatten the round's send-produced entries into one attempts list. */
+function deriveAttempts(
+  entries: readonly Entry[],
+  logTraces: boolean,
+): { attempts: AttemptMeta[]; totalMs: number } {
+  const attempts: AttemptMeta[] = [];
+  let totalMs = 0;
+  for (const entry of entries) {
+    if (!entry.attempts) continue;
+    for (const attempt of entry.attempts) {
+      attempts.push(toAttemptMeta(attempt, entry.parsed, logTraces));
+      totalMs += attempt.durationMs;
+    }
+  }
+  return { attempts, totalMs };
+}
+
+/**
+ * Run a single LLM round on the session's conversation: up to two sends,
+ * each with core's invisible parse retry inside it (so up to four physical
+ * calls per round, all merged into ONE assistant turn for the log).
  *
- * Meta-directives (`isLastRound`, live temp-dir context, first-user-turn
- * framing) live only inside the local `directives` arg to `buildPromptInput`;
- * they never enter the persistent transcript.
+ *   1. Add the round's transient directives (live temp-dir context,
+ *      last-round instruction) and send.
+ *   2. Domain retry — scratchpad: a schema-valid high-risk command with a
+ *      null scratchpad was echo-rejected by the predicate (nothing
+ *      replayable landed). Re-add the transients plus the raw rejected JSON
+ *      as a transient assistant/user echo pair, and send again.
+ *   3. If the second response carries a scratchpad its echo lands via the
+ *      predicate; if it is still null (accepted anyway — no-retry-storm) or
+ *      the second send fails to parse (wrap keeps response #1 for
+ *      execution), the settled echo is added explicitly.
  *
- * On success: returns an `AssistantTurn` with `response` set and `llm_ms`
- * summed across attempts.
+ * On success: returns an `AssistantTurn` with `response` set, attempts
+ * derived from the conversation record, and `llm_ms` summed across them.
  *
- * On failure: throws `RoundError` carrying the partial `AssistantTurn`. The
- * loop catches it, pushes the partial turn onto the transcript (so it gets
- * logged), then re-throws.
+ * On failure: throws `RoundError` carrying the partial `AssistantTurn`
+ * (derived from the sealed entries, so the eager-log guarantee holds), or
+ * rethrows `LlmAbortError` untouched — an aborted round leaves no turn.
  */
 export async function runRound(
-  provider: Provider,
-  transcript: Transcript,
-  scaffold: PromptScaffold,
+  chat: Conversation,
   options: RunRoundOptions,
 ): Promise<AssistantTurn> {
   const turn: AssistantTurn = { kind: "assistant", attempts: [], source: "model" };
   const stopSpinner = options.showSpinner ? startChromeSpinner(SPINNER_TEXT) : () => {};
+  const logTraces = getConfig().logTraces;
+  const startIdx = chat.entries.length;
+
+  const collect = (): void => {
+    const { attempts, totalMs } = deriveAttempts(chat.entries.slice(startIdx), logTraces);
+    turn.attempts = attempts;
+    turn.llm_ms = totalMs;
+  };
+  const fail = (e: unknown): RoundError => {
+    const message = e instanceof Error ? e.message : String(e);
+    verbose(`LLM error: ${message}`);
+    collect();
+    return new RoundError(`LLM error (${options.model}): ${message}`, turn);
+  };
+
   try {
-    const baseDirectives: AttemptDirectives = { liveContext: formatTempDirSection() };
-    if (options.isLastRound) baseDirectives.isLastRound = true;
-    if (options.requestFraming) baseDirectives.requestFraming = options.requestFraming;
+    // Abort before any transient is added: a send on an already-fired signal
+    // never starts and never consumes, which would leave these adds waiting
+    // to leak into the NEXT round's assembly.
+    if (options.signal?.aborted) throw new LlmAbortError();
+    const liveContext = formatTempDirSection();
+    addRoundDirectives(chat, { liveContext, isLastRound: options.isLastRound });
 
-    const baseInput = buildPromptInput(transcript, scaffold, baseDirectives);
-
-    // Step 1: initial call.
-    let response = await callOne(provider, turn, baseInput);
-
-    // Step 2: json-retry on parse failure.
-    if (response === undefined) {
-      verbose("LLM parse error, retrying...");
-      const failedText = turn.attempts[turn.attempts.length - 1]?.raw_response ?? "";
-      response = await callOne(provider, turn, appendJsonRetry(baseInput, failedText));
-      if (response === undefined) {
-        // Parse failed twice in a row — surface the last attempt's error.
-        const last = turn.attempts[turn.attempts.length - 1];
-        const msg = last?.error?.message ?? "LLM parse error";
-        turn.llm_ms = sumAttemptMs(turn);
-        throw new RoundError(`LLM error (${options.model}): ${msg}`, turn);
-      }
+    let response: CommandResponse;
+    try {
+      response = await chat.send(CommandResponseSchema, { signal: options.signal });
+    } catch (e) {
+      if (e instanceof LlmAbortError) throw e;
+      throw fail(e);
     }
 
-    // Step 3: scratchpad-retry for high-risk + null scratchpad. Accept a
-    // still-null scratchpad without storming the model; the confirm panel
-    // remains the final safety layer.
-    if (
-      response.type === "command" &&
-      response.risk_level === "high" &&
-      response._scratchpad == null
-    ) {
-      const scratchDirectives: AttemptDirectives = {
-        ...baseDirectives,
-        scratchpadRequiredRetry: { rejectedResponse: response },
-      };
-      const scratchInput = buildPromptInput(transcript, scaffold, scratchDirectives);
-      let scratchResponse = await callOne(provider, turn, scratchInput);
-
-      // Step 4: json-retry of the scratchpad attempt.
-      if (scratchResponse === undefined) {
-        verbose("LLM parse error, retrying...");
-        const failedText = turn.attempts[turn.attempts.length - 1]?.raw_response ?? "";
-        scratchResponse = await callOne(provider, turn, appendJsonRetry(scratchInput, failedText));
+    // Domain retry: high-risk + null scratchpad. Accept a still-null
+    // scratchpad on the second send without storming the model; the confirm
+    // panel remains the final safety layer.
+    if (isScratchpadRejected(response)) {
+      if (options.signal?.aborted) throw new LlmAbortError();
+      addRoundDirectives(chat, {
+        liveContext,
+        isLastRound: options.isLastRound,
+        scratchpadRejected: response,
+      });
+      try {
+        const second = await chat.send(CommandResponseSchema, { signal: options.signal });
+        if (isScratchpadRejected(second)) addSettledEcho(chat, second);
+        response = second;
+      } catch (e) {
+        if (e instanceof LlmAbortError) throw e;
+        if (!(e instanceof LlmParseError)) {
+          // Provider failure mid-retry fails the round; the partial turn
+          // still records the valid first response for the log.
+          turn.response = response;
+          throw fail(e);
+        }
+        // Scratchpad retry failed to parse — keep response #1 for execution
+        // (its echo was predicate-rejected, so settle it explicitly). The
+        // failed attempts stay on the round for audit.
+        addSettledEcho(chat, response);
       }
-
-      if (scratchResponse !== undefined) response = scratchResponse;
-      // If scratchpad path's parse-retry still failed, we keep the original
-      // response; the round's last attempt carries the parse error for audit,
-      // but `response` remains valid for execution. Same "don't retry-storm"
-      // principle as accepting a still-null scratchpad.
     }
 
     verboseResponse(response);
-
+    collect();
     turn.response = response;
-    turn.llm_ms = sumAttemptMs(turn);
 
     if (!response.content.trim()) {
-      const last = turn.attempts[turn.attempts.length - 1];
+      const last = turn.attempts.at(-1);
       if (last) {
         last.error = { kind: "empty", message: "LLM returned an empty response." };
       }
@@ -260,15 +268,6 @@ export async function runRound(
     }
 
     return turn;
-  } catch (e) {
-    if (e instanceof RoundError) throw e;
-    // Provider-level error (non-structured). The failing attempt already
-    // carries `error.kind: "provider"`; wrap with the model label so the
-    // user sees which provider/model rejected.
-    const errMsg = e instanceof Error ? e.message : String(e);
-    verbose(`LLM error: ${errMsg}`);
-    turn.llm_ms = sumAttemptMs(turn);
-    throw new RoundError(`LLM error (${options.model}): ${errMsg}`, turn);
   } finally {
     stopSpinner();
   }

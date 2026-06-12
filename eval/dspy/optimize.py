@@ -29,6 +29,12 @@ from read_schema import read_schema
 # Paths (container mount points)
 EXAMPLES_PATH = Path("/app/eval/examples/seed.jsonl")
 CONSTANTS_PATH = Path("/app/src/prompt.constants.json")
+# The JSON-retry corrective instruction is core-owned content (the parse
+# retry is wrap-core mechanics — vault/impl-specs/llm.md decision 8). Core
+# hosts it in a plain JSON asset precisely so this script can keep reading
+# it for the PROMPT_HASH manifest; wrap's prompt.constants.json no longer
+# carries a (silently dead) mirror.
+CORE_CONSTANTS_PATH = Path("/app/node_modules/wrap-core/src/llm/prompt-constants.json")
 PROBED_TOOLS_PATH = Path("/app/src/skills/probed-tools.json")
 OUTPUT_PATH = Path("/app/src/prompt.optimized.json")
 
@@ -37,6 +43,8 @@ SEED = 42
 # ── Prompt string constants ─────────────────────────────────────────────
 with open(CONSTANTS_PATH) as _f:
     CONSTANTS = json.load(_f)
+with open(CORE_CONSTANTS_PATH) as _f:
+    CORE_CONSTANTS = json.load(_f)
 with open(PROBED_TOOLS_PATH) as _f:
     PROBED_TOOLS = json.load(_f)
 
@@ -344,7 +352,7 @@ def build_prompt_hash_manifest(
         ["CAPTURED_NO_OUTPUT", CONSTANTS["capturedNoOutput"]],
         ["LAST_ROUND_INSTRUCTION", CONSTANTS["lastRoundInstruction"]],
         ["SCRATCHPAD_REQUIRED_INSTRUCTION", CONSTANTS["scratchpadRequiredInstruction"]],
-        ["JSON_RETRY_INSTRUCTION", CONSTANTS["jsonRetryInstruction"]],
+        ["JSON_RETRY_INSTRUCTION", CORE_CONSTANTS["jsonRetryInstruction"]],
         ["SECTION_TEMP_DIR", CONSTANTS["sectionTempDir"]],
         ["TEMP_DIR_EMPTY", CONSTANTS["tempDirEmpty"]],
         ["PROBED_TOOLS", PROBED_TOOLS],

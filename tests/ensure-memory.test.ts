@@ -55,14 +55,12 @@ describe("ensureMemory", () => {
 
     // explodingLlm would reject the promise if a send happened.
     const result = await ensureMemory(explodingLlm());
-    expect(result.memory).toEqual(memory);
-    expect(result.initialized).toBe(false);
+    expect(result).toEqual(memory);
   });
 
   test("runs init when no memory exists", async () => {
     const result = await ensureMemory(factsLlm(["Runs macOS on arm64", "Default shell is zsh"]));
-    expect(result.initialized).toBe(true);
-    expect(result.memory).toEqual({
+    expect(result).toEqual({
       "/": [{ fact: "Runs macOS on arm64" }, { fact: "Default shell is zsh" }],
     });
     const output = stderr.text;
@@ -75,8 +73,7 @@ describe("ensureMemory", () => {
 
     // Second call should load from disk, not call the LLM.
     const result = await ensureMemory(explodingLlm());
-    expect(result.memory).toEqual({ "/": [{ fact: "Runs macOS on arm64" }] });
-    expect(result.initialized).toBe(false);
+    expect(result).toEqual({ "/": [{ fact: "Runs macOS on arm64" }] });
   });
 
   test("throws when the LLM fails, prefixed in wrap's voice", async () => {
@@ -88,18 +85,26 @@ describe("ensureMemory", () => {
     expect(existsSync(MEMORY_PATH)).toBe(false);
   });
 
-  test("init send makes exactly one attempt — no parse retry", async () => {
-    // Matches the legacy one-physical-call semantics, and keeps shared
-    // WRAP_TEST_RESPONSES consumption deterministic while the query loop
-    // still runs the legacy provider machinery. With a parse retry, the
-    // second canned entry would satisfy the schema and init would succeed.
+  test("init send recovers via the spec-default parse retry", async () => {
+    // The send retries a parse failure exactly once (core mechanics) — the
+    // second canned entry satisfies the schema and init succeeds. The
+    // legacy exactly-one-attempt pin died with the transitional
+    // `{ retry: false }` opt-out at the main-loop flip.
     const llm = createLlm({ name: "test", responses: ["not json", { facts: ["x"] }] });
+    const result = await ensureMemory(llm);
+    expect(result).toEqual({ "/": [{ fact: "x" }] });
+    expect(existsSync(MEMORY_PATH)).toBe(true);
+  });
+
+  test("init fails when both parse attempts come back malformed", async () => {
+    const llm = createLlm({ name: "test", responses: ["not json", "still not json"] });
     await expect(ensureMemory(llm)).rejects.toThrow(/^LLM error \(test \/ \(default\)\): .*JSON/);
     expect(existsSync(MEMORY_PATH)).toBe(false);
   });
 
   test("schema-mismatch reply rejects instead of saving garbage", async () => {
-    const llm = createLlm({ name: "test", responses: [{ wrong: "shape" }] });
+    // Two entries: the parse retry consumes the second; both miss the schema.
+    const llm = createLlm({ name: "test", responses: [{ wrong: "shape" }, { wrong: "shape" }] });
     await expect(ensureMemory(llm)).rejects.toThrow(/^LLM error \(test \/ \(default\)\): .*schema/);
     expect(existsSync(MEMORY_PATH)).toBe(false);
   });
@@ -118,12 +123,12 @@ describe("ensureMemory", () => {
 
   test("facts saved under / scope in new map format", async () => {
     const result = await ensureMemory(factsLlm(["fact one", "fact two"]));
-    expect(result.memory).toEqual({ "/": [{ fact: "fact one" }, { fact: "fact two" }] });
-    expect(result.memory["/"]).toHaveLength(2);
+    expect(result).toEqual({ "/": [{ fact: "fact one" }, { fact: "fact two" }] });
+    expect(result["/"]).toHaveLength(2);
   });
 
   test("trims facts and drops empty ones — sloppy output never persists", async () => {
     const result = await ensureMemory(factsLlm(["  Runs macOS  ", "", "   ", "Uses zsh"]));
-    expect(result.memory).toEqual({ "/": [{ fact: "Runs macOS" }, { fact: "Uses zsh" }] });
+    expect(result).toEqual({ "/": [{ fact: "Runs macOS" }, { fact: "Uses zsh" }] });
   });
 });

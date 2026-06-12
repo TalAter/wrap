@@ -536,7 +536,7 @@ describe("logging integration", () => {
     expect(attempts[0]?.error?.kind).toBe("empty");
   });
 
-  test("parse error logs provider_error on the failed attempt", async () => {
+  test("parse error logs two parse-kind attempts (the send's one retry)", async () => {
     const home = mkdtempSync(join(tmpdir(), "wrap-log-test-"));
     seedMemoryIn(home);
     const result = await wrap("test prompt", {
@@ -549,12 +549,45 @@ describe("logging integration", () => {
     expect(entry.outcome).toBe("error");
     const assistant = turnOfKind(entry, "assistant");
     expect(assistant).toBeDefined();
-    // The test provider throws a raw JSON SyntaxError from its own JSON.parse,
-    // which is not recognized as a structured-output error by the retry
-    // ladder — so it surfaces on the first attempt as a provider-kind error.
-    const attempts = assistant?.attempts as { error?: { kind: string; message?: string } }[];
-    expect(attempts[0]?.error?.kind).toBe("provider");
+    // Core classifies the unparsable canned response and retries once inside
+    // the send: two physical attempts, both parse-kind, each carrying the
+    // raw text breadcrumb. (Pre-flip this surfaced as ONE provider-kind
+    // attempt because the legacy test provider parsed its own output —
+    // contract shift sanctioned by the promotion spec.)
+    const attempts = assistant?.attempts as {
+      error?: { kind: string; message?: string };
+      raw_response?: string;
+    }[];
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]?.error?.kind).toBe("parse");
+    expect(attempts[1]?.error?.kind).toBe("parse");
+    expect(attempts[0]?.raw_response).toBe("not json at all");
     expect(attempts[0]?.error?.message).toBeDefined();
+  });
+
+  test("scratchpad retry flow merges both sends into ONE assistant turn", async () => {
+    // The on-disk JSONL schema stays stable across the core flip: the
+    // domain retry's two sends (echo-rejected first response + the filled
+    // retry) land as a single assistant turn with two attempts.
+    const rejected = {
+      _scratchpad: null,
+      type: "command",
+      content: "echo rm-rf-fake",
+      risk_level: "high",
+    };
+    const filled = { ...rejected, _scratchpad: "Deliberate destruction." };
+    const result = await wrapMock("nuke it", [rejected, filled]);
+    const entry = readLog(result.wrapHome);
+    // High risk + no TTY → blocked; still exactly one assistant turn.
+    expect(entry.outcome).toBe("blocked");
+    expect(modelTurnKinds(entry)).toEqual(["user", "assistant", "final"]);
+    const assistant = turnOfKind(entry, "assistant");
+    const attempts = assistant?.attempts as { parsed?: { _scratchpad?: string | null } }[];
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]?.parsed?._scratchpad).toBeNull();
+    expect((assistant?.response as { _scratchpad?: string })._scratchpad).toBe(
+      "Deliberate destruction.",
+    );
   });
 
   test("non-low risk command logs with outcome 'blocked' (no TTY)", async () => {

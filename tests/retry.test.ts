@@ -1,56 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { type LanguageModelUsage, NoObjectGeneratedError } from "ai";
-import { StructuredOutputError } from "../src/core/parse-response.ts";
-import { extractFailedText, isStructuredOutputError } from "../src/core/round.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fetchesUrl } from "../src/core/runner.ts";
 import { SPINNER_TEXT } from "../src/core/spinner.ts";
 import { TEST_RESOLVED_PROVIDER } from "../src/llm/providers/test.ts";
+import { runSession } from "../src/session/session.ts";
+import { makeLlm } from "./helpers/llm-fixtures.ts";
 import { type MockStderr, mockStderr } from "./helpers/mock-stderr.ts";
+import { seedTestConfig } from "./helpers.ts";
 import { capturedStdout as stdout } from "./preload.ts";
+import { TEST_HOME } from "./wrap-home-preload.ts";
 
-const STUB_USAGE: LanguageModelUsage = {
-  inputTokens: undefined,
-  inputTokenDetails: {
-    noCacheTokens: undefined,
-    cacheReadTokens: undefined,
-    cacheWriteTokens: undefined,
-  },
-  outputTokens: undefined,
-  outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined },
-  totalTokens: undefined,
-};
-
-function mockNoObjectError(opts: { text?: string } = {}) {
-  return new NoObjectGeneratedError({
-    ...opts,
-    response: { id: "", timestamp: new Date(), modelId: "" },
-    usage: STUB_USAGE,
-    finishReason: "stop",
-  });
+function lastLogEntry() {
+  const log = readFileSync(join(TEST_HOME, "logs/wrap.jsonl"), "utf-8");
+  return JSON.parse(log.trim().split("\n").pop() ?? "{}");
 }
-
-describe("isStructuredOutputError", () => {
-  test("detects NoObjectGeneratedError", () => {
-    expect(isStructuredOutputError(mockNoObjectError({ text: "bad" }))).toBe(true);
-  });
-
-  test("detects error with 'invalid JSON' message", () => {
-    expect(isStructuredOutputError(new Error("LLM returned invalid JSON."))).toBe(true);
-  });
-
-  test("detects error with 'invalid response' message", () => {
-    expect(isStructuredOutputError(new Error("LLM returned an invalid response."))).toBe(true);
-  });
-
-  test("rejects unrelated errors", () => {
-    expect(isStructuredOutputError(new Error("network timeout"))).toBe(false);
-  });
-
-  test("rejects non-errors", () => {
-    expect(isStructuredOutputError("string")).toBe(false);
-    expect(isStructuredOutputError(null)).toBe(false);
-  });
-});
 
 describe("fetchesUrl", () => {
   test("detects bare curl with https URL", () => {
@@ -94,113 +58,56 @@ describe("fetchesUrl", () => {
   });
 });
 
-describe("extractFailedText", () => {
-  test("extracts text from NoObjectGeneratedError", () => {
-    expect(extractFailedText(mockNoObjectError({ text: "bad output here" }))).toBe(
-      "bad output here",
-    );
-  });
-
-  test("returns empty string for NoObjectGeneratedError without text", () => {
-    expect(extractFailedText(mockNoObjectError())).toBe("");
-  });
-
-  test("extracts text from StructuredOutputError", () => {
-    const raw = '{"type":"command","content":"ls","risk_level":"none"}';
-    expect(extractFailedText(new StructuredOutputError("invalid response", raw))).toBe(raw);
-  });
-
-  test("returns empty string for other errors", () => {
-    expect(extractFailedText(new Error("something"))).toBe("");
-  });
-});
-
-describe("round retry in runSession", () => {
-  beforeEach(async () => {
-    const { seedTestConfig } = await import("./helpers.ts");
+describe("parse retry in runSession", () => {
+  beforeEach(() => {
     seedTestConfig();
   });
 
-  test("retries on structured output error and succeeds", async () => {
-    const { mkdtempSync, writeFileSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { runSession } = await import("../src/session/session.ts");
-
-    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
-
-    let callCount = 0;
-    const provider = {
-      runPrompt: async (_input: unknown, _schema: unknown) => {
-        callCount++;
-        if (callCount === 1) {
-          throw mockNoObjectError({ text: "not valid json" });
-        }
-        // Second call succeeds
-        return { type: "reply", content: "retried ok", risk_level: "low" };
-      },
-    };
-
-    const exitCode = await runSession("test", provider, {
+  test("recovers from a parse failure via the send's one retry", async () => {
+    const llm = makeLlm([
+      "not valid json",
+      { type: "reply", content: "retried ok", risk_level: "low" },
+    ]);
+    const exitCode = await runSession("test", llm, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
-    expect(callCount).toBe(2);
     expect(exitCode).toBe(0);
     expect(stdout.text).toContain("retried ok");
+    // Both physical attempts merge into the one assistant turn.
+    const entry = lastLogEntry();
+    const assistant = entry.turns.find((t: { kind: string }) => t.kind === "assistant");
+    expect(assistant.attempts).toHaveLength(2);
+    expect(assistant.attempts[0].error.kind).toBe("parse");
   });
 
-  test("does not retry on non-structured-output errors", async () => {
-    const { mkdtempSync, writeFileSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { runSession } = await import("../src/session/session.ts");
-
-    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
-
-    let callCount = 0;
-    const provider = {
-      runPrompt: async () => {
-        callCount++;
-        throw new Error("network failure");
-      },
-    };
-
+  test("does not retry provider errors — a single attempt fails the round", async () => {
+    const llm = makeLlm("ERROR:network failure");
+    let thrown: Error | undefined;
     try {
-      await runSession("test", provider, {
+      await runSession("test", llm, {
         cwd: "/tmp",
         resolvedProvider: TEST_RESOLVED_PROVIDER,
       });
-    } catch {
-      // expected
+    } catch (e) {
+      thrown = e as Error;
     }
-    expect(callCount).toBe(1);
+    expect(thrown?.message).toContain("network failure");
+    const entry = lastLogEntry();
+    const assistant = entry.turns.find((t: { kind: string }) => t.kind === "assistant");
+    expect(assistant.attempts).toHaveLength(1);
+    expect(assistant.attempts[0].error.kind).toBe("provider");
   });
 
   test("wraps LLM errors with attempted provider/model label", async () => {
     // Anthropic's 404 body literally is `{"message":"model: gpt-4o-mini"}` —
-    // the bare SDK message gives no clue which provider rejected which model.
-    // runSession must wrap thrown errors with the resolved provider label so the
-    // user sees what was actually attempted.
-    const { mkdtempSync, writeFileSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { runSession } = await import("../src/session/session.ts");
-
-    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-retry-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
-
-    const provider = {
-      runPrompt: async () => {
-        throw new Error("model: gpt-4o-mini");
-      },
-    };
-
+    // the bare message gives no clue which provider rejected which model.
+    // runSession must wrap thrown errors with the resolved provider label so
+    // the user sees what was actually attempted.
+    const llm = makeLlm("ERROR:model: gpt-4o-mini");
     let thrown: Error | undefined;
     try {
-      await runSession("test", provider, {
+      await runSession("test", llm, {
         cwd: "/tmp",
         resolvedProvider: { name: "anthropic", model: "gpt-4o-mini" },
       });
@@ -210,7 +117,7 @@ describe("round retry in runSession", () => {
     expect(thrown).toBeDefined();
     // Wrapping shows attempted provider/model so the user knows what was tried.
     expect(thrown?.message).toContain("anthropic / gpt-4o-mini");
-    // Original SDK message is preserved inside the wrapper.
+    // Original provider message is preserved inside the wrapper.
     expect(thrown?.message).toContain("model: gpt-4o-mini");
   });
 });
@@ -224,23 +131,11 @@ describe("chrome spinner around LLM call", () => {
   });
 
   test("renders 'thinking...' spinner when stderr is a TTY", async () => {
-    const { mkdtempSync, writeFileSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { runSession } = await import("../src/session/session.ts");
-    const { seedTestConfig } = await import("./helpers.ts");
-
     seedTestConfig();
     stderr = mockStderr({ isTTY: true });
 
-    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
-
-    const provider = {
-      runPrompt: async () => ({ type: "reply", content: "ok", risk_level: "low" }),
-    };
-
-    await runSession("test", provider, {
+    const llm = makeLlm([{ type: "reply", content: "ok", risk_level: "low" }]);
+    await runSession("test", llm, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });
@@ -252,23 +147,11 @@ describe("chrome spinner around LLM call", () => {
   });
 
   test("does not render the spinner when stderr is not a TTY", async () => {
-    const { mkdtempSync, writeFileSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { runSession } = await import("../src/session/session.ts");
-    const { seedTestConfig } = await import("./helpers.ts");
-
     seedTestConfig();
     stderr = mockStderr({ isTTY: false });
 
-    const wrapHome = mkdtempSync(join(tmpdir(), "wrap-spinner-test-"));
-    writeFileSync(join(wrapHome, "memory.json"), '{"/":[{"fact":"test"}]}');
-
-    const provider = {
-      runPrompt: async () => ({ type: "reply", content: "ok", risk_level: "low" }),
-    };
-
-    await runSession("test", provider, {
+    const llm = makeLlm([{ type: "reply", content: "ok", risk_level: "low" }]);
+    await runSession("test", llm, {
       cwd: "/tmp",
       resolvedProvider: TEST_RESOLVED_PROVIDER,
     });

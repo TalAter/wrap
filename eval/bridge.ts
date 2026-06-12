@@ -16,10 +16,9 @@ import { z } from "zod";
 import { CommandResponseSchema } from "../src/command-response.schema.ts";
 import { loadConfig } from "../src/config/config.ts";
 import { applyModelOverride } from "../src/config/resolve.ts";
-import type { Transcript } from "../src/core/transcript.ts";
-import { buildPromptInput } from "../src/core/transcript.ts";
 import { buildPromptScaffold } from "../src/llm/build-prompt.ts";
 import { formatContext } from "../src/llm/format-context.ts";
+import { createTurnFramer, type Transcript } from "../src/llm/framing.ts";
 import { initLlm } from "../src/llm/llm-config.ts";
 import { resolveProvider } from "../src/llm/resolve-provider.ts";
 import type { ConversationMessage, PromptInput } from "../src/llm/types.ts";
@@ -132,9 +131,9 @@ const scaffold = buildPromptScaffold(
 // `seedFirstUserTurn` splices skill turns in before the user prompt and
 // where prior-round turns naturally precede the new user message.
 //
-// Step-shaped user messages (those projected from a `kind: "step"` turn,
+// Step-shaped user messages (those framed from a `kind: "step"` turn,
 // which start with the `## Captured output` section header) are mapped
-// back to step turns so `buildPromptInput`'s first-user-turn framing skips
+// back to step turns so the framer's first-user-turn framing skips
 // them — the framing must wrap a real user request, not a captured probe
 // output. Without this remap, e.g. a discovery skill simulation
 // `[assistant which, user "## Captured output..."]` would have framing
@@ -172,14 +171,20 @@ if (Array.isArray(input.extraMessages)) {
 }
 transcript.push({ kind: "user", text: input.query });
 
-const promptInput = buildPromptInput(transcript, scaffold, {
-  liveContext: undefined,
-  isLastRound: input.lastRound === true,
-  requestFraming: {
-    contextString,
-    sectionUserRequest: promptConstants.sectionUserRequest,
-  },
+// Assemble the request the way the runtime does: scaffold prefix as the
+// leading messages, each turn framed in order (the first user turn carries
+// the request framing), then the last-round instruction — at runtime a
+// transient add, here simply the trailing message of a one-shot assembly.
+const framer = createTurnFramer({
+  contextString,
+  sectionUserRequest: promptConstants.sectionUserRequest,
 });
+const messages: ConversationMessage[] = [...scaffold.prefixMessages];
+for (const turn of transcript) messages.push(...framer.frame(turn));
+if (input.lastRound === true) {
+  messages.push({ role: "user", content: promptConstants.lastRoundInstruction });
+}
+const promptInput: PromptInput = { system: scaffold.system, messages };
 
 if (input.mode === "assemble") {
   out({ ok: true, promptInput: await assembleRequest(promptInput) });

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { CommandResponse } from "../src/command-response.schema.ts";
+import { type Conversation, type Entry, LlmAbortError, replayable } from "wrap-core/llm";
 import {
   fetchesUrl,
   type LoopEvent,
@@ -8,33 +8,28 @@ import {
   type LoopState,
   runLoop,
 } from "../src/core/runner.ts";
-import type { Transcript } from "../src/core/transcript.ts";
-import type { PromptScaffold } from "../src/llm/build-prompt.ts";
-import type { Provider } from "../src/llm/types.ts";
+import { createTurnFramer, type Transcript } from "../src/llm/framing.ts";
+import type { Turn } from "../src/logging/entry.ts";
+import { makeChat, physicalCalls } from "./helpers/llm-fixtures.ts";
 import { seedTestConfig } from "./helpers.ts";
-
-const scaffold: PromptScaffold = {
-  system: "system",
-  prefixMessages: [],
-  contextString: "",
-  sectionUserRequest: "## User's request",
-};
 
 beforeEach(() => {
   seedTestConfig();
 });
 
-function makeProvider(responses: CommandResponse[]): { provider: Provider; calls: () => number } {
-  let calls = 0;
-  const provider: Provider = {
-    runPrompt: async () => {
-      const r = responses[calls];
-      calls += 1;
-      if (!r) throw new Error(`unexpected call ${calls}`);
-      return r;
+/** Minimal hand-rolled conversation for abort-interleaving tests where the
+ *  canned provider can't fire mid-send hooks. */
+function stubChat(send: (opts?: { signal?: AbortSignal }) => Promise<unknown>): Conversation {
+  const entries: Entry[] = [];
+  return {
+    add(message, opts) {
+      entries.push({ message, ...(opts?.transient ? { transient: true } : {}) });
     },
-  };
-  return { provider, calls: () => calls };
+    get entries() {
+      return entries;
+    },
+    send: send as Conversation["send"],
+  } as Conversation;
 }
 
 function makeOptions(overrides?: Partial<LoopOptions>): LoopOptions {
@@ -43,6 +38,16 @@ function makeOptions(overrides?: Partial<LoopOptions>): LoopOptions {
     model: "test / model",
     showSpinner: false,
     ...overrides,
+  };
+}
+
+/** The session's `appendTurn` gate, rebuilt for tests: a turn lands on the
+ *  transcript AND (framed) on the live conversation. */
+function makeAppend(chat: Conversation, transcript: Transcript): (turn: Turn) => void {
+  const framer = createTurnFramer();
+  return (turn) => {
+    transcript.push(turn);
+    for (const message of framer.frame(turn)) chat.add(message);
   };
 }
 
@@ -59,13 +64,11 @@ async function drain(
 
 describe("runLoop", () => {
   test("single-iteration command yields assistant-turn and pushes one assistant turn", async () => {
-    const { provider } = makeProvider([
-      { type: "command", content: "ls", risk_level: "medium" } as CommandResponse,
-    ]);
+    const chat = makeChat([{ type: "command", content: "ls", risk_level: "medium" }]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions()),
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
     );
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("assistant-turn");
@@ -75,18 +78,18 @@ describe("runLoop", () => {
   });
 
   test("single-iteration answer pushes an assistant turn and returns answer", async () => {
-    const { provider } = makeProvider([
-      { type: "reply", content: "hi back", risk_level: "low" } as CommandResponse,
-    ]);
+    const chat = makeChat([{ type: "reply", content: "hi back", risk_level: "low" }]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
-    const { final } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
+    const { final } = await drain(
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
+    );
     expect(final.type).toBe("answer");
     expect(transcript[1]?.kind).toBe("assistant");
   });
 
   test("non-final low: runs inline, pushes assistant + step turns, continues the loop", async () => {
-    const { provider } = makeProvider([
+    const chat = makeChat([
       {
         type: "command",
         final: false,
@@ -99,7 +102,7 @@ describe("runLoop", () => {
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions()),
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
     );
     expect(final.type).toBe("command");
     const stepEvents = events.filter((e) => e.type === "step-running" || e.type === "step-output");
@@ -108,9 +111,31 @@ describe("runLoop", () => {
     expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant", "step", "assistant"]);
   });
 
+  test("step turns are framed into the conversation as they happen", async () => {
+    const chat = makeChat([
+      {
+        type: "command",
+        final: false,
+        content: "echo discovered",
+        risk_level: "low",
+        explanation: "check",
+      },
+      { type: "command", final: true, content: "echo done", risk_level: "low" },
+    ]);
+    const transcript: Transcript = [{ kind: "user", text: "hi" }];
+    const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
+    await drain(runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()));
+    // Replayable conversation mirrors the transcript: user, step echo (from
+    // the send), captured output, final echo.
+    const replayed = chat.entries.filter(replayable).map((e) => e.message);
+    expect(replayed.map((m) => m?.role)).toEqual(["user", "assistant", "user", "assistant"]);
+    expect(replayed[2]?.content).toContain("## Captured output");
+    expect(replayed[2]?.content).toContain("discovered");
+  });
+
   test("yolo + non-final medium: runs inline, pushes assistant + step turns, continues the loop", async () => {
     seedTestConfig({ yolo: true });
-    const { provider } = makeProvider([
+    const chat = makeChat([
       {
         type: "command",
         final: false,
@@ -123,7 +148,7 @@ describe("runLoop", () => {
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions()),
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
     );
     expect(final.type).toBe("command");
     const stepEvents = events.filter((e) => e.type === "step-running" || e.type === "step-output");
@@ -133,7 +158,7 @@ describe("runLoop", () => {
 
   test("yolo + non-final high: runs inline (any non-low non-final runs in yolo)", async () => {
     seedTestConfig({ yolo: true });
-    const { provider } = makeProvider([
+    const chat = makeChat([
       {
         type: "command",
         final: false,
@@ -141,23 +166,22 @@ describe("runLoop", () => {
         risk_level: "high",
         explanation: "cleanup",
         // Present to skip runRound's scratchpad-retry path, which would
-        // consume the second mocked response.
+        // consume the second canned response.
         _scratchpad: "noop",
       },
       { type: "command", final: true, content: "echo done", risk_level: "low" },
     ]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
-    const { events } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
+    const { events } = await drain(
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
+    );
     expect(events.some((e) => e.type === "step-running")).toBe(true);
     expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant", "step", "assistant"]);
   });
 
   test("non-final medium: returns to coordinator without executing", async () => {
-    // Step 4 leaves confirmation for step 5, but runLoop must already
-    // surface non-final non-low as a LoopReturn so the coordinator can
-    // route it to the dialog. Here we just pin that it does NOT run inline.
-    const { provider } = makeProvider([
+    const chat = makeChat([
       {
         type: "command",
         final: false,
@@ -169,7 +193,7 @@ describe("runLoop", () => {
     const transcript: Transcript = [{ kind: "user", text: "test clean" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions()),
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
     );
     expect(final.type).toBe("command");
     // No step-running / step-output yielded — the runner did not execute.
@@ -179,17 +203,14 @@ describe("runLoop", () => {
   });
 
   test("exhausted when budget runs out", async () => {
-    const step: CommandResponse = {
-      type: "command",
-      final: false,
-      content: "true",
-      risk_level: "low",
-    };
-    const { provider } = makeProvider([step, step, step]);
+    const step = { type: "command", final: false, content: "true", risk_level: "low" };
+    const chat = makeChat([step, step, step]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 2, roundNum: 0 };
     seedTestConfig({ maxRounds: 2 });
-    const { final } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
+    const { final } = await drain(
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
+    );
     expect(final.type).toBe("exhausted");
     expect(state.roundNum).toBe(2);
   });
@@ -198,7 +219,7 @@ describe("runLoop", () => {
     // The last-round guard rejects a non-final response on the final round
     // (the LLM was told to return command-or-answer). The step must NOT run
     // and the transcript must NOT gain a step turn.
-    const { provider } = makeProvider([
+    const chat = makeChat([
       {
         type: "command",
         final: false,
@@ -210,7 +231,7 @@ describe("runLoop", () => {
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 1, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions()),
+      runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
     );
     expect(final.type).toBe("exhausted");
     expect(events.some((e) => e.type === "step-running")).toBe(false);
@@ -229,7 +250,7 @@ describe("runLoop", () => {
     const savedShell = process.env.SHELL;
     process.env.SHELL = "/bin/sh";
     try {
-      const { provider } = makeProvider([
+      const chat = makeChat([
         {
           type: "command",
           final: false,
@@ -241,7 +262,9 @@ describe("runLoop", () => {
       ]);
       const transcript: Transcript = [{ kind: "user", text: "hi" }];
       const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
-      const { events } = await drain(runLoop(provider, transcript, scaffold, state, makeOptions()));
+      const { events } = await drain(
+        runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions()),
+      );
       const stepOutputs = events.filter(
         (e): e is Extract<LoopEvent, { type: "step-output" }> => e.type === "step-output",
       );
@@ -260,93 +283,92 @@ describe("runLoop", () => {
   });
 
   test("aborted at top of iteration when signal already aborted", async () => {
-    const { provider, calls } = makeProvider([]);
+    const chat = makeChat("ERROR:should never be called");
     const ctrl = new AbortController();
     ctrl.abort();
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions({ signal: ctrl.signal })),
+      runLoop(
+        chat,
+        makeAppend(chat, transcript),
+        transcript,
+        state,
+        makeOptions({ signal: ctrl.signal }),
+      ),
     );
     expect(final.type).toBe("aborted");
     expect(events).toHaveLength(0);
-    expect(calls()).toBe(0);
+    expect(physicalCalls(chat)).toBe(0);
   });
 
-  test("abort fired between iterations: top check returns aborted", async () => {
+  test("abort fired after a completed step: top-of-iteration check returns aborted", async () => {
     const ctrl = new AbortController();
-    let calls = 0;
-    const provider: Provider = {
-      runPrompt: async () => {
-        calls += 1;
-        if (calls === 1) {
-          ctrl.abort();
-          return {
-            type: "command",
-            final: false,
-            content: "true",
-            risk_level: "low",
-          } as CommandResponse;
-        }
-        throw new Error("should not reach second call");
-      },
-    };
+    const chat = makeChat([
+      { type: "command", final: false, content: "true", risk_level: "low", explanation: "ok" },
+      { type: "command", final: true, content: "true", risk_level: "low" },
+    ]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
-    const { final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions({ signal: ctrl.signal })),
+    const gen = runLoop(
+      chat,
+      makeAppend(chat, transcript),
+      transcript,
+      state,
+      makeOptions({ signal: ctrl.signal }),
     );
-    expect(final.type).toBe("aborted");
-    expect(calls).toBe(1);
+    let final: LoopReturn | undefined;
+    while (true) {
+      const { value, done } = await gen.next();
+      if (done) {
+        final = value;
+        break;
+      }
+      // Abort as the step's output lands — the step turn still records, the
+      // next iteration's top check bails before another LLM call.
+      if (value.type === "step-output") ctrl.abort();
+    }
+    expect(final?.type).toBe("aborted");
+    expect(physicalCalls(chat)).toBe(1);
+    expect(transcript.map((t) => t.kind)).toEqual(["user", "assistant", "step"]);
   });
 
-  test("orphan-turn race: abort during runRound await — no assistant turn pushed", async () => {
-    // Test provider returns a command but the controller is aborted while the
-    // provider promise is resolving. The post-await abort check must see the
-    // aborted signal and return without pushing a transcript turn or yielding
-    // assistant-turn.
+  test("aborted send (LlmAbortError) returns aborted with no assistant turn pushed", async () => {
+    // Core's send rejects with LlmAbortError the moment the signal fires —
+    // the entry was sealed with nothing replayable; the runner must map it
+    // to the aborted return without pushing or yielding a turn.
     const ctrl = new AbortController();
-    const provider: Provider = {
-      runPrompt: async () => {
-        // Abort the signal as the response resolves — simulates the race
-        // where the user pressed Esc just before the call returned.
-        ctrl.abort();
-        return {
-          type: "command",
-          content: "ls",
-          risk_level: "low",
-        } as CommandResponse;
-      },
-    };
+    const chat = stubChat(async () => {
+      ctrl.abort();
+      throw new LlmAbortError();
+    });
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const { events, final } = await drain(
-      runLoop(provider, transcript, scaffold, state, makeOptions({ signal: ctrl.signal })),
+      runLoop(
+        chat,
+        makeAppend(chat, transcript),
+        transcript,
+        state,
+        makeOptions({ signal: ctrl.signal }),
+      ),
     );
     expect(final.type).toBe("aborted");
-    // No assistant-turn yielded.
     expect(events.filter((e) => e.type === "assistant-turn")).toHaveLength(0);
-    // No orphan assistant turn.
     expect(transcript.length).toBe(1);
   });
 
   test("orphan-turn race: abort during step exec returns aborted, no step turn pushed", async () => {
     const ctrl = new AbortController();
-    const { provider } = makeProvider([
-      {
-        type: "command",
-        final: false,
-        content: "true",
-        risk_level: "low",
-        explanation: "ok",
-      } as CommandResponse,
+    const chat = makeChat([
+      { type: "command", final: false, content: "true", risk_level: "low", explanation: "ok" },
     ]);
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const gen = runLoop(
-      provider,
+      chat,
+      makeAppend(chat, transcript),
       transcript,
-      scaffold,
       state,
       makeOptions({ signal: ctrl.signal }),
     );
@@ -366,20 +388,13 @@ describe("runLoop", () => {
   });
 
   test("assistant-turn is yielded BEFORE the runRound throw propagates", async () => {
-    // Simulate a provider that throws after the test provider's first call.
-    let calls = 0;
-    const provider: Provider = {
-      runPrompt: async () => {
-        calls += 1;
-        throw new Error("network down");
-      },
-    };
+    const chat = makeChat("ERROR:network down");
     const transcript: Transcript = [{ kind: "user", text: "hi" }];
     const state: LoopState = { budgetRemaining: 5, roundNum: 0 };
     const events: LoopEvent[] = [];
     let thrown: unknown;
     try {
-      const gen = runLoop(provider, transcript, scaffold, state, makeOptions());
+      const gen = runLoop(chat, makeAppend(chat, transcript), transcript, state, makeOptions());
       while (true) {
         const { value, done } = await gen.next();
         if (done) break;
@@ -391,7 +406,7 @@ describe("runLoop", () => {
     expect(thrown).toBeInstanceOf(Error);
     // The errored turn was still yielded so the consumer can log it.
     expect(events.filter((e) => e.type === "assistant-turn")).toHaveLength(1);
-    expect(calls).toBe(1);
+    expect(physicalCalls(chat)).toBe(1);
   });
 });
 

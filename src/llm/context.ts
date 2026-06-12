@@ -17,9 +17,10 @@ export type QueryContext = {
 /**
  * Assemble the per-session prompt scaffold (system text, static prefix
  * messages, formatted context block). The session calls this once at
- * startup; the runner re-uses everything on every `runRound` call via
- * `buildPromptInput`. The user's bare prompt is NOT part of the scaffold —
- * it's stored as a `user` Turn and framed at projection time.
+ * startup: `system` configures the conversation, `prefixMessages` enter as
+ * real adds at conversation start, and `contextString` feeds the turn
+ * framer. The user's bare prompt is NOT part of the scaffold — it's stored
+ * as a `user` Turn and framed at add time.
  */
 export function assemblePromptScaffold(ctx: QueryContext): PromptScaffold {
   const contextString = formatContext({

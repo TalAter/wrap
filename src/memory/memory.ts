@@ -79,18 +79,16 @@ const InitFactsSchema = z.object({
 /**
  * Load existing memory or initialize by probing the system and asking the
  * LLM. Init is a one-send conversation: the probe dump is the single user
- * message, and the facts arrive through the send's typed result.
- * `initialized` reports whether the init send actually ran — main.ts uses
- * it to keep the legacy query loop's test-playback cursor aligned while the
- * old and new LLM machineries coexist.
+ * message, and the facts arrive through the send's typed result (with the
+ * send's default one-retry parse recovery).
  */
-export async function ensureMemory(llm: Llm): Promise<{ memory: Memory; initialized: boolean }> {
+export async function ensureMemory(llm: Llm): Promise<Memory> {
   const existing = loadMemory();
   if (Object.keys(existing).length > 0) {
     const total = countFacts(existing);
     const globalCount = (existing["/"] ?? []).length;
     verbose(`Memory: ${total} facts (${globalCount} global, ${total - globalCount} scoped)`);
-    return { memory: existing, initialized: false };
+    return existing;
   }
 
   chrome("Learning about your system...", "✨");
@@ -98,15 +96,11 @@ export async function ensureMemory(llm: Llm): Promise<{ memory: Memory; initiali
   verbose("Init: probing OS and shell...");
   const probeOutput = runProbes();
   verbose("Init: calling LLM to extract system facts...");
-  // `retry: false` preserves the legacy exactly-one-physical-call semantics —
-  // and keeps shared WRAP_TEST_RESPONSES consumption deterministic while the
-  // query loop still runs the legacy provider machinery. Revisit at the
-  // main-loop flip.
   const chat = llm.startConversation({ system: INIT_SYSTEM_PROMPT });
   chat.add({ role: "user", content: probeOutput });
   let facts: string[];
   try {
-    ({ facts } = await chat.send(InitFactsSchema, { retry: false }));
+    ({ facts } = await chat.send(InitFactsSchema));
   } catch (e) {
     // Send failures (provider, parse) propagate to main's catch — prefixed
     // here so the user-facing message keeps wrap's voice (vault invariant 3).
@@ -122,5 +116,5 @@ export async function ensureMemory(llm: Llm): Promise<{ memory: Memory; initiali
 
   chrome("Detected OS and shell", "🧠");
 
-  return { memory, initialized: true };
+  return memory;
 }

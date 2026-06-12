@@ -55,10 +55,11 @@ export type WireResponse =
   | { kind: "test" };
 
 /**
- * Bundle emitted by a provider after every physical LLM call. `runRound`
- * subscribes to the notification bus and drains one WireCapture per attempt.
- * A broken wire-builder surfaces as `wire_capture_error`; the invocation
- * still succeeds.
+ * Bundle emitted by a parked legacy provider after a physical LLM call.
+ * Nothing drains it anymore — attempts now derive from core conversation
+ * entries — and it dies with those providers in Unit 7. A broken
+ * wire-builder surfaces as `wire_capture_error`; the invocation still
+ * succeeds.
  */
 export type WireCapture = {
   request_wire?: WireRequest;
@@ -79,8 +80,8 @@ export type AttemptError =
 
 /**
  * One physical LLM call inside an `assistant` turn. Up to four per turn:
- * initial → json-retry → scratchpad-retry → json-retry of the scratchpad.
- * Every successful ladder appends at least one.
+ * two sends (initial, then the scratchpad domain retry), each carrying
+ * core's invisible parse retry. Every successful round appends at least one.
  *
  * Detail-mode-gated fields (`request`, `request_wire`, `response_wire`) are
  * only populated when the user opts in via `logTraces`. `raw_response` keeps
@@ -92,7 +93,7 @@ export type AttemptMeta = {
   /**
    * The parsed response from this specific physical call. Forensic detail —
    * lets the log show, e.g., that the first scratchpad attempt came back
-   * null before the retry. The canonical post-ladder response is on the
+   * null before the retry. The canonical settled response is on the
    * containing assistant turn, not here.
    */
   parsed?: CommandResponse;
@@ -108,13 +109,14 @@ export type AttemptMeta = {
 /**
  * Semantic conversation turn. The LogEntry's `turns[]` and the runtime
  * transcript are the same array — one shape, two consumers (the JSONL
- * writer and the LLM projector).
+ * writer and the add-time turn framer).
  */
 export type Turn =
   /**
    * A user message — the initial query (first user turn) or a follow-up
    * typed into the dialog. Stored as bare text; framing (context,
-   * sectionUserRequest) is applied at projection time only.
+   * sectionUserRequest) is applied by the framer when the turn is added
+   * to the live conversation — never stored.
    */
   | { kind: "user"; text: string }
   /**
@@ -145,7 +147,7 @@ export type Turn =
       exec_ms?: number;
     }
   /**
-   * A skill-emitted probe: one collapsed turn that the projector expands into
+   * A skill-emitted probe: one collapsed turn that the framer expands into
    * an assistant message (the command) + a user message (the captured output).
    */
   | {
