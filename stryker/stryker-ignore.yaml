@@ -2591,3 +2591,158 @@
   mutated: 'true'
   reason: 'guards the pass-through path for non-LlmConfigError exceptions from wrap-core createLlm; in practice createLlm only throws LlmConfigError for config issues — its single non-LlmConfigError throw (ai-sdk.ts:67) is a documented unreachable programming-contract violation, so the mutated behavior differs only on inputs no real caller produces.'
   added: 2026-06-13
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"RoundError"'
+  mutated: '""'
+  reason: 'error.name is cosmetic; runtime never reads it.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'wire.kind === "subprocess"'
+  mutated: 'true'
+  reason: 'subprocess wire-shape transform; the test provider only emits kind="test" wires so this branch is dark under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'wire.kind === "subprocess"'
+  mutated: 'false'
+  reason: 'subprocess wire-shape transform; the test provider only emits kind="test" wires so this branch is dark under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: EqualityOperator
+  original: 'wire.kind === "subprocess"'
+  mutated: 'wire.kind !== "subprocess"'
+  reason: 'subprocess wire-shape transform; the test provider only emits kind="test" wires so this branch is dark under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        const { exitCode, ...rest } = wire;
+        return { ...rest, exit_code: exitCode };
+      }
+  mutated: '{}'
+  reason: 'subprocess wire-shape transform; the test provider only emits kind="test" wires so this branch is dark under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"subprocess"'
+  mutated: '""'
+  reason: 'subprocess wire-shape transform; the test provider only emits kind="test" wires so this branch is dark under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ ...rest, exit_code: exitCode }'
+  mutated: '{}'
+  reason: 'subprocess wire-shape transform; the test provider only emits kind="test" wires so this branch is dark under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'parsed !== undefined'
+  mutated: 'true'
+  reason: '`parsed !== undefined` is a redundant guard given core''s per-entry semantics: an error-bearing entry has parsed undefined, so the assignment is a no-op either way.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'attempt.requestWire'
+  mutated: 'true'
+  reason: 'trace-gating `if (attempt.requestWire)` is equivalent to `if (true)` under the fixture, which always supplies a truthy requestWire.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'attempt.responseWire'
+  mutated: 'true'
+  reason: 'trace-gating `if (attempt.responseWire)` is equivalent to `if (true)` under the fixture, which always supplies a truthy responseWire.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'attempt.rawText !== undefined'
+  mutated: 'true'
+  reason: 'trace-gating `if (attempt.rawText !== undefined)` is equivalent to `if (true)` under the fixture, which always supplies a defined rawText.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'attempt.error.kind === "parse" && attempt.rawText !== undefined'
+  mutated: 'true'
+  reason: 'the parse-failure raw_response breadcrumb is observable only via attempts whose error kind is parse; non-parse error attempts in the unit-test surface have undefined rawText so the assignment is a no-op either way.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: LogicalOperator
+  original: 'attempt.error.kind === "parse" && attempt.rawText !== undefined'
+  mutated: 'attempt.error.kind === "parse" || attempt.rawText !== undefined'
+  reason: 'the parse-failure raw_response breadcrumb is observable only via attempts whose error kind is parse; non-parse error attempts in the unit-test surface have undefined rawText so the assignment is a no-op either way.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'attempt.error.kind === "parse"'
+  mutated: 'true'
+  reason: 'the parse-failure raw_response breadcrumb is observable only via attempts whose error kind is parse; non-parse error attempts in the unit-test surface have undefined rawText so the assignment is a no-op either way.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'attempt.rawText !== undefined'
+  mutated: 'true'
+  reason: 'the parse-failure raw_response breadcrumb is observable only via attempts whose error kind is parse; non-parse error attempts in the unit-test surface have undefined rawText so the assignment is a no-op either way.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: AssignmentOperator
+  original: 'totalMs += attempt.durationMs'
+  mutated: 'totalMs -= attempt.durationMs'
+  reason: 'durationMs accumulation; the test provider returns 0 ms for every send so summed/negated totals collapse to zero either way.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'initial `attempts: []` seed is overwritten by `collect()` before any path returns or throws, so the seed value is unobservable.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '`LLM error: ${message}`'
+  mutated: '``'
+  reason: 'verbose-mode error log line; cosmetic chrome, not asserted by tests.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ signal: options.signal }'
+  mutated: '{}'
+  reason: 'signal forwarding into chat.send; the test provider resolves synchronously so abort-during-send is unobservable under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'options.signal?.aborted'
+  mutated: 'false'
+  reason: 'pre-second-send abort short-circuit; abort-between-sends timing is observable only via integration not in the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ObjectLiteral
+  original: '{ signal: options.signal }'
+  mutated: '{}'
+  reason: 'signal forwarding into chat.send; the test provider resolves synchronously so abort-during-send is unobservable under the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'e instanceof LlmAbortError'
+  mutated: 'false'
+  reason: 're-raise guard for abort-during-second-send; abort timing inside chat.send is observable only via integration not in the unit-test surface.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'isScratchpadRejected(second)'
+  mutated: 'true'
+  reason: 'settle-echo is idempotent for a filled second response — addSettledEcho writes the same projected echoText the predicate already added, so the redundant entry is byte-identical.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: ConditionalExpression
+  original: 'last'
+  mutated: 'true'
+  reason: '`last` is always truthy after `collect()` on any path that reaches this guard — the unconditional first send always produces at least one attempt, so the guard is defensive-only.'
+  added: 2026-06-13
+- file: src/core/round.ts
+  mutator: StringLiteral
+  original: '"LLM returned an empty response."'
+  mutated: '""'
+  reason: 'the error message text on the attempt-level `empty` annotation is cosmetic; tests assert `error.kind` is `empty`, not the message string.'
+  added: 2026-06-13
+
