@@ -254,6 +254,14 @@ describe("createTurnFramer — request framing", () => {
     expect(first[0]?.content).toContain("## User's request\nfirst");
     expect(second[0]?.content).toBe("later follow-up");
   });
+
+  test("framing is consumed exactly once — third user turn stays bare too", () => {
+    const framer = createTurnFramer(framing);
+    framer.frame({ kind: "user", text: "first" });
+    framer.frame({ kind: "user", text: "second" });
+    const third = framer.frame({ kind: "user", text: "third" });
+    expect(third[0]?.content).toBe("third");
+  });
 });
 
 describe("createTurnFramer — final turns (continuation re-adds)", () => {
