@@ -2585,3 +2585,9 @@
   mutated: '``'
   reason: 'cosmetic error message inside the unreachable default branch. Throw still happens, only the message string changes; no caller reads `.message` on this error (the branch is never hit in production).'
   added: 2026-06-13
+- file: src/llm/llm-config.ts
+  mutator: ConditionalExpression
+  original: 'e instanceof LlmConfigError'
+  mutated: 'true'
+  reason: 'guards the pass-through path for non-LlmConfigError exceptions from wrap-core createLlm; in practice createLlm only throws LlmConfigError for config issues — its single non-LlmConfigError throw (ai-sdk.ts:67) is a documented unreachable programming-contract violation, so the mutated behavior differs only on inputs no real caller produces.'
+  added: 2026-06-13
