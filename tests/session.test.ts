@@ -41,6 +41,13 @@ beforeEach(() => {
   injectedPrefix = null;
 });
 
+// Reset after each test as well: the mock.module above is process-global, so
+// a stray `injectedPrefix` value would leak into other test files that import
+// the mocked module (e.g. tests/context.test.ts).
+afterEach(() => {
+  injectedPrefix = null;
+});
+
 describe("runSession — initial low-risk command", () => {
   test("low-risk command runs without dialog and exits 0", async () => {
     const llm = makeLlm([{ type: "command", content: "echo hello", risk_level: "low" }]);
