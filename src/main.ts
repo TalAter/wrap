@@ -90,7 +90,7 @@ export async function main() {
     });
     setTheme(resolveTheme(appearance));
 
-    const resolved = resolveProvider(getConfig());
+    const provider = resolveProvider(getConfig());
     verbose("Config loaded");
 
     // ONE Llm handle per invocation — memory init and the session's
@@ -98,7 +98,7 @@ export async function main() {
     // cursor). createLlm validates eagerly, so this is the "provider
     // initialized" moment. `llm.label` is the one source for the
     // provider/model display string everywhere.
-    const llm = initLlm(resolved);
+    const llm = initLlm(provider);
     verbose(`Provider initialized (${llm.label})`);
 
     let attachedInputPath: string | undefined;
@@ -140,7 +140,7 @@ export async function main() {
     process.exitCode = await runSession(prompt, llm, {
       memory,
       cwd,
-      resolvedProvider: resolved,
+      resolvedProvider: provider,
       skills: SKILLS,
       attachedInputPath,
       attachedInputSize,
