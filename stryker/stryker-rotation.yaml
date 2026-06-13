@@ -70,3 +70,4 @@
 - src/tui/risk-presets.ts
 - src/wizard/write-config.ts
 - src/command-response.schema.ts
+- src/llm/framing.ts
