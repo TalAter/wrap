@@ -420,4 +420,15 @@ describe("formatCommandEcho — wrap's conversation echo predicate", () => {
   test("replies are never domain-rejected", () => {
     expect(formatCommandEcho(answerResponse, "raw")).not.toBeNull();
   });
+
+  test("a high-risk reply with null scratchpad still echoes (only commands are gated)", () => {
+    const highRiskReply: CommandResponse = {
+      _scratchpad: null,
+      type: "reply",
+      final: true,
+      content: "the answer",
+      risk_level: "high",
+    };
+    expect(formatCommandEcho(highRiskReply, "raw")).not.toBeNull();
+  });
 });
