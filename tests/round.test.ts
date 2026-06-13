@@ -350,6 +350,32 @@ describe("runRound — scratchpad retry (domain logic)", () => {
       expect(thrown.turn.response?.content).toBe("echo rm-rf-node-modules-fake");
     }
   });
+
+  test("scratchpad-retry transients (rejected echo, required-instruction) don't replay next round", async () => {
+    const filled = {
+      _scratchpad: "Destructive: blow away deps for a clean install.",
+      type: "command",
+      content: "echo rm-rf-node-modules-fake",
+      risk_level: "high",
+    };
+    const chat = makeChat([
+      rejected,
+      filled,
+      { type: "command", content: "echo done", risk_level: "low" },
+    ]);
+    // Round 1 forces the scratchpad retry, so addRoundDirectives runs a
+    // second time and adds the raw rejected JSON (the only message in any
+    // request that carries `"_scratchpad":null` — echoes strip scratchpad)
+    // plus the required-instruction. Both must be transient.
+    await runRound(chat, defaultOptions);
+    chat.add({ role: "user", content: "follow-up" });
+    await runRound(chat, defaultOptions);
+    const messages = lastRequest(chat)?.messages ?? [];
+    expect(messages.some((m) => m.content.includes('"_scratchpad":null'))).toBe(false);
+    expect(messages.some((m) => m.content === promptConstants.scratchpadRequiredInstruction)).toBe(
+      false,
+    );
+  });
 });
 
 describe("runRound — trace gating (logTraces)", () => {
