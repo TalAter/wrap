@@ -26,6 +26,9 @@ async function initGitRepo(cwd: string): Promise<void> {
   await execIn(cwd, "git init -q");
   await execIn(cwd, "git config user.email test@example.com");
   await execIn(cwd, "git config user.name test");
+  // Inherit-block: ambient commit.gpgsign=true (e.g. Claude's web sandbox) routes
+  // these throwaway repos through a signing server that has no source for them.
+  await execIn(cwd, "git config commit.gpgsign false");
 }
 
 describe("commit skill — trigger", () => {
