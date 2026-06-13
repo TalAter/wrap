@@ -100,6 +100,20 @@ describe("runRound", () => {
     expect(messages.some((m) => m.content === promptConstants.lastRoundInstruction)).toBe(false);
   });
 
+  test("the round's derived attempts cover only this round, not prior rounds'", async () => {
+    const chat = makeChat([
+      { type: "command", content: "ls", risk_level: "low" },
+      { type: "command", content: "echo done", risk_level: "low" },
+    ]);
+    await runRound(chat, defaultOptions);
+    chat.add({ role: "user", content: "follow-up" });
+    const turn = await runRound(chat, defaultOptions);
+    // Round 2 contributed one send: turn.attempts is its single attempt,
+    // not round 1's plus round 2's.
+    expect(turn.attempts).toHaveLength(1);
+    expect(turn.attempts[0]?.parsed?.content).toBe("echo done");
+  });
+
   test("throws RoundError on empty content with the partial round attached", async () => {
     const chat = makeChat([{ type: "reply", content: "   ", risk_level: "low" }]);
     let thrown: unknown;
