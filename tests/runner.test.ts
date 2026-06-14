@@ -422,4 +422,12 @@ describe("fetchesUrl", () => {
   test("returns false for non-fetch step commands", () => {
     expect(fetchesUrl("ls")).toBe(false);
   });
+
+  test("returns false when curl is not the leading command", () => {
+    // The regex anchors at the start: only steps that *begin* with
+    // curl/wget get the 🌐 icon. A pipeline or chained command that
+    // happens to contain `curl …https://…` is a different shape and
+    // must keep the default 🔍 icon.
+    expect(fetchesUrl("ls && curl https://example.com")).toBe(false);
+  });
 });
