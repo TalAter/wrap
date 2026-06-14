@@ -1,12 +1,10 @@
-import { type ParseError, parse } from "jsonc-parser";
+import { ConfigError, loadJsoncConfig, type ProviderEntry } from "wrap-core/config";
 import { wrapFs } from "../fs/home.ts";
 
-/** One entry in the providers map — see specs/llm.md. */
-export type ProviderEntry = {
-  apiKey?: string;
-  baseURL?: string;
-  model?: string;
-};
+/** One entry in the providers map — see specs/llm.md. Re-exported from core
+ *  (`wrap-core/config`) so there's a single definition; wrap consumers keep
+ *  importing it from this module. */
+export type { ProviderEntry };
 
 export type Config = {
   providers?: Record<string, ProviderEntry>;
@@ -56,31 +54,6 @@ export type _DriftCheck = _AssertTrue<
 
 export const CONFIG_FILENAME = "config.jsonc";
 
-function loadFileConfig(): Config {
-  const raw = wrapFs.read(CONFIG_FILENAME);
-  if (raw === null) return {};
-
-  const errors: ParseError[] = [];
-  const parsed = parse(raw, errors, { allowTrailingComma: true });
-
-  if (errors.length > 0) {
-    throw new Error(`Config error: ${CONFIG_FILENAME} contains invalid JSON.`);
-  }
-
-  return parsed ?? {};
-}
-
-function loadEnvConfig(env: Record<string, string | undefined>): Config | undefined {
-  const raw = env.WRAP_CONFIG?.trim();
-  if (!raw) return undefined;
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error("Config error: WRAP_CONFIG contains invalid JSON.");
-  }
-}
-
 /**
  * Load the on-disk config (under `wrapFs.root`) and merge in any
  * `WRAP_CONFIG` env override.
@@ -88,14 +61,20 @@ function loadEnvConfig(env: Record<string, string | undefined>): Config | undefi
  * `envOverrides` exists for the `WRAP_CONFIG` test/CI override only —
  * `WRAP_HOME` is resolved at startup by `wrapFs` and cannot be overridden
  * here. Defaults to `process.env`.
+ *
+ * Delegates file ingestion + env-override folding to `wrap-core/config`. Core
+ * takes a COMPLETE env map (it reads `opts.env ?? process.env`, no merge), so
+ * wrap does the `{ ...process.env, ...envOverrides }` merge itself. Core's
+ * bare `ConfigError` messages are dressed in wrap's "Config error:" voice here.
  */
 export function loadConfig(envOverrides: Record<string, string | undefined> = {}): Config {
-  const env = { ...process.env, ...envOverrides };
-  const fileConfig = loadFileConfig();
-  const envConfig = loadEnvConfig(env);
-
-  if (envConfig === undefined) return fileConfig;
-
-  // Shallow merge: env overrides top-level keys, nested objects replaced entirely
-  return { ...fileConfig, ...envConfig };
+  try {
+    return loadJsoncConfig<Config>(wrapFs, CONFIG_FILENAME, {
+      envOverrideVar: "WRAP_CONFIG",
+      env: { ...process.env, ...envOverrides },
+    });
+  } catch (e) {
+    if (e instanceof ConfigError) throw new Error(`Config error: ${e.message}`);
+    throw e;
+  }
 }

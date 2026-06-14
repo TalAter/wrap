@@ -1,21 +1,14 @@
-import { getRegistration, isKnownProvider, validateProviderEntry } from "wrap-core/llm";
+import { resolveProvider as coreResolveProvider, type ResolvedProvider } from "wrap-core/config";
+import { isKnownProvider, LlmConfigError } from "wrap-core/llm";
 import type { Config, ProviderEntry } from "../config/config.ts";
 
 const NO_LLM_ERROR = "Config error: no LLM configured. Edit ~/.wrap/config.jsonc.";
 
 /** Final state after override resolution — what `initLlm` builds core's
- *  `LlmConfig` from, and what the log entry records as `provider`. */
-export type ResolvedProvider = {
-  name: string;
-  /**
-   * Final model string. Optional because `claude-code` entries may omit it —
-   * the `claude` CLI picks its own default when `--model` is not passed.
-   * All other providers must have a model by the time they reach runtime.
-   */
-  model?: string;
-  apiKey?: string;
-  baseURL?: string;
-};
+ *  `LlmConfig` from, and what the log entry records as `provider`. Re-exported
+ *  from core (`wrap-core/config`) so there's a single definition; other wrap
+ *  files keep importing it from this module. */
+export type { ResolvedProvider };
 
 /**
  * Sentinel `ResolvedProvider` for the test provider. Not user-facing — it's
@@ -104,37 +97,17 @@ export function resolveProvider(
 ): ResolvedProvider {
   if (isTestProviderSelected(env)) return TEST_RESOLVED_PROVIDER;
 
-  const providers = config.providers ?? {};
-  const providerName = config.defaultProvider;
+  // The missing-defaultProvider case keeps wrap's generic NO_LLM_ERROR with its
+  // ~/.wrap remediation — core throws a bare "no LLM configured." for the same
+  // case, so wrap short-circuits it here before delegating. Real-provider
+  // resolution (entry existence, per-entry validation, no-model) is core's;
+  // core's bare `LlmConfigError` messages are dressed in wrap's voice here.
+  if (!config.defaultProvider) throw new Error(NO_LLM_ERROR);
 
-  if (!providerName) throw new Error(NO_LLM_ERROR);
-
-  const entry = providers[providerName];
-  if (!entry) {
-    // After normalization, defaultProvider could name something missing from
-    // the providers map — either a user typo in the config file or a
-    // `--model unknown:x` override that wrote the bad name in. Either way,
-    // the actionable message is "not found" rather than the generic one.
-    throw new Error(`Config error: provider "${providerName}" not found in config.`);
+  try {
+    return coreResolveProvider(config);
+  } catch (e) {
+    if (e instanceof LlmConfigError) throw new Error(`Config error: ${e.message}`);
+    throw e;
   }
-
-  // Per-entry validation runs before the no-model check so a structurally
-  // invalid entry (e.g. ollama without baseURL) reports the actionable error
-  // even when other fields are also missing. Core's validator messages are
-  // bare plain language — wrap's category prefix is applied here, at the
-  // surfacing site.
-  const validationError = validateProviderEntry(providerName, entry);
-  if (validationError) throw new Error(`Config error: ${validationError}`);
-
-  const model = entry.model;
-  if (!model && !getRegistration(providerName).modelOptional) {
-    throw new Error(`Config error: provider "${providerName}" has no model set in config.`);
-  }
-
-  return {
-    name: providerName,
-    model,
-    apiKey: entry.apiKey,
-    baseURL: entry.baseURL,
-  };
 }
