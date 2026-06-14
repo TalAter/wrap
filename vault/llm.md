@@ -2,7 +2,7 @@
 name: llm
 description: Wrap's side of the LLM seam — prompt scaffold, add-time framing, scratchpad retry flow, test-provider env contract, JSONL record derivation
 Source: src/llm/, src/core/round.ts
-Last-synced: eb05626
+Last-synced: a9b4521
 ---
 
 # LLM
@@ -47,7 +47,7 @@ Core's invisible parse retry lives inside `send`; the scratchpad retry is wrap d
 
 ## Provider resolution
 
-`resolve-provider.ts` (config → `ResolvedProvider`) and `parseModelOverride` stay in wrap until config ingestion lifts to core. The registry rules they consult (`isKnownProvider`, `validateProviderEntry`, `getRegistration`) are core's.
+Real-provider resolution and JSONC config loading are core's (`wrap-core/config`: `resolveProvider`, `llmFromResolved`, `loadJsoncConfig`). `resolve-provider.ts` wraps them with wrap's policy — the test sentinel (`TEST_RESOLVED_PROVIDER`), `parseModelOverride` (the `--model` UX), the `NO_LLM_ERROR` remediation, and the `Config error:` voice over core's bare messages. The registry rules (`isKnownProvider`, `validateProviderEntry`, `getRegistration`) are core's too.
 
 ## JSONL record derivation
 
