@@ -11,7 +11,7 @@ Wrap is a CLI that translates plain English into shell commands and runs them. `
 
 This vault is the living reference: **what** Wrap does and **why** decisions were made — never **how** (that's in the code). Code wins on conflict; fix the note. `Source:` points at the code each note describes; `Last-synced` is the sha at which it was last reconciled.
 
-**Before writing or restructuring any note, read [[vault-maintenance]].**
+**Before writing or restructuring any note, read [[vault-maintenance]].** Before writing an implementation spec, read `impl-specs/README.md`.
 
 ---
 
