@@ -1412,3 +1412,42 @@
   mutated: '""'
   reason: 'tag literal on the fall-through return; same unreachable-for-real-callers story as the matching ObjectLiteral at this line.'
   added: 2026-06-14
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"/dev/tty"'
+  mutated: '""'
+  reason: 'default tryOpenTty arrow is the unmocked fallback; all chooseChildStdin tests inject deps, and executeShellCommand''s only caller path (no /dev/tty in CI/sandbox) throws either way and returns "ignore". Observable only on a real TTY.'
+  added: 2026-06-14
+- file: src/core/shell.ts
+  mutator: ArrowFunction
+  original: '() => openSync("/dev/tty", "r")'
+  mutated: '() => undefined'
+  reason: 'same default-fallback path — never invoked by chooseChildStdin tests (they inject tryOpenTty), and in CI without /dev/tty the original throws into the catch just like the undefined-returning mutant misroutes to non-number.'
+  added: 2026-06-14
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"r"'
+  mutated: '""'
+  reason: 'openSync mode literal inside the default tryOpenTty fallback; same unexercised-default story. With "" the call throws → catch → "ignore"; with no /dev/tty the original also throws → "ignore".'
+  added: 2026-06-14
+- file: src/core/shell.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        if (typeof stdin === "number") closeSync(stdin);
+      }
+  mutated: '{}'
+  reason: 'finally-block fd cleanup only fires when chooseChildStdin returned a number (i.e. opened /dev/tty). CI/sandbox tests get "ignore", so the typeof-number guard is false either way and closeSync is never called regardless of mutation.'
+  added: 2026-06-14
+- file: src/core/shell.ts
+  mutator: ConditionalExpression
+  original: 'typeof stdin === "number"'
+  mutated: 'false'
+  reason: 'same fd-cleanup guard — only reachable with a real /dev/tty fd. In test/CI envs stdin is "ignore" so the guard already evaluates false; original and mutant are indistinguishable.'
+  added: 2026-06-14
+- file: src/core/shell.ts
+  mutator: StringLiteral
+  original: '"number"'
+  mutated: '""'
+  reason: '`typeof stdin === ""` is always false (typeof never returns empty string), making this identical to the ConditionalExpression→false mutant; same unreachable-in-test-env story.'
+  added: 2026-06-14
