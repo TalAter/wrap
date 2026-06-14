@@ -114,20 +114,8 @@ export const DARK_THEME: WrapTheme = {
       ],
       pill: { fg: [102, 204, 136], bg: [25, 70, 60] },
     },
-    medium: {
-      frame: [
-        [255, 100, 200],
-        [60, 60, 100],
-      ],
-      pill: { fg: [255, 200, 80], bg: [80, 50, 20] },
-    },
-    high: {
-      frame: [
-        [255, 60, 80],
-        [60, 60, 100],
-      ],
-      pill: { fg: [255, 100, 100], bg: [80, 25, 25] },
-    },
+    medium: DARK_CORE.severity.warning,
+    high: DARK_CORE.severity.danger,
   },
   forget: {
     frame: [
@@ -180,20 +168,8 @@ export const LIGHT_THEME: WrapTheme = {
       ],
       pill: { fg: [15, 125, 55], bg: [215, 238, 220] },
     },
-    medium: {
-      frame: [
-        [175, 35, 115],
-        [170, 170, 195],
-      ],
-      pill: { fg: [160, 95, 0], bg: [248, 232, 200] },
-    },
-    high: {
-      frame: [
-        [190, 25, 45],
-        [170, 170, 195],
-      ],
-      pill: { fg: [190, 25, 45], bg: [248, 218, 218] },
-    },
+    medium: LIGHT_CORE.severity.warning,
+    high: LIGHT_CORE.severity.danger,
   },
   forget: {
     frame: [
