@@ -1,1521 +1,3 @@
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: '!process.stdout.isTTY'
-  mutated: 'process.stdout.isTTY'
-  reason: 'piped flag wiring; scaffold internals not asserted by tests'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'prompt === "" && process.stdin.isTTY === true'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '""'
-  mutated: '"Stryker was here!"'
-  reason: 'no real caller produces this exact literal; mutation only differs on contrived input'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'prompt === ""'
-  mutated: 'prompt !== ""'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'prompt === ""'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: 'true'
-  mutated: 'false'
-  reason: 'internal bookkeeping flag (mountInProgress, etc.); race observable only via integration'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: '!isInteractiveBootstrap'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            const err = e instanceof Error ? e : new Error(String(e));
-            dispatch({ type: "loop-error", error: err });
-            throw err;
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: |-
-    {
-          contextString: scaffold.contextString,
-          sectionUserRequest: scaffold.sectionUserRequest,
-        }
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "loop-error", error: err }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"loop-error"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ tag: "composing-interactive", draft: "" }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"composing-interactive"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '""'
-  mutated: '"Stryker was here!"'
-  reason: 'no real caller produces this exact literal; mutation only differs on contrived input'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: 'false'
-  mutated: 'true'
-  reason: 'internal bookkeeping flag (mountInProgress, etc.); race observable only via integration'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: |-
-    {
-        isDialogLive: () =>
-          state.tag === "processing-followup" ||
-          state.tag === "processing-interactive" ||
-          state.tag === "executing-step",
-        onDialogNotification: (n) => dispatch({ type: "notification", notification: n }),
-      }
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ArrowFunction
-  original: |-
-    () =>
-          state.tag === "processing-followup" ||
-          state.tag === "processing-interactive" ||
-          state.tag === "executing-step"
-  mutated: '() => undefined'
-  reason: 'callback emptied; consumer subsystem (router/notifications/filter) is exercised only indirectly by the integration tests'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    state.tag === "processing-followup" ||
-          state.tag === "processing-interactive" ||
-          state.tag === "executing-step"
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    state.tag === "processing-followup" ||
-          state.tag === "processing-interactive" ||
-          state.tag === "executing-step"
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: |-
-    state.tag === "processing-followup" ||
-          state.tag === "processing-interactive" ||
-          state.tag === "executing-step"
-  mutated: '(state.tag === "processing-followup" || state.tag === "processing-interactive") && state.tag === "executing-step"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: |-
-    state.tag === "processing-followup" ||
-          state.tag === "processing-interactive"
-  mutated: 'state.tag === "processing-followup" && state.tag === "processing-interactive"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    state.tag === "processing-followup" ||
-          state.tag === "processing-interactive"
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "processing-followup"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "processing-followup"'
-  mutated: 'state.tag !== "processing-followup"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"processing-followup"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "processing-interactive"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "processing-interactive"'
-  mutated: 'state.tag !== "processing-interactive"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"processing-interactive"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "executing-step"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "executing-step"'
-  mutated: 'state.tag !== "executing-step"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"executing-step"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ArrowFunction
-  original: '(n) => dispatch({ type: "notification", notification: n })'
-  mutated: '() => undefined'
-  reason: 'callback emptied; consumer subsystem (router/notifications/filter) is exercised only indirectly by the integration tests'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "notification", notification: n }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"notification"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'exited'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    event.type === "key-esc" &&
-          (state.tag === "processing-followup" ||
-            state.tag === "processing-interactive" ||
-            state.tag === "executing-step")
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    event.type === "key-esc" &&
-          (state.tag === "processing-followup" ||
-            state.tag === "processing-interactive" ||
-            state.tag === "executing-step")
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: |-
-    event.type === "key-esc" &&
-          (state.tag === "processing-followup" ||
-            state.tag === "processing-interactive" ||
-            state.tag === "executing-step")
-  mutated: 'event.type === "key-esc" || state.tag === "processing-followup" || state.tag === "processing-interactive" || state.tag === "executing-step"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'event.type === "key-esc"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'event.type === "key-esc"'
-  mutated: 'event.type !== "key-esc"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"key-esc"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    state.tag === "processing-followup" ||
-            state.tag === "processing-interactive" ||
-            state.tag === "executing-step"
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: |-
-    state.tag === "processing-followup" ||
-            state.tag === "processing-interactive" ||
-            state.tag === "executing-step"
-  mutated: '(state.tag === "processing-followup" || state.tag === "processing-interactive") && state.tag === "executing-step"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    state.tag === "processing-followup" ||
-            state.tag === "processing-interactive"
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: |-
-    state.tag === "processing-followup" ||
-            state.tag === "processing-interactive"
-  mutated: 'state.tag === "processing-followup" && state.tag === "processing-interactive"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "processing-followup"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "processing-followup"'
-  mutated: 'state.tag !== "processing-followup"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"processing-followup"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "processing-interactive"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "processing-interactive"'
-  mutated: 'state.tag !== "processing-interactive"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"processing-interactive"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "executing-step"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "executing-step"'
-  mutated: 'state.tag !== "executing-step"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"executing-step"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          currentLoopAbort?.abort();
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: OptionalChaining
-  original: 'currentLoopAbort?.abort'
-  mutated: 'currentLoopAbort.abort'
-  reason: 'optional chaining is defensive at this call site; surrounding control flow guarantees the target is non-null when the line runs'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'next === state'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "exiting"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: 'true'
-  mutated: 'false'
-  reason: 'internal bookkeeping flag (mountInProgress, etc.); race observable only via integration'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag !== prevTag'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag !== prevTag'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag !== prevTag'
-  mutated: 'state.tag === prevTag'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "processing-followup"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "processing-followup"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'entered && state.tag === "processing-followup"'
-  mutated: 'entered || state.tag === "processing-followup"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "processing-followup"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "processing-followup"'
-  mutated: 'state.tag !== "processing-followup"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"processing-followup"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          // submit-followup just landed. The previous assistant turn is already
-          // in the transcript; we push a follow-up user turn so the LLM sees
-          // `[..., assistant, user]` — no message-history hygiene needed.
-          const followupText = state.draft;
-          transcript.push({ kind: "user", text: followupText });
-          loopState.budgetRemaining = maxRounds;
-          startPumpLoop();
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ kind: "user", text: followupText }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"user"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "processing-interactive"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "processing-interactive"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'entered && state.tag === "processing-interactive"'
-  mutated: 'entered || state.tag === "processing-interactive"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "processing-interactive"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "processing-interactive"'
-  mutated: 'state.tag !== "processing-interactive"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"processing-interactive"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          // submit-interactive just landed on an empty transcript. Run skills
-          // first (silent, ≤1s/task), then seed [skill turns..., user turn].
-          // Framing is applied per-call by `requestFraming`. The chrome spinner
-          // is suppressed automatically because startPumpLoop reads
-          // isDialogTag(state.tag) — dialog is up.
-          const draft = state.draft;
-          entry.input_source = "tui";
-          // --verbose buffers lines through the notification bus while the dialog
-          // is up and flushes on teardown, so this prompt echo lands in scrollback
-          // after the invocation finishes — users get to see exactly what they
-          // submitted without the live dialog competing for attention.
-          if (config.verbose) {
-            for (const line of draft.split("\n")) verbose(`prompt: ${line}`);
-          }
-          void seedAndPumpInteractive(draft);
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"tui"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'config.verbose'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'config.verbose'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            for (const line of draft.split("\n")) verbose(`prompt: ${line}`);
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"\n"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '`prompt: ${line}`'
-  mutated: '``'
-  reason: 'no observable behavior change at the unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "editor-handoff"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "editor-handoff"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'entered && state.tag === "editor-handoff"'
-  mutated: 'entered || state.tag === "editor-handoff"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "editor-handoff"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "editor-handoff"'
-  mutated: 'state.tag !== "editor-handoff"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"editor-handoff"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          void beginEditorHandoff(state.draft);
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "executing-step"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'entered && state.tag === "executing-step"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'entered && state.tag === "executing-step"'
-  mutated: 'entered || state.tag === "executing-step"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "executing-step"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'state.tag === "executing-step"'
-  mutated: 'state.tag !== "executing-step"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"executing-step"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          // submit-step-confirm hook: the user just confirmed a non-final
-          // med/high step (or finished editing one). Capture its output,
-          // emit step-output through the bus, push a step turn, reset budget,
-          // then re-enter pumpLoop for the next round.
-          void runConfirmedStep(state.response, state.source);
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        const ctrl = new AbortController();
-        currentLoopAbort = ctrl;
-        try {
-          const exec = await executeShellCommand(response.content, { mode: "capture" });
-          if (ctrl.signal.aborted) return;
-          let stepOutput = exec.stdout;
-          if (exec.stderr.trim()) {
-            stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
-          }
-          stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
-          notifications.emit({ kind: "step-output", text: stepOutput });
-          transcript.push({
-            kind: "step",
-            command: response.content,
-            exit_code: exec.exitCode,
-            output: stepOutput,
-            shell: exec.shell,
-            source,
-            exec_ms: exec.exec_ms,
-          });
-          loopState.budgetRemaining = maxRounds;
-          startPumpLoop();
-        } catch (e) {
-          if (ctrl.signal.aborted) return;
-          const err = e instanceof Error ? e : new Error(String(e));
-          dispatch({ type: "loop-error", error: err });
-        }
-      }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          const exec = await executeShellCommand(response.content, { mode: "capture" });
-          if (ctrl.signal.aborted) return;
-          let stepOutput = exec.stdout;
-          if (exec.stderr.trim()) {
-            stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
-          }
-          stepOutput = truncateMiddle(stepOutput, maxCapturedOutput);
-          notifications.emit({ kind: "step-output", text: stepOutput });
-          transcript.push({
-            kind: "step",
-            command: response.content,
-            exit_code: exec.exitCode,
-            output: stepOutput,
-            shell: exec.shell,
-            source,
-            exec_ms: exec.exec_ms,
-          });
-          loopState.budgetRemaining = maxRounds;
-          startPumpLoop();
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ mode: "capture" }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"capture"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'exec.stderr.trim()'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'exec.stderr.trim()'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: MethodExpression
-  original: 'exec.stderr.trim()'
-  mutated: 'exec.stderr'
-  reason: 'differs only on whitespace-only or empty inputs not produced by real callers; cosmetic chrome counter even if hit'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr;
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: AssignmentOperator
-  original: 'stepOutput += (stepOutput.trim() ? "\n" : "") + exec.stderr'
-  mutated: 'stepOutput -= (stepOutput.trim() ? "\n" : "") + exec.stderr'
-  reason: 'stepOutput accumulation; resulting NaN-coerced value is consumed only by dialog-driven step-output emission not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ArithmeticOperator
-  original: '(stepOutput.trim() ? "\n" : "") + exec.stderr'
-  mutated: '(stepOutput.trim() ? "\n" : "") - exec.stderr'
-  reason: 'string concatenation arithmetic; produces NaN-coerced output not asserted by current tests'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: MethodExpression
-  original: 'stepOutput.trim()'
-  mutated: 'stepOutput'
-  reason: 'differs only on whitespace-only or empty inputs not produced by real callers; cosmetic chrome counter even if hit'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"\n"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '""'
-  mutated: '"Stryker was here!"'
-  reason: 'no real caller produces this exact literal; mutation only differs on contrived input'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ kind: "step-output", text: stepOutput }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"step-output"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: |-
-    {
-            kind: "step",
-            command: response.content,
-            exit_code: exec.exitCode,
-            output: stepOutput,
-            shell: exec.shell,
-            source,
-            exec_ms: exec.exec_ms,
-          }
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"step"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          if (ctrl.signal.aborted) return;
-          const err = e instanceof Error ? e : new Error(String(e));
-          dispatch({ type: "loop-error", error: err });
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "loop-error", error: err }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"loop-error"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          await seedFirstUserTurn(options.skills, draft, transcript);
-          if (ctrl.signal.aborted) return;
-          loopState.budgetRemaining = maxRounds;
-          startPumpLoop();
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        const ctrl = new AbortController();
-        currentLoopAbort = ctrl;
-        try {
-          await seedFirstUserTurn(options.skills, draft, transcript);
-          if (ctrl.signal.aborted) return;
-          loopState.budgetRemaining = maxRounds;
-          startPumpLoop();
-        } catch (e) {
-          if (ctrl.signal.aborted) return;
-          const err = e instanceof Error ? e : new Error(String(e));
-          dispatch({ type: "loop-error", error: err });
-        }
-      }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          if (ctrl.signal.aborted) return;
-          const err = e instanceof Error ? e : new Error(String(e));
-          dispatch({ type: "loop-error", error: err });
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'ctrl.signal.aborted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "loop-error", error: err }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        try {
-          if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-            process.stdin.setRawMode(false);
-          }
-          const resolved = resolveEditor();
-          if (!resolved) {
-            dispatch({ type: "editor-done", text: null });
-            return;
-          }
-          const newText = await spawnEditor(resolved, handoffDraft);
-          dispatch({ type: "editor-done", text: newText });
-        } catch {
-          dispatch({ type: "editor-done", text: null });
-        }
-      }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"loop-error"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-            process.stdin.setRawMode(false);
-          }
-          const resolved = resolveEditor();
-          if (!resolved) {
-            dispatch({ type: "editor-done", text: null });
-            return;
-          }
-          const newText = await spawnEditor(resolved, handoffDraft);
-          dispatch({ type: "editor-done", text: newText });
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'process.stdin.isTTY && typeof process.stdin.setRawMode === "function"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'process.stdin.isTTY && typeof process.stdin.setRawMode === "function"'
-  mutated: 'process.stdin.isTTY || typeof process.stdin.setRawMode === "function"'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'process.stdin.isTTY && typeof process.stdin.setRawMode === "function"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'typeof process.stdin.setRawMode === "function"'
-  mutated: 'true'
-  reason: 'branch in orchestration glue; not observable without dialog/integration coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 'typeof process.stdin.setRawMode === "function"'
-  mutated: 'typeof process.stdin.setRawMode !== "function"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"function"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            process.stdin.setRawMode(false);
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: 'false'
-  mutated: 'true'
-  reason: 'internal bookkeeping flag (mountInProgress, etc.); race observable only via integration'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: '!resolved'
-  mutated: 'resolved'
-  reason: 'editor-resolution guard; alternate branch covered only by GUI-editor integration paths'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: '!resolved'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: '!resolved'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            dispatch({ type: "editor-done", text: null });
-            return;
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "editor-done", text: null }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"editor-done"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "editor-done", text: newText }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"editor-done"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          dispatch({ type: "editor-done", text: null });
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ type: "editor-done", text: null }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"editor-done"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-        const wantsDialog = isDialogTag(state.tag);
-        const mounted = router.isDialogMounted();
-    
-        if (wantsDialog && mountInProgress) return;
-    
-        const continuationPrompt = options.continuationParent?.parentPrompt;
-    
-        if (wantsDialog && !mounted) {
-          mountInProgress = true;
-          try {
-            if (inkReady) await inkReady;
-            router.setDialog(mountResponseDialog({ state, dispatch, continuationPrompt }));
-          } finally {
-            mountInProgress = false;
-          }
-          // State may have moved during the await (e.g. user Esc'd while we
-          // were mounting). The recursive call is sync from here — host is set.
-          void syncDialog();
-          return;
-        }
-    
-        if (wantsDialog && mounted) {
-          router.getDialog()?.rerender({ state, dispatch, continuationPrompt });
-          return;
-        }
-    
-        if (!wantsDialog && mounted) {
-          router.teardownDialog();
-        }
-      }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'wantsDialog && mountInProgress'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'wantsDialog && mountInProgress'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'wantsDialog && mountInProgress'
-  mutated: 'wantsDialog || mountInProgress'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'wantsDialog && !mounted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: '!mounted'
-  mutated: 'mounted'
-  reason: 'mount-state guard; the alternate branch is unreachable in single-threaded test runs'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          mountInProgress = true;
-          try {
-            if (inkReady) await inkReady;
-            router.setDialog(mountResponseDialog({ state, dispatch, continuationPrompt }));
-          } finally {
-            mountInProgress = false;
-          }
-          // State may have moved during the await (e.g. user Esc'd while we
-          // were mounting). The recursive call is sync from here — host is set.
-          void syncDialog();
-          return;
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: 'true'
-  mutated: 'false'
-  reason: 'internal bookkeeping flag (mountInProgress, etc.); race observable only via integration'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            if (inkReady) await inkReady;
-            router.setDialog(mountResponseDialog({ state, dispatch, continuationPrompt }));
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'inkReady'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'inkReady'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ state, dispatch, continuationPrompt }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-            mountInProgress = false;
-          }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: 'false'
-  mutated: 'true'
-  reason: 'internal bookkeeping flag (mountInProgress, etc.); race observable only via integration'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'wantsDialog && mounted'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'wantsDialog && mounted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: 'wantsDialog && mounted'
-  mutated: 'wantsDialog || mounted'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          router.getDialog()?.rerender({ state, dispatch, continuationPrompt });
-          return;
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: OptionalChaining
-  original: 'router.getDialog()?.rerender'
-  mutated: 'router.getDialog().rerender'
-  reason: 'optional chaining is defensive at this call site; surrounding control flow guarantees the target is non-null when the line runs'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ state, dispatch, continuationPrompt }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: '!wantsDialog && mounted'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: '!wantsDialog && mounted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: LogicalOperator
-  original: '!wantsDialog && mounted'
-  mutated: '!wantsDialog || mounted'
-  reason: 'compound tag check; alternate combination produces an unreachable state for the current test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BooleanLiteral
-  original: '!wantsDialog'
-  mutated: 'wantsDialog'
-  reason: 'dialog-want guard; alternate branch only fires under live dialog state not in test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          router.teardownDialog();
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'state.tag === "thinking"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: '!isInteractiveBootstrap'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          // Mount the compose dialog immediately so the user can start typing.
-          void syncDialog();
-        }
-  mutated: '{}'
-  reason: 'block body emptied; observable only through error-path or dialog-driven integration not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'skillTurns.length'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"assistant-turn"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    case "step-output":
-            notifications.emit({ kind: "step-output", text: event.text });
-            return;
-  mutated: 'case "step-output":'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"step-output"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ kind: "step-output", text: event.text }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"step-output"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'signal.aborted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'final === undefined'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'signal.aborted'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ArithmeticOperator
-  original: 'entry.turns.length - 1'
-  mutated: 'entry.turns.length + 1'
-  reason: 'lastProposedCommand loop is bounded by i >= 0; the extra start offset traverses undefined entries harmlessly thanks to turn?.kind'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 'turn?.kind === "assistant"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: OptionalChaining
-  original: 'turn?.kind'
-  mutated: 'turn.kind'
-  reason: 'optional chaining is defensive at this call site; surrounding control flow guarantees the target is non-null when the line runs'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: MethodExpression
-  original: 'entry.turns.filter((t) => t.kind === "assistant")'
-  mutated: 'entry.turns'
-  reason: 'differs only on whitespace-only or empty inputs not produced by real callers; cosmetic chrome counter even if hit'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ArrowFunction
-  original: '(t) => t.kind === "assistant"'
-  mutated: '() => undefined'
-  reason: 'callback emptied; consumer subsystem (router/notifications/filter) is exercised only indirectly by the integration tests'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 't.kind === "assistant"'
-  mutated: 'true'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: 't.kind === "assistant"'
-  mutated: 'false'
-  reason: 'dialog-driven / state-tag branch; the alternate branch is not exercised by the current unit-test surface, which mocks dispatch and observes outcomes rather than per-branch behavior'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: EqualityOperator
-  original: 't.kind === "assistant"'
-  mutated: 't.kind !== "assistant"'
-  reason: 'tag-equality flip; surviving for the same reason as the wrapping conditional — dialog-driven branch not in unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"assistant"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ObjectLiteral
-  original: '{ mode: "inherit" }'
-  mutated: '{}'
-  reason: 'internal dispatch event / transcript-turn shape; downstream consumers tolerate empty payload in the absence of dialog-driven test coverage'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '"inherit"'
-  mutated: '""'
-  reason: 'internal event/turn/tag identifier; the receiving reducer/router path is not exercised under current unit-test surface'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: ConditionalExpression
-  original: |-
-    default: {
-          const _exhaustive: never = outcome;
-          throw new Error(`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`);
-        }
-  mutated: 'default:'
-  reason: 'exhaustive default branch is unreachable in a type-safe codebase (_exhaustive: never)'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: BlockStatement
-  original: |-
-    {
-          const _exhaustive: never = outcome;
-          throw new Error(`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`);
-        }
-  mutated: '{}'
-  reason: 'exhaustive default branch is unreachable in a type-safe codebase (_exhaustive: never)'
-  added: 2026-06-03
-- file: src/session/session.ts
-  mutator: StringLiteral
-  original: '`unhandled session outcome: ${(_exhaustive as { kind: string }).kind}`'
-  mutated: '``'
-  reason: 'exhaustive default branch is unreachable in a type-safe codebase (_exhaustive: never)'
-  added: 2026-06-03
 - file: src/subcommands/forget-delete.ts
   mutator: BlockStatement
   original: |-
@@ -2746,3 +1228,187 @@
   reason: 'the error message text on the attempt-level `empty` annotation is cosmetic; tests assert `error.kind` is `empty`, not the message string.'
   added: 2026-06-13
 
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'response.memory_updates_message'
+  mutated: 'true'
+  reason: 'cosmetic chrome: gates an 🧠 banner line (text/stderr UI). Tests don''t assert chrome rendering.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 's !== null'
+  mutated: 'true'
+  reason: 'defensive null filter on resolvePath() output; real cwd-relative scopes always resolve in the unit-test surface.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'scopes.sort((a, b) => b.length - a.length)'
+  mutated: 'scopes'
+  reason: 'ordering of the chrome banner''s deepest-scope label; cosmetic, not asserted by tests.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ArrowFunction
+  original: '(a, b) => b.length - a.length'
+  mutated: '() => undefined'
+  reason: 'sort comparator that controls which scope label prefixes the chrome banner; cosmetic.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ArithmeticOperator
+  original: 'b.length - a.length'
+  mutated: 'b.length + a.length'
+  reason: 'sort key for the chrome banner''s deepest-scope label; cosmetic.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.budgetRemaining > 0'
+  mutated: 'state.budgetRemaining >= 0'
+  reason: 'boundary at budgetRemaining=0; runLoop is only entered with a positive budget (session resets to maxRounds), so the alt branch covers an input no real caller produces.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'options.signal?.aborted'
+  mutated: 'false'
+  reason: 'only observable difference is one extra roundNum increment before runRound forwards the aborted signal and rejects with LlmAbortError (same final ''aborted'' outcome, 0 physical calls). Judge rejected the roundNum-counter assertion as bound-to-implementation.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'state.roundNum > 1'
+  mutated: 'true'
+  reason: 'verbose-only chrome: gates the ''Round N/maxRounds'' debug line on rounds after the first. No runtime behavior change.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: EqualityOperator
+  original: 'state.roundNum > 1'
+  mutated: 'state.roundNum >= 1'
+  reason: 'same verbose-only chrome line as above; the off-by-one differs only on round 1, an output-only difference.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'isLastRound'
+  mutated: 'true'
+  reason: 'verbose-only chrome: gates the ''Final round: must return command or answer'' debug line. No runtime behavior change.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object" && "turn" in e'
+  mutated: 'true'
+  reason: 'defensive shape check for the partial-turn extraction; RoundError is the only realistic throw shape and satisfies the original predicate. Mutated branch reaches `.turn` on errors that don''t carry one — value is undefined and the subsequent `if (partial)` guard skips, same observable outcome.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object" && "turn" in e'
+  mutated: '(e !== null && typeof e === "object") || "turn" in e'
+  reason: 'compound predicate guarding partial-turn extraction; same equivalent-mutant story as the matching ConditionalExpression — RoundError satisfies both forms identically.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'true'
+  reason: 'defensive object-shape sub-predicate; for the only realistic throw (RoundError) the original is already true. Same equivalent-mutant story as the surrounding compound.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: LogicalOperator
+  original: 'e !== null && typeof e === "object"'
+  mutated: 'e !== null || typeof e === "object"'
+  reason: 'compound sub-predicate; RoundError satisfies both AND and OR forms identically. Equivalent for real throws.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'e !== null'
+  mutated: 'true'
+  reason: 'defensive null guard inside the partial-turn type check. RoundError is the only realistic throw; null/string/number throws are not produced by runRound''s contract.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'typeof e === "object"'
+  mutated: 'true'
+  reason: 'defensive object-type guard inside the partial-turn type check. RoundError is the only realistic throw shape.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'partial'
+  mutated: 'true'
+  reason: 'defensive null guard on the extracted partial turn. The preceding type-check predicate already gates non-RoundError throws to null, so the only path that reaches `if (partial)` with a falsy value is unreachable in practice.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'options.signal?.aborted'
+  mutated: 'false'
+  reason: 'post-runRound belt-and-braces abort check; the LlmAbortError catch above already handles mid-send aborts, leaving this re-check unreachable in practice.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: '{ type: "aborted" }'
+  mutated: '{}'
+  reason: 'return value of the unreachable belt-and-braces abort branch (see matching ConditionalExpression at the same line).'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"aborted"'
+  mutated: '""'
+  reason: 'tag literal on the unreachable belt-and-braces abort branch (see matching ConditionalExpression at the same line).'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: '!response'
+  mutated: 'false'
+  reason: 'defensive guard with a comment calling it out as such; runRound''s contract guarantees `turn.response` on a successful return, so the throw branch is unreachable in practice.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          // runRound's contract guarantees a response on success — defensive.
+          throw new Error("runRound returned an assistant turn without a response");
+        }
+  mutated: '{}'
+  reason: 'throw block on the unreachable defensive branch (see matching `!response` ConditionalExpression at the same line).'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"runRound returned an assistant turn without a response"'
+  mutated: '""'
+  reason: 'error-message text on the unreachable defensive throw; cosmetic even if hit.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ConditionalExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'true'
+  reason: 'branch differs only when stderr is whitespace-only (real shell commands don''t produce that for low-risk steps); even when hit, the only effect is a cosmetic blank stderr suffix on the captured step output.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'exec.stderr.trim()'
+  mutated: 'exec.stderr'
+  reason: 'differs only on whitespace-only stderr — same equivalent-mutant case as the surrounding ConditionalExpression at this line.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: MethodExpression
+  original: 'stepOutput.trim()'
+  mutated: 'stepOutput'
+  reason: 'differs only on whitespace-only stdout, where the separator decision is cosmetic anyway (no real boundary to preserve).'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'the empty-separator branch only runs when stdout is whitespace-only; even with the contrived literal, the LLM input is just slightly noisier — no behavioral assertion in tests touches it.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"model"'
+  mutated: '""'
+  reason: 'step-turn `source` is logged but not used by the framer for step turns (formatStepBody only reads output/exit_code). Real callers see no observable change.'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: ObjectLiteral
+  original: '{ type: "exhausted" }'
+  mutated: '{}'
+  reason: 'fall-through return after the while-loop guard fails. Only reachable when budgetRemaining starts at 0, which no real caller produces (session always resets to a positive maxRounds before entering runLoop).'
+  added: 2026-06-14
+- file: src/core/runner.ts
+  mutator: StringLiteral
+  original: '"exhausted"'
+  mutated: '""'
+  reason: 'tag literal on the fall-through return; same unreachable-for-real-callers story as the matching ObjectLiteral at this line.'
+  added: 2026-06-14
