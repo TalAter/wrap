@@ -115,7 +115,7 @@ export function ProvidersSection({
       gradientStops={getWizardStops()}
       top={{ segs, narrowSegs, align: "left" }}
       bottomStatus={bottomStatus}
-      naturalContentWidth={WIZARD_CONTENT_WIDTH}
+      sizeTo={[WIZARD_CONTENT_WIDTH]}
     >
       {(innerWidth) => (
         <>

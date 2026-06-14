@@ -44,7 +44,7 @@ export function NerdIconsSection({ onDone, onCancel }: NerdIconsSectionProps) {
     <Dialog
       gradientStops={getWizardStops()}
       top={{ segs: wizardLabelPill(), align: "left" }}
-      naturalContentWidth={WIZARD_CONTENT_WIDTH}
+      sizeTo={[WIZARD_CONTENT_WIDTH]}
     >
       <Box flexDirection="column">
         <Text>Do you see four icons below?</Text>

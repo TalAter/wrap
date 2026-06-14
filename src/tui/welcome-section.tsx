@@ -78,7 +78,7 @@ export function WelcomeSection({ onDone, onCancel }: WelcomeSectionProps) {
   const PAD_LEFT = 3;
 
   return (
-    <Dialog gradientStops={getWizardStops()} naturalContentWidth={contentWidth}>
+    <Dialog gradientStops={getWizardStops()} sizeTo={[contentWidth]}>
       {showAnimation ? (
         <Box flexDirection="row" height={CANVAS_HEIGHT}>
           <Box

@@ -5,6 +5,7 @@ import { resolveColorHex } from "wrap-core/ansi";
 import {
   ActionBar,
   type ActionItem,
+  contentNaturalWidth,
   Dialog,
   dialogInnerWidth,
   formatContinuationBadge,
@@ -363,11 +364,8 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
   const { columns: termCols, rows: termRows } = useWindowSize();
   const showFollowupInput =
     state.tag === "composing-followup" || state.tag === "processing-followup";
-  const naturalContentWidth = Math.max(
-    stringWidth(command),
-    explanation ? stringWidth(explanation) : 0,
-    plan ? stringWidth(plan) : 0,
-    showFollowupInput ? stringWidth(draft) : 0,
+  const naturalContentWidth = contentNaturalWidth(
+    [command, explanation, plan, showFollowupInput && draft],
     MIN_INNER_WIDTH,
   );
 
@@ -554,7 +552,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
           align: "left",
         }}
         bottomStatus={bottomStatus}
-        naturalContentWidth={MIN_INNER_WIDTH}
+        sizeTo={[MIN_INNER_WIDTH]}
       >
         {badge && (
           <Box paddingLeft={1}>
@@ -606,7 +604,7 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
       gradientStops={preset.stops}
       top={{ segs: [preset.pill], align: "right" }}
       bottomStatus={bottomStatus}
-      naturalContentWidth={naturalContentWidth}
+      sizeTo={[naturalContentWidth]}
     >
       {badge && (
         <Box paddingLeft={1}>

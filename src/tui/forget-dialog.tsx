@@ -74,7 +74,7 @@ export function ForgetDialog({ footprints, onSubmit, onCancel }: Props) {
   const stops = t.forget.frame;
 
   return (
-    <Dialog gradientStops={stops} naturalContentWidth={CONTENT_WIDTH}>
+    <Dialog gradientStops={stops} sizeTo={[CONTENT_WIDTH]}>
       <Box flexDirection="column">
         <Checklist
           items={items}

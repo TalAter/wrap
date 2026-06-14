@@ -21,11 +21,7 @@ describe("Dialog (generic chrome)", () => {
   test("renders arbitrary children inside the bordered frame", () => {
     const { lastFrame } = render(
       <TP>
-        <Dialog
-          gradientStops={lowStops}
-          top={{ segs: [lowPill], align: "right" }}
-          naturalContentWidth={40}
-        >
+        <Dialog gradientStops={lowStops} top={{ segs: [lowPill], align: "right" }} sizeTo={[40]}>
           <Text>hello wizard</Text>
         </Dialog>
       </TP>,
@@ -39,11 +35,7 @@ describe("Dialog (generic chrome)", () => {
   test("embeds the provided pill in the top border", () => {
     const { lastFrame } = render(
       <TP>
-        <Dialog
-          gradientStops={medStops}
-          top={{ segs: [medPill], align: "right" }}
-          naturalContentWidth={40}
-        >
+        <Dialog gradientStops={medStops} top={{ segs: [medPill], align: "right" }} sizeTo={[40]}>
           <Text>body</Text>
         </Dialog>
       </TP>,
@@ -54,7 +46,7 @@ describe("Dialog (generic chrome)", () => {
   test("renders without a pill when none is supplied", () => {
     const { lastFrame } = render(
       <TP>
-        <Dialog gradientStops={medStops} naturalContentWidth={40}>
+        <Dialog gradientStops={medStops} sizeTo={[40]}>
           <Text>plain</Text>
         </Dialog>
       </TP>,
@@ -71,7 +63,7 @@ describe("Dialog (generic chrome)", () => {
           gradientStops={lowStops}
           top={{ segs: [lowPill], align: "right" }}
           bottomStatus="Loading models list…"
-          naturalContentWidth={40}
+          sizeTo={[40]}
         >
           <Text>body</Text>
         </Dialog>
