@@ -1533,3 +1533,61 @@
   mutated: '""'
   reason: 'cosmetic chrome icon for "Detected OS and shell"; existing tests assert the text but not the icon, and the icon is purely decorative.'
   added: 2026-06-15
+
+- file: src/logging/entry.ts
+  mutator: EqualityOperator
+  original: 'provider.apiKey.length >= 4'
+  mutated: 'provider.apiKey.length > 4'
+  reason: 'boundary differs only at apiKey.length === 4. Real provider keys are ≥20 chars; the threshold is a fingerprint-vs-mask preference and the mutated branch is actually more conservative (fully masks a 4-char key). Binding a corner-case test paraphrases the implementation.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: LogicalOperator
+  original: |-
+    params.attachedInputPath !== undefined &&
+        params.attachedInputSize !== undefined &&
+        params.attachedInputPreview !== undefined
+  mutated: |-
+    params.attachedInputPath !== undefined && params.attachedInputSize !== undefined || params.attachedInputPreview !== undefined
+  reason: 'attached_input three-field guard. Callers (src/main.ts) set all three together or none — the three values are an all-or-none tuple under the runtime contract, so AND/OR variations are indistinguishable.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: |-
+    params.attachedInputPath !== undefined &&
+        params.attachedInputSize !== undefined
+  mutated: 'true'
+  reason: 'first two clauses of the attached_input three-field guard collapse to true. Under the all-or-none caller contract (src/main.ts), the surviving third clause yields the same control flow.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: LogicalOperator
+  original: |-
+    params.attachedInputPath !== undefined &&
+        params.attachedInputSize !== undefined
+  mutated: |-
+    params.attachedInputPath !== undefined || params.attachedInputSize !== undefined
+  reason: 'AND→OR on the first two clauses of the attached_input guard. Same all-or-none caller contract — path and size are either both defined or both undefined, so AND ≡ OR.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.attachedInputPath !== undefined'
+  mutated: 'true'
+  reason: 'path-undefined guard inside the attached_input three-field check. Under the all-or-none caller contract path is defined iff size and preview are; the surviving two guards already cover the same control flow.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.attachedInputSize !== undefined'
+  mutated: 'true'
+  reason: 'size-undefined guard inside the attached_input three-field check. Same all-or-none caller contract as the path/preview siblings.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.attachedInputPreview !== undefined'
+  mutated: 'true'
+  reason: 'preview-undefined guard inside the attached_input three-field check. Same all-or-none caller contract as the path/size siblings.'
+  added: 2026-06-15
+- file: src/logging/entry.ts
+  mutator: ConditionalExpression
+  original: 'params.inputSource !== undefined'
+  mutated: 'true'
+  reason: 'input_source assignment guard. With the guard forced true, `entry.input_source = undefined` is assigned; JSON.stringify omits undefined-valued properties so the on-disk JSONL is byte-identical. Only `"input_source" in entry` (in-memory) would differ and no test exercises that.'
+  added: 2026-06-15
