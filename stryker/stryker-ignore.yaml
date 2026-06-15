@@ -1488,3 +1488,48 @@
   mutated: 'true'
   reason: 'SETTINGS.model.env has exactly one entry, so the loop runs at most once. When v is undefined the mutant returns undefined and the original falls through to the function''s final `return undefined` — same result. When v is a non-empty string both branches return it.'
   added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        throw memoryError(path);
+      }
+  mutated: '{}'
+  reason: 'equivalent — when the catch swallows the throw, `parsed` stays undefined and the next-line `safeParse(undefined)` fails, so the function still throws `memoryError(path)` with the same message. Both tests (corrupt JSON, error includes path) keep passing.'
+  added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: LogicalOperator
+  original: 'existing["/"] ?? []'
+  mutated: 'existing["/"] && []'
+  reason: 'guards a runtime invariant: init seeds memory with the "/" scope, so existing memory always has "/" by the time ensureMemory takes the early-return branch. The wrong globalCount and the unreachable TypeError only manifest on inputs no real caller produces.'
+  added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: StringLiteral
+  original: '"/"'
+  mutated: '""'
+  reason: 'verbose-log diagnostic — globalCount feeds only the `Memory: N facts (X global, Y scoped)` verbose line; verbose mode is off in tests and asserting exact wording would paraphrase the implementation.'
+  added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'verbose-log diagnostic — `?? []` fallback only fires when "/" is missing, which the init invariant prevents; even when reached the result is just a wrong number in the verbose log.'
+  added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: ArithmeticOperator
+  original: 'total - globalCount'
+  mutated: 'total + globalCount'
+  reason: 'verbose-log arithmetic — `scoped = total - global` is shown only inside the verbose `Memory: …` line; verbose mode off in tests and asserting exact wording would paraphrase the implementation.'
+  added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: StringLiteral
+  original: '"✨"'
+  mutated: '""'
+  reason: 'cosmetic chrome icon for "Learning about your system..."; existing tests assert the text but not the icon, and the icon is purely decorative.'
+  added: 2026-06-15
+- file: src/memory/memory.ts
+  mutator: StringLiteral
+  original: '"🧠"'
+  mutated: '""'
+  reason: 'cosmetic chrome icon for "Detected OS and shell"; existing tests assert the text but not the icon, and the icon is purely decorative.'
+  added: 2026-06-15
