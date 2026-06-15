@@ -1451,3 +1451,40 @@
   mutated: '""'
   reason: '`typeof stdin === ""` is always false (typeof never returns empty string), making this identical to the ConditionalExpression→false mutant; same unreachable-in-test-env story.'
   added: 2026-06-14
+
+- file: src/config/resolve.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'env-loop fallback when setting.env is undefined; the mutated array iterates one bogus name and `env["Stryker was here"]` is always undefined, so the loop continues. No real env has that key.'
+  added: 2026-06-15
+- file: src/config/resolve.ts
+  mutator: ConditionalExpression
+  original: 'setting.type === "boolean"'
+  mutated: 'true'
+  reason: 'env-layer boolean dispatch; every SETTINGS entry that has `.env` and is iterated by the env loop is type `"boolean"` (model is filtered at line 30; non-boolean settings with env do not exist in the current SETTINGS shape), so the original and mutant always take the same branch.'
+  added: 2026-06-15
+- file: src/config/resolve.ts
+  mutator: ConditionalExpression
+  original: 'type === "string"'
+  mutated: 'false'
+  reason: '`coerce` is only reachable for non-boolean settings from resolveOne. The only string setting with a flag (`model`) is filtered at line 30; remaining string/number settings have no flag or env. In practice `coerce` is only ever called with type="number", where this branch is already false.'
+  added: 2026-06-15
+- file: src/config/resolve.ts
+  mutator: StringLiteral
+  original: '"string"'
+  mutated: '""'
+  reason: 'same dead string-type branch as the ConditionalExpression mutant above; `coerce` is never reached with type="string" in the current SETTINGS shape (model is filtered, defaultProvider has no flag/env).'
+  added: 2026-06-15
+- file: src/config/resolve.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'fallback for `SETTINGS.model.env ?? []` inside readModelOverride. `SETTINGS.model.env` is always defined as `["WRAP_MODEL"]`, so the right operand of `??` is unreachable.'
+  added: 2026-06-15
+- file: src/config/resolve.ts
+  mutator: ConditionalExpression
+  original: 'v !== undefined && v !== ""'
+  mutated: 'true'
+  reason: 'SETTINGS.model.env has exactly one entry, so the loop runs at most once. When v is undefined the mutant returns undefined and the original falls through to the function''s final `return undefined` — same result. When v is a non-empty string both branches return it.'
+  added: 2026-06-15
