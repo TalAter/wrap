@@ -626,6 +626,18 @@ describe("reduce — processing-interactive", () => {
     expect(next).toBe(state);
   });
 
+  test("loop-final non-final low → confirming (no auto-exec when final=false)", () => {
+    const nonFinalLow = makeResponse({ risk_level: "low", final: false, content: "ls" });
+    const next = reduce(makeProcessingInteractive(), {
+      type: "loop-final",
+      result: { type: "command", response: nonFinalLow },
+    });
+    expect(next.tag).toBe("confirming");
+    if (next.tag === "confirming") {
+      expect(next.response).toBe(nonFinalLow);
+    }
+  });
+
   test("loop-final command low-risk → auto-exec (mirrors thinking path)", () => {
     const resp = makeResponse({ risk_level: "low", content: "echo ok" });
     const next = reduce(makeProcessingInteractive(), {
