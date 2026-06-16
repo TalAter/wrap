@@ -116,6 +116,18 @@ describe("reduce — thinking", () => {
     expect(next).toBe(state);
   });
 
+  test("loop-final non-final low command → confirming (no auto-exec when final=false)", () => {
+    const nonFinalLow = makeResponse({ risk_level: "low", final: false, content: "ls" });
+    const next = reduce(
+      { tag: "thinking" },
+      { type: "loop-final", result: { type: "command", response: nonFinalLow } },
+    );
+    expect(next.tag).toBe("confirming");
+    if (next.tag === "confirming") {
+      expect(next.response).toBe(nonFinalLow);
+    }
+  });
+
   describe("yolo bypasses the confirmation dialog", () => {
     test("yolo + medium final command → exiting{run, source: model}", () => {
       seedTestConfig({ yolo: true });
