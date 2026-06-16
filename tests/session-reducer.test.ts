@@ -775,4 +775,13 @@ describe("reduce — purity and no-op behavior", () => {
     });
     expect(next).toBe(state);
   });
+
+  test("unrelated event in editing returns state by reference", () => {
+    const state = makeEditing();
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "chrome", text: "x" },
+    });
+    expect(next).toBe(state);
+  });
 });
