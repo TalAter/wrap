@@ -668,3 +668,16 @@
   mutated: 'false'
   reason: 'defensive guard in reduceEditorHandoff for origin="editing". editing state has a required CommandResponse, and editor-handoff is only entered from an editing that already had one — `state.response` is always defined on this branch in practice.'
   added: 2026-06-16
+
+- file: src/llm/resolve-provider.ts
+  mutator: EqualityOperator
+  original: 'modelMatches.length > 1'
+  mutated: 'modelMatches.length >= 1'
+  reason: 'equivalent — line 71 only runs when `modelMatches.length` is 0 or >=2. The length===1 case returns earlier at line 69 (`firstMatch && modelMatches.length === 1`), and `firstMatch` is always truthy whenever length>=1 (it is the `[name, entry]` tuple). The mutant diverges only at length===1, which is unreachable here.'
+  added: 2026-06-16
+- file: src/llm/resolve-provider.ts
+  mutator: ConditionalExpression
+  original: 'e instanceof LlmConfigError'
+  mutated: 'true'
+  reason: 'defensive type-narrow on `coreResolveProvider` errors. In practice core only throws `LlmConfigError` for resolution failures; the `throw e` rethrow guards a non-LlmConfigError case that no real input produces. Mirrors the same equivalent mutant already ignored on `src/llm/llm-config.ts`.'
+  added: 2026-06-16
