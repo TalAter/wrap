@@ -824,6 +824,12 @@ describe("reduce — purity and no-op behavior", () => {
     expect(next).toBe(state);
   });
 
+  test("exiting tag is terminal — any event returns state by reference", () => {
+    const state: AppState = { tag: "exiting", outcome: { kind: "exhausted" } };
+    const next = reduce(state, { type: "key-esc" });
+    expect(next).toBe(state);
+  });
+
   test("notification kind that the dialog ignores returns state by reference", () => {
     const state = makeConfirming();
     const next = reduce(state, {
