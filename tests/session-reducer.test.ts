@@ -812,6 +812,12 @@ describe("reduce — purity and no-op behavior", () => {
     expect(next).toBe(state);
   });
 
+  test("unrelated event in composing-interactive returns state by reference", () => {
+    const state = makeComposingInteractive();
+    const next = reduce(state, { type: "key-action", action: "run" });
+    expect(next).toBe(state);
+  });
+
   test("notification kind that the dialog ignores returns state by reference", () => {
     const state = makeConfirming();
     const next = reduce(state, {
