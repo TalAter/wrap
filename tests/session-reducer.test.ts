@@ -180,6 +180,18 @@ describe("reduce — confirming", () => {
     expect(next.outcome.command).toBe(state.response.content);
   });
 
+  test("key-action run on non-final low → exiting{run} (low bypasses executing-step gate)", () => {
+    const nonFinalLow = makeResponse({ risk_level: "low", final: false, content: "ls" });
+    const state = makeConfirming({ response: nonFinalLow });
+    const next = reduce(state, { type: "key-action", action: "run" });
+    expect(next.tag).toBe("exiting");
+    if (next.tag !== "exiting") throw new Error("unreachable");
+    expect(next.outcome.kind).toBe("run");
+    if (next.outcome.kind !== "run") throw new Error("unreachable");
+    expect(next.outcome.source).toBe("model");
+    expect(next.outcome.command).toBe("ls");
+  });
+
   test("key-action cancel → exiting{cancel}", () => {
     const state = makeConfirming();
     const next = reduce(state, { type: "key-action", action: "cancel" });
