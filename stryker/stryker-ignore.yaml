@@ -681,3 +681,22 @@
   mutated: 'true'
   reason: 'defensive type-narrow on `coreResolveProvider` errors. In practice core only throws `LlmConfigError` for resolution failures; the `throw e` rethrow guards a non-LlmConfigError case that no real input produces. Mirrors the same equivalent mutant already ignored on `src/llm/llm-config.ts`.'
   added: 2026-06-16
+
+- file: src/llm/format-context.ts
+  mutator: ConditionalExpression
+  original: 'attachedInputPath !== undefined'
+  mutated: 'true'
+  reason: 'path-undefined guard inside the attached-input section. Under the all-or-none caller contract (src/main.ts:104-128 sets path/size/preview together or leaves all three undefined), preview being defined implies path is defined, so the guard is already true. Mirrors the same equivalent mutants on src/logging/entry.ts.'
+  added: 2026-06-16
+- file: src/llm/format-context.ts
+  mutator: ConditionalExpression
+  original: 'attachedInputSize !== undefined'
+  mutated: 'true'
+  reason: 'size-undefined guard inside the sizeStr ternary. Under the all-or-none caller contract (src/main.ts:104-128 sets path/size/preview together), reaching this point implies size is defined, so the ternary always takes the original branch.'
+  added: 2026-06-16
+- file: src/llm/format-context.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'empty-string fallback when size is undefined inside the sizeStr ternary. Same all-or-none caller contract as the surrounding ConditionalExpression — fallback branch is unreachable in practice.'
+  added: 2026-06-16
