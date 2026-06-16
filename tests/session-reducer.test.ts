@@ -811,4 +811,10 @@ describe("reduce — purity and no-op behavior", () => {
     });
     expect(next).toBe(state);
   });
+
+  test("unrelated event in processing-interactive returns state by reference", () => {
+    const state = makeProcessingInteractive();
+    const next = reduce(state, { type: "draft-change", text: "x" });
+    expect(next).toBe(state);
+  });
 });
