@@ -617,6 +617,15 @@ describe("reduce — processing-interactive", () => {
     if (next.tag === "processing-interactive") expect(next.status).toBe("thinking…");
   });
 
+  test("notification step-output → state by reference (only chrome updates status)", () => {
+    const state = makeProcessingInteractive();
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "step-output", text: "captured" },
+    });
+    expect(next).toBe(state);
+  });
+
   test("loop-final command low-risk → auto-exec (mirrors thinking path)", () => {
     const resp = makeResponse({ risk_level: "low", content: "echo ok" });
     const next = reduce(makeProcessingInteractive(), {
