@@ -793,4 +793,13 @@ describe("reduce — purity and no-op behavior", () => {
     });
     expect(next).toBe(state);
   });
+
+  test("unrelated event in composing-interactive returns state by reference", () => {
+    const state = makeComposingInteractive();
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "chrome", text: "x" },
+    });
+    expect(next).toBe(state);
+  });
 });
