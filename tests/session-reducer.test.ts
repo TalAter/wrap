@@ -802,4 +802,13 @@ describe("reduce — purity and no-op behavior", () => {
     });
     expect(next).toBe(state);
   });
+
+  test("verbose notification in processing-interactive returns state by reference", () => {
+    const state = makeProcessingInteractive();
+    const next = reduce(state, {
+      type: "notification",
+      notification: { kind: "verbose", line: "ignored\n" },
+    });
+    expect(next).toBe(state);
+  });
 });
