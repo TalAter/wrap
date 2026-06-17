@@ -126,16 +126,16 @@ describe("filterAndSortModels", () => {
       test: {
         id: "test",
         models: {
+          undated: {
+            id: "undated",
+            tool_call: true,
+            modalities: { input: ["text"], output: ["text"] },
+          },
           dated: {
             id: "dated",
             tool_call: true,
             modalities: { input: ["text"], output: ["text"] },
             release_date: "2026-04-01",
-          },
-          undated: {
-            id: "undated",
-            tool_call: true,
-            modalities: { input: ["text"], output: ["text"] },
           },
         },
       },
