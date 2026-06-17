@@ -848,3 +848,34 @@
   mutated: 'false'
   reason: 'defensive guard on state.pickedProviders[screen.cursor]; submit-default is only reachable from picking-default which is entered only when pickedProviders.length > 1, and cursor is clamped to [0, length-1].'
   added: 2026-06-17
+
+- file: src/wizard/models-filter.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'fallback for `m.modalities?.input ?? []` triggers only when modalities.input is undefined. Both `[]` and `["Stryker was here"]` produce `includes("text") === false`, so the next line short-circuits identically (modality filter drops the model). Equivalent.'
+  added: 2026-06-17
+- file: src/wizard/models-filter.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'fallback for `m.modalities?.output ?? []` triggers only when modalities.output is undefined. Both `[]` and `["Stryker was here"]` produce `includes("text") === false`, identical outcome.'
+  added: 2026-06-17
+- file: src/wizard/models-filter.ts
+  mutator: LogicalOperator
+  original: 'm.release_date ?? ""'
+  mutated: 'm.release_date && ""'
+  reason: 'mutates the `releaseDate` field written into the returned ModelEntry. Grep confirms releaseDate is set but never read by any consumer (state.ts, config-wizard-dialog.tsx, or tests) — the field is dead. The TUI only reads `m.id` and `m.recommended`. Equivalent under all real callers.'
+  added: 2026-06-17
+- file: src/wizard/models-filter.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'fallback string for the dead `releaseDate` field (same site as the LogicalOperator ignore above). No consumer reads releaseDate, so the value of the fallback is unobservable.'
+  added: 2026-06-17
+- file: src/wizard/models-filter.ts
+  mutator: ConditionalExpression
+  original: 'models.length === 0'
+  mutated: 'false'
+  reason: 'early-return short-circuit in applyRecommendation. With `false`, control falls through to `models.findIndex(...)` (returns -1 on empty), then `models[-1]` is undefined, then the `if (!pick) return models;` guard returns the same empty array. Identical output, just one extra no-op call.'
+  added: 2026-06-17
