@@ -1,6 +1,9 @@
 import { execTaskInShell } from "./run.ts";
 import type { Skill, SkillTask } from "./types.ts";
 
+// Disable pager/external-diff/color so a user's git config can't hijack, hang, or colorize the diff the LLM reads.
+const DIFF_CMD = "git --no-pager diff --no-ext-diff --no-color";
+
 // Drop the pair on empty output. In a clean repo, the diff commands exit 0
 // with no stdout — emitting "I ran X, got nothing" pairs would waste the
 // round the skill is meant to save and risks anchoring the LLM on a
@@ -27,7 +30,7 @@ function gitProbe(command: string): SkillTask {
 function untrackedProbe(): SkillTask {
   const command =
     "git ls-files --others --exclude-standard -z 2>/dev/null | " +
-    "xargs -0 -I{} git --no-pager diff --no-index --no-color -- /dev/null {} 2>/dev/null";
+    `xargs -0 -I{} ${DIFF_CMD} --no-index -- /dev/null {} 2>/dev/null`;
   return {
     command,
     run: async () => {
@@ -44,9 +47,10 @@ export const commitSkill: Skill = {
   // Both diffs (not `git diff HEAD`): the LLM needs to tell staged from
   // unstaged for partial-commit workflows (`git add -p`).
   tasks: () => [
-    gitProbe("git status --short"),
-    gitProbe("git diff --cached"),
-    gitProbe("git diff"),
+    gitProbe("git -c color.status=false status --short"), // status has no --no-color flag; -c is the only lever
+
+    gitProbe(`${DIFF_CMD} --cached`),
+    gitProbe(DIFF_CMD),
     untrackedProbe(),
   ],
 };

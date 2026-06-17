@@ -87,9 +87,9 @@ describe("commit skill — execution", () => {
     const turns = await runSkills([commitSkill], "commit my changes");
 
     expect(turns.map((t) => t.command)).toEqual([
-      "git status --short",
-      "git diff --cached",
-      "git diff",
+      "git -c color.status=false status --short",
+      "git --no-pager diff --no-ext-diff --no-color --cached",
+      "git --no-pager diff --no-ext-diff --no-color",
     ]);
     expect(turns).toHaveLength(3);
     expect(turns[0]?.output).toContain("tracked.txt");
@@ -120,7 +120,10 @@ describe("commit skill — execution", () => {
     await execIn(tmpDir, "git add hello.txt");
 
     const turns = await runSkills([commitSkill], "commit my changes");
-    expect(turns.map((t) => t.command)).toEqual(["git status --short", "git diff --cached"]);
+    expect(turns.map((t) => t.command)).toEqual([
+      "git -c color.status=false status --short",
+      "git --no-pager diff --no-ext-diff --no-color --cached",
+    ]);
   });
 
   test("unstaged only: cached drops, status + unstaged diff emit", async () => {
@@ -131,7 +134,35 @@ describe("commit skill — execution", () => {
     await writeFile(join(tmpDir, "tracked.txt"), "x\nmore\n");
 
     const turns = await runSkills([commitSkill], "commit my changes");
-    expect(turns.map((t) => t.command)).toEqual(["git status --short", "git diff"]);
+    expect(turns.map((t) => t.command)).toEqual([
+      "git -c color.status=false status --short",
+      "git --no-pager diff --no-ext-diff --no-color",
+    ]);
+  });
+
+  test("hostile git config can't hijack or pollute the diff the LLM sees", async () => {
+    await initGitRepo(tmpDir);
+    await writeFile(join(tmpDir, "tracked.txt"), "base\n");
+    await execIn(tmpDir, "git add tracked.txt");
+    await execIn(tmpDir, "git commit -q -m init");
+    await writeFile(join(tmpDir, "tracked.txt"), "base\nstaged-line\n");
+    await execIn(tmpDir, "git add tracked.txt");
+    await writeFile(join(tmpDir, "tracked.txt"), "base\nstaged-line\nunstaged-line\n");
+    await writeFile(join(tmpDir, "untracked.txt"), "fresh-content\n");
+    // An interactive external diff driver + forced color: the hardening flags
+    // must keep both out of the plain text the LLM reads (covers diff.external,
+    // its GIT_EXTERNAL_DIFF env equivalent, and color.ui/status=always).
+    await execIn(tmpDir, "git config diff.external 'echo EXTDIFFMARKER'");
+    await execIn(tmpDir, "git config color.ui always");
+
+    const turns = await runSkills([commitSkill], "commit my changes");
+    const outputs = turns.map((t) => t.output).join("\n---\n");
+
+    expect(outputs).not.toContain("EXTDIFFMARKER");
+    expect(outputs).not.toContain("\x1b");
+    expect(outputs).toContain("staged-line");
+    expect(outputs).toContain("unstaged-line");
+    expect(outputs).toContain("fresh-content");
   });
 });
 
