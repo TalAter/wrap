@@ -1,4 +1,4 @@
-import { Box, Text, useAnimation, useStdin, useWindowSize } from "ink";
+import { Box, Text, useStdin, useWindowSize } from "ink";
 import { useEffect, useRef, useState } from "react";
 import stringWidth from "string-width";
 import { resolveColorHex } from "wrap-core/ansi";
@@ -15,11 +15,12 @@ import {
   TextInput,
   useKeyBindings,
   useNerdFonts,
+  useSpinnerStatus,
 } from "wrap-core/tui";
 import { getConfig } from "../config/store.ts";
 import { copyToClipboard, resolveClipboardTool } from "../core/clipboard.ts";
 import { resolveEditor, spawnEditor } from "../core/editor.ts";
-import { registerExitTeardown, SPINNER_FRAMES, SPINNER_INTERVAL } from "../core/spinner.ts";
+import { registerExitTeardown } from "../core/spinner.ts";
 import type { WrapTheme } from "../core/theme.ts";
 import type { ActionId, AppEvent, AppState } from "../session/state.ts";
 import { useWrapTheme } from "./hooks.ts";
@@ -503,26 +504,15 @@ export function ResponseDialog({ state, dispatch, continuationPrompt }: Response
   ];
   useKeyBindings(confirmingBindings, { isActive: state.tag === "confirming" });
 
-  const noAnimation = getConfig().noAnimation;
-  const spinnerActive =
-    !noAnimation &&
-    (state.tag === "processing-followup" ||
-      state.tag === "processing-interactive" ||
-      state.tag === "executing-step");
-  const { frame: spinnerIndex } = useAnimation({
-    interval: SPINNER_INTERVAL,
-    isActive: spinnerActive,
-  });
-  const spinnerFrame = spinnerActive
-    ? (SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length] ?? null)
-    : null;
-  const prefix = spinnerFrame ? `${spinnerFrame} ` : "";
-  const bottomStatus =
+  const processingLabel =
     state.tag === "processing-followup" || state.tag === "processing-interactive"
-      ? `${prefix}${status ?? FOLLOWUP_FALLBACK_STATUS}`
+      ? (status ?? FOLLOWUP_FALLBACK_STATUS)
       : state.tag === "executing-step"
-        ? `${prefix}${EXECUTING_STEP_STATUS}`
+        ? EXECUTING_STEP_STATUS
         : undefined;
+  const bottomStatus = useSpinnerStatus(processingLabel, {
+    noAnimation: getConfig().noAnimation,
+  });
 
   const preset = getRiskPreset(riskLevel);
 
