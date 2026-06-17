@@ -879,3 +879,10 @@
   mutated: 'false'
   reason: 'early-return short-circuit in applyRecommendation. With `false`, control falls through to `models.findIndex(...)` (returns -1 on empty), then `models[-1]` is undefined, then the `if (!pick) return models;` guard returns the same empty array. Identical output, just one extra no-op call.'
   added: 2026-06-17
+
+- file: src/core/attached-input.ts
+  mutator: ConditionalExpression
+  original: 'bytes.byteLength === 0'
+  mutated: 'false'
+  reason: 'empty-byte-array early return is redundant — `isAsciiWhitespace(bytes)` on the next line trivially returns true for an empty Uint8Array (the for-loop body never executes, falls through to `return true`), so the next branch returns undefined identically. Equivalent under all real inputs.'
+  added: 2026-06-17
