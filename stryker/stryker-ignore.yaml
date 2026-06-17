@@ -1,47 +1,3 @@
-- file: src/subcommands/registry.ts
-  mutator: ConditionalExpression
-  original: 'entry[1].flag.length > 0'
-  mutated: 'true'
-  reason: 'equivalent — every SETTINGS entry with a `flag` has at least one element (type `readonly [string, ...string[]]` enforces it). The mutated branch (flag exists but length is 0) is unreachable.'
-  added: 2026-06-06
-- file: src/subcommands/registry.ts
-  mutator: EqualityOperator
-  original: 'entry[1].flag.length > 0'
-  mutated: 'entry[1].flag.length >= 0'
-  reason: 'equivalent — array length is always >= 0, so the mutant collapses to true. Combined with the outer `!!entry[1].flag` guard, it diverges only when `flag = []`, which never occurs (type enforces non-empty tuple).'
-  added: 2026-06-06
-- file: src/subcommands/registry.ts
-  mutator: ConditionalExpression
-  original: 'aliases.length > 0'
-  mutated: 'true'
-  reason: 'equivalent — `aliases: []` vs `aliases: undefined` are indistinguishable to all consumers (`o.aliases ?? []` in main.ts/completion.ts and `c.aliases?.includes(flag)` in dispatch.ts behave identically for both).'
-  added: 2026-06-06
-- file: src/subcommands/registry.ts
-  mutator: EqualityOperator
-  original: 'aliases.length > 0'
-  mutated: 'aliases.length >= 0'
-  reason: 'equivalent — same as the ConditionalExpression `true` mutant above; both force `aliases: []` instead of `aliases: undefined`, which is indistinguishable to all consumers.'
-  added: 2026-06-06
-- file: src/subcommands/registry.ts
-  mutator: StringLiteral
-  original: '`w ${primary}`'
-  mutated: '``'
-  reason: 'equivalent — the `s.usage ??` fallback is never reached because every SETTINGS entry with a `flag` (verbose, yolo, continue, noAnimation, model, logTraces) supplies its own `usage` string. Flagless entries are filtered out by `hasFlag` before reaching `settingToOption`.'
-  added: 2026-06-06
-
-- file: src/subcommands/version.ts
-  mutator: StringLiteral
-  original: '"command"'
-  mutated: '""'
-  reason: 'equivalent — `kind` is a TS-only tagged-union discriminator; no runtime branch checks `kind === "command"` (only `kind === "option"`), so commands with `kind: ""` behave identically.'
-  added: 2026-06-06
-- file: src/subcommands/version.ts
-  mutator: StringLiteral
-  original: '"version"'
-  mutated: '""'
-  reason: 'equivalent — Command.id is never read at runtime (only Option.id is, in main.ts MODIFIER_SPECS). The version command is dispatched by flag/aliases match, not by id.'
-  added: 2026-06-06
-
 - file: src/llm/framing.ts
   mutator: ConditionalExpression
   original: |-
@@ -700,3 +656,195 @@
   mutated: '"Stryker was here!"'
   reason: 'empty-string fallback when size is undefined inside the sizeStr ternary. Same all-or-none caller contract as the surrounding ConditionalExpression — fallback branch is unreachable in practice.'
   added: 2026-06-16
+
+- file: src/wizard/state.ts
+  mutator: OptionalChaining
+  original: 'API_PROVIDERS[provider]?.recommendedModelRegex'
+  mutated: 'API_PROVIDERS[provider].recommendedModelRegex'
+  reason: 'computeModels is only invoked when transitioning to picking-model, which the wizard reaches only for non-CLI API providers (firstScreenFor branches CLI to disclaimer). API_PROVIDERS[provider] is always defined at this point — the optional chain is defensive-only.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'isCliProvider(provider)'
+  mutated: 'false'
+  reason: 'buildEntry is only called from submit-key (entering-key screen) and submit-model (picking-model screen); CLI providers (claude-code) never reach those screens — they go straight to disclaimer where builtEntries[provider]={} is assigned directly (line 205). The early return is unreachable.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: OptionalChaining
+  original: 'API_PROVIDERS[provider]?.baseURL'
+  mutated: 'API_PROVIDERS[provider].baseURL'
+  reason: 'same callsite story as the recommendedModelRegex optional chain — buildEntry only reaches this line for API providers, so API_PROVIDERS[provider] is always defined.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'baseURL'
+  mutated: 'true'
+  reason: 'mutation sets entry.baseURL=undefined when baseURL is undefined. serializeConfig calls JSON.stringify which drops undefined-valued keys, and validateProviderEntry reads named fields (not Object.keys), so undefined vs absent is unobservable downstream.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'fields.apiKey'
+  mutated: 'true'
+  reason: 'submit-key (line 153) calls buildEntry with `apiKey: trimmed` already guarded non-empty truthy, so the original always takes the assignment; submit-model (line 191) calls with `{}` and the mutation writes entry.apiKey=undefined, which JSON.stringify drops and toEqual treats as absent.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'fields.model'
+  mutated: 'true'
+  reason: 'no buildEntry callsite passes a model field — fields.model is always undefined. Mutation sets entry.model=undefined; JSON.stringify drops it and the subsequent `{ ...prev, model: picked.id }` overwrites the key in submit-model.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'fields.model'
+  mutated: 'false'
+  reason: 'no buildEntry callsite passes a model field — original always evaluates false too, so original ≡ mutant.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!nextName || !state.modelsData'
+  mutated: 'false'
+  reason: 'advanceLoop is only entered after models-fetched (modelsData defined) and only with nextIdx in-bounds of pickedProviders (nextName defined). The defensive guard never trips under real callers.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: LogicalOperator
+  original: '!nextName || !state.modelsData'
+  mutated: '!nextName && !state.modelsData'
+  reason: 'both operands are always false at this point (modelsData defined, nextName in-bounds), so OR ≡ AND under all real inputs.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "selecting-providers"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for toggle-provider; the wizard UI only dispatches toggle-provider while selecting-providers is showing. Mutant diverges only on inputs no real caller produces.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "selecting-providers"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for submit-providers; the wizard UI only dispatches submit-providers from selecting-providers.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "loading-models"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for models-fetched; the dialog host only dispatches it after entering loading-models.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!first'
+  mutated: 'false'
+  reason: 'defensive null guard on pickedProviders[0]; submit-providers transitions to loading-models only when checked.size > 0, so pickedProviders is non-empty by the time models-fetched fires.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "entering-key"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for key-change; the wizard UI only dispatches key-change from entering-key.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "entering-key"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for submit-key; the wizard UI only dispatches submit-key from entering-key.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag === "picking-default"'
+  mutated: 'true'
+  reason: 'mutation forces the picking-default cursor branch on non-picking-default screens; move-cursor is only dispatched from picking-model or picking-default in the UI, so the mutated branch is fed inputs no real caller produces.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "picking-model"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for submit-model; the wizard UI only dispatches submit-model from picking-model.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!picked'
+  mutated: 'false'
+  reason: 'defensive guard on screen.models[screen.cursor]; cursor is clamped to a valid index by move-cursor, and picking-model is only entered with a non-empty models list — picked is always defined.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "disclaimer"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for accept-disclaimer; the wizard UI only dispatches it from disclaimer.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "disclaimer"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for skip-disclaimer; the wizard UI only dispatches it from disclaimer.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'nextIdx >= picked.length'
+  mutated: 'true'
+  reason: 'skip-disclaimer non-last branch (the one this guard chooses against) is unreachable: orderSelection emits API providers first then CLI providers, and claude-code is the only CLI entry — so a disclaimer screen is always the last loop iteration, making nextIdx >= picked.length always true at this point.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ArithmeticOperator
+  original: 'nextIdx - 1'
+  mutated: 'nextIdx + 1'
+  reason: 'the passed-in loopIndex is unobservable — finishLoop overrides it with its own `loopIndex: nextIdx` parameter on every return path (lines 91, 96), so the caller-supplied value never escapes finishLoop.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: BooleanLiteral
+  original: '!state.modelsData'
+  mutated: 'state.modelsData'
+  reason: 'skip-disclaimer non-last branch is unreachable (claude-code is always last; see the line 226 ignore). Even if reached, modelsData is always defined post-models-fetched, so original takes the no-return path.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!state.modelsData'
+  mutated: 'true'
+  reason: 'same unreachable skip-disclaimer non-last branch; equivalent under real inputs.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!state.modelsData'
+  mutated: 'false'
+  reason: 'same unreachable skip-disclaimer non-last branch; modelsData is always non-null at this point.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: BooleanLiteral
+  original: '!nextName'
+  mutated: 'nextName'
+  reason: 'same unreachable skip-disclaimer non-last branch (claude-code always last); nextName is always defined when nextIdx < picked.length.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!nextName'
+  mutated: 'true'
+  reason: 'same unreachable skip-disclaimer non-last branch; equivalent under real inputs.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!nextName'
+  mutated: 'false'
+  reason: 'same unreachable skip-disclaimer non-last branch; nextName is always defined.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+            ...state,
+            pickedProviders: picked,
+            screen: firstScreenFor(nextName, state.modelsData),
+          }
+  mutated: '{}'
+  reason: 'same unreachable skip-disclaimer non-last branch (claude-code always last); the return value is never observed under real inputs.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: 'screen.tag !== "picking-default"'
+  mutated: 'false'
+  reason: 'wrong-screen guard for submit-default; the wizard UI only dispatches submit-default from picking-default.'
+  added: 2026-06-17
+- file: src/wizard/state.ts
+  mutator: ConditionalExpression
+  original: '!picked'
+  mutated: 'false'
+  reason: 'defensive guard on state.pickedProviders[screen.cursor]; submit-default is only reachable from picking-default which is entered only when pickedProviders.length > 1, and cursor is clamped to [0, length-1].'
+  added: 2026-06-17
