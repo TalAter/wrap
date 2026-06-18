@@ -886,3 +886,40 @@
   mutated: 'false'
   reason: 'empty-byte-array early return is redundant — `isAsciiWhitespace(bytes)` on the next line trivially returns true for an empty Uint8Array (the for-loop body never executes, falls through to `return true`), so the next branch returns undefined identically. Equivalent under all real inputs.'
   added: 2026-06-17
+
+- file: src/core/input.ts
+  mutator: EqualityOperator
+  original: 'i < args.length'
+  mutated: 'i <= args.length'
+  reason: 'off-by-one on the loop bound is caught one statement later — when i === args.length, `arg = args[i]` is undefined and the next line `if (arg === undefined) break` exits the loop. No observable change.'
+  added: 2026-06-18
+- file: src/core/input.ts
+  mutator: ConditionalExpression
+  original: 'arg === undefined'
+  mutated: 'false'
+  reason: 'TS-only defensive guard for noUncheckedIndexedAccess on `args[i]`. The enclosing `while (i < args.length)` already guarantees `args[i]` is defined at runtime, so the guard never trips. Equivalent under all real callers.'
+  added: 2026-06-18
+- file: src/core/input.ts
+  mutator: EqualityOperator
+  original: 'eqIdx > 0'
+  mutated: 'eqIdx >= 0'
+  reason: 'flagName extraction at `arg.indexOf("=")`. Mutant only diverges when eqIdx === 0 (arg starts with "="). With original flagName = "=…" (the whole arg); with mutant flagName = "". Neither shape is a registered ModifierSpec flag in real callers, so `flagToSpec.get` returns undefined and the loop breaks identically.'
+  added: 2026-06-18
+- file: src/core/input.ts
+  mutator: EqualityOperator
+  original: 'eqIdx > 0'
+  mutated: 'eqIdx >= 0'
+  reason: 'boolean-modifier "=" rejection inside the `!spec.takesValue` branch. Only reachable when flagToSpec.get(flagName) returns a spec — which requires flagName to match a registered ModifierSpec.flags entry. No real spec registers a flag named "=…" or "", so the eqIdx === 0 case never reaches this line.'
+  added: 2026-06-18
+- file: src/core/input.ts
+  mutator: EqualityOperator
+  original: 'eqIdx > 0'
+  mutated: 'eqIdx >= 0'
+  reason: 'value-modifier `--flag=value` form inside the `spec.takesValue` branch. Same reasoning as the boolean-modifier sibling above — eqIdx === 0 requires arg starts with "=" but flagToSpec only resolves real flag names, so the divergent case is unreachable.'
+  added: 2026-06-18
+- file: src/core/input.ts
+  mutator: OptionalChaining
+  original: 'first?.startsWith'
+  mutated: 'first.startsWith'
+  reason: 'TS-only defensive optional chain for noUncheckedIndexedAccess on `args[0]`. The preceding `if (args.length === 0) return ...` guarantees `args[0]` is defined at runtime, so dropping the optional chain only changes behavior on inputs no real caller produces.'
+  added: 2026-06-18
