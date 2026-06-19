@@ -936,3 +936,342 @@
   mutated: 'memBytes >= 0'
   reason: 'same defensive-skip story as the matching ConditionalExpression above. memBytes comes from statSync.size which is always >=0, so `>= 0` is equivalent to `true` for the runtime values produced by real callers.'
   added: 2026-06-19
+
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: '!content'
+  mutated: 'false'
+  reason: 'empty-content early return is dark in practice. Without it, readLog splits the empty string and bumps `corrupt` — but the command-level fallback paths still emit the same user-visible "No log entries yet." message.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'n !== null'
+  mutated: 'true'
+  reason: 'when n is null, `rawLines.slice(-null)` collapses to `slice(0)` which returns the same full array — equivalent across both call sites (line 19 and line 128).'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: 'initial raw default. In the test environment (non-TTY), the writer choice `raw || !isTTY()` is always true regardless of raw''s initial value — the default only matters when isTTY() is true, which the test harness does not exercise.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          raw = true;
+        }
+  mutated: '{}'
+  reason: '`--raw` flag handler becomes a no-op. In non-TTY tests, !isTTY() is true so writeRaw is selected regardless of the raw flag — the difference is invisible without a TTY harness.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: '`--raw` flag sets raw to false instead of true. Same as the BlockStatement mutant on line 50 — non-TTY tests pick writeRaw regardless of raw''s value.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: Regex
+  original: '/^-\d+$/'
+  mutated: '/-\d+$/'
+  reason: 'regex anchor relaxation. The `^` anchor prevents "foo-3"-style search terms from being misclassified as negative numbers; removing it allows those args to error with "non-negative integer" instead of being treated as search terms. No realistic caller passes a search term containing a `-digits` suffix.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: Regex
+  original: '/^-\d+$/'
+  mutated: '/^-\d+/'
+  reason: 'regex anchor relaxation — losing the `$` lets strings like "-3abc" be flagged as negative numbers. Args starting with `-` followed by digits aren''t realistic search terms; both behaviors are sensible UX.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"Usage: w --log [search] [N] [--raw]"'
+  mutated: '""'
+  reason: 'secondary usage hint in error chrome; primary error message ("Only one search term allowed" / "non-negative integer") is the assertion target in existing tests. Removing the usage line is cosmetic.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: '!Number.isNaN(parsed) && parsed >= 0'
+  mutated: 'true'
+  reason: 'left side of `(A && B) && (String(parsed) === arg)` forced true reduces to `(String(parsed) === arg)`. Whenever original A was true, mutated also produces (C). Whenever A was false (parseInt yielded NaN), C is false too ("NaN"===arg). Observable behavior unchanged.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: LogicalOperator
+  original: '!Number.isNaN(parsed) && parsed >= 0'
+  mutated: '!Number.isNaN(parsed) || parsed >= 0'
+  reason: 'A&&B vs A||B inside `(...) && C`. The regex at line 52 already catches integer negatives, so the only gap (non-integer negatives like "-3.5") has C=false either way — final result unchanged.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'parsed >= 0'
+  mutated: 'true'
+  reason: 'negative-parse guard masked by C — when parsed is a negative non-integer (the only case escaping the regex), `String(parsed) === arg` is false too, so the AND chain collapses regardless of B.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'arg === ""'
+  mutated: 'false'
+  reason: 'empty-arg skip branch dropped. For a lone `--log ""`, the downstream `search ? ... : valid` treats search="" as falsy and follows the same all-entries path. Only differs on contrived calls like `--log "" foo`.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'empty-string comparison literal changed. Original matches arg=="", mutated matches the literal "Stryker was here!" — only differs on that exact string, which no real caller passes.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      if (isTTY() && hasJq()) {
+        const jsonl = `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`;
+        const proc = Bun.spawn(["jq", "-C", "."], {
+          stdin: "pipe",
+          stdout: "inherit",
+          stderr: "inherit",
+        });
+        proc.stdin.write(jsonl);
+        proc.stdin.end();
+        await proc.exited;
+        return;
+      }
+    
+      process.stdout.write(`${entries.map((e) => JSON.stringify(e, null, 2)).join("\n\n")}\n`);
+    }
+  mutated: '{}'
+  reason: 'writePretty body emptied. writePretty is only invoked when `raw || !isTTY()` is false — i.e., in TTY mode, which tests do not exercise. Whole function dark in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'isTTY() && hasJq()'
+  mutated: 'true'
+  reason: 'TTY+jq guard inside writePretty. writePretty is only reached when isTTY() is true; tests run non-TTY so the function is dark.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'isTTY() && hasJq()'
+  mutated: 'false'
+  reason: 'TTY+jq guard inside writePretty. writePretty unreachable in non-TTY tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: LogicalOperator
+  original: 'isTTY() && hasJq()'
+  mutated: 'isTTY() || hasJq()'
+  reason: 'TTY+jq guard inside writePretty. writePretty unreachable in non-TTY tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        const jsonl = `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`;
+        const proc = Bun.spawn(["jq", "-C", "."], {
+          stdin: "pipe",
+          stdout: "inherit",
+          stderr: "inherit",
+        });
+        proc.stdin.write(jsonl);
+        proc.stdin.end();
+        await proc.exited;
+        return;
+      }
+  mutated: '{}'
+  reason: 'jq branch body removed. Reached only when isTTY()&&hasJq(); both false in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '`${entries.map((e) => JSON.stringify(e)).join("\n")}\n`'
+  mutated: '``'
+  reason: 'jq stdin payload template. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'newline literal. On line 81 it joins entries for jq stdin (TTY+jq branch, unreachable in tests). On line 107 it''s the `.join` separator for the command''s help-text array, which has no behavioral coverage.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ArrowFunction
+  original: '(e) => JSON.stringify(e)'
+  mutated: '() => undefined'
+  reason: 'jq stdin mapper. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ArrayDeclaration
+  original: '["jq", "-C", "."]'
+  mutated: '[]'
+  reason: 'jq spawn argv. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"jq"'
+  mutated: '""'
+  reason: 'jq binary name. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"."'
+  mutated: '""'
+  reason: 'jq identity filter argument. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"-C"'
+  mutated: '""'
+  reason: 'jq color flag. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ObjectLiteral
+  original: |-
+    {
+          stdin: "pipe",
+          stdout: "inherit",
+          stderr: "inherit",
+        }
+  mutated: '{}'
+  reason: 'Bun.spawn options for the jq subprocess. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"pipe"'
+  mutated: '""'
+  reason: 'spawn stdin mode for jq. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"inherit"'
+  mutated: '""'
+  reason: 'spawn stdout/stderr inheritance for jq. TTY+jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '`${entries.map((e) => JSON.stringify(e, null, 2)).join("\n\n")}\n`'
+  mutated: '``'
+  reason: 'pretty-print fallback template (TTY without jq). No test exercises this branch — requires isTTY()=true and hasJq()=false simultaneously.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ArrowFunction
+  original: '(e) => JSON.stringify(e, null, 2)'
+  mutated: '() => undefined'
+  reason: 'pretty-print fallback mapper. TTY-no-jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"\n\n"'
+  mutated: '""'
+  reason: 'pretty-print fallback paragraph separator. TTY-no-jq branch — unreachable in tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: '`kind: "command"` is the tagged-union discriminator on Command. No code in src/ reads `kind === "command"` at runtime — dispatch resolves by `flag`/`aliases`.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"log"'
+  mutated: '""'
+  reason: '`id: "log"` is Command metadata — `Command.id` is not read by any runtime code path.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ArrayDeclaration
+  original: |-
+    [
+        "Arguments:",
+        "  search    Filter entries containing this term",
+        "  N         Show only the last N entries",
+        "  --raw     Output raw JSONL instead of pretty-printed",
+      ]
+  mutated: '[]'
+  reason: 'help-text array used only when `--log --help` (or similar) renders it. No tests assert on per-line help content.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"Arguments:"'
+  mutated: '""'
+  reason: 'help-text header line; cosmetic, no tests assert on per-line help content.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"  search    Filter entries containing this term"'
+  mutated: '""'
+  reason: 'help-text line; cosmetic, no tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"  N         Show only the last N entries"'
+  mutated: '""'
+  reason: 'help-text line; cosmetic, no tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"  --raw     Output raw JSONL instead of pretty-printed"'
+  mutated: '""'
+  reason: 'help-text line; cosmetic, no tests.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: '!parsed'
+  mutated: 'false'
+  reason: 'early-exit guard after parseArgs returns null. Mutated skips the explicit exit, then `const {n,search,raw} = parsed` throws TypeError — same final exit=1 (uncaught), and parseArgs already chrome''d the user-facing error before returning null. Stack-trace in stderr is cosmetic.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          process.exitCode = 1;
+          return;
+        }
+  mutated: '{}'
+  reason: 'matching block-statement form of the !parsed guard removal. Same downstream effect (TypeError, exit 1, primary error message preserved).'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'raw || !isTTY()'
+  mutated: 'true'
+  reason: 'writer choice forced to writeRaw. In tests, !isTTY() is already true so the OR evaluates true regardless — equivalent under the test harness.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'valid.length === 0 && corrupt === 0'
+  mutated: 'false'
+  reason: 'first empty-log early return. When skipped, the downstream `results.length === 0` check at line 130 fires for the same valid=[] cases and emits the same "No log entries yet." message.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'corrupt === 0'
+  mutated: 'true'
+  reason: 'expands the early-return condition to trigger whenever valid is empty. The dropped branch (corrupt>0, valid=[]) then misses the corrupt warning, but its primary user-visible output ("No log entries yet.") is unchanged — original also reaches the same message via the second emptiness check.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: EqualityOperator
+  original: 'corrupt === 0'
+  mutated: 'corrupt !== 0'
+  reason: 'inverted corrupt-equality check. Same masked behavior as the ConditionalExpression sibling — the downstream empty-results path produces the same "No log entries yet." message.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          chrome("No log entries yet.");
+          return;
+        }
+  mutated: '{}'
+  reason: 'empty-log early return body removed. Flow falls through to the second empty-results check, which emits the same message and returns.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: ConditionalExpression
+  original: 'search && n !== null'
+  mutated: 'true'
+  reason: 'extra `results.slice(-n)` is a no-op in every reachable case: when n is null `slice(0)` returns the full array, and when n is set without search the upstream `readLog(n)` already capped results to last-n raw lines.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: LogicalOperator
+  original: 'search && n !== null'
+  mutated: 'search || n !== null'
+  reason: 'swapped AND→OR. Only differs when `search` is null and `n` is set; in that case `readLog(n)` already loaded last-n raw lines, so `results.slice(-n)` is a no-op.'
+  added: 2026-06-19
+- file: src/subcommands/log.ts
+  mutator: StringLiteral
+  original: '"No log entries yet."'
+  mutated: '""'
+  reason: 'fall-through message for the all-lines-corrupt case (the first-checks branch at line 122 protects the empty-and-clean case). No test exercises an all-corrupt log file.'
+  added: 2026-06-19
