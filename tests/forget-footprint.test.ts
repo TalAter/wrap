@@ -99,6 +99,17 @@ describe("logsFootprint", () => {
     expect(fp.count).toBe(1);
     expect(fp.bytes).toBe(jsonl.length + traceBody.length);
   });
+
+  test("trace sidecars present, no jsonl → ok with 0 entries", () => {
+    mkdirSync(join(TEST_HOME, "logs", "traces"), { recursive: true });
+    const traceBody = "x".repeat(200);
+    writeFileSync(join(TEST_HOME, "logs", "traces", "abc.json"), traceBody);
+    const fp = logsFootprint();
+    expect(fp.state).toBe("ok");
+    if (fp.state !== "ok") throw new Error();
+    expect(fp.count).toBe(0);
+    expect(fp.bytes).toBe(traceBody.length);
+  });
 });
 
 describe("cacheFootprint", () => {
