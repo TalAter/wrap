@@ -176,6 +176,15 @@ describe("--log search", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("non-negative integer");
   });
+
+  test("arg with a numeric prefix is a search term, not N", async () => {
+    const wrapHome = tmpHome();
+    seedLog(wrapHome, [entry("a"), entry("b"), entry("c"), entry("d"), entry("e")]);
+    const result = await wrap("--log 3abc", { WRAP_HOME: wrapHome });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("No matching log entries.");
+  });
 });
 
 describe("searchEntries", () => {
