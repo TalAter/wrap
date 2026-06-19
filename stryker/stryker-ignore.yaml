@@ -923,3 +923,16 @@
   mutated: 'first.startsWith'
   reason: 'TS-only defensive optional chain for noUncheckedIndexedAccess on `args[0]`. The preceding `if (args.length === 0) return ...` guarantees `args[0]` is defined at runtime, so dropping the optional chain only changes behavior on inputs no real caller produces.'
   added: 2026-06-18
+
+- file: src/subcommands/forget-footprint.ts
+  mutator: ConditionalExpression
+  original: 'memBytes > 0'
+  mutated: 'true'
+  reason: 'defensive skip on the loadMemory call. When memBytes=0 from a missing memory.json, wrapFs.read returns null and loadMemory returns {} — same observable count=0 as the skip. The mutation only diverges on a 0-byte memory.json file (read returns "" → JSON.parse throws → unreadable), but saveMemory always writes a non-empty JSON object so no code path in wrap produces that state.'
+  added: 2026-06-19
+- file: src/subcommands/forget-footprint.ts
+  mutator: EqualityOperator
+  original: 'memBytes > 0'
+  mutated: 'memBytes >= 0'
+  reason: 'same defensive-skip story as the matching ConditionalExpression above. memBytes comes from statSync.size which is always >=0, so `>= 0` is equivalent to `true` for the runtime values produced by real callers.'
+  added: 2026-06-19
