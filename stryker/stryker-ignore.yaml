@@ -1275,3 +1275,370 @@
   mutated: '""'
   reason: 'fall-through message for the all-lines-corrupt case (the first-checks branch at line 122 protects the empty-and-clean case). No test exercises an all-corrupt log file.'
   added: 2026-06-19
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'flag.kind === "option" && flag.takesValue'
+  mutated: 'false'
+  reason: 'defensive — takesValue() short-circuits on line 26 for every flag with `completion`. Of the remaining flags, no current registry entry is both kind="option" AND takesValue=true (the only such case would be --model, which has completion="providers" and returns earlier). So this line is always false in production. Mutation is equivalent under the current registry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'flag.kind === "option"'
+  mutated: 'true'
+  reason: 'same defensive zone as the line-27 full-expression ignore: every option without `completion` has takesValue=false, so `true && flag.takesValue` still evaluates to false. No observable behavior change under the current registry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: EqualityOperator
+  original: 'flag.kind === "option"'
+  mutated: 'flag.kind !== "option"'
+  reason: 'same zone — for commands the inverted check passes but takesValue is undefined (falsy), so the && still returns false. No registry entry distinguishes the two.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"option"'
+  mutated: '""'
+  reason: 'same zone — `flag.kind === ""` is always false for every registry entry, so behavior matches the original after the line-26 short-circuit. Equivalent.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'flag.completion === "shells"'
+  mutated: 'true'
+  reason: 'valueAction inner if. The --completion flag already returns the providers path via the previous if; with the mutation, every non-providers flag (including booleans without completion) gets `:shell:(zsh bash fish)` appended to its zsh spec. Behavioral but not user-broken: zsh treats it as a value action that no user would ever trigger because booleans have no `=` prefix from valuePrefix. No tractable test that does not bind to the generated zsh spec format.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'valueAction default return (the empty-string fallback). Appends "Stryker was here!" to flag specs that have neither providers nor shells completion. Visually corrupts the zsh script but does not change a property any test asserts. zsh-syntax check (line 158) catches genuine malformed scripts; a Stryker text marker inside `[desc]` would parse as a trailing description fragment.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'specs array initializer. Prepends `Stryker was here` to the _arguments list. zsh -n at line 158 would reject the malformed spec, but only when zsh is available in the test environment — CI without zsh skips that check.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: 'separator for provider names in the zsh `_wrap_providers` local array. Tests only assert `script.toContain(name)` for each provider name (line 131-135); concatenation without separator still satisfies that, so the test cannot kill this without binding to the formatting.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '" \\\n    "'
+  mutated: '""'
+  reason: 'specs.join separator inside `_arguments -s \\` block. Removes line continuations and indentation — zsh -n would catch but only when zsh is on PATH.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: MethodExpression
+  original: |-
+    [...registry.commands, ...registry.options]
+        .filter((f) => f.completion === kind)
+  mutated: '[...registry.commands, ...registry.options]'
+  reason: 'real-bug surface in bashCasePattern. Dropping the .filter() makes case-arm patterns match every flag, so tabbing after --verbose offers provider names. Worth a follow-up kill test; ignored this run because tractable tests (synthetic registry, regex-match the providers case arm) bind to the generated-bash arm format. Re-judge in 10 days.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'f.completion === kind'
+  mutated: 'true'
+  reason: 'same surface as the MethodExpression .filter() drop — predicate always-true makes bashCasePattern unconditional. Same follow-up note.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: EqualityOperator
+  original: 'f.completion === kind'
+  mutated: 'f.completion !== kind'
+  reason: 'same surface — inverted predicate. Bash providers case arm now lists non-provider flags. Same follow-up note as the MethodExpression entry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"|"'
+  mutated: '""'
+  reason: 'bashCasePattern join separator. With the registry as-is, providers list collapses to `--model--provider` and shells to `--completion--completions`. Bash -n would reject the malformed case pattern but only runs when bash is present. Test would have to enumerate flag names and check the script; no current test does.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: 'providerWords separator in generateBashCompletion. Provider colons concatenate: `anthropic:openai:ollama:`. Test at line 185-194 only checks `script.toContain(`${p}:`)`, which still passes.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'providerPat'
+  mutated: 'true'
+  reason: 'defensive — providerPat is non-empty in every real registry (--model has completion="providers"). The empty-providerPat branch only matters for hypothetical registries with no provider flags. Equivalent under current registry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'shellPat'
+  mutated: 'true'
+  reason: 'defensive — shellPat is non-empty in every real registry (--completion has completion="shells"). Equivalent under current registry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'caseArms.length > 0'
+  mutated: 'true'
+  reason: 'defensive — caseArms always has 2 entries with the current registry (provider + shell). The empty-caseArms branch is unreachable in production.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: EqualityOperator
+  original: 'caseArms.length > 0'
+  mutated: 'caseArms.length >= 0'
+  reason: 'same defensive zone — `>= 0` is always true, but caseArms is also always non-empty in production. Both branches are equivalent for current registry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'caseArms.join separator inside the bash case block template. Each case arm is multi-line, so removing the join newline produces `;;` glued to the next `    pattern)` — bash -n would catch but only when bash is on PATH.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'caseBlock empty-fallback string. Unreachable in production (caseArms is always non-empty); the mutation only matters for hypothetical empty-arms registries. Equivalent under current registry.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: 'allNames.join separator inside bash compgen flag list. Names collapse to `--log--help--version...`. Tests at line 178-183 only assert `script.toContain(flag.flag)` which still passes; would need a brittle word-boundary regex to kill.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'flagName.startsWith("--")'
+  mutated: 'true'
+  reason: 'fish lineFor `--` vs `-` branch. With the mutation, short flags like `-c` get `-l c` (long-flag form) instead of `-s c`. Behavioral bug, but tests at line 223-230 only check that the right token appears somewhere — they do not assert mutual exclusion. Killing would require structural assertion on short-flag handling.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"--"'
+  mutated: '""'
+  reason: 'same surface as the startsWith conditional above — `startsWith("")` is always true. Same reasoning, same follow-up note.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '" "'
+  mutated: '""'
+  reason: 'fish providerWords separator. Tests check that `anthropic` appears in the `-a` arg (line 244-247), not that names are space-separated. Behavioral (fish would see one giant token) but not covered by current tests.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'flag.completion === "shells"'
+  mutated: 'true'
+  reason: 'fish lineFor inner-else if. Mutation makes every non-providers flag get `-x -a "zsh bash fish"`. Boolean flags would gain spurious shell-name completion. Same class as line 41 — behavioral but no tractable test without binding to lineFor output format.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'takesValue(flag)'
+  mutated: 'true'
+  reason: 'fish takesValue ternary. → true makes every non-providers, non-shells flag get `-x`. Booleans gain value-required semantics. No fish-side test asserts `-x` is absent on booleans.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ConditionalExpression
+  original: 'takesValue(flag)'
+  mutated: 'false'
+  reason: 'fish takesValue ternary inverse. → false drops `-x` from value-taking non-providers/shells flags. No current flag matches that combination in the registry (every value-taking option has `completion`); equivalent.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          parts.push("-x");
+        }
+  mutated: '{}'
+  reason: 'same surface as `takesValue(flag) → false` — block elision drops `-x`. Equivalent under current registry (no value-taking option lacks completion).'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"-x"'
+  mutated: '""'
+  reason: 'fish parts.push("-x"). Same equivalence as the BlockStatement drop above — no registry entry exercises this path.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ArrayDeclaration
+  original: |-
+    [
+        `# Generated by \`${executableName} --completion fish\`. Do not edit by hand.`,
+        "",
+      ]
+  mutated: '[]'
+  reason: 'fish lines array initializer. Empty array means the script body lacks the header banner and the trailing blank line. Tests at line 213-216 check `complete -c wrap` is present (still true since `for` loop populates lines), so the test does not fail. Banner is cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '`# Generated by \`${executableName} --completion fish\`. Do not edit by hand.`'
+  mutated: '``'
+  reason: 'fish header template literal becomes empty. Tests only assert `complete -c wrap` is present (still emitted by the for loop). Banner is cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'fish lines array second element (blank separator after the banner). Cosmetic — inserts a `Stryker was here!` line into the fish script. No fish -n syntax issue (it is just a comment-free top-level line).'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'fish lines.join separator. All `complete -c wrap` lines collapse onto one physical line. Fish --no-execute would reject, but only when fish is on PATH (test at line 264-266 is conditional).'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ArrayDeclaration
+  original: '[...Object.keys(API_PROVIDERS), ...Object.keys(CLI_PROVIDERS)]'
+  mutated: '[]'
+  reason: 'loadRegistry providers field. Only reachable through the CLI subcommand path (completionCmd.run), not through the unit-tested generator functions. The e2e test at line 359-364 only checks the script starts with `#compdef wrap` and exits clean — does not assert provider names appear.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"/"'
+  mutated: '""'
+  reason: 'separator in the "requires a shell name" error string — `zsh/bash/fish` collapses to `zshbashfish`. The runCompletion test at line 291-297 only asserts `error.toContain("requires a shell name")`, not the format of the shells list.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '", "'
+  mutated: '""'
+  reason: 'separator in the "Unsupported shell" error string — `zsh, bash, fish` collapses to `zshbashfish`. Test at line 343-352 asserts each name appears individually (line 348-350), so concatenation still satisfies `.toContain("zsh")`, `.toContain("bash")`, `.toContain("fish")`.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"command"'
+  mutated: '""'
+  reason: 'completionCmd.kind discriminator. The dispatcher reads `kind` to know whether to apply takesValue-style parsing; for the --completion command path, kind only matters in the registry-iteration consumers (e.g. line 78-81). No completion-test asserts the kind field on completionCmd directly.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ArrayDeclaration
+  original: '["--completions"]'
+  mutated: '[]'
+  reason: 'completionCmd.aliases. Mutation removes the `--completions` alias. No test in completion.test.ts asserts the alias parses; dispatch-level tests live elsewhere.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"completion"'
+  mutated: '""'
+  reason: 'completionCmd.id used by help lookup. Test for completion does not assert id; help tests cover help-text routing separately.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"w --completion <shell> [name]"'
+  mutated: '""'
+  reason: 'completionCmd.usage. Cosmetic — surfaces in `w --help completion`; no usage-string assertion in completion.test.ts.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: ArrayDeclaration
+  original: |-
+    [
+        `Supported shells: ${SUPPORTED_SHELLS.join(", ")}`,
+        "",
+        "By default the completion registers the command name `wrap`. Pass an optional",
+        "second argument to register a different name (e.g. a shell alias).",
+        "",
+        "Install (zsh):",
+        "  wrap --completion zsh > ~/.local/share/zsh/site-functions/_wrap",
+        "  (ensure the directory is on your $fpath, then run `compinit`)",
+        "",
+        "Install (bash):",
+        "  wrap --completion bash > ~/.local/share/bash-completion/completions/wrap",
+        "",
+        "Install (fish):",
+        "  wrap --completion fish > ~/.config/fish/completions/wrap.fish",
+      ]
+  mutated: '[]'
+  reason: 'completionCmd.help array. Help text is cosmetic; no test asserts its content.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '`Supported shells: ${SUPPORTED_SHELLS.join(", ")}`'
+  mutated: '``'
+  reason: 'help-text header. Same as the help array — cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '", "'
+  mutated: '""'
+  reason: 'separator in `Supported shells: zsh, bash, fish` help string. Cosmetic — no test asserts the help string at all.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'first help-text blank-line separator. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"By default the completion registers the command name `wrap`. Pass an optional"'
+  mutated: '""'
+  reason: 'help-text body line. Cosmetic — no test asserts help-text content.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"second argument to register a different name (e.g. a shell alias)."'
+  mutated: '""'
+  reason: 'help-text body line. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'second help-text blank-line separator. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"Install (zsh):"'
+  mutated: '""'
+  reason: 'help-text install header. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"  wrap --completion zsh > ~/.local/share/zsh/site-functions/_wrap"'
+  mutated: '""'
+  reason: 'help-text install command. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"  (ensure the directory is on your $fpath, then run `compinit`)"'
+  mutated: '""'
+  reason: 'help-text install note. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'third help-text blank-line separator. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"Install (bash):"'
+  mutated: '""'
+  reason: 'help-text install header. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"  wrap --completion bash > ~/.local/share/bash-completion/completions/wrap"'
+  mutated: '""'
+  reason: 'help-text install command. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: 'fourth help-text blank-line separator. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"Install (fish):"'
+  mutated: '""'
+  reason: 'help-text install header. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"  wrap --completion fish > ~/.config/fish/completions/wrap.fish"'
+  mutated: '""'
+  reason: 'help-text install command. Cosmetic.'
+  added: 2026-06-20
+- file: src/subcommands/completion.ts
+  mutator: StringLiteral
+  original: '"\n"'
+  mutated: '""'
+  reason: 'help.join separator. All help lines collapse to one string when printed; cosmetic — no test asserts the help string format.'
+  added: 2026-06-20
