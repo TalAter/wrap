@@ -28,7 +28,7 @@
     "ink": "^7.0.3",
     "react": "^19.2.6",
     "string-width": "^8.2.1",
-    "wrap-core": "0.0.1",
+    "wrap-core": "github:TalAter/wrap-core#main",
     "zod": "^4.4.3"
   }
 }
