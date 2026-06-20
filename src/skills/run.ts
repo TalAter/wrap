@@ -44,12 +44,12 @@ function withTimeout<T>(
 }
 
 export async function execTaskInShell(command: string): Promise<TaskResult> {
-  const shell = process.env.SHELL || "sh";
-  // No `-i` — skill probes are Wrap-controlled, not user-typed, so they
-  // shouldn't pick up user rc files (aliases, prompt setup, etc).
+  // Probes are Wrap-authored POSIX, not user-typed: run under `sh`, not the
+  // user's $SHELL (fish/csh would choke on the syntax), and without `-i` so
+  // no rc files (aliases, prompt setup) load.
   const proc = (() => {
     try {
-      return Bun.spawn([shell, "-c", command], {
+      return Bun.spawn(["sh", "-c", command], {
         stdout: "pipe",
         stderr: "pipe",
         stdin: "ignore",

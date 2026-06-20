@@ -104,6 +104,29 @@ describe("Shell exec (no `run`)", () => {
     expect(probe.output).toContain("hi");
   });
 
+  test("runs probes under a POSIX shell, ignoring a non-POSIX $SHELL", async () => {
+    // Probes are Wrap-authored POSIX; they must not run under the user's
+    // login shell (fish/csh would choke on the syntax). Stand-in: point
+    // $SHELL at `echo`, which ignores `-c` and prints its args. Under $SHELL
+    // we'd capture "-c echo hi"; under sh we capture the real result, "hi".
+    const prev = process.env.SHELL;
+    process.env.SHELL = "echo";
+    try {
+      const skill: Skill = {
+        name: "s",
+        trigger: { kind: "always" },
+        tasks: () => [{ command: "echo hi" }],
+      };
+      const turns = await runSkills([skill], "anything");
+      const probe = turns[0];
+      if (probe?.kind !== "probe") throw new Error("expected probe");
+      expect(probe.output.trim()).toBe("hi");
+    } finally {
+      if (prev === undefined) delete process.env.SHELL;
+      else process.env.SHELL = prev;
+    }
+  });
+
   test("stderr is appended when command writes to both streams", async () => {
     const skill: Skill = {
       name: "s",

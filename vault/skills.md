@@ -44,3 +44,4 @@ Each invocation re-fires its skills against the new prompt and current state. Pr
 - **Watchlist sits at `src/watchlist.ts`, outside `src/skills/`.** Tracker (persisted state) and consumer (discovery skill's `which` task) stay decoupled — adding tools to the watchlist isn't tangled with skill execution.
 - **Task within a skill = thunk.** `Skill.tasks: () => SkillTask[]` so dynamic skills (e.g. discovery re-reading the watchlist) defer their list-build to run time without lying about the field's type.
 - **Tasks parallel within a skill.** No inter-task deps; turn order in the transcript is preserved by zipping results with the declaration order.
+- **Probes run under a standard POSIX shell, not the user's login shell.** Wrap authors the probe syntax, so a non-POSIX `$SHELL` (fish, csh) must not get a vote — otherwise a probe parse-errors, drops silently, and the LLM never sees its output. The final user-facing command still honors `$SHELL`.
