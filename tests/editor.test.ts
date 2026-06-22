@@ -51,6 +51,16 @@ describe("EDITORS record", () => {
       if (!meta.gui) expect(meta.waitFlag).toBeUndefined();
     }
   });
+
+  test("every editor has a non-empty displayName", () => {
+    // The displayName is surfaced in chrome error messages (spawnEditor exit-code
+    // path), so an empty value would render as "  exited with code N". Each
+    // registry entry must carry one — guards against shape drift if an entry is
+    // added or refactored.
+    for (const [key, meta] of Object.entries(EDITORS)) {
+      expect(meta.displayName, key).toBeTruthy();
+    }
+  });
 });
 
 describe("resolveEditor", () => {
