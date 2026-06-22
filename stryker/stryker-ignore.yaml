@@ -1642,3 +1642,16 @@
   mutated: '""'
   reason: 'help.join separator. All help lines collapse to one string when printed; cosmetic — no test asserts the help string format.'
   added: 2026-06-20
+
+- file: src/session/notification-router.ts
+  mutator: ArrayDeclaration
+  original: '[]'
+  mutated: '["Stryker was here"]'
+  reason: 'initial `buffered: Notification[] = []` seed. The bogus string is at the front of the queue, but flushBuffered passes it through `writeNotificationToStderr` whose switch on `.kind` falls through every case (string has no kind), returning silently. Order of real Notification pushes/shifts is preserved; the bogus entry is consumed invisibly.'
+  added: 2026-06-22
+- file: src/session/notification-router.ts
+  mutator: ConditionalExpression
+  original: 'n'
+  mutated: 'true'
+  reason: 'defensive `if (n)` after `buffered.shift()` narrows the `T | undefined` return type. The surrounding `while (buffered.length > 0)` guarantees shift returns a defined Notification, so the guard is always true at runtime.'
+  added: 2026-06-22
