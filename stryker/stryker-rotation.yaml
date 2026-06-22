@@ -7,7 +7,6 @@
 #
 # See vault/agents/stryker-agent.md for the full workflow.
 
-- src/core/notify.ts
 - src/core/editor.ts
 - src/fs/cache.ts
 - src/config/ensure.ts
@@ -72,3 +71,4 @@
 - src/subcommands/log.ts
 - src/subcommands/completion.ts
 - src/session/notification-router.ts
+- src/core/notify.ts

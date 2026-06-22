@@ -1655,3 +1655,19 @@
   mutated: 'true'
   reason: 'defensive `if (n)` after `buffered.shift()` narrows the `T | undefined` return type. The surrounding `while (buffered.length > 0)` guarantees shift returns a defined Notification, so the guard is always true at runtime.'
   added: 2026-06-22
+
+- file: src/core/notify.ts
+  mutator: StringLiteral
+  original: '"step-output"'
+  mutated: '""'
+  reason: 'case label on the intentionally-no-op step-output branch in writeNotificationToStderr. Mutating to `""` makes the case unmatchable; for any real Notification (the discriminated union locks kind to chrome|verbose|step-output) the switch exits silently — same observable behavior as the original step-output drop documented in the JSDoc.'
+  added: 2026-06-22
+- file: src/core/notify.ts
+  mutator: ConditionalExpression
+  original: |-
+    case "step-output":
+          // Dialog-only — no stderr fallback. See JSDoc above.
+          return;
+  mutated: 'case "step-output":'
+  reason: 'removes the case body for the step-output branch. step-output is the last case and is intentionally a no-op (writeNotificationToStderr drops it per the JSDoc), so falling through to the end of the switch yields the same silent return.'
+  added: 2026-06-22
