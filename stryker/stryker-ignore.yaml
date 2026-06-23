@@ -1880,3 +1880,36 @@
   mutated: '``'
   reason: 'chrome message text on the spawn error catch; chrome is stderr UI, not asserted by tests.'
   added: 2026-06-22
+- file: src/fs/cache.ts
+  mutator: ConditionalExpression
+  original: 'cached !== null && isFresh(path, ttlMs)'
+  mutated: 'true'
+  reason: 'short-circuit redundant with isFresh''s defensive catch. When cached is null the file is missing, so statSync inside isFresh throws and returns false — the AND collapses to false either way.'
+  added: 2026-06-23
+- file: src/fs/cache.ts
+  mutator: StringLiteral
+  original: '`HTTP ${response.status} ${response.statusText}`'
+  mutated: '``'
+  reason: 'thrown error message is never inspected — the only caller (ensure.ts) catches and re-throws a generic Config error, tests assert .rejects.toThrow() without a message.'
+  added: 2026-06-23
+- file: src/fs/cache.ts
+  mutator: EqualityOperator
+  original: 'mtimeMs + ttlMs > Date.now()'
+  mutated: 'mtimeMs + ttlMs >= Date.now()'
+  reason: 'one-millisecond boundary at exact mtime+ttl == now; no test or real caller can construct that exact instant, behavior is identical for every reachable input.'
+  added: 2026-06-23
+- file: src/fs/cache.ts
+  mutator: BlockStatement
+  original: |-
+    {
+        return false;
+      }
+  mutated: '{}'
+  reason: 'catch body — dropping `return false` makes isFresh return undefined, which is falsy at the only call site (`if (cached !== null && isFresh(...))`); same branch behavior.'
+  added: 2026-06-23
+- file: src/fs/cache.ts
+  mutator: BooleanLiteral
+  original: 'false'
+  mutated: 'true'
+  reason: 'catch branch is unreachable in practice — statSync runs immediately after wrapFs.read of the same path; if read returned content the stat succeeds. No real input triggers the catch.'
+  added: 2026-06-23
