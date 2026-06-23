@@ -5,6 +5,7 @@
     "command": "STRYKER=1 bun test"
   },
   "mutate": ["src/command-response.schema.ts"],
+  "ignorePatterns": ["vault"],
   "coverageAnalysis": "off",
   "reporters": ["html", "json", "clear-text", "progress"],
   "htmlReporter": { "fileName": "stryker/reports/mutation/mutation.html" },

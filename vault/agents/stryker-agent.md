@@ -47,7 +47,7 @@ All stryker-related files live under `stryker/` at the repo root.
 
 ## Workflow
 
-0. **Setup.** If `node_modules/` is missing or any import fails (`Cannot find package …`), run `bun install` once before doing anything else. Cold checkouts need this.
+0. **Setup.** The cloud environment's SessionStart hook provisions the `monowrapo` workspace — it clones the `wrap-core`/`sweep` siblings and links them into `node_modules` via a workspace install. If `node_modules/` is still missing or any import fails (`Cannot find package …`), run the **workspace** install (`cd ../monowrapo && bun install`), never a bare `bun install` here — `wrap-core` is unpublished, so a standalone install 404s on it.
 
 1. **Sync + prune.** `git fetch origin && git reset --hard origin/main`. Load `stryker/stryker-ignore.yaml` and drop entries where `added + 10 days < today`. Don't commit yet — the prune ships in step 6's combined commit alongside the new ignores and the rotation update.
 
