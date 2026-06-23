@@ -19,16 +19,26 @@ if [ "$(basename "$WRAP_DIR")" != "wrap" ] && [ ! -e "$PARENT/wrap" ]; then
   ln -s "$WRAP_DIR" "$PARENT/wrap"
 fi
 
+# Authorize private clones with GH_TOKEN when the env provides one; otherwise
+# fall back to the in-session GitHub proxy. The proxy only works inside the live
+# session (not the cached setup-script phase) — that's why cloning lives here.
+auth_url() {
+  if [ -n "${GH_TOKEN:-}" ]; then
+    printf 'https://x-access-token:%s@github.com/TalAter/%s' "$GH_TOKEN" "$1"
+  else
+    printf 'https://github.com/TalAter/%s' "$1"
+  fi
+}
+
 # Clone-or-refresh every sibling to its latest default branch, so stryker always
-# runs against the wrap-core that's live on main. GitHub's cloud proxy authorizes
-# these clones with no token — access follows the connected account.
+# runs against the wrap-core that's live on main.
 for repo in wrap-core sweep monowrapo; do
   dir="$PARENT/$repo"
   if [ -d "$dir/.git" ]; then
     git -C "$dir" fetch --quiet origin
     git -C "$dir" reset --hard --quiet "@{u}"
   else
-    git clone --quiet "https://github.com/TalAter/$repo" "$dir"
+    git clone --quiet "$(auth_url "$repo")" "$dir"
   fi
 done
 

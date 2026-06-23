@@ -8,17 +8,26 @@
 # (.claude/hooks/routine-session-start.sh) does the real, path-aware linkage
 # against the live checkout — this script just primes the cache.
 #
-# Assumes `bun` is on PATH (the routine already runs `bun run mutate`).
+# The setup phase runs BEFORE the session's GitHub proxy exists, so cloning
+# private repos here needs an explicit token. Add a GH_TOKEN env var to the
+# environment (a PAT with read access to wrap-core/sweep/monowrapo). Without it
+# we skip warming entirely and let the in-session hook provision instead — no
+# hard failure either way. Assumes `bun` is on PATH (the routine runs it).
 set -e
+
+if [ -z "${GH_TOKEN:-}" ]; then
+  echo "No GH_TOKEN — skipping cache warm; the SessionStart hook provisions in-session."
+  exit 0
+fi
 
 warm=/tmp/wrap-warm
 rm -rf "$warm"
 mkdir -p "$warm"
 
 # Clone the whole workspace (wrap included — monowrapo globs ../wrap) so the
-# install resolves. GitHub's cloud proxy authorizes these with no token.
+# install resolves.
 for repo in wrap-core sweep wrap monowrapo; do
-  git clone --quiet "https://github.com/TalAter/$repo" "$warm/$repo"
+  git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/TalAter/$repo" "$warm/$repo"
 done
 
 cd "$warm/monowrapo"
