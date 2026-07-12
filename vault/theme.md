@@ -1,8 +1,8 @@
 ---
 name: theme
 description: Color tokens, dark/light appearances, color depth detection, graceful degradation
-Source: src/core/theme.ts, src/core/detect-appearance.ts, src/core/ansi.ts
-Last-synced: 4b5e321
+Source: src/core/theme.ts, src/main.ts (resolution call sites), wrap-core src/theme (probe + resolution chain), src/core/ansi.ts
+Last-synced: 63f023c
 ---
 
 # Theme
@@ -25,9 +25,9 @@ Non-Ink code resolves the active theme + color level at the render site. Ink com
 
 ## Appearance detection
 
-Resolution chain (first hit wins): env var → explicit config → disk cache (1h TTL) → synchronous OSC 11 probe (50ms) → default dark.
+Resolution chain (first hit wins): env var → explicit config → disk cache (1h TTL) → synchronous OSC 11 probe → default dark.
 
-OSC 11 asks the terminal for background color and computes WCAG luminance. **Probe is synchronous, not fire-and-forget**: its raw-mode toggle would otherwise race with a concurrently-mounting Ink dialog and drop the terminal out of raw mode while Ink still thinks it's there, echoing keystrokes to the shell. Two-pass resolution in startup so the wizard and `--help` see a resolved appearance before config load, then config can override.
+OSC 11 asks the terminal for background color and computes WCAG luminance. The probe sends OSC 11 together with a DA1 (Primary Device Attributes) query and reads until the DA1 reply: every terminal answers DA1, and replies arrive in order, so the wait is bounded by the terminal's real round-trip time (SSH included) rather than a guessed timeout, and both replies get consumed instead of leaking into the shell. A generous backstop timeout covers terminals that never answer DA1. **Probe is synchronous, not fire-and-forget**: its raw-mode toggle would otherwise race with a concurrently-mounting Ink dialog and drop the terminal out of raw mode while Ink still thinks it's there, echoing keystrokes to the shell. Two-pass resolution in startup so the wizard and `--help` see a resolved appearance before config load, then config can override — both passes go through the disk cache, so at most one probe fires per run.
 
 ## Color depth
 
@@ -43,7 +43,8 @@ Below truecolor, gradients short-circuit to a solid color — quantizing interpo
 - **No cross-theme derivation.** Explicit values prevent cascading surprises.
 - **Two-stop OKLAB gradients.** Simple to author, smooth result.
 - **OSC 11 probe is synchronous.** Must finish before any Ink dialog mounts — raw-mode cleanup races with Ink's stdin claim on the same tty.
-- **Skip the OSC 11 probe on non-themed code paths** (e.g. `--version`). Slow TTYs reply after the 50ms timeout fires and wrap exits; the orphan reply leaks into the parent shell as `^[]11;rgb:…^G`. Don't probe unless something is about to render with a theme.
+- **Skip the OSC 11 probe on non-themed code paths** (e.g. `--version`). Don't probe unless something is about to render with a theme.
+- **DA1 sentinel bounds the probe, not a fixed timeout.** A 50ms timeout leaked orphan replies into the parent shell (`^[]11;rgb:…^G`) on slow TTYs — SSH round-trips routinely exceed any guess that feels snappy locally.
 - **`NO_COLOR` always wins.** No exceptions.
 - **Per-level overrides on tokens, not separate level themes.** Override sits next to the base; one source of truth per token. Almost no tokens need them — only those whose nearest-palette snap reads as harsh.
 - **Modern bare `TERM` → 256, not 16.** Reality across docker/ssh/tmux. Genuine low-color terminals are listed explicitly.

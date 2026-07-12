@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createLlm, type Llm, type LlmMessage } from "wrap-core/llm";
+import { createLlm, type Llm, LlmAbortError, type LlmMessage } from "wrap-core/llm";
 import { ensureMemory } from "../src/memory/memory.ts";
 import { seedTestConfig } from "./helpers.ts";
 import { capturedStderr as stderr } from "./preload.ts";
@@ -20,11 +20,15 @@ function explodingLlm(message = "should not be called"): Llm {
 }
 
 /** Fake Llm capturing the conversation wiring; send returns `sendResult`. */
-function captureLlm(sendResult: object): {
+function captureLlm(sendResult: object | Error): {
   llm: Llm;
-  captured: { system: string | undefined; messages: LlmMessage[] };
+  captured: { system: string | undefined; messages: LlmMessage[]; sendOpts: unknown };
 } {
-  const captured = { system: undefined as string | undefined, messages: [] as LlmMessage[] };
+  const captured = {
+    system: undefined as string | undefined,
+    messages: [] as LlmMessage[],
+    sendOpts: undefined as unknown,
+  };
   const llm = {
     label: "test / capture",
     startConversation: (options: { system: string }) => {
@@ -34,7 +38,11 @@ function captureLlm(sendResult: object): {
           captured.messages.push(message);
         },
         entries: [],
-        send: async () => sendResult,
+        send: async (_schema: unknown, opts?: unknown) => {
+          captured.sendOpts = opts;
+          if (sendResult instanceof Error) throw sendResult;
+          return sendResult;
+        },
       };
     },
   } as unknown as Llm;
@@ -119,6 +127,21 @@ describe("ensureMemory", () => {
     expect(first.role).toBe("user");
     expect(first.content).toContain("## OS");
     expect(first.content).toContain("## Shell");
+  });
+
+  test("init send carries a timeout signal so a dead network can't hang forever", async () => {
+    const { llm, captured } = captureLlm({ facts: ["some fact"] });
+    await ensureMemory(llm);
+    const opts = captured.sendOpts as { signal?: AbortSignal } | undefined;
+    expect(opts?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("timeout abort surfaces as a plain no-response message, not a raw abort", async () => {
+    const { llm } = captureLlm(new LlmAbortError());
+    await expect(ensureMemory(llm)).rejects.toThrow(
+      /^LLM error \(test \/ capture\): no response after \d+ seconds — check your internet connection and try again\.$/,
+    );
+    expect(existsSync(MEMORY_PATH)).toBe(false);
   });
 
   test("facts saved under / scope in new map format", async () => {

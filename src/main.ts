@@ -44,7 +44,11 @@ export async function main() {
 
     // Early theme: WRAP_THEME env + cache work before config is loaded.
     // Covers --help, the wizard, and any other pre-config code path.
-    if (!isVersion) setTheme(resolveTheme(await resolveAppearance({ envVarName: "WRAP_THEME" })));
+    // `fs` matters: without it the cache is bypassed and this call fires a
+    // fresh OSC 11 probe every run — plus a second one below on cold cache.
+    if (!isVersion) {
+      setTheme(resolveTheme(await resolveAppearance({ envVarName: "WRAP_THEME", fs: wrapFs })));
+    }
 
     // Seed config from CLI + env + defaults so we have an initial state
     // even before reading config file. The session path re-resolves with

@@ -1,4 +1,4 @@
-import type { Llm } from "wrap-core/llm";
+import { type Llm, LlmAbortError } from "wrap-core/llm";
 import { z } from "zod";
 import { chrome } from "../core/output.ts";
 import { prettyPath, resolvePath } from "../core/paths.ts";
@@ -9,6 +9,10 @@ import { runProbes } from "./memory-init-probes.ts";
 import { countFacts, type Memory } from "./types.ts";
 
 const MEMORY_FILE = "memory.json";
+
+// The init send has no dialog and no abort surface — without a bound, a
+// stalled network hangs wrap forever on first run.
+const INIT_SEND_TIMEOUT_MS = 120_000;
 
 const FactSchema = z.object({ fact: z.string() });
 const MemoryFileSchema = z.record(z.string(), z.array(FactSchema));
@@ -100,8 +104,17 @@ export async function ensureMemory(llm: Llm): Promise<Memory> {
   chat.add({ role: "user", content: probeOutput });
   let facts: string[];
   try {
-    ({ facts } = await chat.send(InitFactsSchema));
+    ({ facts } = await chat.send(InitFactsSchema, {
+      signal: AbortSignal.timeout(INIT_SEND_TIMEOUT_MS),
+    }));
   } catch (e) {
+    // Nothing else can abort this send, so LlmAbortError here means the
+    // timeout fired — translate it before the generic wrapping below.
+    if (e instanceof LlmAbortError) {
+      throw new Error(
+        `LLM error (${llm.label}): no response after ${INIT_SEND_TIMEOUT_MS / 1000} seconds — check your internet connection and try again.`,
+      );
+    }
     // Send failures (provider, parse) propagate to main's catch — prefixed
     // here so the user-facing message keeps wrap's voice (vault invariant 3).
     // LlmConfigError can't reach this catch: createLlm validates eagerly, and

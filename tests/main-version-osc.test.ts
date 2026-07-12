@@ -51,4 +51,25 @@ describe("main: OSC 11 early-theme probe is gated by isVersion", () => {
   test("does call resolveAppearance for --help", async () => {
     expect(await runFlagAndCountProbes("--help")).toBeGreaterThan(0);
   });
+
+  // Regression: the early call omitted `fs`, which skips the appearance
+  // cache entirely — so every invocation fired a fresh OSC 11 probe, and
+  // cold runs fired two (early + post-config). With `fs`, the early call
+  // populates the cache and the post-config call hits it: one probe max.
+  test("every resolveAppearance call passes fs so probes are cached", async () => {
+    const spy = spyOn(appearance, "resolveAppearance");
+    spy.mockResolvedValue("dark");
+    const stdout = mockStdout();
+    process.argv = ["bun", "wrap", "--help"];
+    try {
+      await main();
+      expect(spy.mock.calls.length).toBeGreaterThan(0);
+      for (const call of spy.mock.calls) {
+        expect(call[0]?.fs).toBeDefined();
+      }
+    } finally {
+      stdout.restore();
+      spy.mockRestore();
+    }
+  });
 });
