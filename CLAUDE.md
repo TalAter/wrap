@@ -38,3 +38,5 @@ A stop hook runs `bun run lint` (biome --write + tsc) automatically when you fin
 ## wrap-core dependency
 
 wrap-core is a sibling package providing shared substrate. When working on shared substrate (TUI primitives, theme, providers, dialog infra, config), read `vault/wrap-core-api`
+
+wrap-core is unpublished; it resolves via local workspace linking and a separate CI-only mechanism that can silently drift out of sync. Before touching dependency wiring, build scripts, or release workflows, read `vault/dependency-model.md`.
