@@ -83,7 +83,12 @@ jobs:
             os: linux
     runs-on: ${{ matrix.runner }}
     steps:
+      # persist-credentials: false — this job's checkout auth would otherwise
+      # get picked up by the sibling `git clone`s below and break them (the
+      # token isn't valid for those repos); this job never pushes, so it's safe.
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
