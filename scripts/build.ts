@@ -17,14 +17,17 @@ const stubReactDevtoolsPlugin: Bun.BunPlugin = {
 };
 
 const NAME = "wrap";
-// One binary per target, into dist/<name>-<os>-<arch> (the dev sandbox mounts
-// the linux one; the `w` alias points at the darwin one). `bun-` is stripped
-// for friendlier filenames.
-const TARGETS = ["bun-darwin-arm64", "bun-linux-arm64"] as const;
 
-const outfileFor = (target: string) => `dist/${NAME}-${target.slice(4)}`;
+// WRAP_BUILD_TARGET set (release CI): build that single target to a root
+// ./wrap binary. Unset (local dev): build both dev-sandbox targets into
+// dist/<name>-<os>-<arch> (the dev sandbox mounts the linux one; the `w`
+// alias points at the darwin one). `bun-` is stripped for friendlier filenames.
+const releaseTarget = process.env.WRAP_BUILD_TARGET;
+const TARGETS = releaseTarget ? [releaseTarget] : ["bun-darwin-arm64", "bun-linux-arm64"];
 
-mkdirSync("dist", { recursive: true });
+const outfileFor = (target: string) => (releaseTarget ? NAME : `dist/${NAME}-${target.slice(4)}`);
+
+if (!releaseTarget) mkdirSync("dist", { recursive: true });
 
 for (const target of TARGETS) {
   const result = await Bun.build({

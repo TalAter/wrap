@@ -95,7 +95,17 @@ jobs:
           key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bun-version', 'bun.lock') }}
           restore-keys: bun-${{ runner.os }}-${{ runner.arch }}-
 
-      - run: bun install --frozen-lockfile
+      # wrap-core is deliberately unpublished (so local dev doesn't require
+      # cutting a wrap-core version per change) — it only resolves through
+      # the sibling monowrapo Bun workspace, same as scripts/cloud-env-setup.sh.
+      - name: Install dependencies via monowrapo workspace
+        run: |
+          cd ..
+          git clone --quiet --depth 1 https://github.com/TalAter/wrap-core
+          git clone --quiet --depth 1 https://github.com/TalAter/sweep
+          git clone --quiet --depth 1 https://github.com/TalAter/monowrapo
+          cd monowrapo
+          bun install
 
       # BUN_NO_CODESIGN_MACHO_BINARY=1 skip Bun's post-compile self-sign on macOS.
       # Strip below would invalidate it anyway, then we re-sign ad-hoc.
