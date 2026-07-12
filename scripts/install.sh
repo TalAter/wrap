@@ -215,10 +215,20 @@ update_rc_files() {
   # shellcheck disable=SC2016  # literal '$HOME' so the rc-file source line resolves at shell startup
   line='. "$HOME/.wrap/env"'
 
+  # Login shells (ssh, console) read the first of .bash_profile/.bash_login/
+  # .profile and never .bashrc, so .profile always gets the line. .bash_profile
+  # and .bash_login shadow .profile when present, so they get it too — but only
+  # when pre-existing; creating them would break the .profile chain for other
+  # tools. .bashrc covers non-login interactive shells.
   # zsh: .zshenv (not .zshrc) so the source line lands in scripts and
   # non-interactive shells too. The env script is a guarded PATH prepend, so
   # leaking into subprocesses is the desired behavior. Pattern from rustup.
-  for rc in "$HOME/.bashrc" "${ZDOTDIR:-$HOME}/.zshenv"; do
+  for rc in "$HOME/.profile" "$HOME/.bashrc" "${ZDOTDIR:-$HOME}/.zshenv"; do
+    out="$(ensure_rc_line "$rc" "$line")"
+    modified="${modified}${out}"
+  done
+  for rc in "$HOME/.bash_profile" "$HOME/.bash_login"; do
+    [ -f "$rc" ] || continue
     out="$(ensure_rc_line "$rc" "$line")"
     modified="${modified}${out}"
   done

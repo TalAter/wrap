@@ -34,6 +34,9 @@ trap 'rm -rf "$HOME" "$SENTINEL_HOME"' EXIT INT TERM
 # shellcheck disable=SC2016  # literal '$HOME' as written in the rc source line
 LINE_BASH='. "$HOME/.wrap/env"'
 RC_BASH="$HOME/.bashrc"
+RC_PROFILE="$HOME/.profile"
+RC_BPROFILE="$HOME/.bash_profile"
+RC_BLOGIN="$HOME/.bash_login"
 RC_ZSH="${ZDOTDIR:-$HOME}/.zshenv"
 FISH_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/wrap.fish"
 FISH_LINE='source ~/.wrap/env.fish'
@@ -50,6 +53,9 @@ fail() {
 
 # ---------- 1. Install ----------
 echo "== install" >&2
+# Pre-existing .bash_profile shadows .profile for login shells; the installer
+# must add the source line to it. .bash_login stays absent and must not be created.
+printf '# pre-existing\n' > "$RC_BPROFILE"
 sh "$INSTALL_SCRIPT" --base-url "$BASE_URL"
 
 [ -x "$HOME/.local/bin/wrap" ] || fail "binary not at \$HOME/.local/bin/wrap"
@@ -63,7 +69,10 @@ if [ -n "${EXPECTED_VERSION:-}" ]; then
   esac
 fi
 
-[ "$(count_line "$RC_BASH" "$LINE_BASH")"   = 1 ] || fail "$RC_BASH has wrong number of source lines"
+[ "$(count_line "$RC_BASH" "$LINE_BASH")"     = 1 ] || fail "$RC_BASH has wrong number of source lines"
+[ "$(count_line "$RC_PROFILE" "$LINE_BASH")"  = 1 ] || fail "$RC_PROFILE has wrong number of source lines"
+[ "$(count_line "$RC_BPROFILE" "$LINE_BASH")" = 1 ] || fail "$RC_BPROFILE has wrong number of source lines"
+[ ! -e "$RC_BLOGIN" ] || fail "installer created $RC_BLOGIN (should only modify it when pre-existing)"
 [ "$(count_line "$RC_ZSH"  "$LINE_BASH")"   = 1 ] || fail "$RC_ZSH has wrong number of source lines"
 [ "$(count_line "$FISH_CONF" "$FISH_LINE")" = 1 ] || fail "$FISH_CONF has wrong number of source lines"
 
@@ -80,6 +89,7 @@ HOME="$SENTINEL_HOME" sh "$INSTALL_SCRIPT" --base-url "$BASE_URL" --no-modify-pa
 [ ! -e "$SENTINEL_HOME/.wrap/env" ]      || fail "--no-modify-path wrote env script"
 [ ! -e "$SENTINEL_HOME/.wrap/env.fish" ] || fail "--no-modify-path wrote fish env script"
 [ ! -e "$SENTINEL_HOME/.bashrc" ]        || fail "--no-modify-path wrote .bashrc"
+[ ! -e "$SENTINEL_HOME/.profile" ]       || fail "--no-modify-path wrote .profile"
 [ ! -e "$SENTINEL_HOME/.zshenv" ]        || fail "--no-modify-path wrote .zshenv"
 rm -rf "$SENTINEL_HOME"
 SENTINEL_HOME=""
@@ -88,7 +98,9 @@ SENTINEL_HOME=""
 echo "== reinstall" >&2
 sh "$INSTALL_SCRIPT" --base-url "$BASE_URL"
 
-[ "$(count_line "$RC_BASH" "$LINE_BASH")"   = 1 ] || fail "$RC_BASH duplicated source line on re-run"
+[ "$(count_line "$RC_BASH" "$LINE_BASH")"     = 1 ] || fail "$RC_BASH duplicated source line on re-run"
+[ "$(count_line "$RC_PROFILE" "$LINE_BASH")"  = 1 ] || fail "$RC_PROFILE duplicated source line on re-run"
+[ "$(count_line "$RC_BPROFILE" "$LINE_BASH")" = 1 ] || fail "$RC_BPROFILE duplicated source line on re-run"
 [ "$(count_line "$RC_ZSH"  "$LINE_BASH")"   = 1 ] || fail "$RC_ZSH duplicated source line on re-run"
 [ "$(count_line "$FISH_CONF" "$FISH_LINE")" = 1 ] || fail "$FISH_CONF duplicated on re-run"
 
