@@ -103,12 +103,14 @@ jobs:
       # wrap-core is deliberately unpublished (so local dev doesn't require
       # cutting a wrap-core version per change) — it only resolves through
       # the sibling monowrapo Bun workspace, same as scripts/cloud-env-setup.sh.
+      # Token-embedded clone URLs, same as that script: a plain anonymous
+      # clone hits an ambient credential prompt on hosted runners.
       - name: Install dependencies via monowrapo workspace
         run: |
           cd ..
-          git clone --quiet --depth 1 https://github.com/TalAter/wrap-core
-          git clone --quiet --depth 1 https://github.com/TalAter/sweep
-          git clone --quiet --depth 1 https://github.com/TalAter/monowrapo
+          for repo in wrap-core sweep monowrapo; do
+            git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/TalAter/$repo"
+          done
           cd monowrapo
           bun install
 
