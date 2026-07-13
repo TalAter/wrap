@@ -27,6 +27,10 @@ Watch it: `gh run list --limit 3` to find the run, then `gh run watch <id>`.
 
 **The homebrew PR does not auto-merge.** Review the diff (`gh pr view <n> --repo TalAter/homebrew-wrap`) and merge once its `test-bot` check is green. If `test-bot` fails on `brew style`, it's Homebrew's formula linter, not your version bump — fix the formula on the PR's branch and push a follow-up commit (don't reopen a new PR).
 
+## Preflight fails with mass TUI test failures (input never registers)
+
+If dozens of Ink tests fail with keystrokes never arriving (`onSubmit`/`onChange` timeouts, paste-listener MaxListeners warnings), suspect a corrupted `node_modules` before suspecting code: running `bun install` standalone inside `wrap/` builds a local tree but can leave stale workspace symlinks (e.g. `react`, `ink-testing-library`) pointing into monowrapo's store. Two React/ink instances split the stdin context. Check with `find node_modules -maxdepth 1 -type l`. Fix: `rm -rf wrap/node_modules`, then `bun install` from `monowrapo` — never standalone.
+
 ## wrap-core resolution — don't "fix" this if CI breaks on it
 
 Read [[dependency-model]] (`vault/dependency-model.md`) before touching anything here. Short version: `wrap-core` is deliberately unpublished and version-matched via a local Bun workspace; CI resolves it separately via an ad hoc two-package workspace in `release.yml`'s `build` job. The two mechanisms are independent and can silently drift apart — that's exactly what broke the v0.0.6 release.
