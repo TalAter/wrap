@@ -2093,3 +2093,34 @@
   mutated: 'true'
   reason: 'guards the pass-through path for non-ConfigError exceptions from wrap-core loadJsoncConfig. In practice loadJsoncConfig only throws ConfigError for parse failures; the non-ConfigError path fires only on fs.read() system errors (EACCES, EISDIR) that real users only see under rare permission/setup edge cases. Both the original (rethrow raw) and mutated ("Config error:" prefix) surface a clear error — the catch-block''s design choice of which errors deserve the prefix isn''t a behavioral contract worth a brittle fs-condition test. Same pattern as the llm-config.ts:107 LlmConfigError ignore.'
   added: 2026-06-23
+
+- file: src/logging/lookup.ts
+  mutator: MethodExpression
+  original: 'readFileSync(path, "utf-8").trimEnd()'
+  mutated: 'readFileSync(path, "utf-8").trimStart()'
+  reason: 'trim direction on the JSONL content is masked downstream: the `if (!line) continue` skip at line 19 drops any empty element produced by a trailing newline, and `JSON.parse` silently catches lines with leading whitespace. Verified equivalent across typical JSONL, leading-newline, empty, and whitespace-only inputs.'
+  added: 2026-06-23
+- file: src/logging/lookup.ts
+  mutator: ConditionalExpression
+  original: '!content'
+  mutated: 'false'
+  reason: 'empty-content early return for readLogEntries. When skipped, `"".split("\n")` yields `[""]`, the empty line is filtered by the line-19 `if (!line) continue` guard, and the function returns the empty `entries` array — same observable result.'
+  added: 2026-06-23
+- file: src/logging/lookup.ts
+  mutator: ConditionalExpression
+  original: '!line'
+  mutated: 'false'
+  reason: 'empty-line skip inside the JSONL parse loop. When skipped, empty lines fall through to `JSON.parse("")` which throws and is swallowed by the surrounding try/catch — same observable result (no entry pushed).'
+  added: 2026-06-23
+- file: src/logging/lookup.ts
+  mutator: ConditionalExpression
+  original: 'entries.length === 0'
+  mutated: 'false'
+  reason: 'empty-entries early return for findContinuationParent. When skipped, `entries[-1] ?? null` makes `newest` null; the ppid-1 branch returns null; the for-loop with length 0 does not iterate; the function returns `newest` which is null — same observable result.'
+  added: 2026-06-23
+- file: src/logging/lookup.ts
+  mutator: ArithmeticOperator
+  original: 'entries.length - 1'
+  mutated: 'entries.length + 1'
+  reason: 'loop-start index for the newest-first ppid scan. The extra iterations at `i = length+1` and `i = length` read undefined and fail the `if (entry && …)` guard, so the loop visits the same real entries in the same order — same matches returned.'
+  added: 2026-06-23
