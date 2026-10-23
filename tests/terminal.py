@@ -424,10 +424,10 @@ def esc_aborts_a_step_under_zsh():
 def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
     # Interactive bash hands the terminal to each foreground job even with +m, so keys
     # (including Esc) go to the job until it exits; the dialog must survive and resume.
-    responses = [command('sleep 1.5; echo STEP_DONE', final=False, explanation='A medium step'), command('echo done', risk='low')]
+    responses = [command('sleep 3; echo STEP_DONE', final=False, explanation='A medium step'), command('echo done', risk='low')]
     s = Session(['bash step'], responses=responses, extra_env={'SHELL': '/bin/bash'})
     try:
-        s.until('sleep 1.5; echo STEP_DONE'); s.until('Run command?'); s.send('y')
+        s.until('sleep 3; echo STEP_DONE'); s.until('Run command?'); s.send('y')
         s.until('Running step...')
         # Until bash hands the job the terminal, Esc would still reach the dialog and abort the step.
         end = time.monotonic() + 5

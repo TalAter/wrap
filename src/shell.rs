@@ -370,6 +370,8 @@ struct Terminal {
     /// a suspend and `bg`. Cleared again once the foreground is back with
     /// this process (`fg`) or the child's job.
     displaced_by: Cell<Option<libc::pid_t>>,
+    /// The SIGCONT count already folded into `displaced_by`.
+    continued: Cell<usize>,
 }
 
 impl Terminal {
@@ -387,6 +389,7 @@ impl Terminal {
             killed: Cell::new(None),
             observed: Cell::new(group),
             displaced_by: Cell::new(None),
+            continued: Cell::new(CONTINUED.load(std::sync::atomic::Ordering::SeqCst)),
         })
     }
 
@@ -395,15 +398,27 @@ impl Terminal {
         unsafe { libc::tcgetpgrp(self.tty.as_raw_fd()) }
     }
 
-    /// Sample the foreground while `child` runs.
+    /// Sample the foreground while `child` runs. A group that is neither
+    /// ours nor the child's has taken the terminal (the shell after a
+    /// suspend and `bg`); it keeps that standing when the child's exit hands
+    /// the terminal back to us, and loses it only when the shell itself
+    /// resumes us with the terminal (`fg`, seen as a SIGCONT while we are
+    /// the foreground).
     fn observe(&self, child: libc::pid_t) {
         let foreground = self.foreground();
-        if foreground <= 0 || foreground == self.observed.get() {
+        let continued = CONTINUED.load(std::sync::atomic::Ordering::SeqCst);
+        let resumed = continued != self.continued.get();
+        self.continued.set(continued);
+        if foreground <= 0 || (foreground == self.observed.get() && !resumed) {
             return;
         }
         self.observed.set(foreground);
         let ours = foreground == self.group || group_belongs_to_child(foreground, child);
-        self.displaced_by.set((!ours).then_some(foreground));
+        if !ours {
+            self.displaced_by.set(Some(foreground));
+        } else if resumed && foreground == self.group {
+            self.displaced_by.set(None);
+        }
     }
 
     /// The foreground group when it is a job of `child`'s rather than ours.
@@ -537,6 +552,26 @@ fn set_foreground(fd: libc::c_int, group: libc::pid_t) -> io::Result<()> {
 
 static SIGNAL_SCOPE: Mutex<()> = Mutex::new(());
 
+/// Counts SIGCONTs while a captured child shares the terminal: the shell
+/// sends one for both `bg` and `fg`, and the foreground at that moment says
+/// which the user meant.
+static CONTINUED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// The SIGCONT handler that was active before the scope, chained so a
+/// dialog's own note of the continue is still taken.
+static CHAINED_CONTINUE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+extern "C" fn note_continued(signal: libc::c_int) {
+    use std::sync::atomic::Ordering;
+    CONTINUED.fetch_add(1, Ordering::SeqCst);
+    let previous = CHAINED_CONTINUE.load(Ordering::SeqCst);
+    if previous != libc::SIG_DFL && previous != libc::SIG_IGN {
+        // SAFETY: the value was a handler function pointer read from
+        // sigaction; calling it is what the kernel would have done.
+        let handler: extern "C" fn(libc::c_int) = unsafe { std::mem::transmute(previous) };
+        handler(signal);
+    }
+}
+
 /// Ignore signals in Wrap while a child runs: SIGINT and SIGTERM while the
 /// child owns the terminal (it sits in the same foreground process group,
 /// so Ctrl-C still reaches it and Wrap survives to record the exit code),
@@ -557,17 +592,31 @@ impl IgnoredSignals {
             previous: Vec::with_capacity(signals.len()),
             _exclusive: exclusive,
         };
-        for &signal in signals {
+        let noting_continue = signals == JOB_CONTROL_SIGNALS;
+        let all: Vec<libc::c_int> = if noting_continue {
+            signals.iter().copied().chain([libc::SIGCONT]).collect()
+        } else {
+            signals.to_vec()
+        };
+        for signal in all {
             // SAFETY: sigaction fills `previous`; the new action is SIG_IGN
-            // with an empty mask.
+            // (or the continue note) with an empty mask.
             let mut previous: libc::sigaction = unsafe { std::mem::zeroed() };
             let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
-            action.sa_sigaction = libc::SIG_IGN;
+            action.sa_sigaction = if signal == libc::SIGCONT {
+                note_continued as *const () as libc::sighandler_t
+            } else {
+                libc::SIG_IGN
+            };
+            action.sa_flags = libc::SA_RESTART;
             unsafe {
                 libc::sigemptyset(&mut action.sa_mask);
                 if libc::sigaction(signal, &action, &mut previous) == -1 {
                     return Err(io::Error::last_os_error());
                 }
+            }
+            if signal == libc::SIGCONT {
+                CHAINED_CONTINUE.store(previous.sa_sigaction, std::sync::atomic::Ordering::SeqCst);
             }
             guard.previous.push((signal, previous));
         }
