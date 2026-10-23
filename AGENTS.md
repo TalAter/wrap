@@ -18,7 +18,9 @@ Hard rules:
   of `--help`/`--log`/`--version`/`--completion`). All chrome goes to stderr.
 - User-facing errors are plain language with one prefix per category
   (`Config error:`, `LLM error (…):`, `Memory error:`, …). No internals.
-- Prompt text lives in `src/prompt/`; see the architecture note before editing.
+- Prompt text lives in `src/prompt/`. Read the prompt section of the
+  architecture note before editing it; `make optimize` regenerates
+  `optimized.json`.
 
 Use Cargo for dependencies and workflows. Follow [testing.md](testing.md) to
 choose checks for each change before committing. Verify terminal interactions

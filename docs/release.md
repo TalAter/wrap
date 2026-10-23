@@ -1,6 +1,15 @@
 # Releasing
 
-Design rationale lives in `vault/release.md`. This is the **how**.
+Wrap ships prebuilt binaries for macOS and Linux through two channels: the
+personal Homebrew tap [`talater/homebrew-wrap`](https://github.com/talater/homebrew-wrap)
+and the curl-sh installer at `wrap.talater.com/install.sh` (a redirect to the
+latest release's `install.sh` asset). A personal tap ships the moment a tag
+builds; homebrew-core is a later option. The tap consumes the four non-musl
+tarballs; musl is install-script-only. Binaries are ad-hoc signed, not
+notarized: curl and brew never set the quarantine attribute, so only a manual
+browser download sees the Gatekeeper dialog. Nothing writes to `$HOME` at
+install time; the wizard owns first-run config. Completions ship as
+`--completion <shell> [name]` so the single binary stays the only artifact.
 
 ## Cutting a release
 

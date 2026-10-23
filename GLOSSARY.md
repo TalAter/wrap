@@ -1,53 +1,111 @@
-# Glossary
+# Wrap
 
-**Invocation**: One `wrap` run.
+Wrap turns a natural-language prompt into a shell command, confirms it when
+it carries risk, and runs it.
 
-**Query**: The LLM interaction loop within an invocation.
+## Language
 
-**Round**: One LLM response and its optional execution. Probes, intermediate
-steps, and answers are each one round. A round may contain several
-**attempts** (physical LLM calls) when a reply fails to parse or a high-risk
-command arrives without a scratchpad.
+**Invocation**: One `wrap` run, from argv to exit code. Produces one log entry
+unless a subcommand short-circuits.
 
-**Session**: The runtime loop that owns the state machine, the dialog
-lifecycle, and notification routing.
+**Session**: The runtime loop of one invocation: reducer, coordinator, dialog
+lifecycle and notification routing.
 
-**Subcommand**: A CLI action selected by a leading flag (`--log`, `--help`).
+**Loop**: One run of the round loop over a budget of rounds. A follow-up,
+confirmed step or continuation starts a new loop with a fresh budget.
 
-**Modifier flag**: A flag stripped before dispatch that tweaks a query without
-branching (`--verbose`, `--model`, `-c`).
+**Round**: One model response and its optional execution. A round may hold
+several **attempts** (physical model calls): the parse retry and the
+scratchpad retry.
 
-**Skill**: A deterministic bundle of read-only probe commands that runs before
-the first LLM call and emits **probe** turns (command + captured output).
+**Turn**: One semantic entry of the transcript: `user`, `assistant`, `step`,
+`probe` or `final`. The transcript and the log entry's `turns` are the same
+list. Turns are stored bare and framed into provider messages as they are
+added.
 
-**Tool watchlist**: Persisted tool names `which`-checked on every run.
+**Transient**: A conversation add consumed by the send it precedes and never
+replayed (temp-dir listing, last-round instruction, retry echo).
 
-**Memory**: Facts about the environment, each scoped to a directory; `/` is
-global. Stored in `memory.json`.
+**Echo projection**: The reduced form of a prior response the model sees on
+later rounds: `type`, `final`, `content`, `risk_level`, `plan`.
 
-**Chrome**: Wrap's own UI (spinner, status lines, dialog, errors). Always on
-stderr or the terminal, never stdout.
+**Response**: The model's structured reply. `command` (a shell command) or
+`reply` (an answer). `final: false` marks an intermediate **step** whose
+output is captured and fed back.
 
-**Dialog**: The alternate-screen Ratatui surface: confirmation, edit,
-follow-up, compose, wizard, forget.
+**Scratchpad**: Optional `_scratchpad` planning field, first in the schema,
+never shown to the user. Required by prompt rule for state-changing requests.
 
-**Action bar**: The row of actions at the bottom of a dialog.
+**Risk level**: `low`, `medium` or `high`, reported by the model. Low final
+commands auto-run on the initial loop; everything else opens the dialog.
 
-**Follow-up**: Refining a command from inside the dialog within one invocation.
+**Yolo**: Every gate off: no dialog, no no-TTY block, non-final steps of any
+risk run inline. Risk is still logged.
 
-**Continuation**: `-c` resumes the previous conversation in a new invocation.
+**Source**: Who authored an executed command: `model` or `user_override`
+(edited in the dialog). Final turns also carry `cancelled`, `blocked`,
+`exhausted` and `error`.
 
-**Risk level**: `low`, `medium`, or `high`, reported by the LLM. Low final
-commands auto-run; others open the dialog.
+**Follow-up**: Refining the command from inside the dialog within one
+invocation.
 
-**Yolo**: Every execution gate off; the LLM's risk is still logged.
+**Continuation**: `-c` resumes the previous conversation in a new invocation
+by replaying the parent chain from the log.
+
+**Skill**: A deterministic bundle of read-only **tasks** that runs before the
+first model call. Each task emits a **probe** turn (command plus captured
+output) ahead of the user turn.
+
+**Tool watchlist**: Persisted tool names the discovery skill `which`-checks on
+every run. Holds names to check, not tools known to exist.
+
+**Memory**: Facts about the environment, each under a **scope** (an absolute
+directory; `/` is global). Only scopes at or above cwd enter the prompt.
 
 **Attached input**: Piped stdin, written to `$WRAP_TEMP_DIR/input` and
-previewed to the LLM.
+previewed to the model. Human-facing text says "piped".
 
-**Answer**: A `reply` response printed to stdout instead of a command.
+**Scratch dir**: The per-invocation `$WRAP_TEMP_DIR` for downloaded or
+generated artifacts. Store there, never execute from there.
 
-**Log**: One JSONL record per invocation at `$WRAP_HOME/logs/wrap.jsonl`;
-optional trace sidecars under `logs/traces/`.
+**Chrome**: Wrap's own stderr narration: spinner, status lines, verbose
+trace, errors. Never stdout.
 
-**Wrap home**: `~/.wrap` or `$WRAP_HOME`: config, memory, watchlist, logs, cache.
+**Notification bus**: The process-wide channel chrome is emitted on. The
+session's **router** decides whether a notification goes to stderr, is
+buffered until the dialog unmounts, or also updates the live dialog.
+
+**Dialog**: A Ratatui surface on the stderr alternate screen: the response
+dialog (confirm, edit, follow-up, compose, step progress), the wizard and the
+forget checklist.
+
+**Output slot**: The dialog area showing the last captured step output.
+
+**Action bar**: The row of actions at the bottom of the response dialog.
+
+**Editor handoff**: The state in which a terminal-owning external editor holds
+the TTY and the dialog is unmounted.
+
+**Subcommand**: A leading `--flag` that short-circuits the query (`--help`,
+`--version`, `--log`, `--completion`, `--forget`).
+
+**Modifier flag**: A flag stripped before dispatch that tweaks a query
+(`--verbose`, `--model`, `-c`, `--yolo`). Derived from the settings registry.
+
+**Prompt scaffold**: The per-session system text, few-shot prefix and context
+block built from the embedded prompt assets.
+
+**Prompt assets**: `constants.json` (hand-edited strings), `optimized.json`
+(optimizer output) and `schema.txt` (schema source with comments).
+
+**Test provider**: Canned playback selected by `WRAP_TEST_RESPONSE` or
+`WRAP_TEST_RESPONSES`; bypasses provider resolution.
+
+**Eval bridge**: The hidden `--eval-bridge` mode the prompt optimizer calls
+to assemble or execute one request with the runtime's prompt path.
+
+**Appearance**: Dark or light, resolved from env, config, cache or a terminal
+probe. **Color level** is 0 to 3 (mono, 16, 256, truecolor).
+
+**Wrap home**: `~/.wrap` or `$WRAP_HOME`: config, memory, watchlist, logs,
+cache.
