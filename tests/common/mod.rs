@@ -24,9 +24,7 @@ pub fn buffer(width: u16, height: u16) -> Buffer {
 pub fn rows(buf: &Buffer) -> Vec<String> {
     (0..buf.area.height)
         .map(|y| {
-            let row: String = (0..buf.area.width)
-                .map(|x| buf[(x, y)].symbol())
-                .collect();
+            let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect();
             row.trim_end().to_string()
         })
         .collect()

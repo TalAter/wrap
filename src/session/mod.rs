@@ -1,1 +1,3 @@
-//! TODO: implemented in a later commit.
+//! Session: state machine vocabulary, reducer, coordinator.
+
+pub mod state;
