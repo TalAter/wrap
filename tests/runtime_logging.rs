@@ -565,6 +565,39 @@ fn read_log_entries_handles_missing_empty_and_malformed_files() {
     assert_eq!(ids, vec!["good"]);
 }
 
+#[test]
+fn read_log_entries_survives_non_utf8_bytes_elsewhere_in_the_log() {
+    let (_dir, home) = home();
+    let mut first = entry();
+    first.id = "first".into();
+    let mut second = entry();
+    second.id = "second".into();
+    let mut bytes = format!("{}\n", first.to_jsonl_line()).into_bytes();
+    bytes.extend_from_slice(b"\xff\xfe not utf8\n");
+    bytes.extend_from_slice(format!("{}\n", second.to_jsonl_line()).as_bytes());
+    fs::create_dir_all(home.resolve("logs")).unwrap();
+    fs::write(home.resolve("logs/wrap.jsonl"), bytes).unwrap();
+    let ids: Vec<String> = read_log_entries(&home).into_iter().map(|e| e.id).collect();
+    assert_eq!(ids, vec!["first", "second"]);
+}
+
+#[test]
+fn a_bare_id_object_is_not_a_run_and_never_becomes_the_continuation_parent() {
+    let (_dir, home) = home();
+    let mut real = entry();
+    real.id = "real".into();
+    real.ppid = 4242;
+    let lines = format!(
+        "{}\n{{\"id\":\"garbage\"}}\n{{\"id\":\"no-turns\",\"timestamp\":\"2026-10-23T10:00:00.000Z\"}}\n{{\"id\":\"turns-not-array\",\"timestamp\":\"2026-10-23T10:00:00.000Z\",\"turns\":{{}}}}\n",
+        real.to_jsonl_line()
+    );
+    home.write("logs/wrap.jsonl", &lines).unwrap();
+    let entries = read_log_entries(&home);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(find_continuation_parent(&entries, 4242).unwrap().id, "real");
+    assert_eq!(find_continuation_parent(&entries, 9999).unwrap().id, "real");
+}
+
 fn with(id: &str, ppid: u32, parent_id: Option<&str>, turns: Vec<Turn>) -> LogEntry {
     let mut e = entry();
     e.id = id.into();

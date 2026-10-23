@@ -124,13 +124,18 @@ class Session:
         stdin_arg = 'subprocess.PIPE' if piped_stdin is not None else 'None'
         stdout_arg = f'open({str(self.stdout_file)!r},"wb")' if redirect_stdout else 'None'
         feed = f'p.stdin.write({piped_stdin!r}); p.stdin.close(); ' if piped_stdin is not None else ''
-        # The wrapper stands in for the user's shell: it owns the terminal, survives a
-        # keyboard Ctrl+C aimed at the foreground job, and records the terminal state
-        # wrap leaves behind. Its handler (not SIG_IGN) resets to default across exec.
+        # The wrapper stands in for the user's job-control shell: it leads the session and
+        # owns the terminal, runs wrap as a foreground job in a process group of its own
+        # (so wrap's group is not orphaned and a background read stops it with SIGTTIN,
+        # as under a real shell), and records the foreground group and terminal state
+        # wrap leaves behind before taking the terminal back like a shell would. Its
+        # SIGINT handler (not SIG_IGN) resets to default across exec.
         wrapper = ('import subprocess,termios,fcntl,sys,os,signal; fcntl.ioctl(0,termios.TIOCSCTTY,0); signal.signal(signal.SIGINT,lambda *a:None); '
-                   f'p=subprocess.Popen(sys.argv[2:],stdin={stdin_arg},stdout={stdout_arg}); '
+                   'job=lambda:(os.setpgid(0,0),signal.signal(signal.SIGTTOU,signal.SIG_IGN),os.tcsetpgrp(2,os.getpid()),signal.signal(signal.SIGTTOU,signal.SIG_DFL)); '
+                   f'p=subprocess.Popen(sys.argv[2:],stdin={stdin_arg},stdout={stdout_arg},preexec_fn=job); '
                    'open(sys.argv[1]+".pid","w").write(str(p.pid)); ' + feed +
-                   'p.wait(); open(sys.argv[1]+".foreground","w").write(str(os.tcgetpgrp(0))); '
+                   'p.wait(); fg=os.tcgetpgrp(2); signal.signal(signal.SIGTTOU,signal.SIG_IGN); os.tcsetpgrp(2,os.getpgrp()); '
+                   'open(sys.argv[1]+".foreground","w").write(str(fg)); '
                    'open(sys.argv[1],"w").write(repr(termios.tcgetattr(0))); sys.exit(p.returncode)')
         self.process = subprocess.Popen([sys.executable, '-c', wrapper, str(self.termios_result), BINARY, *args],
                                         stdin=self.slave, stdout=self.slave, stderr=self.slave, env=env, start_new_session=True)
@@ -143,7 +148,9 @@ class Session:
         raise AssertionError('wrap never started')
     def resize(self, w, h):
         fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack('HHHH', h, w, 0, 0)); self.screen.resize(w, h)
-        if hasattr(self, 'process'): os.killpg(self.process.pid, signal.SIGWINCH)
+        if hasattr(self, 'process'):
+            try: os.killpg(self.pid(), signal.SIGWINCH)
+            except (AssertionError, ProcessLookupError): pass
     def pump(self, timeout=.1):
         if select.select([self.master], [], [], timeout)[0]:
             try: data = os.read(self.master, 65536)
@@ -183,7 +190,8 @@ class Session:
         if self.process.poll() is None: raise AssertionError(('terminal stalled', self.screen.text(), self.output[-3000:]))
         for _ in range(3): self.pump(.02)
         assert self.process.returncode == code, (self.process.returncode, self.output[-6000:])
-        assert int(pathlib.Path(str(self.termios_result) + '.foreground').read_text()) == self.process.pid, 'terminal foreground group not restored'
+        # Wrap exits as the foreground job it was started as, never leaving the terminal with a group of its own children.
+        assert int(pathlib.Path(str(self.termios_result) + '.foreground').read_text()) == self.pid(), 'terminal foreground group not restored'
         restored = ast.literal_eval(self.termios_result.read_text())
         # macOS sets kernel-owned PENDIN when canonical mode resumes.
         expected = self.initial.copy(); expected[3] &= ~getattr(termios, 'PENDIN', 0); restored[3] &= ~getattr(termios, 'PENDIN', 0)
@@ -204,6 +212,8 @@ class Session:
             foreground = os.tcgetpgrp(self.slave)
             if foreground > 0 and foreground != self.process.pid: os.killpg(foreground, signal.SIGKILL)
         except OSError: pass
+        try: os.killpg(int(pathlib.Path(str(self.termios_result) + '.pid').read_text()), signal.SIGKILL)
+        except (OSError, ValueError): pass
         try: os.killpg(self.process.pid, signal.SIGKILL)
         except ProcessLookupError: pass
         try: self.process.wait(timeout=2)
@@ -418,7 +428,12 @@ def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
     s = Session(['bash step'], responses=responses, extra_env={'SHELL': '/bin/bash'})
     try:
         s.until('sleep 1.5; echo STEP_DONE'); s.until('Run command?'); s.send('y')
-        s.until('Running step...'); s.pump_for(.5); s.send('\x1b')
+        s.until('Running step...')
+        # Until bash hands the job the terminal, Esc would still reach the dialog and abort the step.
+        end = time.monotonic() + 5
+        while foreground_of(s.pid()) == s.pid() and time.monotonic() < end: s.pump(.02)
+        assert foreground_of(s.pid()) != s.pid(), 'the step never took the terminal'
+        s.send('\x1b')
         s.until('echo done', timeout=12); s.until('Output:'); s.until('STEP_DONE'); s.until('Run command?')
         s.send('n'); entries = s.finish(0)
         assert b'Could not read from the terminal' not in s.output, s.output[-800:]
@@ -426,6 +441,11 @@ def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
         assert kinds_of(entry) == ['user', 'assistant', 'step', 'assistant', 'final'], kinds_of(entry)
         assert final['source'] == 'cancelled'
     finally: s.close()
+
+def foreground_of(pid):
+    """The foreground process group of `pid`'s controlling terminal (/proc only)."""
+    stat = open(f'/proc/{pid}/stat').read()
+    return int(stat[stat.rindex(')') + 2:].split()[5])
 
 def session_processes(s, needle):
     # /proc only: the container image has no ps.
@@ -437,6 +457,84 @@ def session_processes(s, needle):
         except OSError: continue
         if int(stat[stat.rindex(')') + 2:].split()[3]) == s.process.pid and needle in args: found.append(f'{pid} {args}')
     return found
+
+class ShellSession:
+    """A real interactive bash as wrap's parent, for the job-control semantics users see.
+    The dialog holds the terminal in raw mode, so a suspend arrives as a signal, not Ctrl+Z."""
+    def __init__(self, args, responses):
+        self.home = tempfile.TemporaryDirectory(prefix='wrap-pty-'); self.tmp = tempfile.TemporaryDirectory(prefix='wrap-pty-tmp-')
+        (pathlib.Path(self.home.name) / 'memory.json').write_text(json.dumps(MEMORY_SEED))
+        self.master, self.slave = pty.openpty()
+        fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack('HHHH', 32, 100, 0, 0))
+        env = {k: v for k, v in os.environ.items() if k not in SCRUB}
+        env.update(WRAP_HOME=self.home.name, WRAP_THEME='dark', TERM='xterm-256color', COLORTERM='truecolor', TMPDIR=self.tmp.name, SHELL='/bin/bash',
+                   HOME=self.home.name, PS1='PROMPT$ ', WRAP_CONFIG='{}', WRAP_TEST_RESPONSES=json.dumps(responses))
+        self.process = subprocess.Popen(['/bin/bash', '--norc', '--noprofile', '-i'], stdin=self.slave, stdout=self.slave, stderr=self.slave, env=env,
+                                        start_new_session=True, preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))
+        self.output = b''
+        self.until('PROMPT$ '); self.send(f'{BINARY} {args}\n')
+    def pump(self, timeout=.1):
+        if select.select([self.master], [], [], timeout)[0]:
+            try: self.output += os.read(self.master, 65536)
+            except OSError: pass
+    def pump_for(self, seconds):
+        end = time.monotonic() + seconds
+        while time.monotonic() < end: self.pump(.02)
+    def text(self): return ESCAPE_ALL.sub('', self.output.decode('utf-8', 'replace'))
+    def until(self, needle, timeout=8):
+        end = time.monotonic() + timeout
+        while needle not in self.text() and time.monotonic() < end: self.pump()
+        assert needle in self.text(), (needle, self.text()[-2000:])
+    def send(self, text): os.write(self.master, text.encode())
+    def wrap_pid(self):
+        end = time.monotonic() + 5
+        while time.monotonic() < end:
+            found = [int(line.split()[0]) for line in session_processes(self, BINARY)]
+            if found: return found[0]
+            time.sleep(.02)
+        raise AssertionError('wrap never started')
+    def foreground(self): return foreground_of(self.process.pid)
+    def close(self):
+        try: os.killpg(self.wrap_pid(), signal.SIGKILL)
+        except (AssertionError, OSError): pass
+        try: os.killpg(self.process.pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+        try: self.process.wait(timeout=2)
+        except subprocess.TimeoutExpired: pass
+        for fd in (self.master, self.slave):
+            try: os.close(fd)
+            except OSError: pass
+        self.home.cleanup(); self.tmp.cleanup()
+
+ESCAPE_ALL = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\x1b[^\[\]()]')
+
+def a_suspended_and_backgrounded_wrap_leaves_the_shell_in_charge():
+    # Suspended mid-step and resumed with `bg`, wrap must neither take the terminal from
+    # the shell when the step's bash exits nor kill the shell's group; job control stops
+    # it instead, and `fg` resumes the dialog with the step's output.
+    responses = [command('sleep 2; echo STEP_DONE', final=False, explanation='A medium step'), command('echo done', risk='low')]
+    s = ShellSession("'bash step'", responses)
+    try:
+        s.until('Run command?'); s.send('y'); s.pump_for(.5)
+        wrap = s.wrap_pid(); os.kill(wrap, signal.SIGTSTP); s.until('Stopped')
+        assert s.foreground() == s.process.pid
+        s.send('bg\n'); s.pump_for(3.0)
+        s.send('echo SHELL_$((1+1))\n'); s.until('SHELL_2')
+        assert s.foreground() == s.process.pid, 'wrap took the terminal from the shell'
+        assert s.process.poll() is None and 'There are stopped jobs' not in s.text(), s.text()[-1500:]
+        # Once the step is over wrap needs the terminal again, so it waits stopped like any background
+        # job; bash reports that only when it next prints a prompt.
+        end = time.monotonic() + 8
+        while s.text().count('Stopped') < 2 and time.monotonic() < end: s.send('\n'); s.pump_for(.3)
+        assert s.text().count('Stopped') == 2, s.text()[-1500:]
+        s.send('fg\n'); s.pump_for(1.0)
+        assert s.foreground() == wrap and not termios.tcgetattr(s.slave)[3] & termios.ICANON, 'dialog did not resume in raw mode'
+        s.until('STEP_DONE'); s.until('echo done'); s.send('n')
+        end = time.monotonic() + 8
+        while session_processes(s, BINARY) and time.monotonic() < end: s.pump()
+        assert not session_processes(s, BINARY), 'wrap did not exit after n'
+        s.send('echo EXIT_$?\n'); s.until('EXIT_0')
+    finally: s.close()
 
 # --- Resize ----------------------------------------------------------------------
 def resize_folds_and_restores():
@@ -666,6 +764,7 @@ SCENARIOS = [
     ('low step runs before dialog', low_step_runs_before_dialog), ('confirmed medium step shows running', confirmed_medium_step_shows_running),
     ('esc aborts a step under zsh', esc_aborts_a_step_under_zsh),
     ('a bash step that owns the terminal does not end the session', a_bash_step_that_owns_the_terminal_does_not_end_the_session),
+    ('a suspended and backgrounded wrap leaves the shell in charge', a_suspended_and_backgrounded_wrap_leaves_the_shell_in_charge),
     ('resize folds and restores', resize_folds_and_restores), ('early keystroke does not confirm', early_keystroke_does_not_confirm),
     ('tty handoff', tty_handoff), ('child alt screen leaves terminal sane', child_alt_screen_leaves_terminal_sane),
     ('SIGINT during dialog', lambda: signal_during_dialog(signal.SIGINT)), ('SIGTERM during dialog', lambda: signal_during_dialog(signal.SIGTERM)),

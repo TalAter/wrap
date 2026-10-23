@@ -75,14 +75,28 @@ fn transport_message(error: &reqwest::Error, host: &str) -> String {
     }
 }
 
-/// The provider's own explanation when the body carries one (every
-/// supported API uses `{"error": {"message": …}}`), else the bare status.
+/// The provider's own explanation when the body carries one, else the bare
+/// status. Anthropic, OpenAI and OpenRouter use `{"error": {"message": …}}`;
+/// Ollama answers `{"error": "…"}`; Mistral uses a top-level `message` or
+/// `detail`. Only string values count, never a validation-error array.
 fn failure_message(status: reqwest::StatusCode, body: Option<&Value>) -> String {
-    body.and_then(|b| b["error"]["message"].as_str())
-        .map(str::trim)
-        .filter(|m| !m.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("Provider returned HTTP {}.", status.as_u16()))
+    let candidates = [
+        &["error", "message"][..],
+        &["error"][..],
+        &["message"][..],
+        &["detail"][..],
+    ];
+    body.and_then(|b| {
+        candidates.iter().find_map(|path| {
+            path.iter()
+                .fold(b, |node, key| &node[*key])
+                .as_str()
+                .map(str::trim)
+                .filter(|m| !m.is_empty())
+        })
+    })
+    .map(str::to_string)
+    .unwrap_or_else(|| format!("Provider returned HTTP {}.", status.as_u16()))
 }
 
 // Credentials travel in headers; never follow a redirect off the origin.

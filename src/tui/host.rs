@@ -12,7 +12,8 @@
 //! confirming → cancel) until the session exits and the terminal is restored
 //! on the way out. The host remembers the signal
 //! ([`TuiHost::signal_received`]) so the process can still exit with the
-//! shell's code for it once the session has finalised.
+//! shell's code for it once the session has finalised. A SIGCONT (the shell's
+//! `fg` after a stop) re-enters raw mode and repaints.
 
 use std::collections::VecDeque;
 use std::io::{self, IsTerminal};
@@ -74,7 +75,8 @@ impl Mounted {
     fn read_input(&mut self) -> io::Result<()> {
         loop {
             // While a confirmed step's job owns the terminal (interactive
-            // bash hands it to each foreground job), reads fail with EIO;
+            // bash hands it to each foreground job) the shell layer ignores
+            // SIGTTIN, so reads fail with EIO instead of stopping Wrap;
             // keystrokes go to that job until it exits and the terminal is
             // reclaimed, so wait instead of ending the session.
             let ready = match event::poll(INPUT_POLL) {
@@ -293,6 +295,13 @@ impl DialogHost for TuiHost {
                 }
                 if !TerminalSession::active() {
                     return Err("The terminal was released after a background failure.".to_string());
+                }
+                if mounted.signals.take_continued() {
+                    mounted
+                        .terminal
+                        .resume()
+                        .map_err(|e| format!("Could not resume the dialog: {e}."))?;
+                    mounted.dirty = true;
                 }
                 mounted
                     .frame()

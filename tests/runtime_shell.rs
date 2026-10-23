@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::os::unix::process::CommandExt;
 use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
-use wrap::shell::{ChildStdin, ShellMode, choose_child_stdin, execute_with_shell, shell_from_env};
+use wrap::shell::{
+    ChildStdin, ShellMode, choose_child_stdin, execute_with_shell, group_belongs_to_child,
+    shell_from_env,
+};
 
 const SH: &str = "/bin/sh";
 
@@ -211,4 +215,90 @@ fn child_stdin_prefers_inherit_then_dev_tty_then_null() {
 
     let choice = choose_child_stdin(false, || Err(std::io::Error::other("ENXIO")));
     assert!(matches!(choice, ChildStdin::Null));
+}
+
+// --- foreground ownership -------------------------------------------------
+
+/// A child shell with job control on, so its background job sits in a
+/// process group of its own; returns the shell and that job's pid.
+fn shell_with_job_group() -> (std::process::Child, libc::pid_t) {
+    use std::io::Read;
+    let mut shell = std::process::Command::new("/bin/bash")
+        .args(["-c", "set -m; sleep 30 & echo $!; wait"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    let mut stdout = shell.stdout.take().unwrap();
+    let mut byte = [0u8; 1];
+    while stdout.read(&mut byte).unwrap() == 1 && byte[0] != b'\n' {
+        line.push(byte[0] as char);
+    }
+    (shell, line.trim().parse().unwrap())
+}
+
+fn end(mut shell: std::process::Child, job: libc::pid_t) {
+    // SAFETY: plain signal sends to processes this test started.
+    unsafe {
+        libc::killpg(job, libc::SIGKILL);
+        libc::killpg(shell.id() as libc::pid_t, libc::SIGKILL);
+    }
+    let _ = shell.wait();
+}
+
+#[test]
+fn a_group_belongs_to_the_child_when_it_is_the_childs_own_or_descends_from_it() {
+    let (shell, job) = shell_with_job_group();
+    let child = shell.id() as libc::pid_t;
+    // SAFETY: a plain query.
+    let job_group = unsafe { libc::getpgid(job) };
+    assert_eq!(job_group, job, "bash did not give the job its own group");
+    assert!(
+        group_belongs_to_child(child, child),
+        "the child's own group"
+    );
+    assert!(
+        group_belongs_to_child(job_group, child),
+        "a group led by the child's descendant"
+    );
+    end(shell, job);
+}
+
+#[test]
+fn the_group_of_the_shell_that_started_us_never_belongs_to_a_child() {
+    let (shell, job) = shell_with_job_group();
+    let child = shell.id() as libc::pid_t;
+    // SAFETY: plain queries.
+    let parent_group = unsafe { libc::getpgid(libc::getppid()) };
+    assert!(!group_belongs_to_child(parent_group, child));
+    end(shell, job);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_sibling_childs_group_does_not_belong_to_another_child() {
+    let (first, first_job) = shell_with_job_group();
+    let (second, second_job) = shell_with_job_group();
+    let (first_pid, second_pid) = (first.id() as libc::pid_t, second.id() as libc::pid_t);
+    assert!(!group_belongs_to_child(second_pid, first_pid));
+    assert!(!group_belongs_to_child(second_job, first_pid));
+    assert!(group_belongs_to_child(second_job, second_pid));
+    end(first, first_job);
+    end(second, second_job);
+}
+
+#[test]
+fn an_emptied_group_belongs_to_whoever_asks() {
+    let mut gone = std::process::Command::new("/bin/sh")
+        .args(["-c", "true"])
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let pid = gone.id() as libc::pid_t;
+    gone.wait().unwrap();
+    let (shell, job) = shell_with_job_group();
+    assert!(group_belongs_to_child(pid, shell.id() as libc::pid_t));
+    end(shell, job);
 }

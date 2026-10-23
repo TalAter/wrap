@@ -3,6 +3,7 @@
 //! lookups that `-c` uses to find and replay a previous conversation.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs;
 use std::io;
 
 use serde::{Deserialize, Serialize};
@@ -323,13 +324,15 @@ pub fn append_log_entry(home: &WrapHome, entry: &mut LogEntry) -> io::Result<()>
 // --- lookup ----------------------------------------------------------------
 
 /// Every entry in the log, oldest first. Lines that are not JSON objects
-/// with a string `id` are skipped; everything else loads leniently (see
-/// [`lenient_entry`]): logging never crashes the tool, even on read.
+/// with a string `id`, a string `timestamp` and a `turns` array are skipped;
+/// everything else loads leniently (see [`lenient_entry`]): logging never
+/// crashes the tool, even on read. Bytes that are not UTF-8 are decoded
+/// lossily so one corrupt line never hides the rest of the log.
 pub fn read_log_entries(home: &WrapHome) -> Vec<LogEntry> {
-    let Ok(Some(content)) = home.read(LOG_FILE) else {
+    let Ok(bytes) = fs::read(home.resolve(LOG_FILE)) else {
         return Vec::new();
     };
-    content
+    String::from_utf8_lossy(&bytes)
         .lines()
         .filter(|line| !line.is_empty())
         .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
@@ -340,13 +343,17 @@ pub fn read_log_entries(home: &WrapHome) -> Vec<LogEntry> {
 /// An entry from any version of the log. A line the typed shape rejects
 /// (a turn kind this version does not know, a field off its enum) still
 /// counts as a run: `-c` must find it, and the turns that do load replay.
-/// Only turns that fail individually are dropped, never the entry.
+/// Only turns that fail individually are dropped, never the entry. A line
+/// without a string `timestamp` and a `turns` array was never a run and is
+/// not one to resume.
 fn lenient_entry(value: serde_json::Value) -> Option<LogEntry> {
     if let Ok(entry) = serde_json::from_value::<LogEntry>(value.clone()) {
         return Some(entry);
     }
     let object = value.as_object()?;
     let id = object.get("id")?.as_str()?.to_string();
+    let timestamp = object.get("timestamp")?.as_str()?.to_string();
+    let turns = object.get("turns")?.as_array()?;
     let text = |key: &str| {
         object
             .get(key)
@@ -364,7 +371,7 @@ fn lenient_entry(value: serde_json::Value) -> Option<LogEntry> {
     }
     Some(LogEntry {
         id,
-        timestamp: text("timestamp").unwrap_or_default(),
+        timestamp,
         version: text("version").unwrap_or_default(),
         cwd: text("cwd").unwrap_or_default(),
         ppid: object
@@ -379,11 +386,8 @@ fn lenient_entry(value: serde_json::Value) -> Option<LogEntry> {
             base_url: None,
         }),
         prompt_hash: text("prompt_hash").unwrap_or_default(),
-        turns: object
-            .get("turns")
-            .and_then(serde_json::Value::as_array)
-            .into_iter()
-            .flatten()
+        turns: turns
+            .iter()
             .filter_map(|turn| serde_json::from_value(turn.clone()).ok())
             .collect(),
         outcome: text("outcome").unwrap_or_default(),

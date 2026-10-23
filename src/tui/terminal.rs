@@ -1,5 +1,6 @@
 //! One alternate-screen terminal session on stderr, the signal scope that
-//! turns SIGINT/SIGTERM/SIGHUP into a cancellation flag while a dialog is up,
+//! turns SIGINT/SIGTERM/SIGHUP into a cancellation flag while a dialog is up
+//! (and notes SIGCONT, so a dialog resumed with `fg` can take raw mode back),
 //! and the stdin drain that keeps buffered keystrokes from confirming.
 //!
 //! Interplay with the chrome exit-teardown registry: outside a dialog the
@@ -25,7 +26,7 @@ use crossterm::event::{
 };
 use crossterm::execute;
 use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 
 use crate::chrome::{
@@ -153,6 +154,32 @@ impl TerminalSession {
         self.terminal.size()
     }
 
+    /// Continued after a stop. Back in the foreground (`fg`) the shell has
+    /// restored its own cooked modes meanwhile, so raw mode is re-entered
+    /// and the next frame repaints everything the shell's prompt drew over.
+    /// Continued in the background (`bg`) the terminal is the shell's and
+    /// nothing is touched.
+    pub fn resume(&mut self) -> io::Result<()> {
+        // SAFETY: plain queries.
+        if unsafe { libc::tcgetpgrp(libc::STDERR_FILENO) != libc::getpgrp() } {
+            return Ok(());
+        }
+        // crossterm skips enabling raw mode it believes is still on.
+        disable_raw_mode()?;
+        enable_raw_mode()?;
+        RAW_ACTIVE.store(true, Ordering::Release);
+        execute!(
+            io::stderr(),
+            EnableBracketedPaste,
+            crossterm::cursor::Hide,
+            Clear(ClearType::All)
+        )?;
+        // With both of ratatui's buffers blank the next frame writes every
+        // cell again, without the cursor query a clear would make.
+        self.terminal.swap_buffers();
+        Ok(())
+    }
+
     fn release() {
         if TERMINAL_ACTIVE.swap(false, Ordering::AcqRel) {
             restore_terminal();
@@ -223,6 +250,7 @@ pub fn drain_pending_input() -> io::Result<usize> {
 }
 
 static SESSION_SIGNAL: AtomicI32 = AtomicI32::new(0);
+static SESSION_CONTINUED: AtomicBool = AtomicBool::new(false);
 static SIGNAL_SESSION_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 extern "C" fn session_signal(signal: libc::c_int) {
@@ -230,9 +258,14 @@ extern "C" fn session_signal(signal: libc::c_int) {
     SESSION_SIGNAL.store(signal, Ordering::Relaxed);
 }
 
+extern "C" fn session_continued(_signal: libc::c_int) {
+    SESSION_CONTINUED.store(true, Ordering::Relaxed);
+}
+
 /// Scoped SIGINT/SIGTERM/SIGHUP dispositions that record the signal instead
-/// of exiting. Dropping restores the chrome exit-teardown handlers, which
-/// opening installs first when nothing else has yet.
+/// of exiting, plus a SIGCONT note for the dialog to repaint after a stop.
+/// Dropping restores the chrome exit-teardown handlers, which opening
+/// installs first when nothing else has yet.
 pub struct SessionSignals {
     previous: Vec<(libc::c_int, libc::sigaction)>,
 }
@@ -244,15 +277,21 @@ impl SessionSignals {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| io::Error::other("a signal scope is already active"))?;
         let mut guard = Self {
-            previous: Vec::with_capacity(3),
+            previous: Vec::with_capacity(4),
         };
         SESSION_SIGNAL.store(0, Ordering::Relaxed);
-        for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
+        SESSION_CONTINUED.store(false, Ordering::Relaxed);
+        for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGCONT] {
             // SAFETY: zeroed sigaction values are fully initialized before
             // installation; the OS fills `previous`.
             let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
             let mut previous: libc::sigaction = unsafe { std::mem::zeroed() };
-            action.sa_sigaction = session_signal as *const () as libc::sighandler_t;
+            let handler = if signal == libc::SIGCONT {
+                session_continued as *const ()
+            } else {
+                session_signal as *const ()
+            };
+            action.sa_sigaction = handler as libc::sighandler_t;
             action.sa_flags = libc::SA_RESTART;
             unsafe { libc::sigemptyset(&mut action.sa_mask) };
             if unsafe { libc::sigaction(signal, &action, &mut previous) } == -1 {
@@ -274,6 +313,11 @@ impl SessionSignals {
             0 => None,
             n => Some(n),
         }
+    }
+
+    /// True once per SIGCONT received during this scope.
+    pub fn take_continued(&self) -> bool {
+        SESSION_CONTINUED.swap(false, Ordering::Relaxed)
     }
 }
 
@@ -319,5 +363,10 @@ mod tests {
         );
         let again = SessionSignals::open().unwrap();
         assert!(!again.received(), "a new scope starts clean");
+        assert!(!again.take_continued());
+        unsafe { libc::raise(libc::SIGCONT) };
+        assert!(again.take_continued());
+        assert!(!again.take_continued(), "a continue is noted once");
+        assert!(!again.received(), "a continue is not a cancel");
     }
 }

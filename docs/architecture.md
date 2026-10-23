@@ -73,11 +73,20 @@ children still read keystrokes from `/dev/tty`.
 
 Captured steps keep the terminal as stdin so `sudo` can prompt. Bash ignores
 `+m` when interactive and hands the terminal to the step's job, so until that
-job exits keystrokes (Esc included) reach the job, not the dialog; the dialog
-tolerates the resulting read errors and resumes afterwards. zsh honours `+m`,
-so there Esc cancels the step: the whole process group is killed and the
-terminal is reclaimed. Children without a terminal, and every skill probe,
-run in their own process group so a timeout or cancel reaps grandchildren.
+job exits keystrokes (Esc included) reach the job, not the dialog. While such
+a step runs Wrap ignores SIGTTIN and SIGTTOU: a terminal read from behind the
+job then fails with EIO, which the dialog tolerates, instead of stopping Wrap
+under the user's shell; the dispositions return once the step ends. zsh
+honours `+m`, so there Esc cancels the step. A cancel kills, and the end of a
+step reclaims the terminal from, only groups the step's child started (on
+Linux by descent in `/proc`; on macOS any group other than the parent shell's
+and the session leader's). The user's shell, which holds the terminal after
+suspending Wrap and typing `bg`, is never signalled or displaced: interactive
+bash restores the terminal to Wrap's group when it exits, so Wrap watches the
+foreground during the step, hands the terminal back to a shell that took it
+and stops itself until `fg`, when a SIGCONT note makes the dialog re-enter
+raw mode and repaint. Children without a terminal, and every skill probe, run
+in their own process group so a timeout or cancel reaps grandchildren.
 
 ## LLM layer
 

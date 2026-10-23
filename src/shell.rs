@@ -10,13 +10,23 @@
 //! Process groups follow the terminal. A child that may touch the terminal
 //! (stdin is the tty) stays in Wrap's foreground group: a background group
 //! cannot read the tty, and interactive bash stops itself until it is in the
-//! foreground. A child with no terminal gets its own group so cancelling it
-//! ends everything it started. Either way a cancelled child is killed with
-//! whatever bash gave the terminal to, and the terminal comes back to Wrap.
+//! foreground. While such a child runs captured, Wrap ignores SIGTTIN and
+//! SIGTTOU: once bash hands the terminal to the step's job, the dialog's
+//! reads fail with EIO (which it tolerates) instead of stopping Wrap behind
+//! the user's shell. A child with no terminal gets its own group so
+//! cancelling it ends everything it started. A cancelled child is killed
+//! together with the groups it started, including the one bash gave the
+//! terminal to, and then the terminal comes back to Wrap. A foreground group
+//! that is not the child's (the user's shell after a suspend and `bg`) is
+//! never signalled and never has the terminal taken from it: interactive bash
+//! restores the terminal to Wrap's group when it exits, so Wrap watches the
+//! foreground while a captured child runs and hands the terminal back to a
+//! shell that took it meanwhile, letting job control stop Wrap until `fg`.
 //!
 //! Piped-input bytes are never streamed to children; they live at
 //! `$WRAP_TEMP_DIR/input` and commands read them from there.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, IsTerminal};
@@ -25,7 +35,7 @@ use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 use std::sync::{Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
@@ -108,8 +118,8 @@ fn cancelled() -> io::Error {
 
 /// Run `command` under `$SHELL`. Creates `$WRAP_TEMP_DIR` first so the child
 /// inherits it. Cancelling the token kills the child, its process group when
-/// it has one of its own, and whatever holds the terminal, then fails with
-/// `ErrorKind::Interrupted`.
+/// it has one of its own, and the child's job holding the terminal, then
+/// fails with `ErrorKind::Interrupted`.
 pub async fn execute_shell_command(
     command: &str,
     mode: ShellMode,
@@ -136,23 +146,42 @@ pub async fn execute_with_shell(
     let stdin = default_child_stdin();
     let own_group = matches!(stdin, ChildStdin::Null);
     let terminal = Terminal::claim();
+    // The dialog stays up and keeps reading the terminal while a captured
+    // child shares it; the child's job may own the terminal meanwhile.
+    let shares_terminal = mode == ShellMode::Capture && terminal.is_some();
+    let ignored = if shares_terminal {
+        Some(IgnoredSignals::install(JOB_CONTROL_SIGNALS)?)
+    } else {
+        None
+    };
     let spawn = Spawn {
         shell,
         command,
         own_group,
         terminal: terminal.as_ref(),
+        child_defaults: if shares_terminal {
+            JOB_CONTROL_SIGNALS
+        } else {
+            &[]
+        },
     };
-    let (status, stdout, stderr) = match mode {
+    let (pid, status, stdout, stderr) = match mode {
         ShellMode::Capture => run_captured(&spawn, stdin, cancel).await?,
         ShellMode::Inherit => {
-            let status = run_inherited(&spawn, stdin, cancel).await?;
-            (status, String::new(), String::new())
+            let (pid, status) = run_inherited(&spawn, stdin, cancel).await?;
+            (pid, status, String::new(), String::new())
         }
     };
-    // A grandchild that bash handed the terminal and then outlived it
-    // leaves the foreground elsewhere; the next terminal read would fail.
-    if let Some(terminal) = &terminal {
-        terminal.reclaim();
+    // A job that bash handed the terminal and that outlived it leaves the
+    // foreground elsewhere; the next terminal read would fail.
+    let handed_back = terminal.as_ref().is_some_and(|t| t.reclaim(pid));
+    drop(ignored);
+    if handed_back {
+        // The shell took the terminal while the child ran and keeps it: wait
+        // stopped like any background job that needs the terminal, until
+        // the shell resumes this process with `fg`.
+        // SAFETY: a plain signal to this process; the default action stops it.
+        unsafe { libc::kill(libc::getpid(), libc::SIGTTIN) };
     }
     Ok(ShellExec {
         exit_code: exit_code(status),
@@ -179,6 +208,13 @@ where
     })
 }
 
+/// How often the foreground group is sampled while a captured child runs.
+const FOREGROUND_WATCH: Duration = Duration::from_millis(50);
+/// Ignored in Wrap while a captured child shares the terminal.
+const JOB_CONTROL_SIGNALS: &[libc::c_int] = &[libc::SIGTTIN, libc::SIGTTOU];
+/// Ignored in Wrap while a child owns the terminal.
+const INTERRUPT_SIGNALS: &[libc::c_int] = &[libc::SIGINT, libc::SIGTERM];
+
 /// What one shell invocation needs to start and, if cancelled, to end.
 struct Spawn<'a> {
     shell: &'a str,
@@ -186,6 +222,8 @@ struct Spawn<'a> {
     /// Put the child in a process group of its own (no terminal involved).
     own_group: bool,
     terminal: Option<&'a Terminal>,
+    /// Signals Wrap ignores meanwhile that the child must handle normally.
+    child_defaults: &'static [libc::c_int],
 }
 
 impl Spawn<'_> {
@@ -200,27 +238,42 @@ impl Spawn<'_> {
         if self.own_group {
             builder.process_group(0);
         }
+        let defaults = self.child_defaults;
+        // SAFETY: `signal` is async-signal-safe and the callback touches
+        // nothing else.
+        unsafe {
+            builder.pre_exec(move || {
+                for signal in defaults {
+                    libc::signal(*signal, libc::SIG_DFL);
+                }
+                Ok(())
+            });
+        }
         builder
     }
 
-    /// End a cancelled child: first whatever group bash handed the terminal
-    /// to, then the child's own group when it left ours (bash moves itself
-    /// out under job control; headless children start apart), then the
-    /// child itself. An interactive shell ignores SIGTERM, so only SIGKILL
-    /// reliably ends it. The caller reaps the child afterwards.
+    /// End a cancelled child: first the child's job holding the terminal,
+    /// then the child's own group when it left ours (bash moves itself out
+    /// under job control; headless children start apart), then the child
+    /// itself; finally the terminal comes back. An interactive shell ignores
+    /// SIGTERM, so only SIGKILL reliably ends it. The caller reaps the child
+    /// afterwards.
     fn kill(&self, pid: libc::pid_t) {
         // SAFETY: plain signal sends; `pid` is a child that has not been
         // reaped, so neither it nor its group id can have been recycled.
         unsafe {
             let own = libc::getpgrp();
-            if let Some(foreground) = self.terminal.and_then(Terminal::foreign_foreground) {
-                libc::killpg(foreground, libc::SIGKILL);
+            if let Some(terminal) = self.terminal {
+                terminal.kill_child_foreground(pid);
             }
             let group = libc::getpgid(pid);
             if group > 0 && group != own {
                 libc::killpg(group, libc::SIGKILL);
             }
             libc::kill(pid, libc::SIGKILL);
+        }
+        if let Some(terminal) = self.terminal {
+            terminal.reclaim(pid);
         }
     }
 }
@@ -229,7 +282,7 @@ async fn run_captured(
     spawn: &Spawn<'_>,
     stdin: ChildStdin,
     cancel: Option<CancellationToken>,
-) -> io::Result<(ExitStatus, String, String)> {
+) -> io::Result<(libc::pid_t, ExitStatus, String, String)> {
     let mut child =
         tokio::process::Command::from(spawn.command(stdin, Stdio::piped(), Stdio::piped()))
             .kill_on_drop(true)
@@ -237,10 +290,17 @@ async fn run_captured(
     let pid = child.id().expect("child not yet reaped") as libc::pid_t;
     let stdout = drain_pipe(child.stdout.take());
     let stderr = drain_pipe(child.stderr.take());
-    let status = match cancel {
-        Some(token) => tokio::select! {
-            status = child.wait() => status?,
-            _ = token.cancelled() => {
+    let cancelled_token = cancel.unwrap_or_default();
+    let mut watch = tokio::time::interval(FOREGROUND_WATCH);
+    let status = loop {
+        tokio::select! {
+            status = child.wait() => break status?,
+            _ = watch.tick() => {
+                if let Some(terminal) = spawn.terminal {
+                    terminal.observe(pid);
+                }
+            }
+            _ = cancelled_token.cancelled() => {
                 spawn.kill(pid);
                 let _ = child.wait().await;
                 // A survivor in our own group may still hold the pipes open.
@@ -248,12 +308,12 @@ async fn run_captured(
                 stderr.abort();
                 return Err(cancelled());
             }
-        },
-        None => child.wait().await?,
+        }
     };
     let stdout = stdout.await.unwrap_or_default();
     let stderr = stderr.await.unwrap_or_default();
     Ok((
+        pid,
         status,
         String::from_utf8_lossy(&stdout).into_owned(),
         String::from_utf8_lossy(&stderr).into_owned(),
@@ -264,19 +324,14 @@ async fn run_inherited(
     spawn: &Spawn<'_>,
     stdin: ChildStdin,
     cancel: Option<CancellationToken>,
-) -> io::Result<ExitStatus> {
-    let signals = IgnoredSignals::install()?;
+) -> io::Result<(libc::pid_t, ExitStatus)> {
+    let signals = IgnoredSignals::install(INTERRUPT_SIGNALS)?;
+    // Ctrl-C has to end the command even though Wrap itself survives it.
+    let spawn = Spawn {
+        child_defaults: INTERRUPT_SIGNALS,
+        ..*spawn
+    };
     let mut builder = spawn.command(stdin, Stdio::inherit(), Stdio::inherit());
-    // The child must not inherit Wrap's ignored dispositions: Ctrl-C has to
-    // end the command even though Wrap itself survives it.
-    // SAFETY: `signal` is async-signal-safe and the callback touches nothing else.
-    unsafe {
-        builder.pre_exec(|| {
-            libc::signal(libc::SIGINT, libc::SIG_DFL);
-            libc::signal(libc::SIGTERM, libc::SIG_DFL);
-            Ok(())
-        });
-    }
     let mut child = builder.spawn()?;
     let pid = child.id() as libc::pid_t;
     let mut wait = tokio::task::spawn_blocking(move || child.wait());
@@ -293,7 +348,7 @@ async fn run_inherited(
         None => (&mut wait).await,
     };
     drop(signals);
-    status.map_err(io::Error::other)?
+    Ok((pid, status.map_err(io::Error::other)??))
 }
 
 /// The controlling terminal, held while this process is its foreground
@@ -305,6 +360,16 @@ async fn run_inherited(
 struct Terminal {
     tty: File,
     group: libc::pid_t,
+    /// A foreground group this process already killed; its members may
+    /// linger as zombies, so it is reclaimed without another look.
+    killed: Cell<Option<libc::pid_t>>,
+    /// The last foreground group observed while the child ran.
+    observed: Cell<libc::pid_t>,
+    /// A group that took the terminal from this process while the child
+    /// ran and did not get there through the child: the user's shell after
+    /// a suspend and `bg`. Cleared again once the foreground is back with
+    /// this process (`fg`) or the child's job.
+    displaced_by: Cell<Option<libc::pid_t>>,
 }
 
 impl Terminal {
@@ -316,22 +381,135 @@ impl Terminal {
             .ok()?;
         // SAFETY: plain queries on a valid fd.
         let (group, foreground) = unsafe { (libc::getpgrp(), libc::tcgetpgrp(tty.as_raw_fd())) };
-        (foreground == group).then_some(Terminal { tty, group })
+        (foreground == group).then_some(Terminal {
+            tty,
+            group,
+            killed: Cell::new(None),
+            observed: Cell::new(group),
+            displaced_by: Cell::new(None),
+        })
     }
 
-    /// The foreground group when it is not ours any more.
-    fn foreign_foreground(&self) -> Option<libc::pid_t> {
+    fn foreground(&self) -> libc::pid_t {
         // SAFETY: a query on a valid fd.
-        let foreground = unsafe { libc::tcgetpgrp(self.tty.as_raw_fd()) };
-        (foreground > 0 && foreground != self.group).then_some(foreground)
+        unsafe { libc::tcgetpgrp(self.tty.as_raw_fd()) }
     }
 
-    /// Take the terminal back when a child left it elsewhere.
-    fn reclaim(&self) {
-        if self.foreign_foreground().is_some() {
-            let _ = set_foreground(self.tty.as_raw_fd(), self.group);
+    /// Sample the foreground while `child` runs.
+    fn observe(&self, child: libc::pid_t) {
+        let foreground = self.foreground();
+        if foreground <= 0 || foreground == self.observed.get() {
+            return;
+        }
+        self.observed.set(foreground);
+        let ours = foreground == self.group || group_belongs_to_child(foreground, child);
+        self.displaced_by.set((!ours).then_some(foreground));
+    }
+
+    /// The foreground group when it is a job of `child`'s rather than ours.
+    /// The user's shell holds the foreground after a suspend and `bg`; it
+    /// is never a candidate, so it never has the terminal taken from it.
+    fn child_foreground(&self, child: libc::pid_t) -> Option<libc::pid_t> {
+        let foreground = self.foreground();
+        if foreground <= 0 || foreground == self.group {
+            return None;
+        }
+        (self.killed.get() == Some(foreground) || group_belongs_to_child(foreground, child))
+            .then_some(foreground)
+    }
+
+    fn kill_child_foreground(&self, child: libc::pid_t) {
+        if let Some(foreground) = self.child_foreground(child) {
+            // SAFETY: a plain signal send to a group the child started.
+            unsafe { libc::killpg(foreground, libc::SIGKILL) };
+            self.killed.set(Some(foreground));
         }
     }
+
+    /// Take the terminal back when `child`'s job left it elsewhere. When a
+    /// shell took the terminal while the child ran and the child's exit
+    /// handed it to this process regardless, it goes back to that shell;
+    /// true when it did.
+    fn reclaim(&self, child: libc::pid_t) -> bool {
+        if self.foreground() == self.group {
+            if let Some(shell) = self.displaced_by.get()
+                && !group_is_empty(shell)
+            {
+                return set_foreground(self.tty.as_raw_fd(), shell).is_ok();
+            }
+        } else if self.child_foreground(child).is_some() {
+            let _ = set_foreground(self.tty.as_raw_fd(), self.group);
+        }
+        false
+    }
+}
+
+/// Whether process group `group` is one `child` started: the child's own
+/// group, a group with nobody left in it, or a group with a live member
+/// descended from `child`. On Linux descent is read from `/proc`. Without it
+/// (macOS) the groups that must never be touched are the shell that started
+/// Wrap and the session leader; any other foreground group got there through
+/// the child.
+pub fn group_belongs_to_child(group: libc::pid_t, child: libc::pid_t) -> bool {
+    // SAFETY: a plain query.
+    if unsafe { libc::getpgid(child) } == group {
+        return true;
+    }
+    group_is_empty(group) || group_descends_from(group, child)
+}
+
+fn group_is_empty(group: libc::pid_t) -> bool {
+    // SAFETY: a signal of 0 only checks for members.
+    let failed = unsafe { libc::killpg(group, 0) } == -1;
+    failed && io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+}
+
+#[cfg(target_os = "linux")]
+fn group_descends_from(group: libc::pid_t, child: libc::pid_t) -> bool {
+    // The group id is its leader's pid; once the leader is gone, any live
+    // member stands in for it.
+    let members: Vec<libc::pid_t> = if parent_of(group).is_some() {
+        vec![group]
+    } else {
+        std::fs::read_dir("/proc")
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .filter_map(|e| e.file_name().to_str()?.parse::<libc::pid_t>().ok())
+                    // SAFETY: a plain query.
+                    .filter(|&pid| unsafe { libc::getpgid(pid) } == group)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    members.into_iter().any(|member| {
+        let mut pid = member;
+        for _ in 0..1024 {
+            if pid == child {
+                return true;
+            }
+            match parent_of(pid) {
+                Some(parent) if parent > 1 && parent != pid => pid = parent,
+                _ => return false,
+            }
+        }
+        false
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn parent_of(pid: libc::pid_t) -> Option<libc::pid_t> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The command name may contain spaces; the fields follow its closing paren.
+    let (_, fields) = stat.rsplit_once(')')?;
+    fields.split_whitespace().nth(1)?.parse().ok()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn group_descends_from(group: libc::pid_t, _child: libc::pid_t) -> bool {
+    // SAFETY: plain queries.
+    let (parent, session) = unsafe { (libc::getpgid(libc::getppid()), libc::getsid(0)) };
+    group != parent && group != session
 }
 
 /// `tcsetpgrp` from a background group normally stops the caller with
@@ -359,25 +537,27 @@ fn set_foreground(fd: libc::c_int, group: libc::pid_t) -> io::Result<()> {
 
 static SIGNAL_SCOPE: Mutex<()> = Mutex::new(());
 
-/// Ignore SIGINT and SIGTERM in Wrap while a terminal-owning child runs. The
-/// child sits in the same foreground process group, so Ctrl-C still reaches
-/// it; Wrap survives to record the exit code. Dispositions are restored on
-/// drop.
+/// Ignore signals in Wrap while a child runs: SIGINT and SIGTERM while the
+/// child owns the terminal (it sits in the same foreground process group,
+/// so Ctrl-C still reaches it and Wrap survives to record the exit code),
+/// SIGTTIN and SIGTTOU while a captured child shares it (a terminal read
+/// from behind the child's job then fails with EIO instead of stopping
+/// Wrap). Dispositions are restored on drop.
 struct IgnoredSignals {
     previous: Vec<(libc::c_int, libc::sigaction)>,
     _exclusive: MutexGuard<'static, ()>,
 }
 
 impl IgnoredSignals {
-    fn install() -> io::Result<Self> {
+    fn install(signals: &[libc::c_int]) -> io::Result<Self> {
         let exclusive = SIGNAL_SCOPE
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut guard = IgnoredSignals {
-            previous: Vec::with_capacity(2),
+            previous: Vec::with_capacity(signals.len()),
             _exclusive: exclusive,
         };
-        for signal in [libc::SIGINT, libc::SIGTERM] {
+        for &signal in signals {
             // SAFETY: sigaction fills `previous`; the new action is SIG_IGN
             // with an empty mask.
             let mut previous: libc::sigaction = unsafe { std::mem::zeroed() };

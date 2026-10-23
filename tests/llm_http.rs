@@ -495,6 +495,40 @@ async fn http_errors_are_provider_errors_with_scrubbed_wires_and_messages() {
 }
 
 #[tokio::test]
+async fn provider_error_messages_are_read_from_every_common_body_shape() {
+    let shapes = [
+        (
+            json!({"error": {"message": "  nested message  "}}),
+            "nested message",
+        ),
+        (json!({"error": "bare error string"}), "bare error string"),
+        (json!({"message": "top-level message"}), "top-level message"),
+        (json!({"detail": "detail string"}), "detail string"),
+        (json!({"error": {"code": 7}}), "Provider returned HTTP 400."),
+        (
+            json!({"detail": [{"loc": ["body"], "msg": "x"}]}),
+            "Provider returned HTTP 400.",
+        ),
+        (
+            json!({"error": {"message": ""}, "message": "fallback"}),
+            "fallback",
+        ),
+    ];
+    for (body, expected) in shapes {
+        let fx = serve(vec![Reply::Json(400, vec![], body.clone())]).await;
+        let llm = llm_with_env(
+            provider("local-fake", Some(API_KEY), Some(&fx.base_url)),
+            &[],
+        );
+        let mut c = chat(&llm);
+        match send(&mut c).await {
+            Err(LlmError::Provider { message }) => assert_eq!(message, expected, "{body}"),
+            other => panic!("{body}: {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
 async fn non_json_success_bodies_and_missing_text_are_provider_errors() {
     let fx = serve(vec![Reply::Raw(200, vec![], "<html>oops</html>".into())]).await;
     let llm = llm_with_env(
@@ -562,17 +596,17 @@ async fn gives_up_after_three_rate_limited_responses() {
         Reply::Json(
             429,
             vec![("retry-after-ms", "1".into())],
-            json!({"error": "a"}),
+            json!({"error": {"type": "rate_limit_a"}}),
         ),
         Reply::Json(
             429,
             vec![("retry-after-ms", "1".into())],
-            json!({"error": "b"}),
+            json!({"error": {"type": "rate_limit_b"}}),
         ),
         Reply::Json(
             429,
             vec![("retry-after-ms", "1".into())],
-            json!({"error": "c"}),
+            json!({"error": {"type": "rate_limit_c"}}),
         ),
     ])
     .await;
