@@ -64,10 +64,10 @@ lines land in scrollback rather than in the alternate buffer about to vanish.
 Wrap disappears during the final exec: the dialog is unmounted, raw mode
 released, and the child inherits stdio, so `vim`, `top`, `ssh` and `sudo`
 work unmodified. Teeing child output would break TTY detection. Commands run
-as `$SHELL +m -ic <cmd>`: `-i` sources the user's rc files; `+m` disables job
-control so the shell cannot seize the foreground process group and leave Wrap
-stopped by SIGTTOU. Wrap ignores SIGINT/SIGTERM while a terminal-owning child
-runs so Ctrl-C reaches the child and Wrap survives to record the exit code.
+as `$SHELL +m -ic <cmd>`: `-i` sources the user's rc files. Interactive bash
+gives the foreground job its own process group and the terminal, so Ctrl-C
+reaches the command; Wrap ignores SIGINT/SIGTERM meanwhile and resets both to
+their defaults in the child, so it survives to record the exit code.
 When Wrap was piped into but a controlling terminal exists, interactive
 children still read keystrokes from `/dev/tty`.
 

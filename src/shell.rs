@@ -3,10 +3,9 @@
 //!
 //! The shell runs as `$SHELL +m -ic <command>`. `-i` sources the user's rc
 //! files so aliases, functions and PATH additions behave as at their own
-//! prompt. `+m` disables job control: an interactive shell would otherwise
-//! seize the terminal's foreground process group and never hand it back, so
-//! the next `tcsetattr` from Wrap would stop the whole process group with
-//! SIGTTOU.
+//! prompt. `+m` asks for job control off; interactive bash still runs each
+//! foreground job in its own process group and hands it the terminal, which
+//! is what lets Ctrl-C reach the command without reaching Wrap.
 //!
 //! Piped-input bytes are never streamed to children; they live at
 //! `$WRAP_TEMP_DIR/input` and commands read them from there.
@@ -14,6 +13,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, IsTerminal};
+use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 use std::sync::{Mutex, MutexGuard};
@@ -172,12 +172,23 @@ async fn run_inherited(
     cancel: Option<CancellationToken>,
 ) -> io::Result<ExitStatus> {
     let signals = IgnoredSignals::install()?;
-    let mut child = std::process::Command::new(shell)
+    let mut builder = std::process::Command::new(shell);
+    builder
         .args(["+m", "-ic", command])
         .stdin(stdin)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?;
+        .stderr(Stdio::inherit());
+    // The child must not inherit Wrap's ignored dispositions: Ctrl-C has to
+    // end the command even though Wrap itself survives it.
+    // SAFETY: `signal` is async-signal-safe and the callback touches nothing else.
+    unsafe {
+        builder.pre_exec(|| {
+            libc::signal(libc::SIGINT, libc::SIG_DFL);
+            libc::signal(libc::SIGTERM, libc::SIG_DFL);
+            Ok(())
+        });
+    }
+    let mut child = builder.spawn()?;
     let pid = child.id() as libc::pid_t;
     let mut wait = tokio::task::spawn_blocking(move || child.wait());
     let status = match cancel {
