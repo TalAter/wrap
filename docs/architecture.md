@@ -71,6 +71,14 @@ their defaults in the child, so it survives to record the exit code.
 When Wrap was piped into but a controlling terminal exists, interactive
 children still read keystrokes from `/dev/tty`.
 
+Captured steps keep the terminal as stdin so `sudo` can prompt. Bash ignores
+`+m` when interactive and hands the terminal to the step's job, so until that
+job exits keystrokes (Esc included) reach the job, not the dialog; the dialog
+tolerates the resulting read errors and resumes afterwards. zsh honours `+m`,
+so there Esc cancels the step: the whole process group is killed and the
+terminal is reclaimed. Children without a terminal, and every skill probe,
+run in their own process group so a timeout or cancel reaps grandchildren.
+
 ## LLM layer
 
 A conversation is an append-only entry record. Transient adds (the live
