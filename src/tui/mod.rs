@@ -7,10 +7,15 @@
 //! assert on real token colors and degradation separately.
 
 pub mod drive;
+pub mod forget_dialog;
 pub mod frame;
+pub mod nerd_icons;
 pub mod response_dialog;
 pub mod terminal;
+pub mod welcome;
+pub mod welcome_frames;
 pub mod widgets;
+pub mod wizard_dialog;
 
 pub use drive::{Dialog, Progress, draw_frame, drive};
 pub use frame::{
