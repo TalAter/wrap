@@ -590,6 +590,56 @@ fn continuation_parent_prefers_the_newest_same_ppid_entry() {
 }
 
 #[test]
+fn entries_with_turns_this_version_cannot_type_still_load_for_continuation() {
+    let (_dir, home) = home();
+    let mut older = entry();
+    older.id = "older".into();
+    older.ppid = 4242;
+    older.turns = vec![user("older prompt")];
+    let mut lines = format!("{}\n", older.to_jsonl_line());
+    // A newer entry from the same shell: an unknown turn kind, an assistant
+    // turn without `source`, and a response whose risk level is off-enum.
+    lines.push_str(
+        &json!({
+            "id": "newer", "timestamp": "2026-10-23T10:00:00.000Z", "version": "9.9.9",
+            "cwd": "/tmp", "ppid": 4242, "provider": {"name": "test"}, "prompt_hash": "h",
+            "turns": [
+                {"kind": "user", "text": "newer prompt"},
+                {"kind": "mystery", "payload": 1},
+                {"kind": "assistant", "attempts": []},
+                {"kind": "assistant", "source": "model", "attempts": [],
+                 "response": {"type": "command", "content": "echo x", "risk_level": "extreme"}},
+                {"kind": "final", "command": "echo x", "exit_code": 0, "source": "model"}
+            ],
+            "outcome": "success"
+        })
+        .to_string(),
+    );
+    lines.push('\n');
+    home.write("logs/wrap.jsonl", &lines).unwrap();
+
+    let entries = read_log_entries(&home);
+    assert_eq!(entries.len(), 2);
+    let parent = find_continuation_parent(&entries, 4242).unwrap();
+    assert_eq!(parent.id, "newer");
+    assert_eq!(parent.ppid, 4242);
+    assert_eq!(parent.outcome, "success");
+    let kinds: Vec<&str> = parent
+        .turns
+        .iter()
+        .map(|t| match t {
+            Turn::User { .. } => "user",
+            Turn::Assistant { .. } => "assistant",
+            Turn::Step { .. } => "step",
+            Turn::Probe { .. } => "probe",
+            Turn::Final { .. } => "final",
+        })
+        .collect();
+    assert_eq!(kinds, ["user", "final"]);
+    assert_eq!(assemble_continuation_chain(&entries, parent).len(), 2);
+}
+
+#[test]
 fn continuation_chain_walks_parent_ids_root_first() {
     let root = with("root", 1, None, vec![user("root prompt")]);
     let mid = with("mid", 1, Some("root"), vec![user("mid prompt")]);

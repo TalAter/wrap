@@ -72,15 +72,28 @@ impl Mounted {
     }
 
     fn read_input(&mut self) -> io::Result<()> {
-        while event::poll(INPUT_POLL)? {
+        loop {
+            // While a confirmed step's job owns the terminal (interactive
+            // bash hands it to each foreground job), reads fail with EIO;
+            // keystrokes go to that job until it exits and the terminal is
+            // reclaimed, so wait instead of ending the session.
+            let ready = match event::poll(INPUT_POLL) {
+                Ok(ready) => ready,
+                Err(e) if e.raw_os_error() == Some(libc::EIO) => return Ok(()),
+                Err(e) => return Err(e),
+            };
+            if !ready {
+                return Ok(());
+            }
             self.dirty = true;
-            match event::read()? {
-                Event::Key(key) => self.dialog.key(key),
-                Event::Paste(text) => self.dialog.paste(&text),
-                Event::Resize(..) | Event::FocusGained | Event::FocusLost | Event::Mouse(_) => {}
+            match event::read() {
+                Ok(Event::Key(key)) => self.dialog.key(key),
+                Ok(Event::Paste(text)) => self.dialog.paste(&text),
+                Ok(_) => {}
+                Err(e) if e.raw_os_error() == Some(libc::EIO) => return Ok(()),
+                Err(e) => return Err(e),
             }
         }
-        Ok(())
     }
 
     /// Hand a finished GUI editor's text back to the dialog.

@@ -103,6 +103,41 @@ fn step_then_final_command_prints_only_the_final_output() {
 }
 
 #[test]
+fn verbose_shows_the_step_explanation_before_the_step_line() {
+    let out = Wrap::seeded()
+        .responses(vec![
+            step("echo found-sips", "Checking image tools"),
+            command("echo converted", "low"),
+        ])
+        .run(&["--verbose", "convert"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let explanation = out
+        .stderr
+        .find("🔍 Checking image tools")
+        .expect("the explanation chrome line");
+    let step_line = out
+        .stderr
+        .find("Step: echo found-sips")
+        .expect("the verbose step line");
+    assert!(explanation < step_line, "{}", out.stderr);
+}
+
+#[test]
+fn a_non_utf8_environment_variable_does_not_break_the_run() {
+    use std::os::unix::ffi::OsStringExt;
+    let out = Wrap::seeded()
+        .response(command("echo ok", "low"))
+        .env_os(
+            "WRAP_TEST_BINARY_JUNK",
+            std::ffi::OsString::from_vec(vec![0x66, 0x6f, 0xff, 0xfe, 0x6f]),
+        )
+        .run(&["say ok"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "ok\n");
+    assert!(!out.stderr.contains("panicked"), "{}", out.stderr);
+}
+
+#[test]
 fn exhausted_round_budget_exits_1_with_a_rounds_message() {
     let out = Wrap::seeded()
         .config(json!({ "maxRounds": 2 }))
@@ -136,6 +171,52 @@ fn no_llm_configured_is_a_config_error() {
     assert_eq!(
         out.stderr,
         "Config error: no LLM configured. Edit ~/.wrap/config.jsonc.\n"
+    );
+}
+
+#[test]
+fn llm_setup_failures_carry_the_config_error_prefix() {
+    // The test provider selected with nothing to play back.
+    let empty = Wrap::seeded()
+        .env("WRAP_TEST_RESPONSES", "")
+        .run(&["hello"]);
+    assert_eq!(empty.code, 1);
+    assert_eq!(empty.stdout, "");
+    assert_eq!(
+        empty.stderr,
+        "Config error: test provider has no responses configured (the name \"test\" selects canned playback).\n"
+    );
+    // A key that points at an environment variable nobody set.
+    let unset = Wrap::seeded()
+        .config(json!({
+            "providers": { "anthropic": { "apiKey": "$WRAP_TEST_KEY_NOBODY_SET", "model": "claude-sonnet-4-6" } },
+            "defaultProvider": "anthropic"
+        }))
+        .run(&["hello"]);
+    assert_eq!(unset.code, 1);
+    assert_eq!(
+        unset.stderr,
+        "Config error: environment variable WRAP_TEST_KEY_NOBODY_SET is not set.\n"
+    );
+}
+
+#[test]
+fn memory_errors_show_the_file_relative_to_home() {
+    let fake_home = tempfile::tempdir().unwrap();
+    let wrap_home = fake_home.path().join(".wrap");
+    std::fs::create_dir_all(&wrap_home).unwrap();
+    std::fs::write(wrap_home.join("memory.json"), "corrupt").unwrap();
+    let out = Wrap::bare()
+        .config(json!({}))
+        .response(reply("never reached"))
+        .env("HOME", fake_home.path().to_str().unwrap())
+        .env("WRAP_HOME", wrap_home.to_str().unwrap())
+        .run(&["hello"]);
+    assert_eq!(out.code, 1);
+    assert_eq!(out.stdout, "");
+    assert_eq!(
+        out.stderr,
+        "Memory error: ~/.wrap/memory.json is broken — delete the file and run Wrap again.\n"
     );
 }
 

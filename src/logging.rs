@@ -322,8 +322,9 @@ pub fn append_log_entry(home: &WrapHome, entry: &mut LogEntry) -> io::Result<()>
 
 // --- lookup ----------------------------------------------------------------
 
-/// Every entry in the log, oldest first. Lines that do not parse are skipped:
-/// logging never crashes the tool, even on read.
+/// Every entry in the log, oldest first. Lines that are not JSON objects
+/// with a string `id` are skipped; everything else loads leniently (see
+/// [`lenient_entry`]): logging never crashes the tool, even on read.
 pub fn read_log_entries(home: &WrapHome) -> Vec<LogEntry> {
     let Ok(Some(content)) = home.read(LOG_FILE) else {
         return Vec::new();
@@ -331,8 +332,66 @@ pub fn read_log_entries(home: &WrapHome) -> Vec<LogEntry> {
     content
         .lines()
         .filter(|line| !line.is_empty())
-        .filter_map(|line| serde_json::from_str(line).ok())
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter_map(lenient_entry)
         .collect()
+}
+
+/// An entry from any version of the log. A line the typed shape rejects
+/// (a turn kind this version does not know, a field off its enum) still
+/// counts as a run: `-c` must find it, and the turns that do load replay.
+/// Only turns that fail individually are dropped, never the entry.
+fn lenient_entry(value: serde_json::Value) -> Option<LogEntry> {
+    if let Ok(entry) = serde_json::from_value::<LogEntry>(value.clone()) {
+        return Some(entry);
+    }
+    let object = value.as_object()?;
+    let id = object.get("id")?.as_str()?.to_string();
+    let text = |key: &str| {
+        object
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    fn field<T: serde::de::DeserializeOwned>(
+        object: &serde_json::Map<String, serde_json::Value>,
+        key: &str,
+    ) -> Option<T> {
+        object
+            .get(key)
+            .cloned()
+            .and_then(|v| serde_json::from_value(v).ok())
+    }
+    Some(LogEntry {
+        id,
+        timestamp: text("timestamp").unwrap_or_default(),
+        version: text("version").unwrap_or_default(),
+        cwd: text("cwd").unwrap_or_default(),
+        ppid: object
+            .get("ppid")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or_default(),
+        provider: field(object, "provider").unwrap_or(ResolvedProvider {
+            name: String::new(),
+            model: None,
+            api_key: None,
+            base_url: None,
+        }),
+        prompt_hash: text("prompt_hash").unwrap_or_default(),
+        turns: object
+            .get("turns")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|turn| serde_json::from_value(turn.clone()).ok())
+            .collect(),
+        outcome: text("outcome").unwrap_or_default(),
+        attached_input: field(object, "attached_input"),
+        memory: field(object, "memory"),
+        input_source: text("input_source"),
+        parent_id: text("parent_id"),
+    })
 }
 
 /// The entry a `w -c` invocation resumes: the newest entry from the same

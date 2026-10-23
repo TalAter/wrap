@@ -135,6 +135,9 @@ pub struct FakeHost {
     /// `mount:<tag>` / `unmount` / `editor` / `stderr:<text>` in order.
     pub log: Vec<String>,
     pub stderr: Vec<wrap::chrome::Notification>,
+    /// Step output handed to the host as its own notification kind; the
+    /// real host never prints these.
+    pub step_outputs: Vec<String>,
     pub editor_result: Option<String>,
     pub editor_drafts: Vec<String>,
     pub continuation_prompt: Option<String>,
@@ -150,6 +153,7 @@ impl FakeHost {
             shown: Vec::new(),
             log: Vec::new(),
             stderr: Vec::new(),
+            step_outputs: Vec::new(),
             editor_result: None,
             editor_drafts: Vec::new(),
             continuation_prompt: None,
@@ -170,6 +174,8 @@ impl FakeHost {
         self
     }
 
+    /// Everything that would reach stderr, rendered as the real host would.
+    /// A step output here would be a leak, so it renders as its text.
     pub fn stderr_text(&self) -> String {
         self.stderr
             .iter()
@@ -179,7 +185,7 @@ impl FakeHost {
                     None => format!("{text}\n"),
                 },
                 wrap::chrome::Notification::Verbose { line } => line.clone(),
-                wrap::chrome::Notification::StepOutput { .. } => String::new(),
+                wrap::chrome::Notification::StepOutput { text } => text.clone(),
             })
             .collect()
     }
@@ -237,10 +243,16 @@ impl DialogHost for FakeHost {
     }
 
     fn write_notification(&mut self, notification: &wrap::chrome::Notification) {
-        if let wrap::chrome::Notification::Chrome { text, .. } = notification {
-            self.log.push(format!("stderr:{text}"));
+        match notification {
+            wrap::chrome::Notification::StepOutput { text } => {
+                self.step_outputs.push(text.clone());
+            }
+            wrap::chrome::Notification::Chrome { text, .. } => {
+                self.log.push(format!("stderr:{text}"));
+                self.stderr.push(notification.clone());
+            }
+            wrap::chrome::Notification::Verbose { .. } => self.stderr.push(notification.clone()),
         }
-        self.stderr.push(notification.clone());
     }
 }
 

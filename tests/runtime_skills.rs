@@ -57,6 +57,97 @@ fn set_mtime(path: &Path, secs: u64) {
 
 // --- triggers & emission --------------------------------------------------
 
+/// Live (non-zombie) pids whose process group is `pgid`, from /proc.
+fn live_members_of_group(pgid: i32) -> Vec<i32> {
+    let mut members = Vec::new();
+    for entry in fs::read_dir("/proc").unwrap().flatten() {
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
+            continue;
+        };
+        let Ok(stat) = fs::read_to_string(entry.path().join("stat")) else {
+            continue;
+        };
+        let Some(rest) = stat.rsplit_once(')').map(|(_, rest)| rest) else {
+            continue;
+        };
+        let fields: Vec<&str> = rest.split_whitespace().collect();
+        if fields.len() > 2 && fields[0] != "Z" && fields[2] == pgid.to_string() {
+            members.push(pid);
+        }
+    }
+    members
+}
+
+#[tokio::test]
+async fn a_timed_out_shell_task_takes_its_backgrounded_grandchildren_with_it() {
+    let (_h, cwd, ctx) = rig();
+    let pid_file = cwd.path().join("pid");
+    let grandchild_file = cwd.path().join("grandchild");
+    let command = format!(
+        "echo $$ > {}; sleep 30 & echo $! > {}; sleep 5",
+        pid_file.display(),
+        grandchild_file.display()
+    );
+    let skill = skill_with("s", Trigger::Always, move || {
+        vec![SkillTask::shell(command.clone())]
+    });
+    let start = Instant::now();
+    let turns = run_skills(&[skill], "anything", &ctx).await;
+    assert!(turns.is_empty(), "a timed-out task emits nothing");
+    assert!(start.elapsed() < Duration::from_secs(3));
+
+    let child_pid: i32 = fs::read_to_string(&pid_file)
+        .expect("the probe wrote its pid before timing out")
+        .trim()
+        .parse()
+        .unwrap();
+    let grandchild: i32 = fs::read_to_string(&grandchild_file)
+        .expect("the backgrounded sleep started before the timeout")
+        .trim()
+        .parse()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut members = live_members_of_group(child_pid);
+    while (!members.is_empty() || is_alive(grandchild)) && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        members = live_members_of_group(child_pid);
+    }
+    assert!(
+        members.is_empty(),
+        "processes still alive in the probe's group: {members:?}"
+    );
+    assert!(!is_alive(grandchild), "the backgrounded sleep survived");
+}
+
+/// Whether `pid` still exists and is not a zombie.
+fn is_alive(pid: i32) -> bool {
+    fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            stat.rsplit_once(')')
+                .map(|(_, rest)| rest.split_whitespace().next() != Some("Z"))
+        })
+        .unwrap_or(false)
+}
+
+#[tokio::test]
+async fn a_panicking_computed_task_is_a_misfire_and_the_rest_still_emit() {
+    let (_h, _c, ctx) = rig();
+    let skill = skill_with("s", Trigger::Always, || {
+        vec![
+            SkillTask::computed("boom", || async {
+                if std::env::var_os("WRAP_SKILL_PANIC_NEVER_SET").is_none() {
+                    panic!("computed task failed");
+                }
+                ok("unreachable")
+            }),
+            computed("echo fine", "fine", 0),
+        ]
+    });
+    let turns = run_skills(&[skill], "anything", &ctx).await;
+    assert_eq!(commands(&turns), ["echo fine"]);
+}
+
 #[tokio::test]
 async fn triggers_gate_skills_and_matching_is_case_insensitive_when_the_regex_says_so() {
     let (_h, _c, ctx) = rig();
@@ -229,7 +320,7 @@ async fn discovery_which_includes_valid_watchlist_tools_only() {
     ctx.home
         .write(
             "tool-watchlist.json",
-            r#"[{"tool":"watchlist-extra","added":"2026-05-21"},{"tool":"; legit","added":"2026-05-21"},{"tool":"; rm -rf /","added":"2026-05-21"}]"#,
+            r#"[{"tool":"watchlist-extra","added":"2026-05-21"},{"tool":"; legit","added":"2026-05-21"},{"tool":"; echo injected","added":"2026-05-21"}]"#,
         )
         .unwrap();
     let turns = run_skills(&[discovery_skill()], "anything", &ctx).await;
@@ -239,7 +330,7 @@ async fn discovery_which_includes_valid_watchlist_tools_only() {
         .unwrap();
     assert!(which.command.contains("watchlist-extra"));
     assert!(!which.command.contains("legit"));
-    assert!(!which.command.contains("rm -rf"));
+    assert!(!which.command.contains("injected"));
     assert_eq!(
         which.command.matches("git").count(),
         1,

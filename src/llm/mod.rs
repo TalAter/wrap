@@ -88,6 +88,9 @@ fn resolve_api_key(
     }
 }
 
+const NO_TEST_RESPONSES: &str =
+    "test provider has no responses configured (the name \"test\" selects canned playback).";
+
 /// A provider handle: eager validation now, conversations on demand.
 /// Cloning shares the provider, so the test playback cursor is shared too.
 #[derive(Clone, Debug)]
@@ -101,16 +104,16 @@ impl Llm {
         match config {
             LlmConfig::Test(responses) => {
                 if matches!(&responses, TestResponses::List(items) if items.is_empty()) {
-                    return Err(
-                        "test provider has no responses configured (the name \"test\" selects canned playback)."
-                            .into(),
-                    );
+                    return Err(NO_TEST_RESPONSES.into());
                 }
                 Ok(Llm {
                     label: "test / (default)".into(),
                     provider: Arc::new(Provider::Test(test_provider::TestProvider::new(responses))),
                 })
             }
+            // The name "test" is the canned-playback provider; reaching it
+            // without responses is a configuration mistake, not a provider.
+            LlmConfig::Provider(entry) if entry.name == "test" => Err(NO_TEST_RESPONSES.into()),
             LlmConfig::Provider(entry) => {
                 if let Some(error) = crate::config::providers::validate_provider_entry(
                     &entry.name,

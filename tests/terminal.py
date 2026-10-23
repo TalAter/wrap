@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Real-terminal contracts; stdlib only. Runs with a disposable home and local HTTP."""
-import ast, codecs, fcntl, http.server, json, os, pathlib, pty, re, select, signal, struct, subprocess, sys, tempfile, termios, threading, time, unicodedata
+import ast, shutil, codecs, fcntl, http.server, json, os, pathlib, pty, re, select, signal, struct, subprocess, sys, tempfile, termios, threading, time, unicodedata
 
 BINARY = str(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'target/debug/wrap').resolve())
 
@@ -395,6 +395,43 @@ def confirmed_medium_step_shows_running():
         assert step['source'] == 'model' and step['output'].strip() == 'SLOW_STEP' and final['source'] == 'cancelled'
     finally: s.close()
 
+def esc_aborts_a_step_under_zsh():
+    # zsh honours +m, so the step stays in Wrap's process group and Esc reaches the dialog.
+    if not shutil.which('zsh'): print('SKIP esc aborts a step under zsh (no zsh)'); return
+    responses = [command('sleep 23.5', final=False, explanation='A long medium step'), command('echo done', risk='low')]
+    s = Session(['cancel a step'], responses=responses, extra_env={'SHELL': shutil.which('zsh')})
+    try:
+        s.until('sleep 23.5'); s.until('Run command?'); s.send('y')
+        s.until('Running step...'); s.pump_for(.8); s.send('\x1b')
+        s.until('Run command?', timeout=8); s.send('n'); entries = s.finish(0)
+        assert b'Could not read from the terminal' not in s.output, s.output[-800:]
+        entry, final = final_turn(entries)
+        assert final['source'] == 'cancelled' and entry['outcome'] == 'cancelled', entry
+        assert 'step' not in kinds_of(entry), kinds_of(entry)
+        assert not session_processes(s, 'sleep 23.5')
+    finally: s.close()
+
+def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
+    # Interactive bash hands the terminal to each foreground job even with +m, so keys
+    # (including Esc) go to the job until it exits; the dialog must survive and resume.
+    responses = [command('sleep 1.5; echo STEP_DONE', final=False, explanation='A medium step'), command('echo done', risk='low')]
+    s = Session(['bash step'], responses=responses, extra_env={'SHELL': '/bin/bash'})
+    try:
+        s.until('sleep 1.5; echo STEP_DONE'); s.until('Run command?'); s.send('y')
+        s.until('Running step...'); s.pump_for(.5); s.send('\x1b')
+        s.until('echo done', timeout=12); s.until('Output:'); s.until('STEP_DONE'); s.until('Run command?')
+        s.send('n'); entries = s.finish(0)
+        assert b'Could not read from the terminal' not in s.output, s.output[-800:]
+        entry, final = final_turn(entries)
+        assert kinds_of(entry) == ['user', 'assistant', 'step', 'assistant', 'final'], kinds_of(entry)
+        assert final['source'] == 'cancelled'
+    finally: s.close()
+
+def session_processes(s, needle):
+    import subprocess as sp
+    return [l for l in sp.run(['ps', '-o', 'sid=,args=', '-e'], capture_output=True, text=True).stdout.splitlines()
+            if l.split(None, 1)[0] == str(s.process.pid) and needle in l]
+
 # --- Resize ----------------------------------------------------------------------
 def resize_folds_and_restores():
     # 52-column lines: one row each at 100 columns, two rows each (28 > the 25-row budget) at 50.
@@ -621,6 +658,8 @@ SCENARIOS = [
     ('followup replaces command', followup_replaces_command), ('followup esc keeps draft', followup_esc_keeps_draft),
     ('interactive compose submits', interactive_compose_submits), ('interactive esc cancels', interactive_esc_cancels),
     ('low step runs before dialog', low_step_runs_before_dialog), ('confirmed medium step shows running', confirmed_medium_step_shows_running),
+    ('esc aborts a step under zsh', esc_aborts_a_step_under_zsh),
+    ('a bash step that owns the terminal does not end the session', a_bash_step_that_owns_the_terminal_does_not_end_the_session),
     ('resize folds and restores', resize_folds_and_restores), ('early keystroke does not confirm', early_keystroke_does_not_confirm),
     ('tty handoff', tty_handoff), ('child alt screen leaves terminal sane', child_alt_screen_leaves_terminal_sane),
     ('SIGINT during dialog', lambda: signal_during_dialog(signal.SIGINT)), ('SIGTERM during dialog', lambda: signal_during_dialog(signal.SIGTERM)),

@@ -183,12 +183,14 @@ fn completion(content: &str) -> Value {
 }
 
 #[tokio::test]
-async fn anthropic_posts_the_messages_api_shape_with_key_header() {
+async fn anthropic_forces_a_response_tool_and_reads_its_input() {
     let mut fx = serve(vec![Reply::Json(
         200,
         vec![],
-        json!({"id": "msg_1", "content": [{"type": "text", "text": "ignored"}, {"type": "text", "text": "{\"answer\":\"hi\"}"}],
-               "stop_reason": "end_turn", "usage": {"input_tokens": 3, "output_tokens": 4}}),
+        json!({"id": "msg_1", "content": [
+                   {"type": "text", "text": "Here is the command."},
+                   {"type": "tool_use", "id": "toolu_1", "name": "response", "input": {"answer": "hi"}}],
+               "stop_reason": "tool_use", "usage": {"input_tokens": 3, "output_tokens": 4}}),
     )])
     .await;
     let llm = llm_with_env(
@@ -210,10 +212,18 @@ async fn anthropic_posts_the_messages_api_shape_with_key_header() {
         req.body["messages"],
         json!([{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}, {"role": "user", "content": "q2"}])
     );
-    assert_eq!(req.body["output_config"]["format"]["type"], "json_schema");
-    assert_eq!(req.body["output_config"]["format"]["schema"], schema());
+    assert!(req.body.get("output_config").is_none());
+    assert_eq!(req.body["tools"].as_array().unwrap().len(), 1);
+    assert_eq!(req.body["tools"][0]["name"], "response");
+    assert_eq!(req.body["tools"][0]["input_schema"], schema());
+    assert!(req.body["tools"][0]["description"].is_string());
+    assert_eq!(
+        req.body["tool_choice"],
+        json!({"type": "tool", "name": "response"})
+    );
 
     let attempt = &c.entries()[3].attempts[0];
+    assert_eq!(attempt.raw_text.as_deref(), Some("{\"answer\":\"hi\"}"));
     match attempt.request_wire.as_ref().unwrap() {
         WireRequest::Http { body } => {
             assert!(body.get("system").is_none());
@@ -231,11 +241,65 @@ async fn anthropic_posts_the_messages_api_shape_with_key_header() {
         } => {
             assert_eq!(body["id"], "msg_1");
             assert_eq!(usage.as_ref().unwrap()["output_tokens"], 4);
-            assert_eq!(finish_reason.as_deref(), Some("end_turn"));
+            assert_eq!(finish_reason.as_deref(), Some("tool_use"));
         }
         other => panic!("{other:?}"),
     }
     assert!(!serde_json::to_string(attempt).unwrap().contains(API_KEY));
+}
+
+#[tokio::test]
+async fn anthropic_without_a_tool_call_falls_back_to_its_text_and_fails_to_parse() {
+    let fx = serve(vec![Reply::Json(
+        200,
+        vec![],
+        json!({"id": "msg_2", "content": [{"type": "text", "text": "I cannot "}, {"type": "text", "text": "do that."}],
+               "stop_reason": "end_turn"}),
+    )])
+    .await;
+    let llm = llm_with_env(
+        provider("anthropic", Some(API_KEY), Some(&fx.base_url)),
+        &[],
+    );
+    let mut c = chat(&llm);
+    let result = c
+        .send::<Answer>(
+            &schema(),
+            SendOptions {
+                cancel: None,
+                retry: false,
+            },
+        )
+        .await;
+    match result {
+        Err(LlmError::Parse { raw_text, .. }) => assert_eq!(raw_text, "I cannot do that."),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn anthropic_max_tokens_follows_the_model_generation() {
+    for (model, expected) in [
+        ("claude-3-opus-20240229", 4096),
+        ("claude-3-haiku-20240307", 4096),
+        ("claude-3-5-sonnet-latest", 8192),
+        ("claude-3-7-sonnet-latest", 8192),
+        ("claude-sonnet-4-6", 16000),
+    ] {
+        let mut fx = serve(vec![Reply::Json(
+            200,
+            vec![],
+            json!({"content": [{"type": "tool_use", "name": "response", "input": {"answer": "hi"}}]}),
+        )])
+        .await;
+        let mut p = provider("anthropic", Some(API_KEY), Some(&fx.base_url));
+        p.model = Some(model.into());
+        let llm = llm_with_env(p, &[]);
+        let mut c = chat(&llm);
+        send(&mut c).await.unwrap();
+        let req = fx.requests.recv().await.unwrap();
+        assert_eq!(req.body["max_tokens"], expected, "{model}");
+    }
 }
 
 #[tokio::test]
@@ -263,7 +327,7 @@ async fn openai_posts_the_responses_api_shape_with_a_strict_schema() {
     );
     let format = &req.body["text"]["format"];
     assert_eq!(format["type"], "json_schema");
-    assert_eq!(format["name"], "wrap_response");
+    assert_eq!(format["name"], "response");
     assert_eq!(format["strict"], true);
     assert_eq!(format["schema"]["required"], json!(["answer", "note"]));
     assert_eq!(format["schema"]["additionalProperties"], false);
@@ -272,7 +336,7 @@ async fn openai_posts_the_responses_api_shape_with_a_strict_schema() {
         WireRequest::Http { body } => {
             assert!(body.get("instructions").is_none());
             assert!(body.get("input").is_none());
-            assert_eq!(body["text"]["format"]["name"], "wrap_response");
+            assert_eq!(body["text"]["format"]["name"], "response");
         }
         other => panic!("{other:?}"),
     }
@@ -280,18 +344,19 @@ async fn openai_posts_the_responses_api_shape_with_a_strict_schema() {
 
 #[tokio::test]
 async fn chat_completions_kinds_pick_response_format_by_provider() {
-    // groq: strict json_schema; openrouter: json_schema without strict;
-    // unknown: json_object; ollama without a key: bearer nokey.
+    // groq: strict json_schema over the all-required schema; openrouter:
+    // strict json_schema over the schema as declared; unknown: json_object;
+    // ollama without a key: bearer nokey.
     let bearer = format!("Bearer {API_KEY}");
     let cases: Vec<(ResolvedProvider, Value, String)> = vec![
         (
             provider("groq", Some(API_KEY), None),
-            json!({"type": "json_schema", "json_schema": {"name": "wrap_response", "schema": wrap::llm::strict_schema(&schema()), "strict": true}}),
+            json!({"type": "json_schema", "json_schema": {"name": "response", "schema": wrap::llm::strict_schema(&schema()), "strict": true}}),
             bearer.clone(),
         ),
         (
             provider("openrouter", Some(API_KEY), None),
-            json!({"type": "json_schema", "json_schema": {"name": "wrap_response", "schema": schema()}}),
+            json!({"type": "json_schema", "json_schema": {"name": "response", "schema": schema(), "strict": true}}),
             bearer.clone(),
         ),
         (
@@ -301,7 +366,7 @@ async fn chat_completions_kinds_pick_response_format_by_provider() {
         ),
         (
             provider("ollama", None, None),
-            json!({"type": "json_schema", "json_schema": {"name": "wrap_response", "schema": wrap::llm::strict_schema(&schema()), "strict": true}}),
+            json!({"type": "json_schema", "json_schema": {"name": "response", "schema": wrap::llm::strict_schema(&schema()), "strict": true}}),
             "Bearer nokey".to_string(),
         ),
     ];
@@ -406,12 +471,8 @@ async fn http_errors_are_provider_errors_with_scrubbed_wires_and_messages() {
     let LlmError::Provider { message } = &err else {
         panic!("{err:?}")
     };
-    assert!(
-        message.starts_with("Provider returned HTTP 401"),
-        "{message}"
-    );
+    assert_eq!(message, "Invalid API key: ...7890");
     assert!(!message.contains(API_KEY));
-    assert!(message.contains("...7890"));
 
     let entry = &c.entries()[3];
     assert_eq!(entry.message, None);
@@ -521,12 +582,62 @@ async fn gives_up_after_three_rate_limited_responses() {
     );
     let mut c = chat(&llm);
     match send(&mut c).await {
-        Err(LlmError::Provider { message }) => assert!(
-            message.starts_with("Provider returned HTTP 429"),
-            "{message}"
+        Err(LlmError::Provider { message }) => {
+            assert_eq!(message, "Provider returned HTTP 429.")
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn failures_without_a_provider_message_name_only_the_status() {
+    // Server errors are retried twice; every reply is the same HTML page.
+    let html = || {
+        Reply::Raw(
+            500,
+            vec![("retry-after-ms", "1".into())],
+            "<html><body>Internal Server Error</body></html>".into(),
+        )
+    };
+    let fx = serve(vec![html(), html(), html()]).await;
+    let llm = llm_with_env(
+        provider("local-fake", Some(API_KEY), Some(&fx.base_url)),
+        &[],
+    );
+    let mut c = chat(&llm);
+    match send(&mut c).await {
+        Err(LlmError::Provider { message }) => {
+            assert_eq!(message, "Provider returned HTTP 500.")
+        }
+        other => panic!("{other:?}"),
+    }
+    match c.entries()[3].attempts[0].response_wire.as_ref().unwrap() {
+        WireResponse::Http { body, .. } => assert!(body.as_str().unwrap().contains("<html>")),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_refused_connection_is_a_plain_reachability_message() {
+    // Bind and release a port so nothing listens on it.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}/v1", listener.local_addr().unwrap());
+    drop(listener);
+    let llm = llm_with_env(provider("local-fake", Some(API_KEY), Some(&base_url)), &[]);
+    let mut c = chat(&llm);
+    match send(&mut c).await {
+        Err(LlmError::Provider { message }) => assert_eq!(
+            message,
+            "Could not reach 127.0.0.1: check your connection and try again."
         ),
         other => panic!("{other:?}"),
     }
+    let attempt = &c.entries()[3].attempts[0];
+    assert!(attempt.response_wire.is_none());
+    assert!(matches!(
+        attempt.request_wire,
+        Some(WireRequest::Http { .. })
+    ));
 }
 
 #[tokio::test]
@@ -565,6 +676,50 @@ async fn abort_mid_request_seals_the_entry_with_no_attempts() {
 
     assert_eq!(send(&mut c).await.unwrap().answer, "fresh");
     assert_eq!(c.entries().len(), 5);
+}
+
+#[tokio::test]
+async fn abort_during_the_corrective_retry_keeps_the_first_attempt() {
+    let mut fx = serve(vec![
+        Reply::Json(200, vec![], completion("not json at all")),
+        Reply::Hold,
+    ])
+    .await;
+    let llm = llm_with_env(
+        provider("local-fake", Some(API_KEY), Some(&fx.base_url)),
+        &[],
+    );
+    let mut c = chat(&llm);
+    let cancel = CancellationToken::new();
+    let trigger = cancel.clone();
+    let schema = schema();
+    let pending = c.send::<Answer>(
+        &schema,
+        SendOptions {
+            cancel: Some(cancel),
+            retry: true,
+        },
+    );
+    let second = async {
+        let _first = fx.requests.recv().await.unwrap();
+        let retry = fx.requests.recv().await.unwrap();
+        trigger.cancel();
+        retry
+    };
+    let (result, retry) = tokio::join!(pending, second);
+    assert!(matches!(result, Err(LlmError::Aborted)));
+    assert_eq!(retry.body["messages"].as_array().unwrap().len(), 6);
+    let entry = &c.entries()[3];
+    assert_eq!(entry.message, None);
+    assert_eq!(entry.attempts.len(), 1);
+    assert_eq!(
+        entry.attempts[0].error.as_ref().unwrap().kind,
+        AttemptErrorKind::Parse
+    );
+    assert_eq!(
+        entry.attempts[0].raw_text.as_deref(),
+        Some("not json at all")
+    );
 }
 
 #[tokio::test]

@@ -96,6 +96,10 @@ async fn fence_stripping_negatives_stay_verbatim_and_classify_as_invalid_json() 
         "```json\n{\"answer\":\"a\"}\n```\n```json\n{\"answer\":\"b\"}\n```",
         "Here you go:\n```json\n{\"answer\":\"hi\"}\n```\nHope that helps!",
         "```json\n{\"answer\":\"```\"}\n```",
+        // A non-word tag is not a fence Wrap recognises.
+        "```json-ish\n{\"answer\":\"hi\"}\n```",
+        // The closing fence must sit on its own line.
+        "```json\n{\"answer\":\"hi\"}```",
     ] {
         let mut c = conv(&single(raw));
         match send_once(&mut c).await {

@@ -43,6 +43,12 @@ pub fn count_facts(memory: &Memory) -> usize {
     memory.values().map(Vec::len).sum()
 }
 
+/// The OS's description of an I/O failure without the errno suffix.
+fn io_reason(error: &std::io::Error) -> String {
+    let text = error.to_string();
+    text.split(" (os error").next().unwrap_or(&text).to_string()
+}
+
 fn memory_error(home: &WrapHome) -> String {
     format!(
         "Memory error: {} is broken — delete the file and run Wrap again.",
@@ -55,8 +61,9 @@ fn memory_error(home: &WrapHome) -> String {
 pub fn load_memory(home: &WrapHome) -> Result<Memory, String> {
     let raw = home.read(MEMORY_FILE).map_err(|e| {
         format!(
-            "Memory error: {} could not be read — {e}",
-            pretty_path(home.resolve(MEMORY_FILE))
+            "Memory error: {} could not be read — {}.",
+            pretty_path(home.resolve(MEMORY_FILE)),
+            io_reason(&e)
         )
     })?;
     match raw {
@@ -93,7 +100,8 @@ pub fn append_facts(
             });
         }
     }
-    save_memory(home, &memory).map_err(|e| format!("Memory error: could not save memory — {e}"))?;
+    save_memory(home, &memory)
+        .map_err(|e| format!("Memory error: could not save memory — {}.", io_reason(&e)))?;
     Ok(memory)
 }
 
@@ -303,7 +311,8 @@ pub async fn ensure_memory_with_timeout(
         .collect();
     ui.verbose(&format!("Init: {} facts extracted", facts.len()));
     let memory: Memory = BTreeMap::from([("/".to_string(), facts)]);
-    save_memory(home, &memory).map_err(|e| format!("Memory error: could not save memory — {e}"))?;
+    save_memory(home, &memory)
+        .map_err(|e| format!("Memory error: could not save memory — {}.", io_reason(&e)))?;
     ui.chrome("Detected OS and shell", "🧠");
     Ok(memory)
 }

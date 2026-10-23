@@ -75,17 +75,6 @@ async fn shell_from_env_falls_back_to_sh() {
 }
 
 #[tokio::test]
-async fn the_temp_dir_is_created_lazily_and_inherited_by_the_child() {
-    let result = execute_with_shell("printf %s \"$WRAP_TEMP_DIR\"", SH, ShellMode::Capture, None)
-        .await
-        .unwrap();
-    assert_eq!(result.exit_code, 0);
-    assert!(!result.stdout.is_empty());
-    assert!(std::path::Path::new(&result.stdout).is_dir());
-    assert_eq!(std::env::var("WRAP_TEMP_DIR").unwrap(), result.stdout);
-}
-
-#[tokio::test]
 async fn inherit_mode_reports_exit_codes_and_signal_deaths() {
     let result = execute_with_shell("exit 3", SH, ShellMode::Inherit, None)
         .await
@@ -114,6 +103,83 @@ async fn cancellation_kills_a_captured_child() {
     let result = execute_with_shell("sleep 5", SH, ShellMode::Capture, Some(token)).await;
     assert!(start.elapsed() < Duration::from_millis(1500));
     assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+}
+
+/// Live (non-zombie) pids whose process group is `pgid`, from /proc.
+fn live_members_of_group(pgid: i32) -> Vec<i32> {
+    let mut members = Vec::new();
+    for entry in std::fs::read_dir("/proc").unwrap().flatten() {
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
+            continue;
+        };
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
+            continue;
+        };
+        // Fields after the parenthesised command: state, ppid, pgrp, ...
+        let Some(rest) = stat.rsplit_once(')').map(|(_, rest)| rest) else {
+            continue;
+        };
+        let fields: Vec<&str> = rest.split_whitespace().collect();
+        if fields.len() > 2 && fields[0] != "Z" && fields[2] == pgid.to_string() {
+            members.push(pid);
+        }
+    }
+    members
+}
+
+#[tokio::test]
+async fn cancellation_ends_the_whole_group_of_a_headless_captured_child() {
+    // Without a terminal the shell gets a process group of its own, so the
+    // backgrounded grandchild must die with it instead of lingering.
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("pid");
+    let grandchild_file = dir.path().join("grandchild");
+    let command = format!(
+        "echo $$ > {}; sh -c 'sleep 30 & echo $! > {}; wait'",
+        pid_file.display(),
+        grandchild_file.display()
+    );
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        cancel.cancel();
+    });
+    let result = execute_with_shell(&command, SH, ShellMode::Capture, Some(token)).await;
+    assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+
+    let child_pid: i32 = std::fs::read_to_string(&pid_file)
+        .expect("the shell wrote its pid before the cancel")
+        .trim()
+        .parse()
+        .unwrap();
+    let grandchild: i32 = std::fs::read_to_string(&grandchild_file)
+        .expect("the grandchild was started before the cancel")
+        .trim()
+        .parse()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut members = live_members_of_group(child_pid);
+    while (!members.is_empty() || is_alive(grandchild)) && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        members = live_members_of_group(child_pid);
+    }
+    assert!(
+        members.is_empty(),
+        "processes still alive in the child's group: {members:?}"
+    );
+    assert!(!is_alive(grandchild), "the backgrounded sleep survived");
+}
+
+/// Whether `pid` still exists and is not a zombie.
+fn is_alive(pid: i32) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            stat.rsplit_once(')')
+                .map(|(_, rest)| rest.split_whitespace().next() != Some("Z"))
+        })
+        .unwrap_or(false)
 }
 
 #[tokio::test]

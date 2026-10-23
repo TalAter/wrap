@@ -151,6 +151,20 @@ fn test_kind_without_responses_is_a_config_error() {
 }
 
 #[test]
+fn the_bare_test_provider_name_without_responses_is_the_no_responses_error() {
+    // `WRAP_TEST_RESPONSES=""` selects the test provider but configures no
+    // playback; the message must say so rather than complain about a URL.
+    let resolved = provider("test", None, None, None);
+    let config = build_llm_config(resolved, &env(&[("WRAP_TEST_RESPONSES", "")])).unwrap();
+    assert!(matches!(config, LlmConfig::Provider(ref p) if p.name == "test"));
+    let err = Llm::new(config, &env(&[])).unwrap_err();
+    assert_eq!(
+        err,
+        "test provider has no responses configured (the name \"test\" selects canned playback)."
+    );
+}
+
+#[test]
 fn test_env_selects_canned_playback_with_responses_list_winning() {
     let resolved = provider(
         "anthropic",

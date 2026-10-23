@@ -3,6 +3,7 @@
 //! never a terminal, so every run exercises the non-interactive paths.
 #![allow(dead_code)]
 
+use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -25,6 +26,8 @@ pub struct Wrap {
     home: TempDir,
     tmp: TempDir,
     env: Vec<(String, String)>,
+    /// Raw entries, for values that are not UTF-8.
+    os_env: Vec<(OsString, OsString)>,
     stdin: Option<Vec<u8>>,
     cwd: Option<PathBuf>,
 }
@@ -36,6 +39,7 @@ impl Wrap {
             home: tempfile::tempdir().unwrap(),
             tmp: tempfile::tempdir().unwrap(),
             env: Vec::new(),
+            os_env: Vec::new(),
             stdin: None,
             cwd: None,
         }
@@ -60,6 +64,11 @@ impl Wrap {
     pub fn env(mut self, key: &str, value: &str) -> Self {
         self.env.retain(|(k, _)| k != key);
         self.env.push((key.to_string(), value.to_string()));
+        self
+    }
+
+    pub fn env_os(mut self, key: impl Into<OsString>, value: impl Into<OsString>) -> Self {
+        self.os_env.push((key.into(), value.into()));
         self
     }
 
@@ -129,6 +138,9 @@ impl Wrap {
             .env("TMPDIR", self.tmp.path())
             .env("WRAP_THEME", "dark");
         for (key, value) in &self.env {
+            command.env(key, value);
+        }
+        for (key, value) in &self.os_env {
             command.env(key, value);
         }
         for (key, value) in extra_env {

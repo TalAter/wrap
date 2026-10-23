@@ -127,16 +127,23 @@ pub struct Conversation {
     entries: Vec<Entry>,
 }
 
-/// Strip markdown fences only when the entire response is one fenced block.
+/// Strip markdown fences only when the entire response is one fenced block:
+/// an opening fence with an optional word tag on its own line, the body, and
+/// a closing fence on its own line. Anything looser (a non-word tag, a
+/// closing fence glued to the body, more fences inside) stays verbatim and
+/// fails to parse, which triggers the corrective retry.
 fn strip_fences(text: &str) -> &str {
+    static FENCE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let fence = FENCE.get_or_init(|| {
+        regex::Regex::new(r"(?s)^```[0-9A-Za-z_]*\s*\n(.*)\n```$").expect("valid regex")
+    });
     let trimmed = text.trim();
-    let inner = trimmed
-        .strip_prefix("```")
-        .and_then(|s| s.split_once('\n'))
-        .map(|(_, rest)| rest)
-        .and_then(|s| s.strip_suffix("```"))
-        .filter(|s| !s.contains("```"));
-    inner.map(str::trim).unwrap_or(trimmed)
+    fence
+        .captures(trimmed)
+        .map(|caps| caps.get(1).expect("group 1").as_str())
+        .filter(|inner| !inner.contains("```"))
+        .map(str::trim)
+        .unwrap_or(trimmed)
 }
 
 /// Fence-strip, then JSON, then schema. Classification lives here, not in

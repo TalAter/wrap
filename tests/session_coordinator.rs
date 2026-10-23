@@ -235,10 +235,72 @@ async fn an_inline_step_shows_its_explanation_but_never_its_output_on_stderr() {
     let text = host.stderr_text();
     assert!(text.contains("🔍 Find the secret\n"), "{text}");
     assert!(!text.contains("OUTPUT_THAT_MUST_NOT_LEAK"), "{text}");
+    // The output travels as its own notification kind, which only a mounted
+    // dialog shows; it is never chrome.
+    assert_eq!(host.step_outputs.len(), 1);
+    assert!(
+        host.step_outputs[0].starts_with("OUTPUT_THAT_MUST_NOT_LEAK\n"),
+        "{:?}",
+        host.step_outputs
+    );
     let entry = rig.last_entry();
     assert_eq!(
         turn_kinds(&entry),
         ["user", "assistant", "step", "assistant"]
+    );
+}
+
+#[tokio::test]
+async fn the_request_opens_with_the_scaffold_prefix_and_then_the_framed_prompt() {
+    // The scaffold's prefix messages (the few-shot pairs plus separator,
+    // when the embedded prompt carries any) enter the conversation as real
+    // messages ahead of the first framed user turn, under the scaffold's
+    // system text.
+    let rig = SessionRig::new();
+    let llm = llm_list(vec![
+        json!({"type":"reply","content":"done","risk_level":"low"}),
+    ]);
+    let mut host = FakeHost::tty();
+    let options = rig.options(|o| {
+        o.config = session_common::config(|c| c.log_traces = Some(true));
+    });
+    assert_eq!(run("list files", &llm, options, &mut host).await, Ok(0));
+    let entry = rig.last_entry();
+    let assistant_index = entry
+        .turns
+        .iter()
+        .position(|t| matches!(t, Turn::Assistant { .. }))
+        .unwrap();
+    let trace: serde_json::Value = serde_json::from_str(
+        &rig.home
+            .read(&format!("logs/traces/{}.json", entry.id))
+            .unwrap()
+            .expect("trace sidecar"),
+    )
+    .unwrap();
+    let request = &trace["turn_attempts"][assistant_index.to_string()][0]["request"];
+    let messages = request["messages"].as_array().unwrap();
+
+    let scaffold = wrap::prompt::assemble_prompt_scaffold(&wrap::prompt::QueryContext {
+        cwd: "/tmp".into(),
+        piped: true,
+        ..Default::default()
+    });
+    assert_eq!(request["system"], scaffold.system);
+    let prefix = scaffold.prefix_messages;
+    assert_eq!(
+        prefix.len(),
+        2 * wrap::prompt::optimized().few_shot_examples.len()
+            + usize::from(!wrap::prompt::optimized().few_shot_examples.is_empty())
+    );
+    for (i, expected) in prefix.iter().enumerate() {
+        assert_eq!(messages[i], serde_json::to_value(expected).unwrap());
+    }
+    let framed = &messages[prefix.len()];
+    assert_eq!(framed["role"], "user");
+    assert!(
+        framed["content"].as_str().unwrap().contains("list files"),
+        "{framed}"
     );
 }
 

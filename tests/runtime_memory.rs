@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::future::Future;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -100,17 +101,25 @@ fn broken_files_fail_with_the_memory_error_naming_the_file() {
 }
 
 #[test]
-fn memory_error_shows_the_path_with_tilde_under_home() {
-    let base = home_dir().join(".wrap-test-memory-err");
-    let _ = fs::remove_dir_all(&base);
-    let home = WrapHome::new(&base);
-    home.write("memory.json", "corrupt").unwrap();
+fn an_unreadable_memory_file_is_a_plain_memory_error() {
+    // Root reads anything; the permission probe is meaningless there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
+    let (dir, home) = home();
+    home.write("memory.json", "{}").unwrap();
+    let path = dir.path().join("memory.json");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
     let err = load_memory(&home).unwrap_err();
-    fs::remove_dir_all(&base).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     assert_eq!(
         err,
-        "Memory error: ~/.wrap-test-memory-err/memory.json is broken — delete the file and run Wrap again."
+        format!(
+            "Memory error: {} could not be read — Permission denied.",
+            wrap::paths::pretty_path(&path)
+        )
     );
+    assert!(!err.contains("os error"), "{err}");
 }
 
 #[test]

@@ -7,18 +7,27 @@
 //! foreground job in its own process group and hands it the terminal, which
 //! is what lets Ctrl-C reach the command without reaching Wrap.
 //!
+//! Process groups follow the terminal. A child that may touch the terminal
+//! (stdin is the tty) stays in Wrap's foreground group: a background group
+//! cannot read the tty, and interactive bash stops itself until it is in the
+//! foreground. A child with no terminal gets its own group so cancelling it
+//! ends everything it started. Either way a cancelled child is killed with
+//! whatever bash gave the terminal to, and the terminal comes back to Wrap.
+//!
 //! Piped-input bytes are never streamed to children; they live at
 //! `$WRAP_TEMP_DIR/input` and commands read them from there.
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, IsTerminal};
+use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
+use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::temp::ensure_temp_dir;
@@ -98,15 +107,20 @@ fn cancelled() -> io::Error {
 }
 
 /// Run `command` under `$SHELL`. Creates `$WRAP_TEMP_DIR` first so the child
-/// inherits it. Cancelling the token kills the child (the shell process; in
-/// inherit mode a foreground grandchild may outlive it) and fails with
+/// inherits it. Cancelling the token kills the child, its process group when
+/// it has one of its own, and whatever holds the terminal, then fails with
 /// `ErrorKind::Interrupted`.
 pub async fn execute_shell_command(
     command: &str,
     mode: ShellMode,
     cancel: Option<CancellationToken>,
 ) -> io::Result<ShellExec> {
-    let env: HashMap<String, String> = std::env::vars().collect();
+    // Only `SHELL` matters here; a non-UTF-8 value elsewhere in the
+    // environment must not matter at all.
+    let env: HashMap<String, String> = std::env::var_os("SHELL")
+        .map(|v| ("SHELL".to_string(), v.to_string_lossy().into_owned()))
+        .into_iter()
+        .collect();
     execute_with_shell(command, &shell_from_env(&env), mode, cancel).await
 }
 
@@ -120,13 +134,26 @@ pub async fn execute_with_shell(
     ensure_temp_dir()?;
     let start = Instant::now();
     let stdin = default_child_stdin();
+    let own_group = matches!(stdin, ChildStdin::Null);
+    let terminal = Terminal::claim();
+    let spawn = Spawn {
+        shell,
+        command,
+        own_group,
+        terminal: terminal.as_ref(),
+    };
     let (status, stdout, stderr) = match mode {
-        ShellMode::Capture => run_captured(shell, command, stdin, cancel).await?,
+        ShellMode::Capture => run_captured(&spawn, stdin, cancel).await?,
         ShellMode::Inherit => {
-            let status = run_inherited(shell, command, stdin, cancel).await?;
+            let status = run_inherited(&spawn, stdin, cancel).await?;
             (status, String::new(), String::new())
         }
     };
+    // A grandchild that bash handed the terminal and then outlived it
+    // leaves the foreground elsewhere; the next terminal read would fail.
+    if let Some(terminal) = &terminal {
+        terminal.reclaim();
+    }
     Ok(ShellExec {
         exit_code: exit_code(status),
         exec_ms: (start.elapsed().as_secs_f64() * 1000.0).round() as u64,
@@ -136,48 +163,110 @@ pub async fn execute_with_shell(
     })
 }
 
+/// Read a child's pipe to its end on a task of its own, so a child writing
+/// more than the pipe buffer never blocks on a full pipe while being waited
+/// on. Aborting the task releases a pipe a surviving grandchild holds open.
+pub(crate) fn drain_pipe<R>(pipe: Option<R>) -> tokio::task::JoinHandle<Vec<u8>>
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes).await;
+        }
+        bytes
+    })
+}
+
+/// What one shell invocation needs to start and, if cancelled, to end.
+struct Spawn<'a> {
+    shell: &'a str,
+    command: &'a str,
+    /// Put the child in a process group of its own (no terminal involved).
+    own_group: bool,
+    terminal: Option<&'a Terminal>,
+}
+
+impl Spawn<'_> {
+    /// `$SHELL +m -ic <command>` with the stdio given.
+    fn command(&self, stdin: ChildStdin, stdout: Stdio, stderr: Stdio) -> std::process::Command {
+        let mut builder = std::process::Command::new(self.shell);
+        builder
+            .args(["+m", "-ic", self.command])
+            .stdin(stdin)
+            .stdout(stdout)
+            .stderr(stderr);
+        if self.own_group {
+            builder.process_group(0);
+        }
+        builder
+    }
+
+    /// End a cancelled child: first whatever group bash handed the terminal
+    /// to, then the child's own group when it left ours (bash moves itself
+    /// out under job control; headless children start apart), then the
+    /// child itself. An interactive shell ignores SIGTERM, so only SIGKILL
+    /// reliably ends it. The caller reaps the child afterwards.
+    fn kill(&self, pid: libc::pid_t) {
+        // SAFETY: plain signal sends; `pid` is a child that has not been
+        // reaped, so neither it nor its group id can have been recycled.
+        unsafe {
+            let own = libc::getpgrp();
+            if let Some(foreground) = self.terminal.and_then(Terminal::foreign_foreground) {
+                libc::killpg(foreground, libc::SIGKILL);
+            }
+            let group = libc::getpgid(pid);
+            if group > 0 && group != own {
+                libc::killpg(group, libc::SIGKILL);
+            }
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
+}
+
 async fn run_captured(
-    shell: &str,
-    command: &str,
+    spawn: &Spawn<'_>,
     stdin: ChildStdin,
     cancel: Option<CancellationToken>,
 ) -> io::Result<(ExitStatus, String, String)> {
-    let child = tokio::process::Command::new(shell)
-        .args(["+m", "-ic", command])
-        .stdin(stdin)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-    // `wait_with_output` drains both pipes while waiting, so a child writing
-    // more than the pipe buffer never blocks on a full pipe.
-    let output = match cancel {
+    let mut child =
+        tokio::process::Command::from(spawn.command(stdin, Stdio::piped(), Stdio::piped()))
+            .kill_on_drop(true)
+            .spawn()?;
+    let pid = child.id().expect("child not yet reaped") as libc::pid_t;
+    let stdout = drain_pipe(child.stdout.take());
+    let stderr = drain_pipe(child.stderr.take());
+    let status = match cancel {
         Some(token) => tokio::select! {
-            output = child.wait_with_output() => output?,
-            _ = token.cancelled() => return Err(cancelled()),
+            status = child.wait() => status?,
+            _ = token.cancelled() => {
+                spawn.kill(pid);
+                let _ = child.wait().await;
+                // A survivor in our own group may still hold the pipes open.
+                stdout.abort();
+                stderr.abort();
+                return Err(cancelled());
+            }
         },
-        None => child.wait_with_output().await?,
+        None => child.wait().await?,
     };
+    let stdout = stdout.await.unwrap_or_default();
+    let stderr = stderr.await.unwrap_or_default();
     Ok((
-        output.status,
-        String::from_utf8_lossy(&output.stdout).into_owned(),
-        String::from_utf8_lossy(&output.stderr).into_owned(),
+        status,
+        String::from_utf8_lossy(&stdout).into_owned(),
+        String::from_utf8_lossy(&stderr).into_owned(),
     ))
 }
 
 async fn run_inherited(
-    shell: &str,
-    command: &str,
+    spawn: &Spawn<'_>,
     stdin: ChildStdin,
     cancel: Option<CancellationToken>,
 ) -> io::Result<ExitStatus> {
     let signals = IgnoredSignals::install()?;
-    let mut builder = std::process::Command::new(shell);
-    builder
-        .args(["+m", "-ic", command])
-        .stdin(stdin)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+    let mut builder = spawn.command(stdin, Stdio::inherit(), Stdio::inherit());
     // The child must not inherit Wrap's ignored dispositions: Ctrl-C has to
     // end the command even though Wrap itself survives it.
     // SAFETY: `signal` is async-signal-safe and the callback touches nothing else.
@@ -195,11 +284,7 @@ async fn run_inherited(
         Some(token) => tokio::select! {
             status = &mut wait => status,
             _ = token.cancelled() => {
-                // An interactive shell ignores SIGTERM, so only SIGKILL
-                // reliably ends it. A foreground grandchild may outlive it.
-                // SAFETY: `pid` is the child spawned above and is still
-                // being waited on, so it cannot have been recycled.
-                unsafe { libc::kill(pid, libc::SIGKILL) };
+                spawn.kill(pid);
                 let _ = (&mut wait).await;
                 drop(signals);
                 return Err(cancelled());
@@ -209,6 +294,67 @@ async fn run_inherited(
     };
     drop(signals);
     status.map_err(io::Error::other)?
+}
+
+/// The controlling terminal, held while this process is its foreground
+/// group. Interactive bash hands the terminal to each foreground job; a job
+/// that outlives a killed shell keeps it, and every later terminal read in
+/// Wrap would fail. `None` when there is no terminal or another group (the
+/// user's shell, after `w … &`) is in the foreground: then nothing is
+/// touched.
+struct Terminal {
+    tty: File,
+    group: libc::pid_t,
+}
+
+impl Terminal {
+    fn claim() -> Option<Terminal> {
+        let tty = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/tty")
+            .ok()?;
+        // SAFETY: plain queries on a valid fd.
+        let (group, foreground) = unsafe { (libc::getpgrp(), libc::tcgetpgrp(tty.as_raw_fd())) };
+        (foreground == group).then_some(Terminal { tty, group })
+    }
+
+    /// The foreground group when it is not ours any more.
+    fn foreign_foreground(&self) -> Option<libc::pid_t> {
+        // SAFETY: a query on a valid fd.
+        let foreground = unsafe { libc::tcgetpgrp(self.tty.as_raw_fd()) };
+        (foreground > 0 && foreground != self.group).then_some(foreground)
+    }
+
+    /// Take the terminal back when a child left it elsewhere.
+    fn reclaim(&self) {
+        if self.foreign_foreground().is_some() {
+            let _ = set_foreground(self.tty.as_raw_fd(), self.group);
+        }
+    }
+}
+
+/// `tcsetpgrp` from a background group normally stops the caller with
+/// SIGTTOU; block it on this thread for the duration.
+fn set_foreground(fd: libc::c_int, group: libc::pid_t) -> io::Result<()> {
+    // SAFETY: the signal set is initialised before use and the mask is
+    // restored on every path.
+    unsafe {
+        let mut mask: libc::sigset_t = std::mem::zeroed();
+        let mut previous: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut mask);
+        libc::sigaddset(&mut mask, libc::SIGTTOU);
+        if libc::sigprocmask(libc::SIG_BLOCK, &mask, &mut previous) == -1 {
+            return Err(io::Error::last_os_error());
+        }
+        let result = if libc::tcsetpgrp(fd, group) == -1 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        };
+        libc::sigprocmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut());
+        result
+    }
 }
 
 static SIGNAL_SCOPE: Mutex<()> = Mutex::new(());

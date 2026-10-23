@@ -413,9 +413,6 @@ impl Session {
     fn handle_loop_event(&mut self, event: LoopEvent) {
         match event {
             LoopEvent::AssistantTurn { .. } => {}
-            LoopEvent::StepRunning { explanation, icon } => {
-                chrome::chrome(&explanation, Some(&icon));
-            }
             LoopEvent::StepOutput { text } => chrome::emit(Notification::StepOutput { text }),
         }
     }

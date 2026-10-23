@@ -64,14 +64,25 @@ fn non_empty(value: Option<&String>) -> Option<String> {
     value.filter(|s| !s.is_empty()).cloned()
 }
 
-fn error_chain(error: &dyn std::error::Error) -> String {
-    let mut parts = vec![error.to_string()];
-    let mut source = error.source();
-    while let Some(inner) = source {
-        parts.push(inner.to_string());
-        source = inner.source();
+/// Plain language for a request that never produced a response.
+fn transport_message(error: &reqwest::Error, host: &str) -> String {
+    if error.is_connect() || error.is_timeout() {
+        format!("Could not reach {host}: check your connection and try again.")
+    } else if error.is_redirect() {
+        format!("The request to {host} was redirected off the provider, which is not allowed.")
+    } else {
+        format!("The request to {host} failed before a response arrived.")
     }
-    parts.join(": ")
+}
+
+/// The provider's own explanation when the body carries one (every
+/// supported API uses `{"error": {"message": …}}`), else the bare status.
+fn failure_message(status: reqwest::StatusCode, body: Option<&Value>) -> String {
+    body.and_then(|b| b["error"]["message"].as_str())
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("Provider returned HTTP {}.", status.as_u16()))
 }
 
 // Credentials travel in headers; never follow a redirect off the origin.
@@ -122,15 +133,52 @@ fn messages_json(messages: &[LlmMessage]) -> Vec<Value> {
         .collect()
 }
 
+/// The name of the forced tool (Anthropic) and of the schema wrapper
+/// (OpenAI-style providers).
+const RESPONSE_TOOL: &str = "response";
+
+/// Output ceilings by Claude generation: the older models reject anything
+/// above their own limit.
+fn anthropic_max_tokens(model: &str) -> u32 {
+    if ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
+        .iter()
+        .any(|m| model.contains(m))
+    {
+        4096
+    } else if ["claude-3-5", "claude-3-7"]
+        .iter()
+        .any(|m| model.contains(m))
+    {
+        8192
+    } else {
+        16000
+    }
+}
+
+/// The forced tool's input as text; a model that answered in prose instead
+/// yields its text blocks joined, which then fails to parse like any other
+/// unstructured reply.
+fn anthropic_text(value: &Value) -> Option<String> {
+    let content = value["content"].as_array()?;
+    if let Some(input) = content
+        .iter()
+        .find(|item| item["type"] == "tool_use")
+        .map(|item| &item["input"])
+        .filter(|input| !input.is_null())
+    {
+        return Some(input.to_string());
+    }
+    content
+        .iter()
+        .filter(|item| item["type"] == "text")
+        .filter_map(|item| item["text"].as_str())
+        .map(str::to_string)
+        .reduce(|a, b| a + &b)
+}
+
 fn extract_text(kind: ProviderKind, value: &Value) -> Option<String> {
     match kind {
-        ProviderKind::Anthropic => value["content"]
-            .as_array()?
-            .iter()
-            .filter(|item| item["type"] == "text")
-            .filter_map(|item| item["text"].as_str())
-            .next_back()
-            .map(str::to_string),
+        ProviderKind::Anthropic => anthropic_text(value),
         ProviderKind::OpenAi => value["output"]
             .as_array()
             .into_iter()
@@ -212,14 +260,21 @@ impl HttpProvider {
     fn build_request(&self, request: &ProviderRequest<'_>) -> (&'static str, Value) {
         let messages = messages_json(request.messages);
         match self.kind {
+            // A forced tool call is the structured-output mechanism every
+            // Claude generation accepts; the reply is the tool's input.
             ProviderKind::Anthropic => (
                 "messages",
                 json!({
                     "model": self.model,
                     "system": request.system,
                     "messages": messages,
-                    "max_tokens": 16000,
-                    "output_config": {"format": {"type": "json_schema", "schema": request.schema}},
+                    "max_tokens": anthropic_max_tokens(&self.model),
+                    "tools": [{
+                        "name": RESPONSE_TOOL,
+                        "description": "Respond with a JSON object.",
+                        "input_schema": request.schema,
+                    }],
+                    "tool_choice": {"type": "tool", "name": RESPONSE_TOOL},
                 }),
             ),
             ProviderKind::OpenAi => (
@@ -230,7 +285,7 @@ impl HttpProvider {
                     "input": messages,
                     "text": {"format": {
                         "type": "json_schema",
-                        "name": "wrap_response",
+                        "name": RESPONSE_TOOL,
                         "schema": strict_schema(request.schema),
                         "strict": true,
                     }},
@@ -242,12 +297,16 @@ impl HttpProvider {
                 let response_format = match kind {
                     ProviderKind::OpenRouter => json!({
                         "type": "json_schema",
-                        "json_schema": {"name": "wrap_response", "schema": request.schema},
+                        "json_schema": {
+                            "name": RESPONSE_TOOL,
+                            "schema": request.schema,
+                            "strict": true,
+                        },
                     }),
                     _ if self.strict => json!({
                         "type": "json_schema",
                         "json_schema": {
-                            "name": "wrap_response",
+                            "name": RESPONSE_TOOL,
                             "schema": strict_schema(request.schema),
                             "strict": true,
                         },
@@ -295,6 +354,10 @@ impl HttpProvider {
         };
 
         let url = format!("{}/{path}", self.base_url.trim_end_matches('/'));
+        let host = reqwest::Url::parse(&url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_string))
+            .unwrap_or_else(|| self.name.clone());
         let mut builder = self.client.post(url).json(&body);
         if self.kind == ProviderKind::Anthropic {
             builder = builder.header("anthropic-version", "2023-06-01");
@@ -327,7 +390,7 @@ impl HttpProvider {
                 Err(error) if attempt < 2 && (error.is_connect() || error.is_timeout()) => {
                     tokio::time::sleep(backoff).await;
                 }
-                Err(error) => return Err(fail(error_chain(&error), None)),
+                Err(error) => return Err(fail(transport_message(&error, &host), None)),
             }
             attempt += 1;
         };
@@ -336,13 +399,13 @@ impl HttpProvider {
         let raw = response
             .text()
             .await
-            .map_err(|e| fail(error_chain(&e), None))?;
+            .map_err(|e| fail(transport_message(&e, &host), None))?;
         let parsed: Option<Value> = serde_json::from_str(&raw).ok();
         if !status.is_success() {
-            let detail: String = raw.chars().take(500).collect();
+            let message = failure_message(status, parsed.as_ref());
             let body = parsed.unwrap_or(Value::String(raw));
             return Err(fail(
-                format!("Provider returned HTTP {status}: {detail}"),
+                message,
                 Some(WireResponse::Http {
                     body,
                     usage: None,

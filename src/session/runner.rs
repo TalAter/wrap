@@ -67,10 +67,7 @@ pub struct LoopState {
 pub enum LoopEvent {
     /// A round settled (successfully or not) and its turn is on the
     /// transcript. The coordinator only observes.
-    AssistantTurn { turn: Turn },
-    /// A non-final step is about to run; the consumer shows `explanation`
-    /// as chrome.
-    StepRunning { explanation: String, icon: String },
+    AssistantTurn { turn: Box<Turn> },
     /// A step finished; `text` is the truncated output fed back to the model.
     StepOutput { text: String },
 }
@@ -123,11 +120,15 @@ fn handle_memory_updates(
         &format!("Memory updated: {} facts", updates.len()),
     );
     if let Some(message) = &response.memory_updates_message {
+        // The first of the longest scopes, in declaration order.
         let deepest = updates
             .iter()
             .filter_map(|u| resolve_path(&u.scope, Some(cwd)))
             .filter(|p| p != Path::new("/"))
-            .max_by_key(|p| p.as_os_str().len());
+            .fold(None::<PathBuf>, |best, p| match best {
+                Some(b) if b.as_os_str().len() >= p.as_os_str().len() => Some(b),
+                _ => Some(p),
+            });
         let text = match deepest {
             Some(scope) => format!("({}) {message}", pretty_path(scope)),
             None => message.clone(),
@@ -199,9 +200,9 @@ pub async fn run_loop(
             Err(RoundError::Failed { message, turn }) => {
                 let turn = *turn;
                 transcript.push_assistant(turn.clone());
-                let _ = options
-                    .events
-                    .send(LoopEvent::AssistantTurn { turn: turn.into() });
+                let _ = options.events.send(LoopEvent::AssistantTurn {
+                    turn: Box::new(turn.into()),
+                });
                 return Err(message);
             }
         };
@@ -214,9 +215,9 @@ pub async fn run_loop(
             .clone()
             .ok_or_else(|| "The LLM round settled without a response.".to_string())?;
         transcript.push_assistant(turn.clone());
-        let _ = options
-            .events
-            .send(LoopEvent::AssistantTurn { turn: turn.into() });
+        let _ = options.events.send(LoopEvent::AssistantTurn {
+            turn: Box::new(turn.into()),
+        });
 
         handle_memory_updates(&response, &options.home, &options.cwd, verbose_on)?;
         if let Some(tools) = response
@@ -259,10 +260,9 @@ pub async fn run_loop(
             .clone()
             .filter(|e| !e.is_empty())
             .unwrap_or_else(|| response.content.clone());
-        let _ = options.events.send(LoopEvent::StepRunning {
-            explanation,
-            icon: icon.to_string(),
-        });
+        // Straight onto the notification bus, ahead of the verbose line, so
+        // the two keep this order wherever they are routed.
+        chrome(&explanation, Some(icon));
         verbose(verbose_on, &format!("Step: {}", response.content));
 
         let exec = match execute_shell_command(

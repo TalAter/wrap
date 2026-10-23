@@ -58,7 +58,7 @@ async fn cancel_exits_zero_with_the_response_command_or_the_last_proposal() {
     let mut entry = fresh_entry();
     let code = finalise(
         SessionOutcome::Cancel {
-            response: Some(cmd("git push", "medium")),
+            response: Some(cmd("echo cancelled-command", "medium")),
         },
         &mut entry,
     )
@@ -66,7 +66,10 @@ async fn cancel_exits_zero_with_the_response_command_or_the_last_proposal() {
     .unwrap();
     assert_eq!(code, 0);
     assert_eq!(entry.outcome, "cancelled");
-    assert_eq!(final_turn(&entry), Some(("git push", None, "cancelled")));
+    assert_eq!(
+        final_turn(&entry),
+        Some(("echo cancelled-command", None, "cancelled"))
+    );
 
     let mut entry = fresh_entry();
     entry.turns.push(Turn::User { text: "x".into() });
