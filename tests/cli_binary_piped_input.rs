@@ -1,0 +1,126 @@
+//! Piped stdin through the real binary: materialised to a 0600 file under
+//! `$WRAP_TEMP_DIR`, described in the log, never fed to the command's stdin.
+
+mod cli_binary_common;
+
+use cli_binary_common::{Wrap, command, first_user_text, reply, step};
+
+#[test]
+fn pipe_with_a_prompt_runs_the_query_not_help() {
+    let out = Wrap::seeded()
+        .response(reply("It's an error log"))
+        .stdin("ERROR: connection refused")
+        .run(&["explain this"]);
+    assert_eq!(out.code, 0);
+    assert_eq!(out.stdout, "It's an error log\n");
+}
+
+#[test]
+fn pipe_without_a_prompt_still_runs_a_query_with_an_empty_prompt() {
+    let wrap = Wrap::seeded().response(reply("3 lines")).stdin("a\nb\nc");
+    let out = wrap.run(&[]);
+    assert_eq!(out.code, 0);
+    assert_eq!(out.stdout, "3 lines\n");
+    let entry = wrap.log_entry();
+    assert_eq!(entry["input_source"], "pipe");
+    assert_eq!(first_user_text(&entry), "");
+}
+
+#[test]
+fn piped_content_is_never_parsed_as_flags() {
+    let out = Wrap::seeded()
+        .response(reply("That's a version flag"))
+        .stdin("--version")
+        .run(&["explain this"]);
+    assert_eq!(out.code, 0);
+    assert_eq!(out.stdout, "That's a version flag\n");
+}
+
+#[test]
+fn the_command_reads_the_full_bytes_from_the_input_file() {
+    let out = Wrap::seeded()
+        .response(command("wc -l < $WRAP_TEMP_DIR/input", "low"))
+        .stdin("line1\nline2\nline3\n")
+        .run(&["count lines"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout.trim(), "3");
+}
+
+#[test]
+fn the_input_file_is_mode_0600() {
+    let out = Wrap::seeded()
+        .response(command("stat -c '%a' $WRAP_TEMP_DIR/input", "low"))
+        .stdin("hello")
+        .run(&["read mode"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout.trim(), "600");
+}
+
+#[test]
+fn the_command_stdin_does_not_carry_the_attached_bytes() {
+    let out = Wrap::seeded()
+        .response(command("cat; echo end", "low"))
+        .stdin("this should not be piped")
+        .run(&["list files"]);
+    assert_eq!(out.code, 0);
+    assert_eq!(out.stdout, "end\n");
+}
+
+#[test]
+fn a_non_final_step_can_read_the_input_file() {
+    let out = Wrap::seeded()
+        .responses(vec![
+            step("wc -l < $WRAP_TEMP_DIR/input", "Counting"),
+            reply("3 lines"),
+        ])
+        .stdin("a\nb\nc\n")
+        .run(&["count lines"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "3 lines\n");
+}
+
+#[test]
+fn attached_input_is_logged_with_path_size_and_preview() {
+    let wrap = Wrap::seeded().response(reply("ok")).stdin("log data here");
+    assert_eq!(wrap.run(&["explain"]).code, 0);
+    let entry = wrap.log_entry();
+    let attached = &entry["attached_input"];
+    assert_eq!(attached["preview"], "log data here");
+    assert_eq!(attached["size"], "log data here".len());
+    let path = attached["path"].as_str().unwrap();
+    assert!(path.contains("wrap-scratch-"), "{path}");
+    assert!(path.ends_with("/input"), "{path}");
+    assert!(std::path::Path::new(path).exists());
+    assert_eq!(entry["input_source"], "argv");
+}
+
+#[test]
+fn large_attached_input_preview_is_truncated_in_the_log() {
+    let wrap = Wrap::seeded().response(reply("ok")).stdin("x".repeat(5000));
+    assert_eq!(wrap.run(&["explain"]).code, 0);
+    let attached = &wrap.log_entry()["attached_input"];
+    assert!(
+        attached["preview"]
+            .as_str()
+            .unwrap()
+            .contains("[…truncated,")
+    );
+    assert!(attached["preview"].as_str().unwrap().len() < 5000);
+    assert_eq!(attached["size"], 5000);
+}
+
+#[test]
+fn verbose_reports_the_input_file_and_its_size() {
+    let out = Wrap::seeded()
+        .response(reply("ok"))
+        .stdin("abcde")
+        .run(&["--verbose", "explain"]);
+    assert_eq!(out.code, 0);
+    let line = out
+        .stderr
+        .lines()
+        .find(|l| l.contains("Input file: "))
+        .unwrap_or_else(|| panic!("{}", out.stderr));
+    assert!(line.contains("/input"), "{line}");
+    assert!(line.contains("(5B)"), "{line}");
+}

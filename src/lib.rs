@@ -1,6 +1,7 @@
 //! Wrap: natural language in, shell command out.
 
 pub mod ansi;
+pub mod app;
 pub mod attached_input;
 pub mod chrome;
 pub mod cli;

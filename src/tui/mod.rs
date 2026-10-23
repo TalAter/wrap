@@ -9,6 +9,7 @@
 pub mod drive;
 pub mod forget_dialog;
 pub mod frame;
+pub mod host;
 pub mod nerd_icons;
 pub mod response_dialog;
 pub mod terminal;
