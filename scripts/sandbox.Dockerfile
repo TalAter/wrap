@@ -1,6 +1,6 @@
 # Linux builds and PTY verification in a clean container.
 FROM rust:slim-bookworm AS build
-RUN apt-get update && apt-get install -y --no-install-recommends pkg-config python3 zsh && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config python3 zsh && rm -rf /var/lib/apt/lists/*
 WORKDIR /wrap
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
