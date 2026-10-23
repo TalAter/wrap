@@ -102,7 +102,9 @@ pub fn logs_footprint(home: &WrapHome) -> Footprint {
     let trace_bytes = dir_stats(&home.resolve("logs/traces")).bytes;
     let mut count = 0;
     if jsonl_bytes > 0 {
-        let content = fs::read_to_string(&jsonl_path).unwrap_or_default();
+        let content = fs::read(&jsonl_path)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .unwrap_or_default();
         let trimmed = content.strip_suffix('\n').unwrap_or(&content);
         if !trimmed.is_empty() {
             count = trimmed.split('\n').count() as u64;

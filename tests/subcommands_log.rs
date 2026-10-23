@@ -322,3 +322,19 @@ fn tty_without_jq_pretty_prints_entries_separated_by_blank_lines() {
     let (_, _, raw) = run_log(&home, &["--raw"], true);
     assert_eq!(raw, format!("{}\n{}\n", entry("a", "t"), entry("b", "t")));
 }
+
+#[test]
+fn non_utf8_bytes_in_the_log_do_not_hide_entries() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = wrap::home::WrapHome::new(dir.path());
+    std::fs::create_dir_all(dir.path().join("logs")).unwrap();
+    std::fs::write(
+        dir.path().join("logs/wrap.jsonl"),
+        b"{\"id\":\"a\"}\n{\"id\":\"\xff\"}\n",
+    )
+    .unwrap();
+    let read = wrap::subcommands::log::read_log(&home, None);
+    assert_eq!(read.valid.len(), 2);
+    assert_eq!(read.corrupt, 0);
+    assert_eq!(read.valid[1]["id"], "\u{fffd}");
+}

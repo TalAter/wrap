@@ -40,7 +40,9 @@ pub struct LogRead {
 /// Parse the last `n` raw lines of the log (all when `None`). The slice is
 /// taken before parsing, so corrupt lines count toward `n`.
 pub fn read_log(home: &WrapHome, n: Option<usize>) -> LogRead {
-    let content = home.read(LOG_FILE).ok().flatten().unwrap_or_default();
+    let content = std::fs::read(home.resolve(LOG_FILE))
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .unwrap_or_default();
     let content = content.trim_end();
     let mut read = LogRead {
         valid: Vec::new(),
