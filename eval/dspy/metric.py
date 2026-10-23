@@ -1,6 +1,6 @@
 """Scoring function for evaluating validated LLM responses against assertions.
 
-The bridge validates responses with Zod before scoring. This module only does
+The bridge validates responses against the schema before scoring. This module only does
 weighted assertion checks against already-validated response dicts.
 """
 

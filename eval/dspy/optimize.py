@@ -1,12 +1,16 @@
 """DSPy optimizer for Wrap's system prompt.
 
-Reads the Zod schema (with inline comments), loads examples, runs GEPA
+Reads the schema text (with inline comments), loads examples, runs GEPA
 optimization to discover the best instruction text, and writes the result
-to src/prompt.optimized.json.
+to src/prompt/optimized.json.
 
-The Zod schema's inline comments serve as structural guidance for the LLM —
-they explain what each type means, when to use probe vs command, etc. GEPA
-optimizes the instruction text around this fixed schema.
+The schema's inline comments serve as structural guidance for the LLM —
+they explain what each type means, when to use a non-final command vs a
+final one, etc. GEPA optimizes the instruction text around this fixed schema.
+
+Every candidate is scored through the wrap binary's hidden `--eval-bridge`
+mode (see src/eval_bridge.rs), so prompts are assembled and sent by the same
+code that ships.
 """
 
 import hashlib
@@ -28,27 +32,21 @@ from read_schema import read_schema
 
 # Paths (container mount points)
 EXAMPLES_PATH = Path("/app/eval/examples/seed.jsonl")
-CONSTANTS_PATH = Path("/app/src/prompt.constants.json")
-# The JSON-retry corrective instruction is core-owned content (the parse
-# retry is wrap-core mechanics — vault/impl-specs/llm.md decision 8). Core
-# hosts it in a plain JSON asset precisely so this script can keep reading
-# it for the PROMPT_HASH manifest; wrap's prompt.constants.json no longer
-# carries a (silently dead) mirror.
-CORE_CONSTANTS_PATH = Path("/app/node_modules/wrap-core/src/llm/prompt-constants.json")
+CONSTANTS_PATH = Path("/app/src/prompt/constants.json")
 PROBED_TOOLS_PATH = Path("/app/src/skills/probed-tools.json")
-OUTPUT_PATH = Path("/app/src/prompt.optimized.json")
+OUTPUT_PATH = Path("/app/src/prompt/optimized.json")
 
 SEED = 42
 
 # ── Prompt string constants ─────────────────────────────────────────────
 with open(CONSTANTS_PATH) as _f:
     CONSTANTS = json.load(_f)
-with open(CORE_CONSTANTS_PATH) as _f:
-    CORE_CONSTANTS = json.load(_f)
 with open(PROBED_TOOLS_PATH) as _f:
     PROBED_TOOLS = json.load(_f)
 
-BRIDGE_PATH = "/app/eval/bridge.ts"
+# The wrap binary in bridge mode. The image installs it at /usr/local/bin;
+# WRAP_BRIDGE_BIN points at a different build (e.g. a host target/ binary).
+BRIDGE_CMD = [os.environ.get("WRAP_BRIDGE_BIN", "/usr/local/bin/wrap"), "--eval-bridge"]
 
 # ── Bridge-level cache ──────────────────────────────────────────────────
 BRIDGE_CACHE_DIR = os.environ.get("BRIDGE_CACHEDIR", "/tmp/wrap-bridge-cache")
@@ -61,7 +59,7 @@ def _bridge_cache_key(payload_dict: dict) -> str:
 
 
 def call_bridge(mode, instruction, schema_text, memory, cwd, piped, query, extra_messages=None, last_round=False, attached_input=None):
-    """Call the TS bridge as a subprocess. Returns parsed JSON output or None on crash.
+    """Call the wrap bridge as a subprocess. Returns parsed JSON output or None on crash.
 
     Tool probe results and cwd files flow via `extra_messages` as transcript
     turns — the runtime discovery skill emits them, and examples encode them
@@ -95,7 +93,7 @@ def call_bridge(mode, instruction, schema_text, memory, cwd, piped, query, extra
     payload = json.dumps(payload_dict)
     try:
         result = subprocess.run(
-            ["bun", "run", BRIDGE_PATH],
+            BRIDGE_CMD,
             input=payload, capture_output=True, text=True,
             timeout=300,
         )
@@ -137,7 +135,7 @@ def load_examples(path: Path) -> list[dict]:
 
 
 def make_signature(schema_text: str):
-    """Create a DSPy signature with the Zod schema in the output field description."""
+    """Create a DSPy signature with the schema text in the output field description."""
 
     class WrapSignature(dspy.Signature):
         """Translate natural language into shell commands. Return JSON."""
@@ -170,7 +168,7 @@ def make_signature(schema_text: str):
             desc="The user's natural language request"
         )
         response_json: str = dspy.OutputField(
-            desc=f"JSON object conforming to this Zod schema:\n{schema_text}"
+            desc=f"JSON object conforming to this schema:\n{schema_text}"
         )
 
     return WrapSignature
@@ -329,7 +327,14 @@ def extract_instruction(optimized) -> str:
 def build_prompt_hash_manifest(
     instruction: str, schema_text: str,
 ) -> list[list[object]]:
-    """Return the static prompt surface that PROMPT_HASH versions."""
+    """Return the static prompt surface that PROMPT_HASH versions.
+
+    Every input comes from src/prompt/constants.json, the schema text, and
+    src/skills/probed-tools.json. JSON_RETRY_INSTRUCTION moved into
+    constants.json from a separate wrap-core asset; its text is unchanged,
+    so the manifest is byte-identical to the one before the move and
+    existing hashes stay comparable.
+    """
     return [
         ["SYSTEM_PROMPT", (instruction or "").strip()],
         ["MEMORY_RECENCY_INSTRUCTION", CONSTANTS["memoryRecencyInstruction"]],
@@ -352,7 +357,7 @@ def build_prompt_hash_manifest(
         ["CAPTURED_NO_OUTPUT", CONSTANTS["capturedNoOutput"]],
         ["LAST_ROUND_INSTRUCTION", CONSTANTS["lastRoundInstruction"]],
         ["SCRATCHPAD_REQUIRED_INSTRUCTION", CONSTANTS["scratchpadRequiredInstruction"]],
-        ["JSON_RETRY_INSTRUCTION", CORE_CONSTANTS["jsonRetryInstruction"]],
+        ["JSON_RETRY_INSTRUCTION", CONSTANTS["jsonRetryInstruction"]],
         ["SECTION_TEMP_DIR", CONSTANTS["sectionTempDir"]],
         ["TEMP_DIR_EMPTY", CONSTANTS["tempDirEmpty"]],
         ["PROBED_TOOLS", PROBED_TOOLS],

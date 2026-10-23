@@ -1,6 +1,6 @@
 # Eval Results
 
-A timestamped JSON file (e.g., `20260330-014006.json`) is written after each `bun run optimize` run. It captures everything needed to understand what the optimizer did and what failed.
+A timestamped JSON file (e.g., `20260330-014006.json`) is written after each `make optimize` run. It captures everything needed to understand what the optimizer did and what failed.
 
 ## Structure
 
