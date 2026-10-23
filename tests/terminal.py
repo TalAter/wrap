@@ -428,9 +428,15 @@ def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
     finally: s.close()
 
 def session_processes(s, needle):
-    import subprocess as sp
-    return [l for l in sp.run(['ps', '-o', 'sid=,args=', '-e'], capture_output=True, text=True).stdout.splitlines()
-            if l.split(None, 1)[0] == str(s.process.pid) and needle in l]
+    # /proc only: the container image has no ps.
+    found = []
+    for pid in os.listdir('/proc'):
+        if not pid.isdigit(): continue
+        try:
+            stat = open(f'/proc/{pid}/stat').read(); args = open(f'/proc/{pid}/cmdline', 'rb').read().replace(b'\0', b' ').decode(errors='replace')
+        except OSError: continue
+        if int(stat[stat.rindex(')') + 2:].split()[3]) == s.process.pid and needle in args: found.append(f'{pid} {args}')
+    return found
 
 # --- Resize ----------------------------------------------------------------------
 def resize_folds_and_restores():
