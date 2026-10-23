@@ -1,16 +1,5 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/routine-session-start.sh"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "matcher": "",

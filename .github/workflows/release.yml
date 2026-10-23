@@ -17,12 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Verify tag matches package.json version
+      - name: Verify tag matches Cargo.toml version
         run: |
-          pkg_version="$(jq -r .version package.json)"
+          crate_version="$(sed -n '/^\[package\]/,/^\[/{s/^version = "\(.*\)"$/\1/p}' Cargo.toml | head -1)"
           tag_version="${GITHUB_REF_NAME#v}"
-          if [ "$pkg_version" != "$tag_version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $pkg_version"
+          if [ "$crate_version" != "$tag_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $crate_version"
             exit 1
           fi
 
@@ -36,7 +36,7 @@ jobs:
                  --title "$GITHUB_REF_NAME" \
                  --notes "Release $GITHUB_REF_NAME"
 
-  # Static analysis on the install scripts. Gates `build` and `install-asset`
+  # Static analysis on the shell scripts. Gates `build` and `install-asset`
   # so a shellcheck failure prevents any asset from shipping to the release.
   shellcheck:
     runs-on: ubuntu-24.04
@@ -45,10 +45,19 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y -qq shellcheck
       - name: Run shellcheck
-        run: shellcheck scripts/install.sh scripts/test-install.sh scripts/install-assert.sh
+        run: shellcheck scripts/install.sh scripts/test-install.sh scripts/install-assert.sh scripts/release.sh scripts/bump-tap.sh
+
+  # Quick red-tree guard before spending six build legs. Full lint lives in
+  # check.yml, which runs on every push.
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked
 
   build:
-    needs: [create-release, shellcheck]
+    needs: [create-release, shellcheck, test]
     permissions:
       contents: write
       id-token: write
@@ -58,92 +67,68 @@ jobs:
       matrix:
         include:
           - triple: aarch64-apple-darwin
-            bun_target: bun-darwin-arm64
             runner: macos-14
             os: macos
           - triple: x86_64-apple-darwin
-            bun_target: bun-darwin-x64
             runner: macos-15-intel
             os: macos
           - triple: aarch64-unknown-linux-gnu
-            bun_target: bun-linux-arm64
             runner: ubuntu-24.04-arm
             os: linux
           - triple: x86_64-unknown-linux-gnu
-            bun_target: bun-linux-x64
             runner: ubuntu-24.04
             os: linux
           - triple: aarch64-unknown-linux-musl
-            bun_target: bun-linux-arm64-musl
             runner: ubuntu-24.04-arm
             os: linux
+            musl: true
           - triple: x86_64-unknown-linux-musl
-            bun_target: bun-linux-x64-musl
             runner: ubuntu-24.04
             os: linux
+            musl: true
     runs-on: ${{ matrix.runner }}
+    env:
+      TRIPLE: ${{ matrix.triple }}
     steps:
-      # persist-credentials: false — this job's checkout auth would otherwise
-      # get picked up by the sibling `git clone`s below and break them (the
-      # token isn't valid for those repos); this job never pushes, so it's safe.
       - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          bun-version-file: .bun-version
+          targets: ${{ matrix.triple }}
 
-      - uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-${{ runner.arch }}-
-
-      # wrap-core is deliberately unpublished (so local dev doesn't require
-      # cutting a wrap-core version per change) — it only resolves via Bun
-      # workspace linking against a sibling checkout, same idea as the local
-      # monowrapo workspace, minus monowrapo itself (private, and pulls in
-      # the unrelated sweep sibling too).
-      - name: Install dependencies via ad hoc workspace
+      # musl-gcc wraps the runner's native gcc with musl headers/CRT, so each
+      # musl leg runs on the runner of its own architecture (no cross-compile).
+      # aws-lc-sys (via rustls) compiles C, so the C compiler must be the musl
+      # one too — hence CC for the target rather than just the Rust linker.
+      - name: Install musl toolchain
+        if: matrix.musl
         run: |
-          cd ..
-          git clone --quiet --depth 1 https://github.com/TalAter/wrap-core
-          mkdir ci-workspace
-          cd ci-workspace
-          echo '{ "private": true, "workspaces": ["../wrap-core", "../wrap"] }' > package.json
-          bun install
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+          echo "CC_$(echo "$TRIPLE" | tr '-' '_')=musl-gcc" >> "$GITHUB_ENV"
 
-      # BUN_NO_CODESIGN_MACHO_BINARY=1 skip Bun's post-compile self-sign on macOS.
-      # Strip below would invalidate it anyway, then we re-sign ad-hoc.
       - name: Build
-        env:
-          BUN_NO_CODESIGN_MACHO_BINARY: "1"
-          WRAP_BUILD_TARGET: ${{ matrix.bun_target }}
-        run: bun run build
+        run: cargo build --release --locked --target "$TRIPLE"
 
       # Strip before signing — strip invalidates signatures.
-      # Linux binaries are NOT stripped: GNU strip discards the trailer
-      # Bun appends past the ELF image, leaving a binary that boots as
-      # bare bun instead of running the embedded entrypoint.
+      - name: Strip (Linux)
+        if: matrix.os == 'linux'
+        run: strip "target/$TRIPLE/release/wrap"
+
       - name: Strip (macOS)
         if: matrix.os == 'macos'
-        run: strip -x wrap
+        run: strip -x "target/$TRIPLE/release/wrap"
 
       - name: Ad-hoc sign (macOS)
         if: matrix.os == 'macos'
-        run: codesign --sign - --force ./wrap
+        run: codesign --sign - --force "target/$TRIPLE/release/wrap"
 
       - name: Tar
-        env:
-          TRIPLE: ${{ matrix.triple }}
-        run: tar -czf "wrap-${TRIPLE}.tar.gz" wrap
+        run: tar -czf "wrap-${TRIPLE}.tar.gz" -C "target/${TRIPLE}/release" wrap
 
       # Upload before attest so a Sigstore outage can't block the asset from
       # reaching the draft release. Attestation sha256 is fixed at tar time.
       - name: Upload to draft release
-        env:
-          TRIPLE: ${{ matrix.triple }}
         run: gh release upload "$GITHUB_REF_NAME" "wrap-${TRIPLE}.tar.gz" --clobber
 
       - name: Attest build provenance
@@ -294,11 +279,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
       - name: Bump tap formula
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: bun run scripts/bump-tap.ts
+        run: scripts/bump-tap.sh
