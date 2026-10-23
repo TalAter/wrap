@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use common::*;
 use crossterm::event::KeyCode;
-use ratatui::style::Modifier;
+use ratatui::style::{Color, Modifier};
 use serde_json::json;
 use wrap::config::ProviderEntry;
 use wrap::theme::DARK;
@@ -568,7 +568,7 @@ fn nerd_mode_pill_chain_uses_powerline_glyphs_and_icons() {
     enter(&mut d);
     let s = text(&d);
     assert!(
-        s.contains("\u{E0B6} 🧙  Setup Wizard \u{E0B0} \u{F03A} Providers \u{E0B4}"),
+        s.contains("\u{E0B6} 🧙  Setup Wizard \u{E0C0} \u{F03A} Providers \u{E0B4}"),
         "{s}"
     );
     assert!(s.contains("[ ] \u{e754}  Anthropic"), "{s}");
@@ -583,4 +583,110 @@ fn narrow_terminals_fall_back_to_abbreviated_steps() {
     assert!(s.contains(" Providers  K  M  D "), "{s}");
     let s = screen(&draw(&d, 24, 36));
     assert!(s.contains(" P  K  M  D "), "{s}");
+}
+
+// ── narrow terminals ────────────────────────────────────────────
+
+fn row_of(buf: &ratatui::buffer::Buffer, needle: &str) -> u16 {
+    (0..buf.area.height)
+        .find(|&y| row(buf, y).contains(needle))
+        .unwrap_or_else(|| panic!("{needle:?} not on screen:\n{}", screen(buf)))
+}
+
+fn assert_all_visible(buf: &ratatui::buffer::Buffer, width: u16, needles: &[&str]) {
+    // Wrapped rows interleave with the frame's side borders.
+    let flatten = |text: &str| -> String {
+        text.chars()
+            .filter(|c| !c.is_whitespace() && *c != '│')
+            .collect()
+    };
+    let s = screen(buf);
+    let flat = flatten(&s);
+    for needle in needles {
+        assert!(
+            flat.contains(&flatten(needle)),
+            "{needle:?} missing at {width} cols:\n{s}"
+        );
+    }
+    for line in rows(buf) {
+        assert!(
+            unicode_width::UnicodeWidthStr::width(line.as_str()) <= usize::from(width),
+            "{line}"
+        );
+    }
+    let top = row_of(buf, "╭");
+    let bottom = row_of(buf, "╰");
+    let frame_x = find(buf, top, "╭").unwrap();
+    for y in top + 1..bottom {
+        assert_eq!(
+            buf[(frame_x, y)].symbol(),
+            "│",
+            "left border continuous at row {y}:\n{s}"
+        );
+    }
+}
+
+#[test]
+fn narrow_selection_screen_wraps_the_intro_headers_and_action_bar() {
+    let mut d = with_cli();
+    to_providers(&mut d);
+    for width in [48u16, 40] {
+        let buf = draw(&d, width, 40);
+        assert_all_visible(
+            &buf,
+            width,
+            &[
+                "Wrap needs at least one LLM provider configured.",
+                "SELECT API PROVIDER(S)",
+                "USE YOUR CODING AGENT'S SUBSCRIPTION",
+                "[ ] Ollama (local)",
+                "[ ] Claude Code",
+                "Space to toggle",
+            ],
+        );
+    }
+}
+
+#[test]
+fn narrow_key_screen_wraps_the_link_and_action_bar() {
+    let mut d = dialog();
+    to_anthropic_key(&mut d);
+    for width in [48u16, 40] {
+        let buf = draw(&d, width, 30);
+        assert_all_visible(
+            &buf,
+            width,
+            &[
+                "Anthropic API key",
+                "Get one: https://console.anthropic.com/settings/keys",
+                "⏎ to continue",
+            ],
+        );
+    }
+}
+
+// ── copy colours ────────────────────────────────────────────────
+
+#[test]
+fn body_copy_uses_the_terminal_default_colour_and_headings_stay_bold() {
+    let mut d = dialog();
+    to_providers(&mut d);
+    let buf = draw(&d, 100, 36);
+    let y = row_of(&buf, "Wrap needs");
+    let x = find(&buf, y, "Wrap").unwrap();
+    assert_eq!(fg(&buf, x, y), Color::Reset);
+    assert!(!buf[(x, y)].modifier.contains(Modifier::BOLD));
+
+    let mut d = dialog();
+    to_anthropic_key(&mut d);
+    let buf = draw(&d, 100, 36);
+    let y = row_of(&buf, "Anthropic API key");
+    let x = find(&buf, y, "Anthropic").unwrap();
+    assert_eq!(fg(&buf, x, y), Color::Reset);
+    assert!(buf[(x, y)].modifier.contains(Modifier::BOLD));
+    let y = row_of(&buf, "Get one:");
+    let x = find(&buf, y, "Get").unwrap();
+    assert_eq!(fg(&buf, x, y), Color::Reset);
+    let lx = find(&buf, y, "https").unwrap();
+    assert_eq!(fg(&buf, lx, y), rgb(DARK.wizard.provider_link.base));
 }

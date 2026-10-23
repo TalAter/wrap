@@ -64,7 +64,7 @@ impl NerdIconsSection {
         let theme = paint.theme;
         let frame = DialogFrame::new(theme.wizard.frame, WIZARD_CONTENT_WIDTH, paint)
             .with_top(TopBadge::new(wizard_label_pill(theme), Align::Left));
-        let body = Style::default().fg(paint.color(&theme.copy.body));
+        let body = Style::default();
         let marker = paint.color(&theme.wizard.nerd_choice_marker);
         let muted = paint.color(&theme.wizard.nerd_choice_label);
         let bright = paint.color(&theme.wizard.nerd_choice_selected_label);

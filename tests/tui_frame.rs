@@ -117,9 +117,9 @@ fn pill_spans_wrap_in_powerline_glyphs_only_with_nerd_fonts() {
     let nerd = pill_spans(&[wiz.clone(), done.clone()], true, false, paint());
     assert_eq!(
         text(&Line::from(nerd.clone())),
-        "\u{E0B6} Wizard \u{E0B0} API Key \u{E0B4}"
+        "\u{E0B6} Wizard \u{E0C0} API Key \u{E0B4}"
     );
-    let flame = nerd.iter().find(|s| s.content == "\u{E0B0}").unwrap();
+    let flame = nerd.iter().find(|s| s.content == "\u{E0C0}").unwrap();
     assert_eq!(
         flame.style.fg,
         Some(Color::Rgb(70, 90, 150)),
@@ -384,7 +384,7 @@ fn frame_widens_to_fit_its_pill_and_clamps_to_the_terminal() {
     let body = wide.draw(&mut buf, buf_area, 1);
     assert_eq!(body.width, 12);
     assert_eq!(
-        row(&buf, 1),
+        row(&buf, 2),
         "  ╭──────────────╮",
         "pill dropped when it cannot fit"
     );
@@ -424,4 +424,22 @@ fn gradient_collapses_to_the_body_color_below_truecolor() {
         "{:?}",
         spans[0].style.fg
     );
+}
+
+#[test]
+fn frame_rounds_odd_centering_slack_up_on_both_axes() {
+    // 69 wide on 100 columns: slack 31 → x = 16; 10 tall on 15 rows: slack 5 → y = 3.
+    let mut buf = buffer(100, 15);
+    let frame = DialogFrame::new(DARK.risk.low.frame, 65, paint());
+    let buf_area = buf.area;
+    let body = frame.draw(&mut buf, buf_area, 6);
+    assert_eq!(body, ratatui::layout::Rect::new(18, 5, 65, 6));
+    assert!(
+        row(&buf, 3).starts_with(&format!("{}╭", " ".repeat(16))),
+        "{}",
+        row(&buf, 3)
+    );
+    assert_eq!(row(&buf, 2), "");
+    assert!(row(&buf, 12).contains('╯'), "{}", row(&buf, 12));
+    assert_eq!(row(&buf, 13), "");
 }

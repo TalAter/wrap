@@ -6,6 +6,7 @@ mod common;
 
 use common::*;
 use crossterm::event::KeyCode;
+use ratatui::style::Color;
 use wrap::subcommands::forget::{Bucket, Footprint, Footprints};
 use wrap::theme::DARK;
 use wrap::tui::Dialog;
@@ -161,4 +162,72 @@ fn opening_the_real_dialog_without_a_terminal_is_an_io_error() {
         false,
     ));
     assert!(result.is_err());
+}
+
+fn row_of(buf: &ratatui::buffer::Buffer, needle: &str) -> u16 {
+    (0..buf.area.height)
+        .find(|&y| row(buf, y).contains(needle))
+        .unwrap_or_else(|| panic!("{needle:?} not on screen:\n{}", screen(buf)))
+}
+
+#[test]
+fn focus_highlight_covers_only_the_row_text() {
+    let d = dialog(&full());
+    let buf = draw(&d, 100, 20);
+    let y = row_of(&buf, "❯ [✓] Memory");
+    let start = find(&buf, y, "❯").unwrap();
+    let close = find(&buf, y, "4K)").unwrap() + 2;
+    let highlight = rgb(DARK.checklist.row_focused_bg.base);
+    assert_eq!(bg(&buf, start, y), highlight);
+    assert_eq!(bg(&buf, close, y), highlight, "last glyph of the row");
+    assert_eq!(
+        bg(&buf, close + 1, y),
+        Color::Reset,
+        "no fill past the text: {}",
+        row(&buf, y)
+    );
+}
+
+#[test]
+fn narrow_terminals_wrap_rows_and_the_action_bar_instead_of_truncating() {
+    let d = dialog(&full());
+    for width in [48u16, 40] {
+        let buf = draw(&d, width, 30);
+        // Wrapped rows interleave with the frame's side borders.
+        let s = screen(&buf);
+        let flat: String = s
+            .chars()
+            .filter(|c| !c.is_whitespace() && *c != '│')
+            .collect();
+        for needle in [
+            "(23facts,4K)",
+            "(1,203entries,4M)",
+            "(3dirs,112M)",
+            "↑↓move",
+            "Spacetoggle",
+            "⏎forget",
+            "Esccancel",
+        ] {
+            assert!(
+                flat.contains(needle),
+                "{needle} missing at {width} cols:\n{s}"
+            );
+        }
+        for line in rows(&buf) {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(line.as_str()) <= usize::from(width),
+                "{line}"
+            );
+        }
+        let top = row_of(&buf, "╭");
+        let bottom = row_of(&buf, "╰");
+        let frame_x = find(&buf, top, "╭").unwrap();
+        for y in top + 1..bottom {
+            assert_eq!(
+                buf[(frame_x, y)].symbol(),
+                "│",
+                "left border continuous at row {y}:\n{s}"
+            );
+        }
+    }
 }

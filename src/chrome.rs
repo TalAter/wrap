@@ -5,7 +5,7 @@
 use std::io::{self, IsTerminal, Write};
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -257,6 +257,9 @@ static TEARDOWN_PTRS: [AtomicPtr<u8>; MAX_TEARDOWNS] =
 static TEARDOWN_LENS: [AtomicUsize; MAX_TEARDOWNS] = [const { AtomicUsize::new(0) }; MAX_TEARDOWNS];
 static STDERR_IS_TTY: AtomicBool = AtomicBool::new(false);
 static INSTALL_HANDLERS: Once = Once::new();
+/// Runs inside the exit and signal handlers before the teardown bytes, so
+/// it must be async-signal-safe. Only the first registration is kept.
+static EXIT_RESTORE_HOOK: OnceLock<fn()> = OnceLock::new();
 /// Registration is serialized so a slot's length and pointer stay paired;
 /// the handlers only read.
 static REGISTER: Mutex<()> = Mutex::new(());
@@ -280,7 +283,7 @@ impl Drop for TeardownGuard {
 /// terminal. Handlers install on the first registration. Registrations
 /// beyond eight are dropped.
 pub fn register_exit_teardown(bytes: &'static str) -> TeardownGuard {
-    INSTALL_HANDLERS.call_once(install_exit_handlers);
+    install_exit_handlers();
     let _serial = lock(&REGISTER);
     let slot = (0..MAX_TEARDOWNS).find(|&i| TEARDOWN_PTRS[i].load(Ordering::Relaxed).is_null());
     if let Some(i) = slot {
@@ -325,7 +328,32 @@ fn write_teardowns_to_fd(fd: libc::c_int, is_tty: bool) {
     }
 }
 
-fn install_exit_handlers() {
+/// Installs the `atexit` and SIGINT/SIGTERM handlers once per process.
+/// Anything that saves and later reinstates the current signal dispositions
+/// (a dialog's signal scope) calls this first, so what it saves is these
+/// handlers rather than the defaults they are about to replace.
+pub fn install_exit_handlers() {
+    INSTALL_HANDLERS.call_once(install_exit_handlers_once);
+}
+
+pub fn exit_handlers_installed() -> bool {
+    INSTALL_HANDLERS.is_completed()
+}
+
+/// Registers an async-signal-safe function the exit and signal handlers
+/// call before writing the teardown bytes (the terminal session uses it to
+/// put the tty back in cooked mode). Later registrations are ignored.
+pub fn set_exit_restore_hook(hook: fn()) {
+    let _ = EXIT_RESTORE_HOOK.set(hook);
+}
+
+fn run_exit_restore_hook() {
+    if let Some(hook) = EXIT_RESTORE_HOOK.get() {
+        hook();
+    }
+}
+
+fn install_exit_handlers_once() {
     STDERR_IS_TTY.store(io::stderr().is_terminal(), Ordering::Relaxed);
     unsafe {
         libc::atexit(teardown_at_exit);
@@ -339,12 +367,14 @@ fn install_exit_handlers() {
 }
 
 extern "C" fn teardown_at_exit() {
+    run_exit_restore_hook();
     write_teardowns_to_fd(libc::STDERR_FILENO, STDERR_IS_TTY.load(Ordering::Relaxed));
 }
 
 /// Signals skip `atexit`, so restore here and re-exit with the shell's
 /// conventional code for the signal.
 extern "C" fn teardown_on_signal(signal: libc::c_int) {
+    run_exit_restore_hook();
     write_teardowns_to_fd(libc::STDERR_FILENO, STDERR_IS_TTY.load(Ordering::Relaxed));
     let code = if signal == libc::SIGINT { 130 } else { 143 };
     unsafe { libc::_exit(code) }

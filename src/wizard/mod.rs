@@ -27,7 +27,10 @@ pub const NO_TERMINAL_ERROR: &str =
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     Completed(WizardResult),
+    /// Esc or Ctrl+C; nothing written.
     Cancelled,
+    /// SIGINT/SIGTERM/SIGHUP (the number) ended the wizard; nothing written.
+    Interrupted(i32),
 }
 
 /// True when no `config.jsonc` exists and `WRAP_CONFIG` is unset. A config
@@ -56,7 +59,7 @@ fn terminal_error(error: std::io::Error) -> String {
 
 /// Runs the wizard and, on completion, writes `config.jsonc` and
 /// `config.schema.json` and prints the saved confirmation. Cancelling (a
-/// key or a signal) writes nothing. A models.dev failure is the
+/// key) or a signal writes nothing. A models.dev failure is the
 /// plain-language error for `main` to print.
 ///
 /// The nerd-icons answer is pushed into the config store as soon as it is
@@ -96,13 +99,16 @@ pub async fn run(
         .map_err(terminal_error)?;
     drop(terminal);
     let result = match exit {
-        WizardExit::Cancelled => return Ok(Outcome::Cancelled),
         WizardExit::Failed(message) => return Err(message),
-        WizardExit::Done(result) => result,
+        WizardExit::Cancelled => None,
+        WizardExit::Done(result) => Some(result),
     };
-    if signals.received() {
-        return Ok(Outcome::Cancelled);
+    if let Some(signal) = signals.signal() {
+        return Ok(Outcome::Interrupted(signal));
     }
+    let Some(result) = result else {
+        return Ok(Outcome::Cancelled);
+    };
     write_wizard_config(home, &result)?;
     write_schema(home).map_err(|e| {
         format!(

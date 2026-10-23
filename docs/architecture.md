@@ -218,13 +218,16 @@ gradients collapse to a solid, since quantized interpolation bands.
 
 Dialogs run on the stderr alternate screen in raw mode with bracketed paste.
 Outside a dialog the chrome exit-teardown registry restores the terminal on
-exit, SIGINT (130) and SIGTERM (143). While a dialog is up a signal scope
-supersedes those handlers: a signal becomes a cancel that the reducer backs
-out one state at a time, and the previous dispositions return on drop. The
-session also registers its restore bytes with the registry so an exit that
-bypasses `Drop` still leaves the main screen. Compose states push kitty key
-disambiguation so Shift+Enter and Ctrl+letter arrive with modifiers; Ctrl+J
-and a trailing backslash plus Enter are the fallbacks every terminal handles.
+exit, SIGINT (130) and SIGTERM (143): it puts the tty back in cooked mode
+(the terminal session saves the pre-raw `termios` for it) and writes the
+restore bytes. Opening a dialog's signal scope installs those handlers first
+and then supersedes them, so they are what returns on drop; a signal inside
+the scope becomes a cancel that the reducer backs out one state at a time,
+logged as `cancelled`, and the process still exits `128 + signal` once the
+session has finalised. The wizard and forget dialogs follow the same rule.
+Compose states push kitty key disambiguation so Shift+Enter and Ctrl+letter
+arrive with modifiers; Ctrl+J and a trailing backslash plus Enter are the
+fallbacks every terminal handles.
 The host drops and recreates its event future after every wake, so all
 progress lives on the mounted dialog.
 

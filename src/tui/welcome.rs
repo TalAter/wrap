@@ -157,7 +157,7 @@ impl WelcomeSection {
     /// note, with the blank rows between them.
     fn text_block(&self, paint: Paint, wrap_width: usize) -> Vec<Line<'static>> {
         let theme = paint.theme;
-        let body = Style::default().fg(paint.color(&theme.copy.body));
+        let body = Style::default();
         let mut lines = Vec::new();
         let stops = theme.wizard.welcome_logo;
         for (i, row) in LOGO.iter().enumerate() {

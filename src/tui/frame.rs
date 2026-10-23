@@ -19,7 +19,7 @@ pub const DIALOG_CHROME_HEIGHT: u16 = 4;
 
 const PL_LCURVE: &str = "\u{E0B6}";
 const PL_RCURVE: &str = "\u{E0B4}";
-const PL_RFLAME: &str = "\u{E0B0}";
+const PL_RFLAME: &str = "\u{E0C0}";
 
 /// Inner content width for a dialog on a terminal of `term_cols`, given the
 /// width its content naturally wants.
@@ -375,8 +375,9 @@ impl DialogFrame {
         let total_width = inner_width + 4;
         let middle_rows = body_rows.saturating_add(2);
         let total_height = middle_rows.saturating_add(2);
-        let x = area.x + area.width.saturating_sub(total_width) / 2;
-        let y = area.y + area.height.saturating_sub(total_height) / 2;
+        // Odd slack rounds toward the bottom-right.
+        let x = area.x + area.width.saturating_sub(total_width).div_ceil(2);
+        let y = area.y + area.height.saturating_sub(total_height).div_ceil(2);
         let paint = self.paint;
 
         let prepared = fit_top(

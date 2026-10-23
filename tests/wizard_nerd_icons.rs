@@ -5,6 +5,7 @@ mod common;
 
 use common::*;
 use crossterm::event::KeyCode;
+use ratatui::style::Color;
 use wrap::theme::DARK;
 use wrap::tui::nerd_icons::{NERD_TEST_ICONS, NerdIconsExit, NerdIconsSection};
 
@@ -101,4 +102,16 @@ fn enter_selects_and_esc_cancels() {
         Some(NerdIconsExit::Selected(false))
     );
     assert_eq!(n.key(key(KeyCode::Esc)), Some(NerdIconsExit::Cancel));
+}
+
+#[test]
+fn prompt_and_glyph_rows_use_the_terminal_default_colour() {
+    let n = NerdIconsSection::new();
+    let buf = draw(&n);
+    let y = row_of(&buf, "four icons");
+    let x = find(&buf, y, "Do").unwrap();
+    assert_eq!(fg(&buf, x, y), Color::Reset);
+    let y = row_of(&buf, NERD_TEST_ICONS[0]);
+    let x = find(&buf, y, NERD_TEST_ICONS[0]).unwrap();
+    assert_eq!(fg(&buf, x, y), Color::Reset);
 }

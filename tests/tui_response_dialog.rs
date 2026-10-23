@@ -94,9 +94,9 @@ fn confirming_lays_out_pill_command_explanation_and_action_bar() {
     });
     let buf = draw(&d, 100, 20);
     let lines = dialog_rows(&buf);
-    // 65 inner + 4 = 69 wide; centred on 100 → x = 15.
+    // 65 inner + 4 = 69 wide; centred on 100 with the odd slack rounded up → x = 16.
     assert!(
-        lines[0].starts_with(&format!("{}╭", " ".repeat(15))),
+        lines[0].starts_with(&format!("{}╭", " ".repeat(16))),
         "{}",
         lines[0]
     );
@@ -972,4 +972,26 @@ fn fold_command_keeps_head_and_tail_within_the_row_budget() {
     assert!(folded.contains("end"));
     let rows: usize = folded.lines().map(|l| l.len().div_ceil(50).max(1)).sum();
     assert!(rows <= 4, "{folded}");
+}
+
+#[test]
+fn many_short_command_lines_size_the_dialog_to_the_widest_line_not_their_sum() {
+    let short: Vec<String> = (1..=30).map(|i| format!("echo {i}")).collect();
+    let d = dialog(&confirming(&short.join("\n"), RiskLevel::Medium));
+    let buf = draw(&d, 120, 60);
+    let top = dialog_rows(&buf)[0].trim().to_string();
+    assert_eq!(
+        unicode_width::UnicodeWidthStr::width(top.as_str()),
+        69,
+        "thirty short lines stay at the minimum width: {top}"
+    );
+    let mut lines = short.clone();
+    lines.push("x".repeat(80));
+    let d = dialog(&confirming(&lines.join("\n"), RiskLevel::Medium));
+    let top = dialog_rows(&draw(&d, 120, 60))[0].trim().to_string();
+    assert_eq!(
+        unicode_width::UnicodeWidthStr::width(top.as_str()),
+        84,
+        "one 80-cell line widens to that line plus the chrome: {top}"
+    );
 }

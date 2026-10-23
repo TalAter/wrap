@@ -435,13 +435,40 @@ def child_alt_screen_leaves_terminal_sane():
     finally: s.close()
 
 # --- Signals ---------------------------------------------------------------------
-def signal_during_dialog(sig):
-    s = Session(['wait for me'], response=command('echo NEVER'))
+def signal_during_dialog(sig, extra_env=None):
+    # A graceful cancel (log entry, terminal restored) that still exits 128+signal for wrappers and CI.
+    s = Session(['wait for me'], response=command('echo NEVER'), extra_env=extra_env)
     try:
-        s.until('Run command?'); os.kill(s.pid(), sig); entries = s.finish(0)
+        s.until('Run command?'); os.kill(s.pid(), sig); entries = s.finish(128 + int(sig))
         assert b'NEVER\r\n' not in s.output
         entry, final = final_turn(entries)
         assert final['source'] == 'cancelled' and entry['outcome'] == 'cancelled', entry
+    finally: s.close()
+
+def signal_during_composer(sig):
+    # No spinner ran before this dialog, so it is the first thing to touch the signal handlers.
+    s = Session([], response=command('echo NEVER'))
+    try:
+        s.until('compose'); os.kill(s.pid(), sig); entries = s.finish(128 + int(sig))
+        assert b'NEVER\r\n' not in s.output
+        entry, final = final_turn(entries)
+        assert final['source'] == 'cancelled' and entry['outcome'] == 'cancelled', entry
+    finally: s.close()
+
+def signal_during_wizard_welcome(sig):
+    s = Wizard(['hello'])
+    try:
+        s.until('~45 seconds.'); os.kill(s.pid(), sig); s.finish(128 + int(sig))
+        assert not s.home_path('config.jsonc').exists() and not s.home_path('config.schema.json').exists()
+        assert not s.home_path('logs').exists()
+    finally: s.close()
+
+def signal_during_forget(sig):
+    s = Session(['--forget'])
+    try:
+        seed_forget(s); s.until('Temp files'); os.kill(s.pid(), sig); s.finish(128 + int(sig))
+        assert b'Forgotten.' not in s.output
+        for name in ('memory.json', 'logs/wrap.jsonl', 'cache/appearance.json'): assert s.home_path(name).exists(), name
     finally: s.close()
 
 def keyboard_interrupt_kills_child():
@@ -597,6 +624,9 @@ SCENARIOS = [
     ('resize folds and restores', resize_folds_and_restores), ('early keystroke does not confirm', early_keystroke_does_not_confirm),
     ('tty handoff', tty_handoff), ('child alt screen leaves terminal sane', child_alt_screen_leaves_terminal_sane),
     ('SIGINT during dialog', lambda: signal_during_dialog(signal.SIGINT)), ('SIGTERM during dialog', lambda: signal_during_dialog(signal.SIGTERM)),
+    ('SIGINT during dialog without animation', lambda: signal_during_dialog(signal.SIGINT, {'WRAP_NO_ANIMATION': '1'})),
+    ('SIGINT during composer', lambda: signal_during_composer(signal.SIGINT)), ('SIGTERM on wizard welcome', lambda: signal_during_wizard_welcome(signal.SIGTERM)),
+    ('SIGINT during forget', lambda: signal_during_forget(signal.SIGINT)),
     ('keyboard interrupt kills child', keyboard_interrupt_kills_child),
     ('piped stdin with tty', piped_stdin_with_tty), ('redirected stdout', redirected_stdout), ('redirected answer', redirected_answer),
     ('forget toggle and delete', forget_toggle_and_delete), ('forget esc deletes nothing', forget_esc_deletes_nothing),

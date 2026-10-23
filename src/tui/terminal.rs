@@ -4,14 +4,17 @@
 //!
 //! Interplay with the chrome exit-teardown registry: outside a dialog the
 //! registry's SIGINT/SIGTERM handlers write their restore bytes and exit.
-//! While a [`SessionSignals`] scope is open those handlers are superseded
-//! (the scope records the previous dispositions and reinstates them on drop),
-//! so a signal becomes a graceful cancel and the dialog's own teardown runs.
-//! A [`TerminalSession`] additionally registers the screen-restore bytes with
-//! the registry so an exit path that bypasses `Drop` still leaves the
-//! terminal on its main screen.
+//! Opening a [`SessionSignals`] scope installs those handlers first (so they
+//! are what the scope saves) and then supersedes them; dropping the scope
+//! reinstates them. A signal inside the scope therefore becomes a graceful
+//! cancel and the dialog's own teardown runs. A [`TerminalSession`]
+//! additionally registers the screen-restore bytes with the registry and the
+//! cooked-mode `termios` restore as its hook, so an exit path that bypasses
+//! `Drop` still leaves the terminal on its main screen in cooked mode.
 
+use std::cell::UnsafeCell;
 use std::io::{self, IsTerminal, Write};
+use std::mem::MaybeUninit;
 use std::sync::Once;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::Duration;
@@ -25,7 +28,9 @@ use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 
-use crate::chrome::{TeardownGuard, register_exit_teardown};
+use crate::chrome::{
+    TeardownGuard, install_exit_handlers, register_exit_teardown, set_exit_restore_hook,
+};
 
 /// Bytes that undo everything a session turned on, for the exit registry.
 const RESTORE_BYTES: &str = "\x1b[<u\x1b[?2004l\x1b[?1049l\x1b[?25h";
@@ -35,6 +40,44 @@ const DRAIN_LIMIT: usize = 1024;
 static TERMINAL_ACTIVE: AtomicBool = AtomicBool::new(false);
 static ENHANCEMENT_ACTIVE: AtomicBool = AtomicBool::new(false);
 static PANIC_HOOK: Once = Once::new();
+
+/// The tty attributes from before raw mode, for the signal path.
+struct CookedTermios(UnsafeCell<MaybeUninit<libc::termios>>);
+
+// SAFETY: written only while `RAW_ACTIVE` is false, which is the only time
+// the signal handler leaves it unread; sessions never overlap.
+unsafe impl Sync for CookedTermios {}
+
+static COOKED: CookedTermios = CookedTermios(UnsafeCell::new(MaybeUninit::uninit()));
+static COOKED_SAVED: AtomicBool = AtomicBool::new(false);
+static RAW_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+fn save_cooked_termios() {
+    let mut attrs = MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: tcgetattr fills the struct on success; the slot is written
+    // while no raw session is active, so the handler cannot be reading it.
+    unsafe {
+        if libc::tcgetattr(libc::STDERR_FILENO, attrs.as_mut_ptr()) == 0 {
+            COOKED.0.get().write(attrs);
+            COOKED_SAVED.store(true, Ordering::Release);
+        }
+    }
+}
+
+/// Async-signal-safe: atomic loads and `tcsetattr(2)`. A no-op unless raw
+/// mode is on, so a normal exit after `Drop` changes nothing.
+fn restore_cooked_termios() {
+    if RAW_ACTIVE.load(Ordering::Acquire) && COOKED_SAVED.load(Ordering::Acquire) {
+        // SAFETY: the slot was initialized before `COOKED_SAVED` was set.
+        unsafe {
+            libc::tcsetattr(
+                libc::STDERR_FILENO,
+                libc::TCSANOW,
+                (*COOKED.0.get()).as_ptr(),
+            );
+        }
+    }
+}
 
 /// The stderr alternate screen in raw mode with bracketed paste and a hidden
 /// cursor. Opening fails when stderr is not a terminal. Released on drop,
@@ -62,10 +105,13 @@ impl TerminalSession {
             }));
         });
         let teardown = register_exit_teardown(RESTORE_BYTES);
+        save_cooked_termios();
+        set_exit_restore_hook(restore_cooked_termios);
         if let Err(error) = enable_raw_mode() {
             TERMINAL_ACTIVE.store(false, Ordering::Release);
             return Err(error);
         }
+        RAW_ACTIVE.store(true, Ordering::Release);
         if let Err(error) = execute!(
             io::stderr(),
             EnterAlternateScreen,
@@ -157,6 +203,7 @@ pub fn restore_terminal() {
         crossterm::cursor::Show
     );
     let _ = disable_raw_mode();
+    RAW_ACTIVE.store(false, Ordering::Release);
 }
 
 /// Drops every queued terminal event so nothing typed before this moment is
@@ -184,14 +231,15 @@ extern "C" fn session_signal(signal: libc::c_int) {
 }
 
 /// Scoped SIGINT/SIGTERM/SIGHUP dispositions that record the signal instead
-/// of exiting. Dropping restores whatever handlers were installed before,
-/// including the chrome exit-teardown handlers.
+/// of exiting. Dropping restores the chrome exit-teardown handlers, which
+/// opening installs first when nothing else has yet.
 pub struct SessionSignals {
     previous: Vec<(libc::c_int, libc::sigaction)>,
 }
 
 impl SessionSignals {
     pub fn open() -> io::Result<Self> {
+        install_exit_handlers();
         SIGNAL_SESSION_ACTIVE
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| io::Error::other("a signal scope is already active"))?;

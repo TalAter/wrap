@@ -202,8 +202,8 @@ pub(crate) fn render_body(
     render_rows(buf, area, paint, frame, &rows);
 }
 
-/// One row group of a wizard body.
-enum Row {
+/// One row group of a dialog body.
+pub(crate) enum Row {
     Line(Line<'static>),
     /// Word-wrapped text; takes as many rows as it needs at the inner width.
     Para(Line<'static>),
@@ -236,7 +236,15 @@ impl Row {
     }
 }
 
-fn render_rows(buf: &mut Buffer, area: Rect, paint: Paint, frame: &DialogFrame, rows: &[Row]) {
+/// Draws `frame` around `rows` centered in `area`, each row taking the
+/// height it needs at the inner width, and applies the color level.
+pub(crate) fn render_rows(
+    buf: &mut Buffer,
+    area: Rect,
+    paint: Paint,
+    frame: &DialogFrame,
+    rows: &[Row],
+) {
     let inner_width = frame.inner_width(area.width);
     let body_rows = rows
         .iter()
@@ -263,7 +271,7 @@ fn indented(line: Line<'static>) -> Line<'static> {
 }
 
 fn action_row(items: &[ActionItem], paint: Paint) -> Row {
-    Row::Line(indented(action_bar_line(items, None, None, paint)))
+    Row::Para(indented(action_bar_line(items, None, None, paint)))
 }
 
 // ── The dialog ──────────────────────────────────────────────────
@@ -656,9 +664,9 @@ impl ConfigWizardDialog {
 
     fn provider_rows(&self, paint: Paint, inner_width: u16) -> Vec<Row> {
         let theme = self.opts.theme;
-        let body = Style::default().fg(paint.color(&theme.copy.body));
+        let body = Style::default();
         let bold = body.add_modifier(Modifier::BOLD);
-        let text = |s: &str| Row::Line(Line::from(Span::styled(s.to_string(), body)));
+        let text = |s: &str| Row::Para(Line::from(Span::styled(s.to_string(), body)));
         let blank = || Row::Line(Line::default());
         match (&self.state.screen, &self.widget) {
             (ProviderScreen::SelectingProviders { checked }, ScreenWidget::Checklist(list)) => {
@@ -667,7 +675,7 @@ impl ConfigWizardDialog {
                     blank(),
                 ];
                 let list = list.clone().with_width(inner_width);
-                rows.extend(list.lines(paint).into_iter().map(Row::Line));
+                rows.extend(list.lines(paint).into_iter().map(Row::Para));
                 rows.push(blank());
                 let mut items = vec![ActionItem::new("Space", "to toggle")];
                 if !checked.is_empty() {
@@ -689,12 +697,12 @@ impl ConfigWizardDialog {
             (ProviderScreen::EnteringKey { provider, .. }, ScreenWidget::Input(input)) => {
                 let api = api_provider(provider);
                 let name = api.map_or(provider.as_str(), |p| p.display_name);
-                let mut rows = vec![Row::Line(Line::from(Span::styled(
+                let mut rows = vec![Row::Para(Line::from(Span::styled(
                     format!("{name} API key"),
                     bold,
                 )))];
                 if let Some(url) = api.and_then(|p| p.api_key_url) {
-                    rows.push(Row::Line(Line::from(vec![
+                    rows.push(Row::Para(Line::from(vec![
                         Span::styled("Get one: ", body),
                         Span::styled(
                             url.to_string(),
@@ -714,7 +722,7 @@ impl ConfigWizardDialog {
             (ProviderScreen::PickingModel { provider, .. }, ScreenWidget::Select(select)) => {
                 let name = api_provider(provider).map_or(provider.as_str(), |p| p.display_name);
                 let mut rows = vec![
-                    Row::Line(Line::from(Span::styled(format!("{name} model"), bold))),
+                    Row::Para(Line::from(Span::styled(format!("{name} model"), bold))),
                     blank(),
                 ];
                 rows.extend(select.lines(paint).into_iter().map(Row::Line));
@@ -745,7 +753,7 @@ impl ConfigWizardDialog {
             ],
             (ProviderScreen::PickingDefault { .. }, ScreenWidget::Select(select)) => {
                 let mut rows = vec![
-                    Row::Line(Line::from(Span::styled(
+                    Row::Para(Line::from(Span::styled(
                         "Which provider should be the default?",
                         bold,
                     ))),

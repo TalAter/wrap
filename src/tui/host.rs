@@ -10,7 +10,9 @@
 //! resolves `next_event` as [`AppEvent::KeyEsc`], and keeps doing so on every
 //! later call, so the reducer backs out one state at a time (editing →
 //! confirming → cancel) until the session exits and the terminal is restored
-//! on the way out.
+//! on the way out. The host remembers the signal
+//! ([`TuiHost::signal_received`]) so the process can still exit with the
+//! shell's code for it once the session has finalised.
 
 use std::collections::VecDeque;
 use std::io::{self, IsTerminal};
@@ -145,6 +147,8 @@ pub struct TuiHost {
     clipboard: Option<&'static str>,
     mounted: Option<Mounted>,
     queued: VecDeque<AppEvent>,
+    /// The signal that cancelled a mounted dialog, if one did.
+    signal: Option<i32>,
 }
 
 impl TuiHost {
@@ -164,11 +168,19 @@ impl TuiHost {
             clipboard: resolve_clipboard_tool_on_path(),
             mounted: None,
             queued: VecDeque::new(),
+            signal: None,
         }
     }
 
     pub fn is_mounted(&self) -> bool {
         self.mounted.is_some()
+    }
+
+    /// The SIGINT/SIGTERM/SIGHUP number that interrupted a dialog during
+    /// this host's lifetime; the session ends as a cancel, and the caller
+    /// turns this into the `128 + signal` exit code.
+    pub fn signal_received(&self) -> Option<i32> {
+        self.signal
     }
 
     fn dialog_options(&self, continuation_prompt: Option<&str>) -> ResponseDialogOptions {
@@ -238,6 +250,11 @@ impl DialogHost for TuiHost {
     }
 
     fn unmount(&mut self) {
+        if let Some(mounted) = &self.mounted
+            && let Some(signal) = mounted.signals.signal()
+        {
+            self.signal = Some(signal);
+        }
         // Dropping restores the main screen, raw mode and the signal
         // dispositions, and abandons a GUI editor still open.
         self.mounted = None;
@@ -253,7 +270,8 @@ impl DialogHost for TuiHost {
                 let Some(mounted) = self.mounted.as_mut() else {
                     return Err("The dialog is not open.".to_string());
                 };
-                if mounted.signals.received() {
+                if let Some(signal) = mounted.signals.signal() {
+                    self.signal = Some(signal);
                     if mounted.signal_esc_sent {
                         tokio::time::sleep(TICK).await;
                     }

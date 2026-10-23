@@ -16,6 +16,7 @@ use super::terminal::{SessionSignals, TerminalSession};
 use super::widgets::{
     ActionItem, Checklist, ChecklistEvent, ChecklistItem, Paint, action_bar_line,
 };
+use super::wizard_dialog::{Row, render_rows};
 use crate::subcommands::forget::{Bucket, Footprint, Footprints, Unit, format_footprint};
 use crate::theme::Theme;
 
@@ -99,7 +100,6 @@ impl ForgetDialog {
             .collect();
         let list = Checklist::new(items)
             .with_checked(ROWS.iter().map(|r| bucket_value(r.bucket)))
-            .with_width(FORGET_CONTENT_WIDTH)
             .allow_empty_submit();
         Self {
             theme,
@@ -121,13 +121,13 @@ impl ForgetDialog {
             .collect()
     }
 
-    /// Renders into `area` of `buf` and applies the color level.
+    /// Renders into `area` of `buf` and applies the color level. Rows wrap
+    /// at the inner width rather than truncating.
     pub fn render_to(&self, buf: &mut Buffer, area: Rect) {
         let paint = self.paint();
         let frame = DialogFrame::new(self.theme.forget.frame, FORGET_CONTENT_WIDTH, paint);
-        let inner_width = frame.inner_width(area.width);
-        let mut lines = self.list.clone().with_width(inner_width).lines(paint);
-        lines.push(Line::default());
+        let mut rows: Vec<Row> = self.list.lines(paint).into_iter().map(Row::Para).collect();
+        rows.push(Row::Line(Line::default()));
         let bar = action_bar_line(
             &[
                 ActionItem::new("↑↓", "move"),
@@ -141,16 +141,8 @@ impl ForgetDialog {
         );
         let mut spans = vec![Span::raw("   ")];
         spans.extend(bar.spans);
-        lines.push(Line::from(spans));
-        let body = frame.draw(buf, area, lines.len() as u16);
-        for (i, line) in lines.iter().enumerate() {
-            let y = body.y + i as u16;
-            if y >= body.bottom() {
-                break;
-            }
-            buf.set_line(body.x, y, line, body.width);
-        }
-        paint.finish(buf);
+        rows.push(Row::Para(Line::from(spans)));
+        render_rows(buf, area, paint, &frame, &rows);
     }
 }
 
@@ -195,18 +187,36 @@ impl Dialog for ForgetDialog {
     }
 }
 
-/// Opens the alternate screen, runs the dialog, and returns the selection
-/// (`None` on Esc, Ctrl+C or a signal). Fails when stderr is not a terminal.
+/// How the real dialog ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ForgetOutcome {
+    /// The buckets to delete, possibly none.
+    Selected(Vec<Bucket>),
+    /// Esc or Ctrl+C.
+    Cancelled,
+    /// SIGINT/SIGTERM/SIGHUP (the number) closed the dialog.
+    Interrupted(i32),
+}
+
+/// Opens the alternate screen, runs the dialog, and reports how it ended.
+/// Fails when stderr is not a terminal.
 pub async fn show_forget_dialog(
     footprints: &Footprints,
     theme: &'static Theme,
     color_level: u8,
     nerd_fonts: bool,
-) -> io::Result<Option<Vec<Bucket>>> {
+) -> io::Result<ForgetOutcome> {
     let signals = SessionSignals::open()?;
     let mut terminal = TerminalSession::open()?;
     let mut dialog = ForgetDialog::new(footprints, theme, color_level, nerd_fonts);
-    drive(&mut dialog, &mut terminal, || signals.received()).await
+    let exit = drive(&mut dialog, &mut terminal, || signals.received()).await?;
+    if let Some(signal) = signals.signal() {
+        return Ok(ForgetOutcome::Interrupted(signal));
+    }
+    Ok(match exit {
+        Some(buckets) => ForgetOutcome::Selected(buckets),
+        None => ForgetOutcome::Cancelled,
+    })
 }
 
 /// [`show_forget_dialog`] for synchronous callers such as the `--forget`
@@ -217,7 +227,7 @@ pub fn show_forget_dialog_blocking(
     theme: &'static Theme,
     color_level: u8,
     nerd_fonts: bool,
-) -> io::Result<Option<Vec<Bucket>>> {
+) -> io::Result<ForgetOutcome> {
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => tokio::task::block_in_place(|| {
             handle.block_on(show_forget_dialog(

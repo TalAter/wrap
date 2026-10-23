@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use common::*;
 use crossterm::event::KeyCode;
-use ratatui::style::Modifier;
+use ratatui::style::{Color, Modifier};
 use wrap::ansi::interpolate;
 use wrap::theme::DARK;
 use wrap::tui::welcome::{
@@ -185,4 +185,21 @@ fn enter_continues_and_esc_cancels() {
     assert_eq!(w.key(ch('x')), None);
     assert_eq!(w.key(key(KeyCode::Enter)), Some(WelcomeExit::Continue));
     assert_eq!(w.key(key(KeyCode::Esc)), Some(WelcomeExit::Cancel));
+}
+
+#[test]
+fn copy_rows_use_the_terminal_default_colour() {
+    let w = WelcomeSection::new(Instant::now());
+    let buf = draw(&w, 100, 30);
+    for (needle, word) in [
+        ("a cli with taste", "a cli"),
+        ("(yours)", "(yours)"),
+        ("Quick one-time setup", "Quick"),
+        ("◷ Takes", "◷ Takes"),
+    ] {
+        let y = row_of(&buf, needle);
+        let x = find(&buf, y, word).unwrap();
+        assert_eq!(fg(&buf, x, y), Color::Reset, "{needle}");
+        assert!(!buf[(x, y)].modifier.contains(Modifier::BOLD), "{needle}");
+    }
 }

@@ -34,7 +34,7 @@ use crate::skills::bundled_skills;
 use crate::subcommands::{self, Bucket, Context, Footprints};
 use crate::temp::{ensure_temp_dir, format_size};
 use crate::theme::{Appearance, detect_appearance, set_theme};
-use crate::tui::forget_dialog::show_forget_dialog_blocking;
+use crate::tui::forget_dialog::{ForgetOutcome, show_forget_dialog_blocking};
 use crate::tui::host::TuiHost;
 use crate::wizard;
 
@@ -42,6 +42,13 @@ pub const NO_PREVIOUS_RUN: &str = "Continue error: no previous wrap run found.";
 pub const PARENT_HAD_PIPE: &str =
     "Continue error: previous run had piped input that's no longer available.";
 pub const CONFIGURED_NOTICE: &str = "✓ wrap configured — run w again to start wrapping";
+
+/// The shell's exit code for a process ended by `signal`: a dialog that a
+/// signal closed still tears down gracefully, and the process then exits
+/// with this so wrappers and CI observe the interruption.
+pub fn signal_exit_code(signal: i32) -> i32 {
+    128 + signal
+}
 
 /// The process environment as owned strings; built once per invocation.
 pub fn process_env() -> HashMap<String, String> {
@@ -83,6 +90,7 @@ pub fn dispatch_subcommand(
 ) -> i32 {
     let stderr_is_tty = std::io::stderr().is_terminal();
     let which = |cmd: &str| paths::which(cmd).is_some();
+    let interrupted = std::cell::Cell::new(None);
     let forget_dialog = |footprints: &Footprints| -> Option<Vec<Bucket>> {
         let level = color_level(stderr_is_tty, env);
         match show_forget_dialog_blocking(
@@ -91,7 +99,12 @@ pub fn dispatch_subcommand(
             level,
             config.nerd_fonts,
         ) {
-            Ok(selection) => selection,
+            Ok(ForgetOutcome::Selected(buckets)) => Some(buckets),
+            Ok(ForgetOutcome::Cancelled) => None,
+            Ok(ForgetOutcome::Interrupted(signal)) => {
+                interrupted.set(Some(signal));
+                None
+            }
             Err(error) => {
                 chrome(
                     &format!("Forget error: could not open the dialog: {error}."),
@@ -111,7 +124,8 @@ pub fn dispatch_subcommand(
         which: &which,
         forget_dialog: &forget_dialog,
     };
-    subcommands::dispatch(flag, args, &ctx)
+    let code = subcommands::dispatch(flag, args, &ctx);
+    interrupted.get().map_or(code, signal_exit_code)
 }
 
 /// `-c` was set: the parent entry, its chain and the root prompt. Refuses
@@ -162,6 +176,9 @@ pub async fn ensure_config(
         }
         match wizard::run(home, env, crate::theme::get_theme(), no_animation).await? {
             wizard::Outcome::Cancelled => return Ok(ConfigGate::Exit(0)),
+            wizard::Outcome::Interrupted(signal) => {
+                return Ok(ConfigGate::Exit(signal_exit_code(signal)));
+            }
             wizard::Outcome::Completed(_) if nothing_to_run => {
                 chrome(CONFIGURED_NOTICE, None);
                 return Ok(ConfigGate::Exit(0));
@@ -310,7 +327,7 @@ pub async fn run_query(
         config.nerd_fonts,
         config.no_animation,
     );
-    run_session(
+    let code = run_session(
         prompt,
         &llm,
         SessionOptions {
@@ -329,5 +346,6 @@ pub async fn run_query(
         },
         &mut host,
     )
-    .await
+    .await?;
+    Ok(host.signal_received().map_or(code, signal_exit_code))
 }
