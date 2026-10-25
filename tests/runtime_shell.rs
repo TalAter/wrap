@@ -4,6 +4,7 @@ use process_observation::{is_alive, live_members_of_group};
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::time::{Duration, Instant};
 
@@ -14,6 +15,40 @@ use wrap::shell::{
 };
 
 const SH: &str = "/bin/sh";
+
+fn in_headless_subprocess(test: &str) -> bool {
+    if std::env::var("WRAP_HEADLESS_SHELL_TEST").as_deref() == Ok(test) {
+        assert!(File::open("/dev/tty").is_err());
+        return true;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", test, "--nocapture"])
+        .env("WRAP_HEADLESS_SHELL_TEST", test)
+        .env("HOME", home.path())
+        .env("WRAP_HOME", home.path())
+        .env_remove("ENV")
+        .env_remove("BASH_ENV")
+        .stdin(std::process::Stdio::null());
+    // SAFETY: setsid is async-signal-safe and detaches the child from any tty.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    false
+}
 
 fn is_reaped(pid: i32) -> bool {
     // SAFETY: signal zero checks existence without delivering a signal.
@@ -162,6 +197,25 @@ async fn cancellation_kills_a_captured_child() {
 
 #[tokio::test]
 async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
+    if !in_headless_subprocess("cancellation_after_shell_exit_ends_descendants_holding_either_pipe")
+    {
+        return;
+    }
+    let startup = tempfile::tempdir().unwrap();
+    let bash = startup.path().join("bash-with-job-control");
+    // Emulate interactive startup enabling job control after parsing +m.
+    std::fs::write(
+        &bash,
+        "#!/bin/sh\nexec /bin/bash --noprofile --norc -ic 'set -m; eval \"$1\"' bash \"$3\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&bash, std::fs::Permissions::from_mode(0o700)).unwrap();
+    for shell in [SH, "/bin/bash", bash.to_str().unwrap()] {
+        cancellation_after_shell_exit(shell).await;
+    }
+}
+
+async fn cancellation_after_shell_exit(shell: &str) {
     for redirect in [">/dev/null", "2>/dev/null"] {
         let dir = tempfile::tempdir().unwrap();
         let pid_file = dir.path().join("pid");
@@ -190,7 +244,7 @@ async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
             started
         };
         let (result, cancelled_at) = tokio::join!(
-            execute_with_shell(&command, SH, ShellMode::Capture, Some(token)),
+            execute_with_shell(&command, shell, ShellMode::Capture, Some(token)),
             cancellation
         );
         assert!(
@@ -207,12 +261,18 @@ async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
         while is_alive(job) && Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        assert!(!is_alive(job), "descendant survived cancellation");
+        assert!(
+            !is_alive(job),
+            "{shell}: descendant {job} survived cancellation ({redirect})"
+        );
     }
 }
 
 #[tokio::test]
 async fn cancellation_ends_the_whole_group_of_a_headless_captured_child() {
+    if !in_headless_subprocess("cancellation_ends_the_whole_group_of_a_headless_captured_child") {
+        return;
+    }
     // Without a terminal the shell gets a process group of its own, so the
     // backgrounded grandchild must die with it instead of lingering.
     let dir = tempfile::tempdir().unwrap();

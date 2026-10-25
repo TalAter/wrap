@@ -3,7 +3,9 @@
 //!
 //! The shell runs as `$SHELL +m -ic <command>`. `-i` sources the user's rc
 //! files so aliases, functions and PATH additions behave as at their own
-//! prompt. `+m` asks for job control off; interactive bash still runs each
+//! prompt. Headless commands also run `set +m` after interactive startup so
+//! background jobs stay in the child's isolated group after its exit.
+//! `+m` asks for job control off; interactive bash still runs each
 //! foreground job in its own process group and hands it the terminal, which
 //! is what lets Ctrl-C reach the command without reaching Wrap.
 //!
@@ -214,8 +216,14 @@ impl Spawn<'_> {
     /// `$SHELL +m -ic <command>` with the stdio given.
     fn command(&self, stdin: ChildStdin, stdout: Stdio, stderr: Stdio) -> std::process::Command {
         let mut builder = std::process::Command::new(self.shell);
+        // Interactive startup can override +m, including in headless Bash 3.2.
+        let command = if self.own_group {
+            format!("set +m; {}", self.command)
+        } else {
+            self.command.to_owned()
+        };
         builder
-            .args(["+m", "-ic", self.command])
+            .args(["+m", "-ic", &command])
             .stdin(stdin)
             .stdout(stdout)
             .stderr(stderr);
