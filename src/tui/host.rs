@@ -77,17 +77,23 @@ impl Mounted {
 
     fn read_input(&mut self) -> io::Result<()> {
         loop {
-            // While a confirmed step's job owns the terminal (interactive
-            // bash hands it to each foreground job) the shell layer ignores
-            // SIGTTIN, so reads fail with EIO instead of stopping Wrap;
-            // keystrokes go to that job until it exits and the terminal is
-            // reclaimed, so wait instead of ending the session.
+            if !super::terminal::dialog_owns_input() {
+                return Ok(());
+            }
+            // A shell can take the foreground between the ownership check
+            // and poll. Ignored SIGTTIN makes that read fail with EIO instead
+            // of stopping Wrap.
             let ready = match event::poll(INPUT_POLL) {
                 Ok(ready) => ready,
                 Err(e) if e.raw_os_error() == Some(libc::EIO) => return Ok(()),
                 Err(e) => return Err(e),
             };
             if !ready {
+                return Ok(());
+            }
+            // Ownership may change during the blocking poll. Leave its queued
+            // event for the child-exit boundary to discard.
+            if !super::terminal::dialog_owns_input() {
                 return Ok(());
             }
             self.dirty = true;

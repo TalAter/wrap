@@ -2,6 +2,7 @@
 """Shell process cleanup and termios restoration through the real-PTY harness.
 Set WRAP_TEST_BASH to exercise an additional Bash binary.
 """
+import errno
 import os
 import pathlib
 import shutil
@@ -10,6 +11,7 @@ import stat
 import shlex
 import tempfile
 import subprocess
+import sys
 import termios
 
 import terminal as tty
@@ -102,6 +104,97 @@ def captured_stderr_and_interrupt_are_preserved(shell):
         assert 'NOT_REACHED' not in steps[0]['output'], steps
         assert 'no job control' not in steps[0]['output'], steps
     finally:
+        s.close()
+
+
+def captured_silent_stderr_completes(shell):
+    for risk in ['low', 'medium']:
+        for command, output in [('true', ''), ('echo ONLY_STDOUT', 'ONLY_STDOUT')]:
+            s = tty.Session(['silent stderr step'], responses=[
+                tty.command(command, risk=risk, final=False), tty.reply('DONE')],
+                extra_env={'SHELL': shell}, redirect_stdout=True)
+            try:
+                if risk == 'medium':
+                    s.until('Run command?')
+                    s.send('y')
+                entries = s.finish(0, alt=risk == 'medium', timeout=5)
+                steps = [turn for turn in entries[0]['turns'] if turn['kind'] == 'step']
+                assert len(steps) == 1 and steps[0]['exit_code'] == 0, steps
+                assert steps[0]['output'].strip() == output, steps
+                assert s.stdout_file.read_bytes() == b'DONE\n'
+                assert not list(pathlib.Path(s.tmp.name).rglob('wrap-stderr-*'))
+            finally:
+                s.close()
+
+
+def captured_descendant_stderr_survives_shell_exit(shell, cancel=False):
+    descendant = '''echo $$ > "$WRAP_HOME/job.pid"; read -r release < "$WRAP_HOME/release"; echo LATE_STDERR >&2'''
+    launch = f'sh -c {shlex.quote(descendant)} >/dev/null &'
+    step = (shlex.quote(sys.executable) + ' "$WRAP_HOME/shared.py"; '
+            'echo $$ > "$WRAP_HOME/shell.pid"; sh -c ' + shlex.quote(launch))
+    s = tty.Session(['descendant owns stderr'], responses=[
+        tty.command(step, final=False), tty.reply('DONE')],
+        extra_env={'SHELL': shell}, redirect_stdout=True)
+    try:
+        os.mkfifo(s.home_path('release'), 0o600)
+        os.mkfifo(s.home_path('shared-release'), 0o600)
+        s.home_path('shared.py').write_text(f'''import os, pathlib
+if os.fork() == 0:
+    os.setpgid(0, {s.pid()})
+    for fd in [0, 1, 2]: os.close(fd)
+    home = pathlib.Path(os.environ['WRAP_HOME'])
+    (home / 'shared.pid').write_text(str(os.getpid()))
+    os.open(home / 'shared-release', os.O_RDONLY)
+''')
+        s.until('Run command?')
+        s.send('y')
+        assert s.wait_screen(lambda: s.home_path('job.pid').exists(), 5)
+        shell_pid = int(s.home_path('shell.pid').read_text())
+        job_pid = int(s.home_path('job.pid').read_text())
+        assert s.wait_screen(lambda: s.home_path('shared.pid').exists(), 5)
+        shared_pid = int(s.home_path('shared.pid').read_text())
+        assert os.getpgid(shared_pid) == s.pid(), 'unrelated process must share Wrap group'
+        assert s.wait_screen(lambda: not live(shell_pid), 5), 'direct shell did not exit'
+        assert s.process.poll() is None, 'capture ended before descendant stderr closed'
+        if cancel:
+            os.kill(s.pid(), signal.SIGINT)
+            s.until('Run command?')
+            assert s.wait_screen(lambda: not live(job_pid), 3), 'descendant survived cancellation'
+            assert not list(pathlib.Path(s.tmp.name).rglob('wrap-stderr-*'))
+            s.send('n')
+        else:
+            released = False
+            def release():
+                nonlocal released
+                if released:
+                    return True
+                try:
+                    fd = os.open(s.home_path('release'), os.O_WRONLY | os.O_NONBLOCK)
+                except OSError as error:
+                    if error.errno == errno.ENXIO:
+                        return False
+                    raise
+                with os.fdopen(fd, 'w') as gate:
+                    gate.write('go\n')
+                released = True
+                return True
+            assert s.wait_screen(release, 5), 'descendant did not open its input gate'
+        entries = s.finish(0, timeout=5)
+        steps = [turn for turn in entries[0]['turns'] if turn['kind'] == 'step']
+        if cancel:
+            assert not steps, steps
+        else:
+            assert len(steps) == 1 and steps[0]['exit_code'] == 0, steps
+            assert steps[0]['output'].strip() == 'LATE_STDERR', steps
+            assert s.stdout_file.read_bytes() == b'DONE\n'
+        assert not list(pathlib.Path(s.tmp.name).rglob('wrap-stderr-*'))
+        assert live(shared_pid), 'unrelated shared-group process was killed'
+    finally:
+        for name in ['job.pid', 'shared.pid']:
+            path = s.home_path(name)
+            if path.exists():
+                try: os.kill(int(path.read_text()), signal.SIGKILL)
+                except ProcessLookupError: pass
         s.close()
 
 
@@ -289,11 +382,14 @@ if __name__ == '__main__':
     tty.run('captured startup and pipe ownership', lambda: captured_startup_and_pipe_ownership('/bin/bash'))
     tty.run('captured startup failure and cancel', lambda: captured_startup_failure_and_cancel('/bin/bash'))
     tty.run('captured spawn failure cleans pipe', captured_spawn_failure_cleans_pipe)
+    tty.run('descendant stderr survives shell exit', lambda: captured_descendant_stderr_survives_shell_exit('/bin/bash'))
+    tty.run('cancel after shell exit closes descendant stderr', lambda: captured_descendant_stderr_survives_shell_exit('/bin/bash', cancel=True))
     for name in ['sh', 'bash', 'zsh']:
         shell = shutil.which(name)
         if not shell:
             print(f'SKIP {name} unavailable')
             continue
+        tty.run(f'{name} silent captured stderr completes', lambda: captured_silent_stderr_completes(shell))
         tty.run(f'{name} compound cancel reaps descendants', lambda: cancel_compound_step_ends_descendants(shell))
         tty.run(f'{name} captured step restores dialog modes', lambda: captured_step_restores_dialog_modes(shell))
         tty.run(f'{name} cancelled step restores dialog modes', lambda: captured_step_restores_dialog_modes(shell, cancel=True))
@@ -306,12 +402,15 @@ if __name__ == '__main__':
             for test in [interrupted_final_child_restores_terminal_modes,
                          captured_child_keeps_tty_input,
                          captured_stderr_and_interrupt_are_preserved,
+                         captured_silent_stderr_completes,
+                         captured_descendant_stderr_survives_shell_exit,
                          explicit_interrupt_trap_is_preserved,
                          cancel_compound_step_ends_descendants,
                          captured_step_restores_dialog_modes,
                          inline_step_restores_terminal_modes]:
                 tty.run(f'{bash}: {test.__name__}', lambda: test(str(shell)))
             tty.run(f'{bash}: cancelled step restores dialog modes', lambda: captured_step_restores_dialog_modes(str(shell), cancel=True))
+            tty.run(f'{bash}: cancel after shell exit closes descendant stderr', lambda: captured_descendant_stderr_survives_shell_exit(str(shell), cancel=True))
             tty.run(f'{bash}: startup and pipe ownership', lambda: captured_startup_and_pipe_ownership(bash))
             tty.run(f'{bash}: startup failure and cancel', lambda: captured_startup_failure_and_cancel(bash))
     tty.server.shutdown()

@@ -80,8 +80,15 @@ Before the command, stderr opens a private FIFO (mode 0600 in the scratch
 directory), so startup background jobs inherit no capture descriptor. The
 FIFO is removed when the step finishes or is cancelled; its parent writer
 closes on shell exit even when startup exits before opening the FIFO.
-Bash owns the foreground until it exits, so keystrokes (Esc included) reach
-the step, not the dialog. The action bar offers Ctrl-C to interrupt the step.
+The FIFO reader uses a cancellable `select` worker because macOS kqueue does
+not report its final writer's disconnect. The exited shell stays unreaped
+until capture and cleanup finish, reserving its PID for safe group cleanup.
+Bash input (Esc included) is reserved from spawn until exit is acknowledged
+and the foreground returns, including startup and a handoff completed between
+observations. Other shells reserve input once observed outside Wrap's group.
+At that boundary Wrap restores terminal modes and discards unread child input,
+then accepts fresh dialog keys without waiting for capture pipes to close. Shared-group
+shells keep dialog input active. The action bar offers Ctrl-C to interrupt the step.
 A shell-owned interrupt returns the step's failure to the model; Esc cancels
 through the dialog only while Wrap owns input. During the step Wrap ignores
 SIGTTIN and SIGTTOU: a terminal read from behind the job then fails with EIO,

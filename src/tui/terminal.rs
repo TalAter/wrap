@@ -13,11 +13,13 @@
 //! cooked-mode `termios` restore as its hook, so an exit path that bypasses
 //! `Drop` still leaves the terminal on its main screen in cooked mode.
 
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
+use std::fs::File;
 use std::io::{self, IsTerminal, Write};
 use std::mem::MaybeUninit;
-use std::sync::Once;
+use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::{Mutex, Once};
 use std::time::Duration;
 
 use crossterm::event::{
@@ -260,11 +262,117 @@ pub fn restore_terminal() {
     RAW_ACTIVE.store(false, Ordering::Release);
 }
 
+/// Bash reserves input from spawn; other shells reserve it once observed
+/// outside our group. The reservation ends after exit is acknowledged and
+/// the foreground returns. Shared-group shells allow dialog cancellation.
+struct InputOwner {
+    tty: File,
+    child: Option<libc::pid_t>,
+    handed_off: bool,
+}
+
+static CAPTURED_INPUT: Mutex<Option<InputOwner>> = Mutex::new(None);
+
+pub(crate) fn dialog_owns_input() -> bool {
+    let mut owner = CAPTURED_INPUT.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(owner) = owner.as_mut() else {
+        return true;
+    };
+    // SAFETY: queries on a live tty descriptor and an unreaped child pid.
+    let (group, foreground, child_group) = unsafe {
+        (
+            libc::getpgrp(),
+            libc::tcgetpgrp(owner.tty.as_raw_fd()),
+            owner.child.map_or(-1, |child| libc::getpgid(child)),
+        )
+    };
+    owner.handed_off |= (child_group > 0 && child_group != group)
+        || (foreground > 0
+            && foreground != group
+            && owner
+                .child
+                .is_some_and(|child| crate::shell::group_belongs_to_child(foreground, child)));
+    !owner.handed_off && foreground == group
+}
+
+pub(crate) struct CapturedInput {
+    active: Cell<bool>,
+    child_exited: Cell<bool>,
+}
+
+impl CapturedInput {
+    pub(crate) fn new(tty: Option<File>, child: libc::pid_t, expects_handoff: bool) -> Self {
+        let active = tty.is_some();
+        if let Some(tty) = tty {
+            *CAPTURED_INPUT.lock().unwrap_or_else(|e| e.into_inner()) = Some(InputOwner {
+                tty,
+                child: Some(child),
+                // Bash can take and return the tty, then rejoin our group,
+                // entirely between ownership observations.
+                handed_off: expects_handoff,
+            });
+        }
+        Self {
+            active: Cell::new(active),
+            child_exited: Cell::new(false),
+        }
+    }
+
+    pub(crate) fn child_exited(&self) {
+        self.child_exited.set(true);
+        if self.active.get()
+            && let Some(owner) = CAPTURED_INPUT
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_mut()
+        {
+            owner.child = None;
+        }
+    }
+
+    pub(crate) fn child_has_exited(&self) -> bool {
+        self.child_exited.get()
+    }
+
+    fn take(&self) -> Option<InputOwner> {
+        if !self.active.replace(false) {
+            return None;
+        }
+        CAPTURED_INPUT
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+    }
+
+    pub(crate) fn finish(&self) {
+        if let Some(owner) = self.take()
+            && owner.handed_off
+            && TerminalSession::active()
+            // SAFETY: a query on the guard's live tty descriptor.
+            && unsafe { libc::tcgetpgrp(owner.tty.as_raw_fd()) == libc::getpgrp() }
+        {
+            // The child has exited or been killed and modes are restored. Discard
+            // unread child input before reopening dialog input, independently
+            // of pipe EOF. No live child's stdin is drained.
+            // SAFETY: the tty is ours and the descriptor remains open.
+            unsafe { libc::tcflush(owner.tty.as_raw_fd(), libc::TCIFLUSH) };
+            let _ = drain_pending_input();
+        }
+    }
+}
+
+impl Drop for CapturedInput {
+    fn drop(&mut self) {
+        // Only explicit child completion or cancellation discards its input.
+        self.take();
+    }
+}
+
 /// Drops every queued terminal event so nothing typed before this moment is
 /// interpreted by what renders next. Bounded, and a no-op without an open
 /// session. Returns how many events were discarded.
 pub fn drain_pending_input() -> io::Result<usize> {
-    if !TerminalSession::active() {
+    if !TerminalSession::active() || !dialog_owns_input() {
         return Ok(0);
     }
     let mut dropped = 0;

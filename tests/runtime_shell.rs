@@ -233,10 +233,11 @@ async fn cancellation_after_shell_exit(shell: &str) {
                 let pid = std::fs::read_to_string(&pid_file)
                     .ok()
                     .and_then(|text| text.trim().parse::<i32>().ok());
-                if pid.is_some_and(is_reaped) {
+                // The exited shell reserves its PID while descendants drain.
+                if pid.is_some_and(|pid| !is_alive(pid)) {
                     break;
                 }
-                assert!(Instant::now() < deadline, "direct shell was not reaped");
+                assert!(Instant::now() < deadline, "direct shell did not exit");
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             let started = Instant::now();
@@ -252,6 +253,15 @@ async fn cancellation_after_shell_exit(shell: &str) {
             "cancellation waited for a descendant to close {redirect}"
         );
         assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+        let pid: i32 = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            is_reaped(pid),
+            "cancelled shell was not reaped after cleanup"
+        );
         let job: i32 = std::fs::read_to_string(&job_file)
             .unwrap()
             .trim()

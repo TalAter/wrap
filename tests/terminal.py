@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Real-terminal contracts; stdlib only. Runs with a disposable home and local HTTP."""
-import ast, shutil, codecs, fcntl, http.server, json, os, pathlib, pty, re, select, signal, struct, subprocess, sys, tempfile, termios, threading, time, unicodedata
+import ast, shutil, codecs, fcntl, http.server, json, os, pathlib, pty, re, select, signal, shlex, struct, subprocess, sys, tempfile, termios, threading, time, unicodedata
 
 BINARY = str(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'target/debug/wrap').resolve())
 
@@ -491,6 +491,147 @@ def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
         assert final['source'] == 'cancelled'
     finally: s.close()
 
+def buffered_escape_at_bash_handoff(fresh_escape=False, stopped=False, missed=False, shell='/bin/bash'):
+    # Keep the capture pipe open after Bash exits, independently of terminal
+    # ownership. This makes input-before-completion deterministic.
+    with tempfile.TemporaryDirectory(prefix='wrap-handoff-') as directory:
+        root = pathlib.Path(directory)
+        release = root / 'release'; os.mkfifo(release)
+        pipes = root / 'pipes'; os.mkfifo(pipes)
+        if missed:
+            # Stop Wrap while the child still shares its group. No ownership
+            # sample can see Bash's startup or the fixture's complete handoff.
+            launcher = root / 'bash'
+            launcher.write_text(f"""#!{sys.executable}
+import os, pathlib, signal, subprocess, sys
+parent = os.getppid()
+root = pathlib.Path({directory!r})
+(root / 'group').write_text(str(os.getpgrp()))
+os.kill(parent, signal.SIGSTOP)
+while True:
+    if pathlib.Path('/proc').is_dir():
+        stat = pathlib.Path(f'/proc/{{parent}}/stat').read_text()
+        state = stat[stat.rindex(')') + 2:].split()[0]
+    else:
+        state = subprocess.check_output(['ps', '-o', 'stat=', '-p', str(parent)], text=True).strip()
+    if state.startswith('T'): break
+os.execv({shell!r}, [{shell!r}, *sys.argv[1:]])
+""")
+            launcher.chmod(0o700)
+            shell = str(launcher)
+        fixture = root / 'step.py'
+        fixture.write_text("""import os, pathlib, signal, subprocess, sys
+root = pathlib.Path(sys.argv[1])
+group = int((root / 'group').read_text()) if (root / 'group').exists() else None
+if group:
+    signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+    os.setpgid(0, 0)
+    os.tcsetpgrp(0, os.getpgrp())
+(root / 'shell').write_text(str(os.getpid()))
+(root / 'ready').touch()
+assert os.read(0, 1) == b'x'
+(root / 'read').touch()
+with (root / 'release').open() as gate:
+    gate.read()
+subprocess.Popen([sys.executable, '-c',
+    "import pathlib,sys; p=pathlib.Path(sys.argv[1]); (p/'holding').touch(); (p/'pipes').open().read(); print('STEP_DONE')",
+    str(root)], stdin=subprocess.DEVNULL,
+    preexec_fn=(lambda: os.setpgid(0, group)) if group else None)
+if group:
+    # Model Bash returning the tty and rejoining Wrap before it exits.
+    os.setpgid(0, group)
+    os.tcsetpgrp(0, group)
+    (root / 'returned-group').write_text(str(os.getpgrp()))
+""")
+        invocation = f'{shlex.quote(sys.executable)} {shlex.quote(str(fixture))} {shlex.quote(directory)}'
+        step = f'exec {invocation}' if missed else f'{invocation}; true'
+        s = Session(['handoff boundary'], responses=[command(step, final=False), command('echo AFTER_HANDOFF')],
+                    extra_env={'SHELL': shell}, size=(140, 36))
+        try:
+            s.until('Run command?'); s.send('y')
+            assert s.wait_screen(lambda: (root / 'ready').exists(), 5)
+            assert foreground_of(s.pid()) != s.pid(), (s.pid(), (root / 'shell').read_text(), s.output[-2000:])
+            if missed: assert process_state(s.pid()).startswith('T'), 'Wrap observed the handoff'
+            s.send('x')
+            assert s.wait_screen(lambda: (root / 'read').exists(), 5), 'child stdin was stolen'
+            if stopped: os.kill(s.pid(), signal.SIGSTOP)
+            s.send('\x1b')
+            with release.open('w') as gate: gate.write('exit')
+            assert s.wait_screen(lambda: (root / 'holding').exists() and foreground_of(s.pid()) == s.pid(), 5)
+            if missed:
+                child = int((root / 'shell').read_text())
+                assert s.wait_screen(lambda: process_state(child).startswith('Z'), 5)
+                assert int((root / 'returned-group').read_text()) == s.pid(), 'child retained observable ownership'
+            if stopped or missed: os.kill(s.pid(), signal.SIGCONT)
+            # An empty tty can precede the end of crossterm's drain. Require a
+            # subsequent frame at a new size before sending a fresh key.
+            s.until('ctrl+C to interrupt step')
+            assert s.wait_screen(lambda: not select.select([s.slave], [], [], 0)[0]
+                                 or 'Runcommand?' in s.visible(), 5)
+            s.absent('Run command?')
+            def action_rows():
+                return [i for i, row in enumerate(s.screen.grid)
+                        if 'ctrl+Ctointerruptstep' in re.sub(r'\s+', '', ''.join(row))]
+            assert s.wait_screen(lambda: action_rows() or 'Runcommand?' in s.visible(), 5), s.screen.text()
+            s.absent('Run command?')
+            action_row = action_rows()[0]
+            s.resize(140, 44)
+            assert s.wait_screen(lambda: 'ctrl+Ctointerruptstep' in
+                                 re.sub(r'\s+', '', ''.join(s.screen.grid[action_row + 4]))
+                                 or 'Runcommand?' in s.visible(), 5), s.screen.text()
+            s.absent('Run command?')
+            if fresh_escape:
+                s.send('\x1b')
+                s.until('Run command?')
+                s.send('n'); entries = s.finish(0)
+                assert 'step' not in kinds_of(entries[0]), entries
+            else:
+                with pipes.open('w') as gate: gate.write('finish')
+                s.until('echo AFTER_HANDOFF'); s.until('STEP_DONE'); s.until('Run command?')
+                s.send('n'); entries = s.finish(0)
+                assert kinds_of(entries[0]) == ['user', 'assistant', 'step', 'assistant', 'final'], entries
+        finally:
+            # A background pipe holder can outlive Bash, including on failure.
+            try:
+                fd = os.open(pipes, os.O_WRONLY | os.O_NONBLOCK)
+                os.write(fd, b'finish'); os.close(fd)
+            except OSError: pass
+            s.close()
+
+
+def captured_descendant_keeps_terminal_input_after_shell_exit():
+    with tempfile.TemporaryDirectory(prefix='wrap-handoff-') as directory:
+        root = pathlib.Path(directory)
+        fixture = root / 'step.py'
+        fixture.write_text("""import os, pathlib, signal, sys, tty
+root = pathlib.Path(sys.argv[1])
+signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+if os.getpgrp() != os.getpid(): os.setpgid(0, 0)
+os.tcsetpgrp(0, os.getpgrp())
+tty.setraw(0)
+(root / 'shell').write_text(str(os.getpid()))
+if os.fork():
+    os._exit(0)
+(root / 'ready').touch()
+assert os.read(0, 1) == b'x'
+print('DESCENDANT_INPUT')
+""")
+        step = f'exec {shlex.quote(sys.executable)} {shlex.quote(str(fixture))} {shlex.quote(directory)}'
+        s = Session(['descendant input'], responses=[command(step, final=False), command('echo AFTER_DESCENDANT')],
+                    extra_env={'SHELL': '/bin/bash'}, size=(140, 36))
+        try:
+            s.until('Run command?'); s.send('y')
+            assert s.wait_screen(lambda: (root / 'ready').exists(), 5)
+            shell = int((root / 'shell').read_text())
+            assert s.wait_screen(lambda: process_state(shell).startswith('Z'), 5), 'shell did not exit'
+            assert foreground_of(s.pid()) == shell, 'terminal stolen from the surviving reader'
+            s.send('x'); s.until('echo AFTER_DESCENDANT'); s.until('DESCENDANT_INPUT')
+            s.send('n'); entries = s.finish(0)
+            steps = [t for t in entries[0]['turns'] if t['kind'] == 'step']
+            assert len(steps) == 1 and steps[0]['exit_code'] == 0, steps
+        finally: s.close()
+
+
 def ctrl_c_interrupts_a_bash_step_that_owns_the_terminal():
     responses = [command('echo ready > "$WRAP_HOME/step-ready"; sleep 30', final=False), command('echo AFTER_INTERRUPT')]
     s = Session(['interrupt a step'], responses=responses, extra_env={'SHELL': '/bin/bash'})
@@ -535,6 +676,15 @@ def ctrl_backslash_cleans_up_a_shared_foreground_step():
         s.pump_for(.3); s.send('\x1c'); entries = s.finish(131)
         assert entries[-1]['outcome'] == 'cancelled', entries
     finally: s.close()
+
+def process_state(pid):
+    """Observe exit without reaping the child reserved by Wrap."""
+    if not pathlib.Path('/proc').is_dir():
+        result = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], text=True, capture_output=True)
+        return result.stdout.strip()
+    try: stat = pathlib.Path(f'/proc/{pid}/stat').read_text()
+    except FileNotFoundError: return ''
+    return stat[stat.rindex(')') + 2:].split()[0]
 
 def foreground_of(pid):
     """The foreground process group of `pid`'s controlling terminal."""
@@ -897,6 +1047,12 @@ SCENARIOS = [
     ('low step runs before dialog', low_step_runs_before_dialog), ('confirmed medium step shows running', confirmed_medium_step_shows_running),
     ('esc aborts a step under zsh', esc_aborts_a_step_under_zsh),
     ('a bash step that owns the terminal does not end the session', a_bash_step_that_owns_the_terminal_does_not_end_the_session),
+    ('buffered escape at bash handoff', buffered_escape_at_bash_handoff),
+    ('buffered escape at bash handoff with Wrap stopped', lambda: buffered_escape_at_bash_handoff(stopped=True)),
+    ('buffered escape with entire bash handoff missed', lambda: buffered_escape_at_bash_handoff(missed=True)),
+    ('fresh escape after entire bash handoff missed', lambda: buffered_escape_at_bash_handoff(missed=True, fresh_escape=True)),
+    ('fresh escape after bash handoff', lambda: buffered_escape_at_bash_handoff(fresh_escape=True)),
+    ('captured descendant keeps terminal input after shell exit', captured_descendant_keeps_terminal_input_after_shell_exit),
     ('Ctrl-C interrupts a bash step', ctrl_c_interrupts_a_bash_step_that_owns_the_terminal),
     ('Ctrl-C cancels a zsh step', ctrl_c_cancels_a_zsh_step_without_exiting_wrap),
     ('captured child controls terminal signals', captured_child_can_disable_terminal_signals),

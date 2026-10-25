@@ -36,10 +36,11 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs::File;
-use std::io::{self, IsTerminal};
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::io::{self, IsTerminal, Read};
+use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
@@ -50,6 +51,7 @@ use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::temp::ensure_temp_dir;
+use crate::tui::terminal::{CapturedInput, dialog_owns_input};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShellMode {
@@ -174,16 +176,14 @@ pub async fn execute_with_shell(
             &[]
         },
     };
-    let (pid, status, stdout, stderr) = match mode {
+    let (handed_back, status, stdout, stderr) = match mode {
         ShellMode::Capture => run_captured(&spawn, stdin, cancel).await?,
         ShellMode::Inherit => {
             let (pid, status) = run_inherited(&spawn, stdin, cancel).await?;
-            (pid, status, String::new(), String::new())
+            let handed_back = terminal.as_ref().is_some_and(|t| t.reclaim(pid));
+            (handed_back, status, String::new(), String::new())
         }
     };
-    // A job that bash handed the terminal and that outlived it leaves the
-    // foreground elsewhere; the next terminal read would fail.
-    let handed_back = terminal.as_ref().is_some_and(|t| t.reclaim(pid));
     drop(ignored);
     if handed_back {
         // The shell took the terminal while the child ran and keeps it: wait
@@ -268,39 +268,44 @@ impl Spawn<'_> {
         builder
     }
 
-    /// End a cancelled child: first its descendants, then its terminal job,
-    /// then the child's own group when it left ours (bash moves itself out
-    /// under job control; headless children start apart), then the child
-    /// itself; finally the terminal comes back. An interactive shell ignores
-    /// SIGTERM, so only SIGKILL reliably ends it. The caller reaps the child
-    /// afterwards if it has not already exited while descendants drain.
-    fn kill(&self, pid: libc::pid_t, running: bool) {
+    /// Captured children reserve their PID until cleanup; inherited children
+    /// have a concurrent blocking wait and retain their normal group lookup.
+    fn kill(&self, pid: libc::pid_t, running: bool, unreaped: bool) {
         if running {
             kill_descendants(pid);
         }
-        // SAFETY: signal only the child's isolated group, its terminal job,
-        // or the direct child while it has not been reaped.
-        unsafe {
-            let own = libc::getpgrp();
-            if let Some(terminal) = self.terminal {
-                terminal.kill_child_foreground(pid);
+        if let Some(terminal) = self.terminal
+            && running
+        {
+            terminal.kill_child_foreground(pid);
+        }
+        // SAFETY: an unreaped child reserves pid against reuse as a group ID.
+        // Otherwise signal only its isolated or currently observed group.
+        let (group, own) = unsafe {
+            (
+                if unreaped || self.own_group {
+                    pid
+                } else {
+                    libc::getpgid(pid)
+                },
+                libc::getpgrp(),
+            )
+        };
+        let killed =
+            group > 0 && group != own && unsafe { libc::killpg(group, libc::SIGKILL) } == 0;
+        if let Some(terminal) = self.terminal {
+            if unreaped && killed && terminal.foreground() == pid {
+                terminal.killed.set(Some(pid));
             }
-            let group = if self.own_group {
-                pid
-            } else if running {
-                libc::getpgid(pid)
+            if unreaped {
+                terminal.reclaim_unreaped(pid);
             } else {
-                -1
-            };
-            if group > 0 && group != own {
-                libc::killpg(group, libc::SIGKILL);
-            }
-            if running {
-                libc::kill(pid, libc::SIGKILL);
+                terminal.reclaim(pid);
             }
         }
-        if let Some(terminal) = self.terminal {
-            terminal.reclaim(pid);
+        if running {
+            // SAFETY: the PID still belongs to our unreaped direct child.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
         }
     }
 }
@@ -309,17 +314,19 @@ async fn run_captured(
     spawn: &Spawn<'_>,
     stdin: ChildStdin,
     cancel: Option<CancellationToken>,
-) -> io::Result<(libc::pid_t, ExitStatus, String, String)> {
+) -> io::Result<(bool, ExitStatus, String, String)> {
     if let Some(terminal) = spawn.terminal {
         // A foreground child needs Ctrl-C even when the dialog uses raw mode.
         // Subsequent mode changes belong to the child until it returns.
         terminal.enable_interrupts()?;
     }
+    let input_tty = spawn.terminal.map(|t| t.tty.try_clone()).transpose()?;
     let mut capture = spawn
         .terminal
         .filter(|_| bash_needs_terminal_stderr(spawn.shell))
         .map(|_| CapturedStderr::open())
         .transpose()?;
+    let mut child_exits = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::child())?;
     let mut child = tokio::process::Command::from(spawn.command(
         stdin,
         Stdio::piped(),
@@ -333,21 +340,33 @@ async fn run_captured(
     .kill_on_drop(true)
     .spawn()?;
     let pid = child.id().expect("child not yet reaped") as libc::pid_t;
+    let input = CapturedInput::new(input_tty, pid, bash_needs_terminal_stderr(spawn.shell));
     let stdout = child.stdout.take();
-    let (stderr, keepalive) = match capture.as_mut() {
+    let stderr = child.stderr.take();
+    let (fifo, keepalive) = match capture.as_mut() {
         Some(capture) => (capture.reader.take(), capture.keepalive.take()),
-        None => (child.stderr.take(), None),
+        None => (None, None),
     };
     let cancelled_token = cancel.unwrap_or_default();
     let mut watch = tokio::time::interval(FOREGROUND_WATCH);
     let result = {
         let completion = async {
             let wait = async {
-                let result = child.wait().await;
+                captured_exit(pid, &mut child_exits, spawn.terminal).await?;
+                input.child_exited();
+                if let Some(terminal) = spawn.terminal {
+                    terminal.return_input(pid, &input);
+                }
                 drop(keepalive);
-                result
+                Ok::<_, io::Error>(())
             };
-            tokio::try_join!(wait, read_pipe(stdout), read_pipe(stderr))
+            let read_stderr = async {
+                match fifo {
+                    Some(fifo) => read_fifo(fifo).await,
+                    None => read_pipe(stderr).await,
+                }
+            };
+            tokio::try_join!(wait, read_pipe(stdout), read_stderr)
         };
         tokio::pin!(completion);
         loop {
@@ -358,25 +377,81 @@ async fn run_captured(
                 _ = watch.tick() => {
                     if let Some(terminal) = spawn.terminal {
                         terminal.observe(pid);
+                        if input.child_has_exited() {
+                            terminal.return_input(pid, &input);
+                        }
                     }
                 }
             }
         }
     };
-    let (status, stdout, stderr) = match result {
+    let ((), stdout, stderr) = match result {
         Ok(result) => result,
         Err(error) => {
-            spawn.kill(pid, child.id().is_some());
+            spawn.kill(pid, !input.child_has_exited(), true);
+            if let Some(terminal) = spawn.terminal {
+                terminal.restore_modes();
+            }
+            input.finish();
             let _ = child.wait().await;
+            input.child_exited();
             return Err(error);
         }
     };
+    let handed_back = if let Some(terminal) = spawn.terminal {
+        let handed_back = terminal.reclaim_unreaped(pid);
+        terminal.restore_modes();
+        handed_back
+    } else {
+        false
+    };
+    input.finish();
+    let status = child.wait().await?;
     Ok((
-        pid,
+        handed_back,
         status,
         String::from_utf8_lossy(&stdout).into_owned(),
         String::from_utf8_lossy(&stderr).into_owned(),
     ))
+}
+
+/// Retain the exited child's PID until capture drains or cancellation cleans
+/// its groups. Tokio alone reaps it after terminal restoration.
+async fn captured_exit(
+    pid: libc::pid_t,
+    exits: &mut tokio::signal::unix::Signal,
+    terminal: Option<&Terminal>,
+) -> io::Result<()> {
+    loop {
+        dialog_owns_input();
+        if let Some(terminal) = terminal {
+            terminal.observe(pid);
+        }
+        // SAFETY: waitid initializes info for our unreaped direct child;
+        // WNOWAIT leaves the exit status and process identity intact.
+        let mut info = unsafe { std::mem::zeroed::<libc::siginfo_t>() };
+        if unsafe {
+            libc::waitid(
+                libc::P_PID,
+                pid as libc::id_t,
+                &mut info,
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        } < 0
+        {
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error);
+        }
+        if unsafe { info.si_pid() } == pid {
+            return Ok(());
+        }
+        if exits.recv().await.is_none() {
+            return Err(io::Error::other("child exit listener stopped"));
+        }
+    }
 }
 
 /// Opened by the shell only after startup, so rc-file background jobs do
@@ -384,7 +459,7 @@ async fn run_captured(
 /// before that open; it closes when the shell exits, even if startup fails.
 struct CapturedStderr {
     path: std::path::PathBuf,
-    reader: Option<tokio::process::ChildStderr>,
+    reader: Option<File>,
     keepalive: Option<File>,
 }
 
@@ -411,9 +486,7 @@ impl CapturedStderr {
                 .custom_flags(libc::O_NONBLOCK)
                 .open(&capture.path)?,
         );
-        capture.reader = Some(tokio::process::ChildStderr::from_std(
-            std::process::ChildStderr::from(OwnedFd::from(reader)),
-        )?);
+        capture.reader = Some(reader);
         Ok(capture)
     }
 }
@@ -421,6 +494,85 @@ impl CapturedStderr {
 impl Drop for CapturedStderr {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// Darwin does not report named-FIFO EOF through kqueue (including poll).
+/// select observes it; closing the socket wakes the worker on future drop.
+async fn read_fifo(reader: File) -> io::Result<Vec<u8>> {
+    let (stop, wake) = UnixStream::pair()?;
+    if reader.as_raw_fd().max(wake.as_raw_fd()) as usize >= libc::FD_SETSIZE {
+        return Err(io::Error::from_raw_os_error(libc::EMFILE));
+    }
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let worker = std::thread::Builder::new()
+        .name("wrap-stderr".into())
+        .spawn(move || {
+            let _ = send.send(read_fifo_until_closed(reader, wake));
+        })?;
+    let _guard = FifoRead {
+        stop: Some(stop),
+        worker: Some(worker),
+    };
+    receive
+        .await
+        .map_err(|_| io::Error::other("stderr reader stopped"))?
+}
+
+struct FifoRead {
+    stop: Option<UnixStream>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for FifoRead {
+    fn drop(&mut self) {
+        drop(self.stop.take());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn read_fifo_until_closed(mut reader: File, wake: UnixStream) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    let mut buffer = [0; 8192];
+    loop {
+        // SAFETY: both descriptors are owned here and checked against
+        // FD_SETSIZE before spawning. select mutates only this local set.
+        let (ready, stopped) = unsafe {
+            let mut set = std::mem::zeroed::<libc::fd_set>();
+            libc::FD_SET(reader.as_raw_fd(), &mut set);
+            libc::FD_SET(wake.as_raw_fd(), &mut set);
+            let ready = libc::select(
+                reader.as_raw_fd().max(wake.as_raw_fd()) + 1,
+                &mut set,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+            (ready, libc::FD_ISSET(wake.as_raw_fd(), &set))
+        };
+        if ready < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error);
+        }
+        if stopped {
+            return Err(cancelled());
+        }
+        // Recheck cancellation between bounded reads, even with continuous output.
+        match reader.read(&mut buffer) {
+            Ok(0) => return Ok(bytes),
+            Ok(count) => bytes.extend_from_slice(&buffer[..count]),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                ) => {}
+            Err(error) => return Err(error),
+        }
     }
 }
 
@@ -463,7 +615,7 @@ async fn run_inherited(
         Some(token) => tokio::select! {
             status = &mut wait => status,
             _ = token.cancelled() => {
-                spawn.kill(pid, true);
+                spawn.kill(pid, true, false);
                 let _ = (&mut wait).await;
                 drop(signals);
                 return Err(cancelled());
@@ -485,6 +637,7 @@ struct Terminal {
     tty: File,
     group: libc::pid_t,
     modes: libc::termios,
+    restored: Cell<bool>,
     /// A dialog lifecycle change supersedes the captured step's saved modes.
     capture_raw: Option<bool>,
     /// A foreground group this process already killed; its members may
@@ -532,6 +685,7 @@ impl Terminal {
             tty,
             group,
             modes,
+            restored: Cell::new(false),
             capture_raw: (mode == ShellMode::Capture)
                 .then(|| crossterm::terminal::is_raw_mode_enabled().unwrap_or(false)),
             killed: Cell::new(None),
@@ -592,9 +746,13 @@ impl Terminal {
     /// Take the terminal back when `child`'s job left it elsewhere. When a
     /// shell took the terminal while the child ran and the child's exit
     /// handed it to this process regardless, it goes back to that shell;
-    /// true when it did.
+    /// true while that shell holds it and Wrap must wait for `fg`.
     fn reclaim(&self, child: libc::pid_t) -> bool {
-        if self.foreground() == self.group {
+        let foreground = self.foreground();
+        if self.displaced_by.get() == Some(foreground) {
+            return true;
+        }
+        if foreground == self.group {
             if let Some(shell) = self.displaced_by.get()
                 && !group_is_empty(shell)
             {
@@ -607,10 +765,34 @@ impl Terminal {
     }
 }
 
-impl Drop for Terminal {
-    fn drop(&mut self) {
+impl Terminal {
+    /// The reserved PID identifies the child's own group even when Bash
+    /// rejoins Wrap's group before exiting and leaves descendants behind.
+    fn reclaim_unreaped(&self, child: libc::pid_t) -> bool {
+        if self.foreground() == child {
+            if self.displaced_by.get() == Some(child) {
+                self.displaced_by.set(None);
+            }
+            let _ = set_foreground(self.tty.as_raw_fd(), self.group);
+        }
+        self.reclaim(child)
+    }
+
+    fn return_input(&self, child: libc::pid_t, input: &CapturedInput) {
+        // A descendant may still own and read the tty after the shell exits.
+        if self.foreground() == self.group {
+            self.reclaim(child);
+            self.restore_modes();
+            input.finish();
+        }
+    }
+
+    fn restore_modes(&self) {
         // A shell that took the foreground during suspend/bg owns its modes.
         if self.foreground() != self.group {
+            return;
+        }
+        if self.restored.replace(true) {
             return;
         }
         let mut modes = self.modes;
@@ -629,6 +811,12 @@ impl Drop for Terminal {
         }
         // SAFETY: the fd and saved termios remain valid for this guard.
         unsafe { libc::tcsetattr(self.tty.as_raw_fd(), libc::TCSANOW, &modes) };
+    }
+}
+
+impl Drop for Terminal {
+    fn drop(&mut self) {
+        self.restore_modes();
     }
 }
 
@@ -860,5 +1048,136 @@ impl Drop for IgnoredSignals {
             // SAFETY: restores the disposition sigaction returned at install.
             unsafe { libc::sigaction(*signal, previous, std::ptr::null_mut()) };
         }
+    }
+}
+
+#[cfg(test)]
+mod capture_tests {
+    use super::*;
+    use std::future::{Future, poll_fn};
+    use std::io::Write;
+    use std::task::Poll;
+
+    // Fork briefly inherits CLOEXEC descriptors until exec completes.
+    static FORK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[tokio::test]
+    async fn captured_exit_retains_status_until_cleanup() {
+        let _fork = FORK.lock().await;
+        for own_group in [false, true] {
+            let mut exits =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::child()).unwrap();
+            let mut command = tokio::process::Command::new("/bin/sh");
+            command.args(["-c", "true"]).kill_on_drop(true);
+            if own_group {
+                command.process_group(0);
+            }
+            let mut child = command.spawn().unwrap();
+            let pid = child.id().unwrap() as libc::pid_t;
+            for _ in 0..2 {
+                tokio::time::timeout(Duration::from_secs(2), captured_exit(pid, &mut exits, None))
+                    .await
+                    .expect("exit must remain observable until cleanup")
+                    .unwrap();
+            }
+            assert!(child.wait().await.unwrap().success());
+        }
+    }
+
+    #[tokio::test]
+    async fn fifo_completes_when_last_writer_closes_without_writing() {
+        let mut capture = CapturedStderr::open().unwrap();
+        let writer = capture.keepalive.take().unwrap();
+        let mut read = Box::pin(read_fifo(capture.reader.take().unwrap()));
+        poll_fn(|cx| {
+            assert!(read.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        drop(writer);
+        let output = tokio::time::timeout(Duration::from_secs(2), read)
+            .await
+            .expect("FIFO close must wake a pending reader")
+            .unwrap();
+        assert!(output.is_empty());
+    }
+
+    #[tokio::test]
+    async fn fifo_drains_trailing_output_from_a_remaining_writer() {
+        let mut capture = CapturedStderr::open().unwrap();
+        let writer = File::options().write(true).open(&capture.path).unwrap();
+        let mut read = Box::pin(read_fifo(capture.reader.take().unwrap()));
+        poll_fn(|cx| {
+            assert!(read.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        drop(capture.keepalive.take());
+        poll_fn(|cx| {
+            assert!(read.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        let expected = vec![b'x'; 256 * 1024];
+        let bytes = expected.clone();
+        let writing = std::thread::spawn(move || {
+            let mut writer = writer;
+            writer.write_all(&bytes).unwrap();
+        });
+        let output = tokio::time::timeout(Duration::from_secs(2), read)
+            .await
+            .expect("remaining writer must drain and close")
+            .unwrap();
+        writing.join().unwrap();
+        assert_eq!(output, expected);
+    }
+
+    #[tokio::test]
+    async fn dropping_fifo_read_closes_reader_with_writers_still_open() {
+        let _fork = FORK.lock().await;
+        for shell_exited in [false, true] {
+            let mut capture = CapturedStderr::open().unwrap();
+            let path = capture.path.clone();
+            let mut writer = File::options().write(true).open(&path).unwrap();
+            let mut read = Box::pin(read_fifo(capture.reader.take().unwrap()));
+            poll_fn(|cx| {
+                assert!(read.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            if shell_exited {
+                drop(capture.keepalive.take());
+            }
+            drop(read);
+            assert_eq!(
+                writer.write(b"x").unwrap_err().kind(),
+                io::ErrorKind::BrokenPipe
+            );
+            drop(capture);
+            assert!(!path.exists());
+        }
+    }
+
+    #[test]
+    fn fifo_cancellation_takes_priority_over_readable_output() {
+        let mut capture = CapturedStderr::open().unwrap();
+        let reader = capture.reader.take().unwrap();
+        let mut remaining = reader.try_clone().unwrap();
+        capture
+            .keepalive
+            .as_mut()
+            .unwrap()
+            .write_all(b"pending")
+            .unwrap();
+        let (stop, wake) = UnixStream::pair().unwrap();
+        assert!((reader.as_raw_fd().max(wake.as_raw_fd()) as usize) < libc::FD_SETSIZE);
+        drop(stop);
+        assert_eq!(
+            read_fifo_until_closed(reader, wake).unwrap_err().kind(),
+            io::ErrorKind::Interrupted
+        );
+        let mut bytes = [0; 7];
+        assert_eq!(remaining.read(&mut bytes).unwrap(), bytes.len());
+        assert_eq!(&bytes, b"pending");
     }
 }
