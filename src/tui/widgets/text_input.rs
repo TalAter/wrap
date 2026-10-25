@@ -38,7 +38,7 @@ pub enum InputEvent {
     Submit(String),
 }
 
-/// Terminal-dependent layout for the multiline composer.
+/// Terminal-dependent layout for unmasked editable text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InputLayout {
     /// Column at which long logical lines hard-wrap into visual rows.
@@ -281,7 +281,7 @@ impl TextInput {
         self.insert_clamped(&cleaned)
     }
 
-    /// The strip for this terminal layout. `layout` only matters in multiline.
+    /// The strip for this terminal layout. Masked inputs ignore `layout`.
     pub fn frame(&self, paint: Paint, layout: Option<InputLayout>) -> InputFrame {
         let t = &paint.theme.input;
         if self.editing_external {
@@ -298,7 +298,7 @@ impl TextInput {
             .filter(|_| self.text().is_empty())
             .map(|p| Span::styled(p.clone(), Style::default().fg(paint.color(&t.placeholder))));
         match self.mode {
-            Mode::Single { masked } => {
+            Mode::Single { masked } if masked || layout.is_none() => {
                 let (before, at, after) = if masked {
                     (
                         mask(self.cursor.before()),
@@ -308,7 +308,11 @@ impl TextInput {
                 } else {
                     (
                         self.cursor.before().to_string(),
-                        self.cursor.at().to_string(),
+                        match self.cursor.at() {
+                            "\n" => " \n",
+                            at => at,
+                        }
+                        .to_string(),
                         self.cursor.after().to_string(),
                     )
                 };
@@ -318,9 +322,20 @@ impl TextInput {
                     Span::styled(after, text_style),
                 ];
                 spans.extend(placeholder);
-                InputFrame::wrapped(vec![Line::from(spans)])
+                let mut lines = Vec::new();
+                let mut line = Line::default();
+                for span in spans {
+                    for (i, text) in span.content.split('\n').enumerate() {
+                        if i > 0 {
+                            lines.push(std::mem::take(&mut line));
+                        }
+                        line.spans.push(Span::styled(text.to_string(), span.style));
+                    }
+                }
+                lines.push(line);
+                InputFrame::wrapped(lines)
             }
-            Mode::Multi => {
+            _ => {
                 let layout = layout.unwrap_or(InputLayout {
                     wrap_width: u16::MAX,
                     max_rows: None,

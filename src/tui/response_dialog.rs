@@ -19,7 +19,10 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Paragraph, Widget, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use super::frame::{Align, DialogFrame, PillSegment, SizeBasis, TopBadge, content_natural_width};
+use super::frame::{
+    Align, DIALOG_CHROME_HEIGHT, DialogFrame, PillSegment, SizeBasis, TopBadge,
+    content_natural_width,
+};
 use super::terminal::drain_pending_input;
 use super::widgets::{
     ActionItem, InputEvent, InputFrame, InputLayout, Paint, TextInput, action_bar_line,
@@ -573,9 +576,14 @@ impl ResponseDialog {
             InputEvent::Idle => {}
             InputEvent::Changed { truncated } => {
                 self.truncated_banner = truncated;
-                self.events.push(AppEvent::DraftChange {
-                    text: self.input.text().to_string(),
-                });
+                let text = self.input.text().to_string();
+                // Only the latest consecutive draft needs acknowledgment;
+                // replaying intermediate drafts would replace the live cursor.
+                if let Some(AppEvent::DraftChange { text: pending }) = self.events.last_mut() {
+                    *pending = text;
+                } else {
+                    self.events.push(AppEvent::DraftChange { text });
+                }
             }
             InputEvent::Submit(text) => {
                 if text.trim().is_empty() {
@@ -812,9 +820,8 @@ impl ResponseDialog {
             ));
             blocks.push(Block::Blank);
         }
-        if tag == StateTag::Editing {
-            blocks.push(Block::Input(self.input.frame(paint, None)));
-        } else {
+        let command_index = blocks.len();
+        if tag != StateTag::Editing {
             match fold_command(command, max_command_rows, text_width) {
                 CommandDisplay::Full(text) => {
                     blocks.push(Block::Input(InputFrame::read_only(&text, paint)));
@@ -915,6 +922,21 @@ impl ResponseDialog {
             }
         };
         blocks.push(Block::line(bar, 3));
+        if tag == StateTag::Editing {
+            let chrome_rows = blocks.iter().fold(DIALOG_CHROME_HEIGHT, |rows, block| {
+                rows.saturating_add(block.height(inner_width))
+            });
+            blocks.insert(
+                command_index,
+                Block::Input(self.input.frame(
+                    paint,
+                    Some(InputLayout {
+                        wrap_width: text_width as u16,
+                        max_rows: Some(area.height.saturating_sub(chrome_rows).max(1)),
+                    }),
+                )),
+            );
+        }
         (frame, blocks)
     }
 }

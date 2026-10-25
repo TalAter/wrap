@@ -299,6 +299,163 @@ fn editing(draft: &str) -> AppState {
 }
 
 #[test]
+fn editing_reserves_wrapped_explanation_and_action_rows() {
+    let draft = (1..=20)
+        .map(|i| format!("echo LINE{i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut state = editing(&draft);
+    if let AppState::Editing { response, .. } = &mut state {
+        response.explanation = Some("one\ntwo\nthree\nfour\nfive\nsix".into());
+    }
+    let d = dialog(&state);
+    for width in [80, 40] {
+        let buf = draw(&d, width, 16);
+        let s = screen(&buf);
+        assert!(s.contains("LINE20"), "cursor row missing: {s}");
+        assert!(s.contains("six"), "explanation missing: {s}");
+        let compact: String = s
+            .chars()
+            .filter(|c| !c.is_whitespace() && *c != '│')
+            .collect();
+        assert!(
+            compact.contains("torun") && compact.contains("todiscardchanges"),
+            "actions missing: {s}"
+        );
+        assert!(s.contains('╯'), "bottom border missing: {s}");
+        assert_eq!(
+            buf.content
+                .iter()
+                .filter(|c| c.modifier.contains(Modifier::REVERSED))
+                .count(),
+            1,
+            "cursor missing: {s}"
+        );
+    }
+}
+
+#[test]
+fn editing_viewport_keeps_cursor_and_actions_visible_through_navigation_and_resize() {
+    let commands = (1..=20)
+        .map(|i| format!("echo LINE{i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for draft in [commands, format!("echo START{}END", "x".repeat(1200))] {
+        let mut state = editing(&draft);
+        let mut d = dialog(&state);
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 16)).unwrap();
+        let mut check = |d: &ResponseDialog, width, height, visible: &str, cursor: &str| {
+            terminal.backend_mut().resize(width, height);
+            terminal.autoresize().unwrap();
+            terminal.draw(|f| d.render(f)).unwrap();
+            let buf = terminal.backend().buffer();
+            let s = screen(buf);
+            assert!(s.contains(visible), "cursor's text missing: {s}");
+            assert!(
+                s.contains("to run") && s.contains("to discard changes"),
+                "actions missing: {s}"
+            );
+            assert!(s.contains('╯'), "bottom border missing: {s}");
+            let cursors = buf
+                .content
+                .iter()
+                .filter(|c| c.modifier.contains(Modifier::REVERSED))
+                .collect::<Vec<_>>();
+            assert_eq!(cursors.len(), 1, "cursor missing: {s}");
+            assert_eq!(cursors[0].symbol(), cursor, "{s}");
+        };
+        let tail = if draft.contains('\n') {
+            "LINE20"
+        } else {
+            "END"
+        };
+        check(&d, 80, 16, tail, " ");
+        d.key(key(KeyCode::Home));
+        check(&d, 80, 16, "echo", "e");
+        d.key(key(KeyCode::End));
+        d.key(key(KeyCode::Left));
+        check(
+            &d,
+            60,
+            12,
+            tail,
+            if draft.contains('\n') { "0" } else { "D" },
+        );
+        d.key(key(KeyCode::Right));
+        d.key(ch('X'));
+        for event in d.take_events() {
+            state = wrap::session::reduce(&state, &event, false).unwrap();
+            d.sync(&state);
+        }
+        check(&d, 80, 16, &format!("{tail}X"), " ");
+        d.key(key(KeyCode::Enter));
+        assert_eq!(
+            d.take_events(),
+            [AppEvent::SubmitEdit {
+                text: format!("{draft}X")
+            }]
+        );
+    }
+}
+
+#[test]
+fn batched_typing_preserves_the_cursor_after_reducer_acknowledgments() {
+    for initial in [editing("abc"), composing("abc"), interactive("abc")] {
+        let mut state = initial;
+        let mut d = dialog(&state);
+        d.key(key(KeyCode::Left));
+        d.key(ch('X'));
+        d.key(ch('Y'));
+        for event in d.take_events() {
+            state = wrap::session::reduce(&state, &event, false).unwrap();
+            d.sync(&state);
+        }
+        d.key(ch('Z'));
+        for event in d.take_events() {
+            state = wrap::session::reduce(&state, &event, false).unwrap();
+            d.sync(&state);
+        }
+        assert_eq!(state.draft(), Some("abXYZc"));
+        d.key(key(KeyCode::Enter));
+        let expected = match state {
+            AppState::Editing { .. } => AppEvent::SubmitEdit {
+                text: "abXYZc".into(),
+            },
+            AppState::ComposingFollowup { .. } => AppEvent::SubmitFollowup {
+                text: "abXYZc".into(),
+            },
+            _ => AppEvent::SubmitInteractive {
+                text: "abXYZc".into(),
+            },
+        };
+        assert_eq!(d.take_events(), [expected]);
+    }
+}
+
+#[test]
+fn editing_preserves_visible_command_line_breaks_and_the_cursor() {
+    let mut d = dialog(&editing("echo FIRST\necho SECOND"));
+    d.key(key(KeyCode::Left));
+    let buf = draw(&d, 90, 16);
+    let lines = rows(&buf);
+    let first = lines.iter().position(|r| r.contains("echo FIRST")).unwrap();
+    assert!(lines[first + 1].contains("echo SECOND"), "{}", screen(&buf));
+    let y = (first + 1) as u16;
+    let x = find(&buf, y, "SECOND").unwrap() + 5;
+    assert!(buf[(x, y)].modifier.contains(Modifier::REVERSED));
+    d.key(ch('X'));
+    d.take_events();
+    d.key(key(KeyCode::Enter));
+    assert_eq!(
+        d.take_events(),
+        [AppEvent::SubmitEdit {
+            text: "echo FIRST\necho SECONXD".into()
+        }]
+    );
+}
+
+#[test]
 fn editing_shows_the_draft_with_a_cursor_and_routes_keys_to_the_reducer() {
     let mut d = dialog(&editing("echo rm-i-fake"));
     let buf = draw(&d, 90, 14);

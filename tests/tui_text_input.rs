@@ -120,6 +120,66 @@ fn cursor_moves_between_logical_lines_snapping_the_column() {
 // ── single line ──────────────────────────────────────────────────
 
 #[test]
+fn single_line_viewport_tracks_wrapped_rows_without_changing_key_or_paste_behavior() {
+    let mut input = TextInput::single_line("echo ABCDEFGHIJKLMNOP");
+    let layout = Some(InputLayout {
+        wrap_width: 10,
+        max_rows: Some(2),
+    });
+    let buf = render(&input, 12, layout);
+    assert_eq!(rows(&buf), [" FGHIJKLMNO", " P"]);
+    assert_eq!(cursor_cells(&buf), [(2, 1, " ".into())]);
+    input.key(key(KeyCode::Left));
+    input.key(key(KeyCode::Left));
+    let buf = render(&input, 12, layout);
+    assert_eq!(rows(&buf), [" echo ABCDE", " FGHIJKLMNO"]);
+    assert_eq!(cursor_cells(&buf), [(10, 1, "O".into())]);
+    input.key(key(KeyCode::Home));
+    assert_eq!(
+        cursor_cells(&render(&input, 12, layout)),
+        [(1, 0, "e".into())]
+    );
+    input.key(key(KeyCode::End));
+    input.paste("X\r\nY");
+    input.key(ctrl('j'));
+    input.key(key(KeyCode::Up));
+    assert_eq!(input.cursor().offset(), input.text().len());
+    assert_eq!(
+        input.key(shift(KeyCode::Enter)),
+        InputEvent::Submit("echo ABCDEFGHIJKLMNOPXY".into())
+    );
+    let buf = render(
+        &input,
+        10,
+        Some(InputLayout {
+            wrap_width: 8,
+            max_rows: Some(1),
+        }),
+    );
+    assert_eq!(rows(&buf), [" LMNOPXY"]);
+    assert_eq!(cursor_cells(&buf), [(8, 0, " ".into())]);
+}
+
+#[test]
+fn single_line_preserves_existing_newlines_including_the_cursor_at_a_line_break() {
+    let mut input = TextInput::single_line("echo FIRST\n\necho SECOND\n");
+    let buf = render(&input, 40, None);
+    assert_eq!(rows(&buf), [" echo FIRST", "", " echo SECOND", ""]);
+    assert_eq!(cursor_cells(&buf), [(1, 3, " ".into())]);
+    input.key(key(KeyCode::Home));
+    for _ in 0..10 {
+        input.key(key(KeyCode::Right));
+    }
+    let buf = render(&input, 40, None);
+    assert_eq!(cursor_cells(&buf), [(11, 0, " ".into())]);
+    assert_eq!(rows(&buf)[2], " echo SECOND");
+    assert_eq!(
+        input.key(key(KeyCode::Enter)),
+        InputEvent::Submit("echo FIRST\n\necho SECOND\n".into())
+    );
+}
+
+#[test]
 fn single_line_renders_text_with_an_inverse_cursor_on_the_surface() {
     let input = TextInput::single_line("hello");
     let buf = render(&input, 12, None);

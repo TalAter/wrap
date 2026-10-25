@@ -289,6 +289,54 @@ def arrow_clamp_no_wraparound():
     finally: s.close()
 
 # --- High risk and editing -----------------------------------------------------
+def command_edit_viewport(wrapped=False, explanation=False):
+    draft = 'echo START' + 'x' * 1200 + 'END' if wrapped else '\n'.join(f'echo LINE{i:02}' for i in range(1, 21))
+    tail = 'END' if wrapped else 'LINE20'
+    detail = 'one\ntwo\nthree\nfour\nfive\nsix' if explanation else None
+    s = Session(['edit commands'], response=command(draft, explanation=detail), size=(80, 16),
+                redirect_stdout=True, extra_env={'PATH': '/nonexistent'} if explanation else None)
+    try:
+        s.until('medium risk' if explanation else 'Run command?'); s.send('e'); s.until('to discard changes')
+        s.until(tail); s.until('to run'); s.until('╯')
+        s.send('\x01'); s.until('echo START' if wrapped else 'echo LINE01'); s.until_gone(tail)
+        s.send('\x05'); s.until(tail)
+        s.resize(40 if explanation else 76, 16 if explanation else 12)
+        s.until(tail); s.until('to discard'); s.until('changes'); s.until('╯')
+        s.send(LEFT); s.send('X'); edited_tail = tail[:-1] + 'X' + tail[-1]
+        s.until(edited_tail)
+        s.resize(80, 16); s.until(edited_tail); s.until('to run'); s.until('to discard changes')
+        expected = draft[:-1] + 'X' + draft[-1]
+        s.send('\r'); entries = s.finish(0)
+        final = final_turn(entries)[1]
+        assert (final['command'], final['source']) == (expected, 'user_override'), final
+        assert s.stdout_file.read_text() == '\n'.join(line.removeprefix('echo ') for line in expected.splitlines()) + '\n'
+    finally: s.close()
+
+def batched_typing_keeps_cursor_in_place():
+    s = Session(['edit command'], response=command('echo abc'))
+    try:
+        s.until('Run command?'); s.send('e'); s.until('to discard changes')
+        s.send(LEFT); s.pump_for(.1)
+        s.send('XY'); s.until('echo abXYc')
+        s.send('Z'); s.pump_for(.1); s.send('\r'); entries = s.finish(0)
+        final = final_turn(entries)[1]
+        assert (final['command'], final['source']) == ('echo abXYZc', 'user_override'), final
+        assert b'abXYZc\r\n' in s.output
+    finally: s.close()
+
+def multiline_edit_shows_each_command_line():
+    s = Session(['edit commands'], response=command('echo FIRST\necho SECOND'))
+    try:
+        s.until('Run command?'); s.send('e'); s.until('to discard changes')
+        lines = s.screen.text().splitlines()
+        first = next(i for i, line in enumerate(lines) if 'echo FIRST' in line)
+        assert 'echo SECOND' in lines[first + 1], s.screen.text()
+        s.send(LEFT); s.send('X'); s.until('echo SECONXD'); s.send('\r'); entries = s.finish(0)
+        final = final_turn(entries)[1]
+        assert (final['command'], final['source']) == ('echo FIRST\necho SECONXD', 'user_override'), final
+        assert b'FIRST\r\n' in s.output and b'SECONXD\r\n' in s.output
+    finally: s.close()
+
 def high_risk_edit_runs_override():
     s = Session(['do the risky thing'], response=command('echo ORIGINAL', 'high'))
     try:
@@ -838,6 +886,11 @@ SCENARIOS = [
     ('cancel with q', lambda: cancel_key('q')), ('cancel with Ctrl+C', lambda: cancel_key('\x03')), ('arrow select yes', arrow_select_yes),
     ('arrow clamp no wraparound', arrow_clamp_no_wraparound),
     ('high risk edit runs override', high_risk_edit_runs_override), ('edit esc restores original', edit_esc_restores_original),
+    ('batched typing keeps cursor in place', batched_typing_keeps_cursor_in_place),
+    ('multiline edit shows each command line', multiline_edit_shows_each_command_line),
+    ('multiline command edit viewport', command_edit_viewport),
+    ('wrapped command edit viewport', lambda: command_edit_viewport(wrapped=True)),
+    ('command edit viewport reserves explanation and actions', lambda: command_edit_viewport(explanation=True)),
     ('followup replaces command', followup_replaces_command), ('followup esc keeps draft', followup_esc_keeps_draft),
     ('interactive compose submits', interactive_compose_submits), ('interactive esc cancels', interactive_esc_cancels),
     ('low step runs before dialog', low_step_runs_before_dialog), ('confirmed medium step shows running', confirmed_medium_step_shows_running),
