@@ -380,11 +380,15 @@ def followup_replaces_command():
     finally: s.close()
 
 def followup_esc_keeps_draft():
-    responses = [command('echo FIRST'), command('sleep 2; echo SLOW_STEP_OUTPUT', 'low', final=False, explanation='A slow step'), command('echo SECOND')]
-    s = Session(['first attempt'], responses=responses)
+    # zsh shares terminal input with the dialog; Bash reserves Esc for its step.
+    shell = shutil.which('zsh')
+    if not shell: print('SKIP followup esc keeps draft (no zsh)'); return
+    responses = [command('echo FIRST'), command('touch "$WRAP_HOME/step-ready"; sleep 30; echo SLOW_STEP_OUTPUT', 'low', final=False, explanation='A slow step'), command('echo SECOND')]
+    s = Session(['first attempt'], responses=responses, extra_env={'SHELL': shell})
     try:
         s.until('Run command?'); s.send('f'); s.until('actually...'); s.send('keep this draft'); s.until('keep this draft')
         s.send('\r'); s.until('to abort')
+        assert s.wait_screen(lambda: s.home_path('step-ready').exists(), 5), 'follow-up step never started'
         s.send('\x1b'); s.until('to send'); s.until('keep this draft'); s.absent('to abort')
         s.send('\x1b'); s.until_gone('keep this draft'); s.until('Run command?'); s.send('n'); entries = s.finish(0)
         # The aborted step's chrome line flushes to scrollback on teardown; its output never does.
