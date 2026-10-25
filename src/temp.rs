@@ -101,9 +101,12 @@ fn walk(root: &Path, rel: &str, out: &mut Vec<String>) {
         } else {
             format!("{rel}/{name}")
         };
-        let Ok(meta) = std::fs::metadata(root.join(&child_rel)) else {
+        let Ok(meta) = std::fs::symlink_metadata(root.join(&child_rel)) else {
             continue;
         };
+        if meta.is_symlink() {
+            continue;
+        }
         if meta.is_dir() {
             out.push(format!("${TEMP_DIR_ENV}/{child_rel}/"));
             walk(root, &child_rel, out);
@@ -138,6 +141,14 @@ pub struct DirStats {
 /// Symlinks count once at their own size and are never followed.
 pub fn dir_stats(root: &Path) -> DirStats {
     let mut stats = DirStats::default();
+    if let Ok(meta) = std::fs::symlink_metadata(root)
+        && meta.is_symlink()
+    {
+        return DirStats {
+            files: 1,
+            bytes: meta.len(),
+        };
+    }
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else {

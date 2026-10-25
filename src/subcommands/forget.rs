@@ -97,6 +97,14 @@ pub fn memory_footprint(home: &WrapHome) -> Footprint {
 /// Invocation count is the JSONL line count; bytes include trace sidecars
 /// so the number matches what deleting the logs bucket removes.
 pub fn logs_footprint(home: &WrapHome) -> Footprint {
+    if let Ok(meta) = fs::symlink_metadata(home.resolve("logs"))
+        && meta.is_symlink()
+    {
+        return Footprint::Ok {
+            count: 0,
+            bytes: meta.len(),
+        };
+    }
     let jsonl_path = home.resolve("logs/wrap.jsonl");
     let jsonl_bytes = file_bytes(&jsonl_path);
     let trace_bytes = dir_stats(&home.resolve("logs/traces")).bytes;

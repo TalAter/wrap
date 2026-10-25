@@ -86,6 +86,37 @@ fn format_size_rounds_to_b_k_m() {
 }
 
 #[test]
+fn scratch_listing_does_not_follow_symlink_cycles_or_external_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("data"), "abc").unwrap();
+    fs::write(outside.path().join("private-name"), "private").unwrap();
+    symlink(dir.path(), dir.path().join("loop")).unwrap();
+    symlink(outside.path(), dir.path().join("outside")).unwrap();
+    let section = format_temp_dir_section(Some(dir.path()));
+    assert!(section.contains("$WRAP_TEMP_DIR/data (3B)"));
+    assert!(!section.contains("private-name"));
+    assert!(!section.contains(dir.path().to_str().unwrap()));
+    assert!(section.len() < 500);
+}
+
+#[test]
+fn dir_stats_counts_a_root_symlink_without_reading_its_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("data"), vec![0; 10_000]).unwrap();
+    let link = dir.path().join("link");
+    symlink(outside.path(), &link).unwrap();
+    assert_eq!(
+        dir_stats(&link),
+        DirStats {
+            files: 1,
+            bytes: fs::symlink_metadata(&link).unwrap().len(),
+        }
+    );
+}
+
+#[test]
 fn dir_stats_handles_missing_and_empty_dirs() {
     let dir = tempfile::tempdir().unwrap();
     assert_eq!(

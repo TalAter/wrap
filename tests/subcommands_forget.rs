@@ -91,6 +91,25 @@ fn logs_footprint_counts_lines_and_includes_trace_bytes() {
 }
 
 #[test]
+fn symlinked_log_bucket_counts_only_the_link_and_preserves_external_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let home = WrapHome::new(dir.path());
+    fs::write(outside.path().join("wrap.jsonl"), "private record\n").unwrap();
+    let link = home.resolve("logs");
+    symlink(outside.path(), &link).unwrap();
+    assert_eq!(
+        logs_footprint(&home),
+        ok(0, fs::symlink_metadata(&link).unwrap().len())
+    );
+    assert!(delete_logs(&home).removed);
+    assert_eq!(
+        fs::read_to_string(outside.path().join("wrap.jsonl")).unwrap(),
+        "private record\n"
+    );
+}
+
+#[test]
 fn cache_footprint_is_recursive_and_ignores_siblings() {
     let dir = tempfile::tempdir().unwrap();
     let home = WrapHome::new(dir.path());
