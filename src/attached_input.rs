@@ -9,19 +9,19 @@ use std::io::{IsTerminal, Read};
 pub fn read_attached_input(
     is_tty: bool,
     read: impl FnOnce() -> std::io::Result<Vec<u8>>,
-) -> Option<Vec<u8>> {
+) -> std::io::Result<Option<Vec<u8>>> {
     if is_tty {
-        return None;
+        return Ok(None);
     }
-    let bytes = read().ok()?;
+    let bytes = read()?;
     if bytes.is_empty() || is_ascii_whitespace(&bytes) {
-        return None;
+        return Ok(None);
     }
-    Some(bytes)
+    Ok(Some(bytes))
 }
 
 /// [`read_attached_input`] over the process's real stdin.
-pub fn read_attached_stdin() -> Option<Vec<u8>> {
+pub fn read_attached_stdin() -> std::io::Result<Option<Vec<u8>>> {
     let stdin = std::io::stdin();
     read_attached_input(stdin.is_terminal(), || {
         let mut bytes = Vec::new();

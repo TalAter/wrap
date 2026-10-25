@@ -9,40 +9,40 @@ fn tty_stdin_is_never_read() {
         called.set(true);
         Ok(b"should not be read".to_vec())
     });
-    assert_eq!(result, None);
+    assert_eq!(result.unwrap(), None);
     assert!(!called.get());
 }
 
 #[test]
 fn piped_bytes_are_returned_verbatim_including_non_utf8() {
     assert_eq!(
-        read_attached_input(false, || Ok(b"hello world".to_vec())),
+        read_attached_input(false, || Ok(b"hello world".to_vec())).unwrap(),
         Some(b"hello world".to_vec())
     );
     let bytes = vec![0xff, 0xfe, 0x41, 0x42];
     assert_eq!(
-        read_attached_input(false, || Ok(bytes.clone())),
+        read_attached_input(false, || Ok(bytes.clone())).unwrap(),
         Some(bytes)
     );
 }
 
 #[test]
 fn empty_or_ascii_whitespace_only_input_is_dropped() {
-    assert_eq!(read_attached_input(false, || Ok(Vec::new())), None);
+    assert_eq!(read_attached_input(false, || Ok(Vec::new())).unwrap(), None);
     assert_eq!(
-        read_attached_input(false, || Ok(b"   \n\t  \n  ".to_vec())),
+        read_attached_input(false, || Ok(b"   \n\t  \n  ".to_vec())).unwrap(),
         None
     );
     assert_eq!(
-        read_attached_input(false, || Ok(vec![0x0b, 0x0c, 0x0d])),
+        read_attached_input(false, || Ok(vec![0x0b, 0x0c, 0x0d])).unwrap(),
         None
     );
 }
 
 #[test]
-fn read_failure_counts_as_no_input() {
+fn read_failure_is_propagated() {
     let result = read_attached_input(false, || Err(std::io::Error::other("boom")));
-    assert_eq!(result, None);
+    assert_eq!(result.unwrap_err().to_string(), "boom");
 }
 
 #[test]
@@ -135,4 +135,46 @@ fn truncate_middle_counts_characters_not_bytes() {
     let text = "é".repeat(100);
     let result = truncate_middle(&text, 50);
     assert!(result.contains("of 100 chars"));
+}
+
+#[test]
+fn directory_stdin_fails_before_command_or_log_side_effects() {
+    let home = tempfile::tempdir().unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    std::fs::write(
+        home.path().join("memory.json"),
+        r#"{"/":[{"fact":"test"}]}"#,
+    )
+    .unwrap();
+    let response = serde_json::json!({
+        "type": "command", "content": "echo executed > marker", "risk_level": "low"
+    });
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wrap"))
+        .arg("run the command")
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", home.path())
+        .env("WRAP_HOME", home.path())
+        .env("TMPDIR", scratch.path())
+        .env("WRAP_CONFIG", "{}")
+        .env("WRAP_THEME", "dark")
+        .env("SHELL", "/bin/sh")
+        .env("WRAP_TEST_RESPONSE", response.to_string())
+        .current_dir(home.path())
+        .stdin(std::fs::File::open(home.path()).unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        !home.path().join("marker").exists(),
+        "command ran after stdin failed"
+    );
+    assert!(!home.path().join("logs/wrap.jsonl").exists());
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Input error: could not read the piped input"),
+        "{stderr}"
+    );
+    assert_eq!(stderr.matches("Input error:").count(), 1);
 }

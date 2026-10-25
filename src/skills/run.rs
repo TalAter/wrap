@@ -2,11 +2,11 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
+use tokio::io::AsyncReadExt;
 use tokio::task::JoinHandle;
 
 use crate::attached_input::truncate_middle;
 use crate::logging::ProbeTurn;
-use crate::shell::drain_pipe;
 
 use super::{Skill, SkillContext, SkillTask, TaskResult};
 
@@ -14,6 +14,15 @@ const TIMEOUT: Duration = Duration::from_secs(1);
 // A computed task that itself shells out arms the shell timeout (which kills
 // the child) and this outer one; the grace lets the inner one win the race.
 const COMPUTED_TIMEOUT: Duration = Duration::from_millis(1100);
+
+struct ProbeGroup(libc::pid_t);
+
+impl Drop for ProbeGroup {
+    fn drop(&mut self) {
+        // SAFETY: probes start in their own process group; descendants share it.
+        unsafe { libc::killpg(self.0, libc::SIGKILL) };
+    }
+}
 
 /// Run a probe under `sh -c` in `cwd` with a one-second cap. Probes are
 /// Wrap-authored POSIX, so they use `sh` rather than the user's `$SHELL`
@@ -32,25 +41,30 @@ pub async fn exec_task_in_shell(command: &str, cwd: &Path) -> Option<TaskResult>
         .kill_on_drop(true)
         .spawn()
         .ok()?;
-    let pid = child.id()? as libc::pid_t;
-    // Pipes drain while waiting, so a chatty probe never deadlocks on a full
-    // pipe and then trips the timeout as a false misfire.
-    let stdout = drain_pipe(child.stdout.take());
-    let stderr = drain_pipe(child.stderr.take());
-    let status = match tokio::time::timeout(TIMEOUT, child.wait()).await {
-        Ok(status) => status.ok()?,
-        Err(_elapsed) => {
-            // SAFETY: the child is spawned in its own group and not yet
-            // reaped, so `pid` names that group and nothing else.
-            unsafe { libc::killpg(pid, libc::SIGKILL) };
+    let group = ProbeGroup(child.id()? as libc::pid_t);
+    let mut stdout = child.stdout.take()?;
+    let mut stderr = child.stderr.take()?;
+    let mut stdout_bytes = Vec::new();
+    let mut stderr_bytes = Vec::new();
+    // The deadline includes EOF: descendants can retain pipes after sh exits.
+    let result = tokio::time::timeout(TIMEOUT, async {
+        tokio::try_join!(
+            child.wait(),
+            stdout.read_to_end(&mut stdout_bytes),
+            stderr.read_to_end(&mut stderr_bytes),
+        )
+    })
+    .await;
+    drop(group);
+    let status = match result {
+        Ok(Ok((status, _, _))) => status,
+        _ => {
             let _ = child.wait().await;
-            stdout.abort();
-            stderr.abort();
             return None;
         }
     };
-    let stdout = String::from_utf8_lossy(&stdout.await.unwrap_or_default()).into_owned();
-    let stderr = String::from_utf8_lossy(&stderr.await.unwrap_or_default()).into_owned();
+    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
     let mut combined = stdout;
     if !stderr.trim().is_empty() {
         if !combined.trim().is_empty() {

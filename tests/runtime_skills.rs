@@ -591,3 +591,24 @@ async fn commit_skill_resists_hostile_git_config() {
     assert!(joined.contains("unstaged-line"));
     assert!(joined.contains("fresh-content"));
 }
+
+#[tokio::test]
+async fn probe_deadline_includes_pipes_held_open_after_the_shell_exits() {
+    let (_home, cwd, ctx) = rig();
+    let skill = skill_with("s", Trigger::Always, || {
+        vec![SkillTask::shell(
+            "(sleep 2; echo survived > marker) & echo output; exit 0",
+        )]
+    });
+    let start = Instant::now();
+    let result =
+        tokio::time::timeout(Duration::from_secs(4), run_skills(&[skill], "x", &ctx)).await;
+    let elapsed = start.elapsed();
+    tokio::time::sleep(Duration::from_millis(2200).saturating_sub(elapsed)).await;
+    assert!(
+        !cwd.path().join("marker").exists(),
+        "probe descendant survived its deadline"
+    );
+    assert!(result.expect("probe hung after its deadline").is_empty());
+    assert!(elapsed < Duration::from_millis(1800), "{elapsed:?}");
+}

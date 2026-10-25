@@ -221,3 +221,54 @@ async fn a_missing_binary_is_a_plain_provider_error() {
         other => panic!("{other:?}"),
     }
 }
+
+async fn descendant_cleanup(drop_send: bool) {
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    install_fake(
+        dir.path(),
+        "(sleep 1; echo survived > \"$dir/marker\") & echo ready > \"$dir/ready\"; wait",
+    );
+    let l = llm(dir.path(), None);
+    let mut c = chat(&l);
+    let cancel = CancellationToken::new();
+    let schema = schema();
+    {
+        let send = c.send::<Answer>(
+            &schema,
+            SendOptions {
+                cancel: Some(cancel.clone()),
+                retry: true,
+            },
+        );
+        tokio::pin!(send);
+        let ready = async {
+            while !dir.path().join("ready").exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        };
+        tokio::select! {
+            result = &mut send => panic!("provider finished before cancellation: {result:?}"),
+            result = tokio::time::timeout(Duration::from_secs(3), ready) => result.expect("fake CLI did not start"),
+        }
+        if !drop_send {
+            cancel.cancel();
+            assert!(matches!(send.await, Err(LlmError::Aborted)));
+        }
+    }
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    assert!(
+        !dir.path().join("marker").exists(),
+        "Claude descendant survived cancellation"
+    );
+}
+
+#[tokio::test]
+async fn cancellation_kills_claude_descendants() {
+    descendant_cleanup(false).await;
+}
+
+#[tokio::test]
+async fn dropping_the_send_future_kills_claude_descendants() {
+    descendant_cleanup(true).await;
+}

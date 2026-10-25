@@ -11,6 +11,17 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 
+struct ClaudeProcessGroup(Option<libc::pid_t>);
+
+impl Drop for ClaudeProcessGroup {
+    fn drop(&mut self) {
+        if let Some(pid) = self.0 {
+            // SAFETY: the CLI starts in its own group, including its descendants.
+            unsafe { libc::killpg(pid, libc::SIGKILL) };
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ClaudeCodeProvider {
     model: Option<String>,
@@ -116,9 +127,11 @@ impl ClaudeCodeProvider {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .process_group(0)
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| fail(format!("cannot start claude: {e}"), None))?;
+        let mut group = ClaudeProcessGroup(child.id().map(|pid| pid as libc::pid_t));
         let mut pipe = child
             .stdin
             .take()
@@ -130,6 +143,7 @@ impl ClaudeCodeProvider {
         };
         let (written, output) = tokio::join!(write, child.wait_with_output());
         let output = output.map_err(|e| fail(e.to_string(), None))?;
+        group.0 = None;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

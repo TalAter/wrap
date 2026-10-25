@@ -252,7 +252,8 @@ pub async fn run_query(
         None
     };
 
-    let attached_bytes = read_attached_stdin();
+    let attached_bytes = read_attached_stdin()
+        .map_err(|_| "Input error: could not read the piped input.".to_string())?;
     let stdin_is_tty = std::io::stdin().is_terminal();
 
     // Nothing to work with: no args, no pipe, no terminal (scripts, cron).
