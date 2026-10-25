@@ -236,13 +236,16 @@ impl Spawn<'_> {
         builder
     }
 
-    /// End a cancelled child: first the child's job holding the terminal,
+    /// End a cancelled child: first its descendants, then its terminal job,
     /// then the child's own group when it left ours (bash moves itself out
     /// under job control; headless children start apart), then the child
     /// itself; finally the terminal comes back. An interactive shell ignores
     /// SIGTERM, so only SIGKILL reliably ends it. The caller reaps the child
     /// afterwards if it has not already exited while descendants drain.
     fn kill(&self, pid: libc::pid_t, running: bool) {
+        if running {
+            kill_descendants(pid);
+        }
         // SAFETY: signal only the child's isolated group, its terminal job,
         // or the direct child while it has not been reaped.
         unsafe {
@@ -372,8 +375,9 @@ async fn run_inherited(
 struct Terminal {
     tty: File,
     group: libc::pid_t,
-    /// Captured steps leave mode restoration to the concurrently active dialog.
-    modes: Option<libc::termios>,
+    modes: libc::termios,
+    /// A dialog lifecycle change supersedes the captured step's saved modes.
+    capture_raw: Option<bool>,
     /// A foreground group this process already killed; its members may
     /// linger as zombies, so it is reclaimed without another look.
     killed: Cell<Option<libc::pid_t>>,
@@ -418,7 +422,9 @@ impl Terminal {
         (foreground == group).then_some(Terminal {
             tty,
             group,
-            modes: (mode == ShellMode::Inherit).then_some(modes),
+            modes,
+            capture_raw: (mode == ShellMode::Capture)
+                .then(|| crossterm::terminal::is_raw_mode_enabled().unwrap_or(false)),
             killed: Cell::new(None),
             observed: Cell::new(group),
             displaced_by: Cell::new(None),
@@ -495,13 +501,83 @@ impl Terminal {
 impl Drop for Terminal {
     fn drop(&mut self) {
         // A shell that took the foreground during suspend/bg owns its modes.
-        if let Some(modes) = &self.modes
-            && self.foreground() == self.group
-        {
-            // SAFETY: the fd and saved termios remain valid for this guard.
-            unsafe { libc::tcsetattr(self.tty.as_raw_fd(), libc::TCSANOW, modes) };
+        if self.foreground() != self.group {
+            return;
         }
+        let mut modes = self.modes;
+        if let Some(raw) = self.capture_raw {
+            if crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) != raw {
+                return;
+            }
+            if raw {
+                // The dialog controls signal keys as its state changes,
+                // including a cancellation before the child has finished.
+                let mut current = unsafe { std::mem::zeroed() };
+                if unsafe { libc::tcgetattr(self.tty.as_raw_fd(), &mut current) } == 0 {
+                    modes.c_lflag = (modes.c_lflag & !libc::ISIG) | (current.c_lflag & libc::ISIG);
+                }
+            }
+        }
+        // SAFETY: the fd and saved termios remain valid for this guard.
+        unsafe { libc::tcsetattr(self.tty.as_raw_fd(), libc::TCSANOW, &modes) };
     }
+}
+
+/// Stop ancestors before killing descendants so a shell cannot advance to
+/// its next command or orphan children during cleanup. Signal individual
+/// pids: descendants may share Wrap's group with unrelated jobs.
+fn kill_descendants(child: libc::pid_t) {
+    let mut tree = vec![child];
+    let mut next = 0;
+    while next < tree.len() {
+        let pid = tree[next];
+        // SAFETY: the root is an unreaped direct child; other pids were
+        // discovered through their parent, never through a shared group.
+        if unsafe { libc::kill(pid, libc::SIGSTOP) } == 0 {
+            for descendant in children_of(pid) {
+                if !tree.contains(&descendant) {
+                    tree.push(descendant);
+                }
+            }
+        }
+        next += 1;
+    }
+    for pid in tree.into_iter().skip(1).rev() {
+        // SAFETY: each pid belongs to the stopped child's descendant tree.
+        unsafe { libc::kill(pid, libc::SIGKILL) };
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn children_of(parent: libc::pid_t) -> Vec<libc::pid_t> {
+    std::fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| entry.file_name().to_string_lossy().parse().ok())
+        .filter(|&pid| parent_of(pid) == Some(parent))
+        .collect()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn children_of(parent: libc::pid_t) -> Vec<libc::pid_t> {
+    let Ok(output) = std::process::Command::new("/bin/ps")
+        .args(["-axo", "pid=,ppid="])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let pid = fields.next()?.parse().ok()?;
+            let ppid: libc::pid_t = fields.next()?.parse().ok()?;
+            (ppid == parent).then_some(pid)
+        })
+        .collect()
 }
 
 /// Whether process group `group` is one `child` started: the child's own

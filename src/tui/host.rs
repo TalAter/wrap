@@ -234,6 +234,9 @@ impl DialogHost for TuiHost {
     }
 
     fn mount(&mut self, state: &AppState, continuation_prompt: Option<&str>) -> Result<(), String> {
+        if self.signal.is_some() {
+            return Ok(());
+        }
         let signals = SessionSignals::open().map_err(open_error)?;
         let terminal = TerminalSession::open().map_err(open_error)?;
         // Keystrokes typed while the model was thinking never confirm.
@@ -324,6 +327,9 @@ impl DialogHost for TuiHost {
     }
 
     fn pending_signal(&mut self) -> Option<AppEvent> {
+        if self.mounted.is_none() {
+            return self.signal.map(|_| AppEvent::KeyEsc);
+        }
         let mounted = self.mounted.as_mut()?;
         let signal = mounted.signals.signal().or(self.signal)?;
         if !(signal == libc::SIGINT

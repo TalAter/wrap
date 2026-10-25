@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """External-editor dialog contracts using the shared real-PTY harness."""
+import json
 import os
 import pathlib
 import signal
@@ -147,6 +148,53 @@ def unlaunchable_editor_restores_the_dialog():
         s.close()
 
 
+def suspended_editor_cancels_on_background_continue():
+    with tempfile.TemporaryDirectory(prefix='wrap-editor-') as root:
+        root = pathlib.Path(root)
+        editor = root / 'editor'
+        editor.write_text('''#!/bin/sh
+stty -echo
+printf '%s' "$$" > "$(dirname "$0")/pid"
+printf EDITOR_CANCEL_READY
+read -r answer
+''')
+        editor.chmod(0o700)
+        s = tty.ShellSession(
+            f"--version; EDITOR={shlex.quote(str(editor))} {shlex.quote(tty.BINARY)} 'edit this'",
+            [tty.command('echo ORIGINAL')])
+        editor_pid = None
+        try:
+            s.until('Run command?'); s.send('e'); s.until('to discard changes'); s.send('\x07')
+            s.until('EDITOR_CANCEL_READY'); editor_pid = int((root / 'pid').read_text())
+            wrap_pid = s.wrap_pid()
+            s.output = b''; s.send('\x1a'); s.until('Stopped'); s.until('PROMPT$ ')
+            assert s.foreground() == s.process.pid, 'shell never regained foreground'
+            shell_modes = termios.tcgetattr(s.slave)
+            s.output = b''
+            os.kill(wrap_pid, signal.SIGTERM)
+            os.kill(wrap_pid, signal.SIGCONT)
+            end = time.monotonic() + 3
+            while tty.session_processes(s, tty.BINARY) and time.monotonic() < end:
+                assert s.foreground() == s.process.pid, 'cancelled editor stole shell terminal'
+                s.pump(.02)
+            try: os.kill(editor_pid, 0)
+            except ProcessLookupError: pass
+            else: raise AssertionError('stopped editor was not reaped')
+            assert not tty.session_processes(s, tty.BINARY), 'suspended Wrap did not cancel after SIGCONT'
+            assert s.foreground() == s.process.pid, 'cancellation displaced parent shell'
+            assert termios.tcgetattr(s.slave) == shell_modes, 'cancellation changed shell terminal modes'
+            assert b'\x1b[?1049h' not in s.output, 'cancellation remounted the dialog behind the shell'
+            entries = [json.loads(line) for line in
+                       (pathlib.Path(s.home.name) / 'logs/wrap.jsonl').read_text().splitlines()]
+            assert entries[-1]['outcome'] == 'cancelled', entries
+            s.send('echo SHELL_ALIVE_$((1+1))\n'); s.until('SHELL_ALIVE_2')
+        finally:
+            if editor_pid is not None:
+                try: os.killpg(editor_pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+            s.close()
+
+
 def gui_editor_cannot_read_dialog_and_survives_cancellation():
     with tempfile.TemporaryDirectory(prefix='wrap-gui-editor-') as root:
         root = pathlib.Path(root)
@@ -193,6 +241,7 @@ if __name__ == '__main__':
         ('editor descendants cancellation restores terminal', terminal_editor_descendants_cancel_and_restore_terminal),
         ('editor Ctrl-Z and fg restore dialog', terminal_editor_suspend_resume_respects_shell),
         ('editor bg leaves shell foreground', lambda: terminal_editor_suspend_resume_respects_shell(True)),
+        ('stopped editor cancels after background SIGCONT', suspended_editor_cancels_on_background_continue),
         ('editor launch failure restores dialog', unlaunchable_editor_restores_the_dialog),
         ('GUI editor input isolation and detached cancellation', gui_editor_cannot_read_dialog_and_survives_cancellation),
     ]:

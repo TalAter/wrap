@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Shell termios restoration through the shared real-PTY harness."""
+"""Shell process cleanup and termios restoration through the real-PTY harness."""
+import os
+import pathlib
+import shutil
+import signal
+import subprocess
+import termios
+
 import terminal as tty
 
 
@@ -71,11 +78,103 @@ def captured_child_keeps_tty_input():
         s.close()
 
 
+def live(pid):
+    if pathlib.Path('/proc').is_dir():
+        try:
+            state = pathlib.Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[0]
+        except FileNotFoundError:
+            return False
+        return state != 'Z'
+    result = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)],
+                            capture_output=True, text=True)
+    return bool(result.stdout.strip()) and not result.stdout.strip().startswith('Z')
+
+
+def cancel_compound_step_ends_descendants(shell):
+    sibling = 'sleep 30 </dev/null >/dev/null 2>&1 & echo $! > "$WRAP_HOME/sibling.pid"'
+    step = """sh -c 'echo $$ > "$WRAP_HOME/job.pid"; exec sleep 30'; echo AFTER > "$WRAP_HOME/after" """
+    s = tty.Session(['cancel compound step'], responses=[
+        tty.command(sibling, risk='low', final=False),
+        tty.command(step, final=False), tty.reply('unused')],
+        extra_env={'SHELL': shell})
+    pids = []
+    try:
+        s.until('Run command?')
+        sibling_pid = int(s.home_path('sibling.pid').read_text())
+        pids.append(sibling_pid)
+        s.send('y')
+        assert s.wait_screen(lambda: s.home_path('job.pid').exists(), 5)
+        job = int(s.home_path('job.pid').read_text())
+        pids.append(job)
+        s.pump_for(.2)
+        if tty.foreground_of(s.pid()) == s.pid():
+            assert os.getpgid(sibling_pid) == s.pid(), 'sibling must share Wrap group'
+            s.send('\x1b')
+        else:
+            # Bash owns input; a signal reaches the dialog's cancel path.
+            os.kill(s.pid(), signal.SIGINT)
+        s.until('Run command?', timeout=5)
+        assert s.wait_screen(lambda: not live(job), 2), f'{shell}: descendant survived cancel'
+        assert live(sibling_pid), f'{shell}: unrelated sibling was killed'
+        assert not s.home_path('after').exists(), 'shell advanced after cancellation'
+        s.send('n')
+        entries = s.finish(0)
+        assert entries[-1]['outcome'] == 'cancelled', entries
+    finally:
+        for pid in pids:
+            try: os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError: pass
+        s.close()
+
+
+def captured_step_restores_dialog_modes(shell, cancel=False):
+    step = ('stty sane; echo ready > "$WRAP_HOME/step-ready"; sleep 30; echo AFTER'
+            if cancel else 'stty sane; echo STEP')
+    s = tty.Session(['step changes modes'], responses=[
+        tty.command(step, final=False),
+        tty.command('echo AFTER_MODES')], extra_env={'SHELL': shell})
+    try:
+        s.until('Run command?')
+        s.send('y')
+        if cancel:
+            assert s.wait_screen(lambda: s.home_path('step-ready').exists(), 5)
+            s.pump_for(.2)
+            os.kill(s.pid(), signal.SIGINT)
+            s.until('Run command?')
+        else:
+            s.until('echo AFTER_MODES')
+        assert s.wait_screen(lambda: not termios.tcgetattr(s.slave)[3] &
+                             (termios.ICANON | termios.ECHO), 2), f'{shell}: dialog modes leaked'
+        s.send('n')
+        s.finish(0, timeout=3)
+    finally:
+        s.close()
+
+
+def inline_step_restores_terminal_modes(shell):
+    s = tty.Session(['inline step changes modes'], responses=[
+        tty.command('stty -echo; echo STEP', risk='low', final=False),
+        tty.reply('FINISHED')], extra_env={'SHELL': shell})
+    try:
+        s.finish(0, alt=False)
+    finally:
+        s.close()
+
+
 if __name__ == '__main__':
     tty.run('final child restores terminal modes', final_child_restores_terminal_modes)
     tty.run('failed final child restores terminal modes', failed_final_child_restores_terminal_modes)
     tty.run('interrupted final child restores terminal modes', interrupted_final_child_restores_terminal_modes)
     tty.run('captured child keeps tty input', captured_child_keeps_tty_input)
+    for name in ['sh', 'bash', 'zsh']:
+        shell = shutil.which(name)
+        if not shell:
+            print(f'SKIP {name} unavailable')
+            continue
+        tty.run(f'{name} compound cancel reaps descendants', lambda: cancel_compound_step_ends_descendants(shell))
+        tty.run(f'{name} captured step restores dialog modes', lambda: captured_step_restores_dialog_modes(shell))
+        tty.run(f'{name} cancelled step restores dialog modes', lambda: captured_step_restores_dialog_modes(shell, cancel=True))
+        tty.run(f'{name} inline step restores terminal modes', lambda: inline_step_restores_terminal_modes(shell))
     tty.server.shutdown()
     if tty.FAILED:
         raise SystemExit(1)

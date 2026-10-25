@@ -211,20 +211,22 @@ impl Terminal {
         }
     }
 
-    fn relay_stop(&self, editor: i32) {
-        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-        // Consume only stop notifications; Tokio owns the child's exit status.
-        if unsafe {
-            libc::waitid(
-                libc::P_PID,
-                editor as libc::id_t,
-                &mut info,
-                libc::WSTOPPED | libc::WNOHANG,
-            )
-        } != 0
-            || unsafe { info.si_pid() } != editor
+    async fn relay_stop(&self, editor: i32, cancel: &CancellationToken) {
         {
-            return;
+            let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            // Consume only stop notifications; Tokio owns the child's exit status.
+            if unsafe {
+                libc::waitid(
+                    libc::P_PID,
+                    editor as libc::id_t,
+                    &mut info,
+                    libc::WSTOPPED | libc::WNOHANG,
+                )
+            } != 0
+                || unsafe { info.si_pid() } != editor
+            {
+                return;
+            }
         }
         let fd = self.file.as_raw_fd();
         let mut modes = unsafe { std::mem::zeroed() };
@@ -233,6 +235,13 @@ impl Terminal {
         loop {
             // The caller shell tracks Wrap's group, not the editor's group.
             unsafe { libc::kill(libc::getpid(), libc::SIGSTOP) };
+            // The host polls signals while this future yields. Pending
+            // cancellation must settle before another stop or terminal handoff.
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => return,
+                _ = tokio::time::sleep(Duration::from_millis(100)) => {}
+            }
             if unsafe { libc::tcgetpgrp(fd) } == self.group {
                 break;
             }
@@ -375,7 +384,7 @@ pub async fn spawn_editor(
             }
             status = child.wait() => break status.map_err(editor_error)?,
             _ = job_control.tick(), if terminal.is_some() => {
-                terminal.as_ref().unwrap().relay_stop(group.0);
+                terminal.as_ref().unwrap().relay_stop(group.0, &cancel).await;
             }
         }
     };
