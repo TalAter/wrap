@@ -2,8 +2,8 @@
 
 Wrap ships prebuilt binaries for macOS and Linux through two channels: the
 personal Homebrew tap [`talater/homebrew-wrap`](https://github.com/talater/homebrew-wrap)
-and the curl-sh installer at `wrap.talater.com/install.sh` (a redirect to the
-latest release's `install.sh` asset). A personal tap ships the moment a tag
+and the curl-sh installer [served from GitHub Releases](https://github.com/TalAter/wrap/releases/latest/download/install.sh).
+A personal tap ships the moment a tag
 builds; homebrew-core is a later option. The tap consumes the four non-musl
 tarballs; musl is install-script-only. Binaries are ad-hoc signed, not
 notarized: curl and brew never set the quarantine attribute, so only a manual
