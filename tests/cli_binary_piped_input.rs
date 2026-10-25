@@ -18,7 +18,11 @@ fn scratch_input_is_forgotten_with_temp_env(key: &str, non_utf8: bool) {
         b"scratch"
     }));
     let fallback = tmp.path().join("fallback");
-    std::fs::create_dir(&base).unwrap();
+    let supports_path = match std::fs::create_dir(&base) {
+        Ok(()) => true,
+        Err(error) if non_utf8 && error.raw_os_error() == Some(libc::EILSEQ) => false,
+        Err(error) => panic!("cannot create scratch fixture: {error}"),
+    };
     std::fs::create_dir(&fallback).unwrap();
     std::fs::write(
         home.path().join("memory.json"),
@@ -53,6 +57,18 @@ fn scratch_input_is_forgotten_with_temp_env(key: &str, non_utf8: bool) {
         .write_all(b"private input")
         .unwrap();
     let output = child.wait_with_output().unwrap();
+    if !supports_path {
+        assert!(!output.status.success(), "{output:?}");
+        assert!(output.stdout.is_empty(), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("Input error: could not save the piped input"),
+            "{output:?}"
+        );
+        assert_eq!(std::fs::read_dir(&fallback).unwrap().count(), 0);
+        assert!(!home.path().join("logs/wrap.jsonl").exists());
+        return;
+    }
     assert!(output.status.success(), "{output:?}");
     let input = [&base, &fallback]
         .into_iter()
@@ -87,7 +103,7 @@ fn scratch_input_uses_temp_and_is_forgotten() {
 }
 
 #[test]
-fn non_utf8_scratch_input_is_forgotten() {
+fn non_utf8_scratch_input_is_forgotten_or_rejected_by_the_filesystem() {
     scratch_input_is_forgotten_with_temp_env("TMPDIR", true);
 }
 
