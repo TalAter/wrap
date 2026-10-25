@@ -537,7 +537,11 @@ mod tests {
             first,
             format!("{HIDE_CURSOR}\r{} {SPINNER_TEXT}", SPINNER_FRAMES[0])
         );
-        std::thread::sleep(SPINNER_INTERVAL * 4);
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        let expected_frame = format!("\r{} {SPINNER_TEXT}", SPINNER_FRAMES[2]);
+        while !text_of(&sink).contains(&expected_frame) && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
         let during = text_of(&sink);
         assert!(during.contains(&format!("\r{} {SPINNER_TEXT}", SPINNER_FRAMES[1])));
         assert!(during.contains(&format!("\r{} {SPINNER_TEXT}", SPINNER_FRAMES[2])));
