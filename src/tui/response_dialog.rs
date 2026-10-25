@@ -244,7 +244,7 @@ fn processing_actions() -> Vec<ActionItem> {
 }
 
 fn executing_step_actions() -> Vec<ActionItem> {
-    vec![ActionItem::new("Esc", "to abort step")]
+    vec![ActionItem::new("ctrl+C", "to interrupt step")]
 }
 
 /// One row group of the dialog body.
@@ -526,7 +526,7 @@ impl ResponseDialog {
             if self.gui_editing.is_some() {
                 return;
             }
-            let draft = self.state.draft().unwrap_or("").to_string();
+            let draft = self.input.text().to_string();
             if self.opts.editor.as_ref().is_some_and(|e| e.gui) {
                 self.gui_editing = Some(self.state.tag());
                 self.input.set_editing_external(true);

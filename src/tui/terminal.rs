@@ -1,5 +1,5 @@
 //! One alternate-screen terminal session on stderr, the signal scope that
-//! turns SIGINT/SIGTERM/SIGHUP into a cancellation flag while a dialog is up
+//! turns SIGINT/SIGQUIT/SIGTERM/SIGHUP into cancellation while a dialog is up
 //! (and notes SIGCONT, so a dialog resumed with `fg` can take raw mode back),
 //! and the stdin drain that keeps buffered keystrokes from confirming.
 //!
@@ -150,6 +150,33 @@ impl TerminalSession {
         set_keyboard_enhancement(enabled)
     }
 
+    /// Control whether the terminal turns control keys into signals. A
+    /// terminal taken back by the user's shell is never changed.
+    pub fn set_signal_keys(&self, enabled: bool) -> io::Result<()> {
+        let mut modes = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(libc::STDERR_FILENO, &mut modes) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if (modes.c_lflag & libc::ISIG != 0) == enabled {
+            return Ok(());
+        }
+        let foreground = unsafe { libc::tcgetpgrp(libc::STDERR_FILENO) };
+        if foreground <= 0
+            || !crate::shell::group_belongs_to_child(foreground, unsafe { libc::getpid() })
+        {
+            return Ok(());
+        }
+        if enabled {
+            modes.c_lflag |= libc::ISIG;
+        } else {
+            modes.c_lflag &= !libc::ISIG;
+        }
+        if unsafe { libc::tcsetattr(libc::STDERR_FILENO, libc::TCSANOW, &modes) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
     pub fn size(&self) -> io::Result<ratatui::layout::Size> {
         self.terminal.size()
     }
@@ -262,7 +289,7 @@ extern "C" fn session_continued(_signal: libc::c_int) {
     SESSION_CONTINUED.store(true, Ordering::Relaxed);
 }
 
-/// Scoped SIGINT/SIGTERM/SIGHUP dispositions that record the signal instead
+/// Scoped SIGINT/SIGQUIT/SIGTERM/SIGHUP dispositions that record the signal instead
 /// of exiting, plus a SIGCONT note for the dialog to repaint after a stop.
 /// Dropping restores the chrome exit-teardown handlers, which opening
 /// installs first when nothing else has yet.
@@ -277,11 +304,17 @@ impl SessionSignals {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| io::Error::other("a signal scope is already active"))?;
         let mut guard = Self {
-            previous: Vec::with_capacity(4),
+            previous: Vec::with_capacity(5),
         };
         SESSION_SIGNAL.store(0, Ordering::Relaxed);
         SESSION_CONTINUED.store(false, Ordering::Relaxed);
-        for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP, libc::SIGCONT] {
+        for signal in [
+            libc::SIGINT,
+            libc::SIGQUIT,
+            libc::SIGTERM,
+            libc::SIGHUP,
+            libc::SIGCONT,
+        ] {
             // SAFETY: zeroed sigaction values are fully initialized before
             // installation; the OS fills `previous`.
             let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
@@ -302,7 +335,7 @@ impl SessionSignals {
         Ok(guard)
     }
 
-    /// True once any of the three signals arrived during this scope.
+    /// True once a cancellation signal arrived during this scope.
     pub fn received(&self) -> bool {
         SESSION_SIGNAL.load(Ordering::Relaxed) != 0
     }
@@ -313,6 +346,14 @@ impl SessionSignals {
             0 => None,
             n => Some(n),
         }
+    }
+
+    /// A shared foreground group's Ctrl-C interrupts its active step without
+    /// turning subsequent dialog events into a session-wide cancellation.
+    pub fn take_interrupt(&self) -> bool {
+        SESSION_SIGNAL
+            .compare_exchange(libc::SIGINT, 0, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
     }
 
     /// True once per SIGCONT received during this scope.

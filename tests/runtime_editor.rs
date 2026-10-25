@@ -21,6 +21,13 @@ fn editor_key_strips_directories_and_exe_suffix() {
 }
 
 #[test]
+fn editor_key_handles_unicode_at_the_suffix_boundary() {
+    assert_eq!(editor_key("/opt/编辑器"), "编辑器");
+    assert_eq!(editor_key("/opt/éabc"), "éabc");
+    assert_eq!(editor_key("/opt/编辑器.ExE"), "编辑器");
+}
+
+#[test]
 fn gui_editors_carry_wait_flags_and_terminal_editors_do_not() {
     for (key, meta) in EDITORS {
         assert!(!meta.display_name.is_empty(), "{key}");
@@ -252,7 +259,7 @@ async fn gui_editors_receive_the_wait_flag_before_the_file() {
 }
 
 #[tokio::test]
-async fn cancellation_abandons_the_wait_without_killing_the_editor() {
+async fn gui_cancellation_abandons_the_wait_without_killing_the_editor() {
     let mut rig = Rig::new();
     let pre = CancellationToken::new();
     pre.cancel();
@@ -265,10 +272,11 @@ async fn cancellation_abandons_the_wait_without_killing_the_editor() {
     assert!(start.elapsed() < Duration::from_millis(500));
 
     let marker = rig.home.root().join("finished");
-    let late = rig.fake(&format!(
+    let mut late = rig.fake(&format!(
         "#!/bin/sh\nprintf 'unexpected' > \"$1\"\nsleep 0.3\ntouch \"{}\"\n",
         marker.display()
     ));
+    late.meta.gui = true;
     let token = CancellationToken::new();
     let cancel = token.clone();
     tokio::spawn(async move {
@@ -293,4 +301,65 @@ async fn cancellation_abandons_the_wait_without_killing_the_editor() {
         spawn_editor(&edits, "seed", &rig.home, Some(never)).await,
         Ok(Some("edited".into()))
     );
+}
+
+#[tokio::test]
+async fn pre_cancelled_editor_preserves_the_saved_buffer() {
+    let mut rig = Rig::new();
+    rig.home.write("cache/compose.md", "saved draft").unwrap();
+    let editor = rig.fake("#!/bin/sh\nexit 9\n");
+    let token = CancellationToken::new();
+    token.cancel();
+    assert_eq!(
+        spawn_editor(&editor, "replacement", &rig.home, Some(token)).await,
+        Ok(None)
+    );
+    assert_eq!(
+        fs::read_to_string(rig.home.resolve("cache/compose.md")).unwrap(),
+        "saved draft"
+    );
+}
+
+async fn wait_file(path: &Path) {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !path.exists() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("editor readiness timed out");
+}
+
+#[tokio::test]
+async fn terminal_cancellation_reaps_editor_and_stops_descendants() {
+    let mut rig = Rig::new();
+    let editor = rig.fake(
+        r#"#!/bin/sh
+root=$(dirname "$1")
+printf '%s' "$$" > "$root/pid"
+(sleep 0.3; printf survived > "$root/survived") &
+printf '%s' "$!" > "$root/descendant"
+wait
+"#,
+    );
+    let token = CancellationToken::new();
+    let job = spawn_editor(&editor, "seed", &rig.home, Some(token.clone()));
+    let ready = rig.home.resolve("cache/descendant");
+    let trigger = async {
+        wait_file(&ready).await;
+        token.cancel();
+    };
+    let (result, _) = tokio::join!(job, trigger);
+    assert_eq!(result, Ok(None));
+    let pid: i32 = fs::read_to_string(rig.home.resolve("cache/pid"))
+        .unwrap()
+        .parse()
+        .unwrap();
+    let reaped = unsafe { libc::kill(pid, 0) } == -1;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(
+        !rig.home.exists("cache/survived"),
+        "editor descendant survived cancellation"
+    );
+    assert!(reaped, "terminal editor must be reaped before returning");
 }

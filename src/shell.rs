@@ -145,7 +145,7 @@ pub async fn execute_with_shell(
     let start = Instant::now();
     let stdin = default_child_stdin();
     let own_group = matches!(stdin, ChildStdin::Null);
-    let terminal = Terminal::claim();
+    let terminal = Terminal::claim(mode);
     // The dialog stays up and keeps reading the terminal while a captured
     // child shares it; the child's job may own the terminal meanwhile.
     let shares_terminal = mode == ShellMode::Capture && terminal.is_some();
@@ -189,22 +189,6 @@ pub async fn execute_with_shell(
         shell: shell.to_string(),
         stdout,
         stderr,
-    })
-}
-
-/// Read a child's pipe to its end on a task of its own, so a child writing
-/// more than the pipe buffer never blocks on a full pipe while being waited
-/// on. Aborting the task releases a pipe a surviving grandchild holds open.
-pub(crate) fn drain_pipe<R>(pipe: Option<R>) -> tokio::task::JoinHandle<Vec<u8>>
-where
-    R: tokio::io::AsyncRead + Unpin + Send + 'static,
-{
-    tokio::spawn(async move {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut bytes).await;
-        }
-        bytes
     })
 }
 
@@ -257,20 +241,28 @@ impl Spawn<'_> {
     /// under job control; headless children start apart), then the child
     /// itself; finally the terminal comes back. An interactive shell ignores
     /// SIGTERM, so only SIGKILL reliably ends it. The caller reaps the child
-    /// afterwards.
-    fn kill(&self, pid: libc::pid_t) {
-        // SAFETY: plain signal sends; `pid` is a child that has not been
-        // reaped, so neither it nor its group id can have been recycled.
+    /// afterwards if it has not already exited while descendants drain.
+    fn kill(&self, pid: libc::pid_t, running: bool) {
+        // SAFETY: signal only the child's isolated group, its terminal job,
+        // or the direct child while it has not been reaped.
         unsafe {
             let own = libc::getpgrp();
             if let Some(terminal) = self.terminal {
                 terminal.kill_child_foreground(pid);
             }
-            let group = libc::getpgid(pid);
+            let group = if self.own_group {
+                pid
+            } else if running {
+                libc::getpgid(pid)
+            } else {
+                -1
+            };
             if group > 0 && group != own {
                 libc::killpg(group, libc::SIGKILL);
             }
-            libc::kill(pid, libc::SIGKILL);
+            if running {
+                libc::kill(pid, libc::SIGKILL);
+            }
         }
         if let Some(terminal) = self.terminal {
             terminal.reclaim(pid);
@@ -283,41 +275,61 @@ async fn run_captured(
     stdin: ChildStdin,
     cancel: Option<CancellationToken>,
 ) -> io::Result<(libc::pid_t, ExitStatus, String, String)> {
+    if let Some(terminal) = spawn.terminal {
+        // A foreground child needs Ctrl-C even when the dialog uses raw mode.
+        // Subsequent mode changes belong to the child until it returns.
+        terminal.enable_interrupts()?;
+    }
     let mut child =
         tokio::process::Command::from(spawn.command(stdin, Stdio::piped(), Stdio::piped()))
             .kill_on_drop(true)
             .spawn()?;
     let pid = child.id().expect("child not yet reaped") as libc::pid_t;
-    let stdout = drain_pipe(child.stdout.take());
-    let stderr = drain_pipe(child.stderr.take());
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
     let cancelled_token = cancel.unwrap_or_default();
     let mut watch = tokio::time::interval(FOREGROUND_WATCH);
-    let status = loop {
-        tokio::select! {
-            status = child.wait() => break status?,
-            _ = watch.tick() => {
-                if let Some(terminal) = spawn.terminal {
-                    terminal.observe(pid);
+    let result = {
+        let completion =
+            async { tokio::try_join!(child.wait(), read_pipe(stdout), read_pipe(stderr)) };
+        tokio::pin!(completion);
+        loop {
+            tokio::select! {
+                biased;
+                _ = cancelled_token.cancelled() => break Err(cancelled()),
+                result = &mut completion => break result,
+                _ = watch.tick() => {
+                    if let Some(terminal) = spawn.terminal {
+                        terminal.observe(pid);
+                    }
                 }
-            }
-            _ = cancelled_token.cancelled() => {
-                spawn.kill(pid);
-                let _ = child.wait().await;
-                // A survivor in our own group may still hold the pipes open.
-                stdout.abort();
-                stderr.abort();
-                return Err(cancelled());
             }
         }
     };
-    let stdout = stdout.await.unwrap_or_default();
-    let stderr = stderr.await.unwrap_or_default();
+    let (status, stdout, stderr) = match result {
+        Ok(result) => result,
+        Err(error) => {
+            spawn.kill(pid, child.id().is_some());
+            let _ = child.wait().await;
+            return Err(error);
+        }
+    };
     Ok((
         pid,
         status,
         String::from_utf8_lossy(&stdout).into_owned(),
         String::from_utf8_lossy(&stderr).into_owned(),
     ))
+}
+
+/// Read concurrently with the child wait; dropping the future closes the
+/// pipe even if a descendant still holds its writing end.
+async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: Option<R>) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    if let Some(mut pipe) = pipe {
+        pipe.read_to_end(&mut bytes).await?;
+    }
+    Ok(bytes)
 }
 
 async fn run_inherited(
@@ -339,7 +351,7 @@ async fn run_inherited(
         Some(token) => tokio::select! {
             status = &mut wait => status,
             _ = token.cancelled() => {
-                spawn.kill(pid);
+                spawn.kill(pid, true);
                 let _ = (&mut wait).await;
                 drop(signals);
                 return Err(cancelled());
@@ -360,6 +372,8 @@ async fn run_inherited(
 struct Terminal {
     tty: File,
     group: libc::pid_t,
+    /// Captured steps leave mode restoration to the concurrently active dialog.
+    modes: Option<libc::termios>,
     /// A foreground group this process already killed; its members may
     /// linger as zombies, so it is reclaimed without another look.
     killed: Cell<Option<libc::pid_t>>,
@@ -375,7 +389,20 @@ struct Terminal {
 }
 
 impl Terminal {
-    fn claim() -> Option<Terminal> {
+    fn enable_interrupts(&self) -> io::Result<()> {
+        let fd = self.tty.as_raw_fd();
+        let mut modes = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(fd, &mut modes) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        modes.c_lflag |= libc::ISIG;
+        if unsafe { libc::tcsetattr(fd, libc::TCSANOW, &modes) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    fn claim(mode: ShellMode) -> Option<Terminal> {
         let tty = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -383,9 +410,15 @@ impl Terminal {
             .ok()?;
         // SAFETY: plain queries on a valid fd.
         let (group, foreground) = unsafe { (libc::getpgrp(), libc::tcgetpgrp(tty.as_raw_fd())) };
+        // SAFETY: tcgetattr initialises the modes for a valid terminal fd.
+        let mut modes = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(tty.as_raw_fd(), &mut modes) } == -1 {
+            return None;
+        }
         (foreground == group).then_some(Terminal {
             tty,
             group,
+            modes: (mode == ShellMode::Inherit).then_some(modes),
             killed: Cell::new(None),
             observed: Cell::new(group),
             displaced_by: Cell::new(None),
@@ -456,6 +489,18 @@ impl Terminal {
             let _ = set_foreground(self.tty.as_raw_fd(), self.group);
         }
         false
+    }
+}
+
+impl Drop for Terminal {
+    fn drop(&mut self) {
+        // A shell that took the foreground during suspend/bg owns its modes.
+        if let Some(modes) = &self.modes
+            && self.foreground() == self.group
+        {
+            // SAFETY: the fd and saved termios remain valid for this guard.
+            unsafe { libc::tcsetattr(self.tty.as_raw_fd(), libc::TCSANOW, modes) };
+        }
     }
 }
 

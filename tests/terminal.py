@@ -395,7 +395,7 @@ def confirmed_medium_step_shows_running():
     s = Session(['two confirmations'], responses=responses)
     try:
         s.until('sleep 1; echo SLOW_STEP'); s.until('Run command?'); s.send('y')
-        s.until('Running step...'); s.until('to abort step')
+        s.until('Running step...'); s.until('to interrupt step')
         s.until('echo AFTER_STEP', timeout=12); s.until('Output:'); s.until('SLOW_STEP'); s.until('Run command?')
         s.send('n'); entries = s.finish(0)
         assert b'AFTER_STEP\r\n' not in s.output
@@ -442,13 +442,74 @@ def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
         assert final['source'] == 'cancelled'
     finally: s.close()
 
+def ctrl_c_interrupts_a_bash_step_that_owns_the_terminal():
+    responses = [command('echo ready > "$WRAP_HOME/step-ready"; sleep 30', final=False), command('echo AFTER_INTERRUPT')]
+    s = Session(['interrupt a step'], responses=responses, extra_env={'SHELL': '/bin/bash'})
+    try:
+        s.until('Run command?'); s.send('y'); s.until('ctrl+C to interrupt step')
+        assert s.wait_screen(lambda: s.home_path('step-ready').exists(), 5)
+        # Wait for the foreground job; an interrupt between Bash jobs is deferred.
+        s.pump_for(.3); s.send('\x03')
+        s.until('echo AFTER_INTERRUPT', timeout=5); s.until('Run command?'); s.send('n')
+        entries = s.finish(0)
+        steps = [turn for turn in entries[-1]['turns'] if turn['kind'] == 'step']
+        assert len(steps) == 1 and steps[0]['exit_code'] != 0, steps
+    finally: s.close()
+
+def ctrl_c_cancels_a_zsh_step_without_exiting_wrap():
+    if not shutil.which('zsh'): print('SKIP zsh Ctrl-C (no zsh)'); return
+    s = Session(['cancel a step'], responses=[command('sleep 30', final=False), reply('unused')],
+                extra_env={'SHELL': shutil.which('zsh')})
+    try:
+        s.until('Run command?'); s.send('y'); s.until('Running step...')
+        s.pump_for(.3); s.send('\x03'); s.until('Run command?', timeout=5)
+        s.send('n'); entries = s.finish(0)
+        assert entries[-1]['outcome'] == 'cancelled'
+    finally: s.close()
+
+def captured_child_can_disable_terminal_signals():
+    code = "import os,termios,time; f=os.open('/dev/tty',os.O_RDWR); m=termios.tcgetattr(f); m[3]&=~termios.ISIG; termios.tcsetattr(f,termios.TCSANOW,m); time.sleep(.4); print('ISIG_ON' if termios.tcgetattr(f)[3]&termios.ISIG else 'ISIG_OFF')"
+    s = Session(['terminal settings'], responses=[command(f"{shutil.which('python3')} -c \"{code}\"", final=False), command('echo AFTER_MODES')],
+                extra_env={'SHELL': '/bin/bash'})
+    try:
+        s.until('Run command?'); s.send('y'); s.until('echo AFTER_MODES'); s.until('Output:')
+        assert 'ISIG_OFF' in s.visible() and 'ISIG_ON' not in s.visible(), s.visible()
+        s.send('n'); s.finish(0)
+    finally: s.close()
+
+def ctrl_backslash_cleans_up_a_shared_foreground_step():
+    if not shutil.which('zsh'): print('SKIP zsh Ctrl-backslash (no zsh)'); return
+    s = Session(['quit a step'], responses=[command('sleep 30', final=False), reply('unused')],
+                extra_env={'SHELL': shutil.which('zsh')})
+    try:
+        s.until('Run command?'); s.send('y'); s.until('Running step...')
+        s.pump_for(.3); s.send('\x1c'); entries = s.finish(131)
+        assert entries[-1]['outcome'] == 'cancelled', entries
+    finally: s.close()
+
 def foreground_of(pid):
-    """The foreground process group of `pid`'s controlling terminal (/proc only)."""
+    """The foreground process group of `pid`'s controlling terminal."""
+    if not pathlib.Path('/proc').is_dir():
+        return int(subprocess.check_output(['ps', '-o', 'tpgid=', '-p', str(pid)], text=True).strip())
     stat = open(f'/proc/{pid}/stat').read()
     return int(stat[stat.rindex(')') + 2:].split()[5])
 
 def session_processes(s, needle):
-    # /proc only: the container image has no ps.
+    if not pathlib.Path('/proc').is_dir():
+        rows = subprocess.check_output(['ps', '-axo', 'pid=,ppid=,command='], text=True).splitlines()
+        processes = {}
+        for row in rows:
+            fields = row.strip().split(None, 2)
+            if len(fields) == 3:
+                processes[int(fields[0])] = (int(fields[1]), fields[2])
+        def belongs(pid):
+            seen = set()
+            while pid in processes and pid not in seen:
+                if pid == s.process.pid: return True
+                seen.add(pid); pid = processes[pid][0]
+            return False
+        return [f'{pid} {args}' for pid, (_, args) in processes.items() if needle in args and belongs(pid)]
+    # Minimal Linux containers need no ps binary.
     found = []
     for pid in os.listdir('/proc'):
         if not pid.isdigit(): continue
@@ -576,6 +637,24 @@ def child_alt_screen_leaves_terminal_sane():
     finally: s.close()
 
 # --- Signals ---------------------------------------------------------------------
+def signal_during_terminal_editor():
+    with tempfile.TemporaryDirectory(prefix='wrap-editor-') as root:
+        editor = pathlib.Path(root) / 'editor'
+        editor.write_text('#!/bin/sh\nstty -echo\necho $$ > "$WRAP_HOME/editor.pid"\nprintf EDITOR_READY\nexec sleep 30\n')
+        editor.chmod(0o700)
+        s = Session([], response=reply('unused'), extra_env={'VISUAL': str(editor)}, redirect_stdout=True)
+        try:
+            s.until('compose'); s.send('\x07'); s.until_output(b'EDITOR_READY')
+            editor_pid = int(s.home_path('editor.pid').read_text())
+            os.kill(s.pid(), signal.SIGTERM)
+            entries = s.finish(143)
+            assert entries[-1]['outcome'] == 'cancelled', entries
+            assert s.home_path('stdout.txt').read_bytes() == b''
+            try: os.kill(editor_pid, 0)
+            except ProcessLookupError: pass
+            else: raise AssertionError('editor survived cancelled handoff')
+        finally: s.close()
+
 def signal_during_dialog(sig, extra_env=None):
     # A graceful cancel (log entry, terminal restored) that still exits 128+signal for wrappers and CI.
     s = Session(['wait for me'], response=command('echo NEVER'), extra_env=extra_env)
@@ -764,10 +843,15 @@ SCENARIOS = [
     ('low step runs before dialog', low_step_runs_before_dialog), ('confirmed medium step shows running', confirmed_medium_step_shows_running),
     ('esc aborts a step under zsh', esc_aborts_a_step_under_zsh),
     ('a bash step that owns the terminal does not end the session', a_bash_step_that_owns_the_terminal_does_not_end_the_session),
+    ('Ctrl-C interrupts a bash step', ctrl_c_interrupts_a_bash_step_that_owns_the_terminal),
+    ('Ctrl-C cancels a zsh step', ctrl_c_cancels_a_zsh_step_without_exiting_wrap),
+    ('captured child controls terminal signals', captured_child_can_disable_terminal_signals),
+    ('Ctrl-backslash restores terminal after a step', ctrl_backslash_cleans_up_a_shared_foreground_step),
     ('a suspended and backgrounded wrap leaves the shell in charge', a_suspended_and_backgrounded_wrap_leaves_the_shell_in_charge),
     ('resize folds and restores', resize_folds_and_restores), ('early keystroke does not confirm', early_keystroke_does_not_confirm),
     ('tty handoff', tty_handoff), ('child alt screen leaves terminal sane', child_alt_screen_leaves_terminal_sane),
     ('SIGINT during dialog', lambda: signal_during_dialog(signal.SIGINT)), ('SIGTERM during dialog', lambda: signal_during_dialog(signal.SIGTERM)),
+    ('SIGTERM during terminal editor', signal_during_terminal_editor),
     ('SIGINT during dialog without animation', lambda: signal_during_dialog(signal.SIGINT, {'WRAP_NO_ANIMATION': '1'})),
     ('SIGINT during composer', lambda: signal_during_composer(signal.SIGINT)), ('SIGTERM on wizard welcome', lambda: signal_during_wizard_welcome(signal.SIGTERM)),
     ('SIGINT during forget', lambda: signal_during_forget(signal.SIGINT)),

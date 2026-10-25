@@ -109,6 +109,58 @@ async fn cancellation_kills_a_captured_child() {
     assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
 }
 
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
+    for redirect in [">/dev/null", "2>/dev/null"] {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let job_file = dir.path().join("job");
+        let command = format!(
+            "echo $$ > {}; sleep 4 {redirect} & echo $! > {}",
+            pid_file.display(),
+            job_file.display()
+        );
+        let token = CancellationToken::new();
+        let cancel = token.clone();
+        let cancellation = async {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                let pid = std::fs::read_to_string(&pid_file)
+                    .ok()
+                    .and_then(|text| text.trim().parse::<i32>().ok());
+                if pid.is_some_and(|pid| !std::path::Path::new(&format!("/proc/{pid}")).exists()) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "direct shell did not exit");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let started = Instant::now();
+            cancel.cancel();
+            started
+        };
+        let (result, cancelled_at) = tokio::join!(
+            execute_with_shell(&command, SH, ShellMode::Capture, Some(token)),
+            cancellation
+        );
+        assert!(
+            cancelled_at.elapsed() < Duration::from_secs(1),
+            "cancellation waited for a descendant to close {redirect}"
+        );
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+        let job: i32 = std::fs::read_to_string(&job_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while is_alive(job) && Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(!is_alive(job), "descendant survived cancellation");
+    }
+}
+
 /// Live (non-zombie) pids whose process group is `pgid`, from /proc.
 fn live_members_of_group(pgid: i32) -> Vec<i32> {
     let mut members = Vec::new();

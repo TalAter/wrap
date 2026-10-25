@@ -460,7 +460,7 @@ fn processing_followup_freezes_the_draft_and_spins_in_the_bottom_border() {
 }
 
 #[test]
-fn executing_step_shows_output_slot_running_status_and_abort_hint() {
+fn executing_step_shows_output_slot_running_status_and_interrupt_hint() {
     let d = dialog(&AppState::ExecutingStep {
         response: response("echo git-stash-fake", RiskLevel::Medium),
         source: StepSource::Model,
@@ -482,7 +482,7 @@ fn executing_step_shows_output_slot_running_status_and_abort_hint() {
     assert!(lines[5].contains("echo git-stash-fake"), "{}", lines[5]);
     let s = screen(&buf);
     assert!(
-        s.contains("Running step...") && s.contains("Esc to abort step"),
+        s.contains("Running step...") && s.contains("ctrl+C to interrupt step"),
         "{s}"
     );
     let y = rows(&buf)
@@ -691,6 +691,42 @@ fn o_clone(o: &ResponseDialogOptions) -> ResponseDialogOptions {
 }
 
 // ── external editor ──────────────────────────────────────────────
+
+#[test]
+fn ctrl_g_in_the_same_input_batch_includes_the_latest_keystrokes() {
+    for gui in [false, true] {
+        let mut o = opts(&DARK);
+        o.editor = Some(EditorInfo {
+            display_name: "Editor".into(),
+            gui,
+        });
+        let mut dialog = ResponseDialog::new(&composing("draft"), o);
+        dialog.key(ch('x'));
+        dialog.key(ctrl('g'));
+        let mut events = dialog.take_events();
+        assert_eq!(
+            events.remove(0),
+            AppEvent::DraftChange {
+                text: "draftx".into()
+            }
+        );
+        if gui {
+            assert_eq!(
+                dialog.take_signals(),
+                [DialogSignal::OpenGuiEditor {
+                    draft: "draftx".into()
+                }]
+            );
+        } else {
+            assert_eq!(
+                events,
+                [AppEvent::EnterEditor {
+                    draft: "draftx".into()
+                }]
+            );
+        }
+    }
+}
 
 #[test]
 fn ctrl_g_opens_a_terminal_editor_through_the_reducer_and_a_gui_editor_locally() {

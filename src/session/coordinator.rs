@@ -83,6 +83,11 @@ pub trait DialogHost {
     /// mounted; dropped and recreated after every state change, so it must
     /// keep no progress of its own. `Err` ends the session with the message.
     fn next_event(&mut self) -> HostFuture<'_, Result<AppEvent, String>>;
+    /// Pending OS signals must take effect before a completed loop can exit
+    /// or execute, even while the terminal's input future is between polls.
+    fn pending_signal(&mut self) -> Option<AppEvent> {
+        None
+    }
     /// Run a terminal-owning editor on `draft` with the dialog unmounted.
     /// `None` keeps the draft the user had.
     fn edit_in_editor(&mut self, draft: String) -> HostFuture<'_, Option<String>>;
@@ -95,9 +100,13 @@ pub trait DialogHost {
 /// `$VISUAL` / `$EDITOR` / the first known editor on PATH, run on `draft`.
 /// A non-zero exit or launch failure shows its notice as chrome and keeps
 /// the draft. The hook real hosts use for [`DialogHost::edit_in_editor`].
-pub async fn run_terminal_editor(draft: &str, home: &WrapHome) -> Option<String> {
+pub async fn run_terminal_editor(
+    draft: &str,
+    home: &WrapHome,
+    cancel: CancellationToken,
+) -> Option<String> {
     let resolved = resolve_editor_from_env()?;
-    match spawn_editor(&resolved, draft, home, None).await {
+    match spawn_editor(&resolved, draft, home, Some(cancel)).await {
         Ok(text) => text,
         Err(notice) => {
             chrome::chrome(&notice, None);
@@ -544,6 +553,11 @@ impl Session {
                     event = host_event(host, mounted) => Wake::Host(event),
                 }
             };
+            if !matches!(wake, Wake::Host(_))
+                && let Some(event) = host.pending_signal()
+            {
+                self.dispatch(event, host);
+            }
             match wake {
                 Wake::LoopEvent(event) => self.handle_loop_event(event),
                 Wake::LoopDone(joined) => self.handle_loop_done(joined, host),

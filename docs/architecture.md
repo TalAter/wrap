@@ -73,8 +73,11 @@ children still read keystrokes from `/dev/tty`.
 
 Captured steps keep the terminal as stdin so `sudo` can prompt. Bash ignores
 `+m` when interactive and hands the terminal to the step's job, so until that
-job exits keystrokes (Esc included) reach the job, not the dialog. While such
-a step runs Wrap ignores SIGTTIN and SIGTTOU: a terminal read from behind the
+job exits keystrokes (Esc included) reach the job, not the dialog. The action
+bar offers Ctrl-C to interrupt the step. A shell-owned
+interrupt returns the step's failure to the model; Esc cancels through the
+dialog only while Wrap owns input. During the step Wrap ignores SIGTTIN and
+SIGTTOU: a terminal read from behind the
 job then fails with EIO, which the dialog tolerates, instead of stopping Wrap
 under the user's shell; the dispositions return once the step ends. zsh
 honours `+m`, so there Esc cancels the step. A cancel kills, and the end of a
@@ -257,6 +260,11 @@ beats silently losing the buffer to a detached GUI that exits at once. The
 buffer lives at `cache/compose.md` under `$WRAP_HOME` because macOS temp-dir
 file watching made VS Code report the file deleted mid-edit. Exit 0 with a
 non-empty file replaces the draft; anything else keeps it.
+Editor output uses the controlling terminal or stderr, preserving redirected
+stdout. Terminal editors reopen `/dev/tty` for input and restore its foreground
+group and modes on return. Signals during handoff cancel and reap the editor
+before the session logs its cancellation. GUI waits use null stdin in a separate
+session; abandoning a wait leaves the GUI running.
 
 ## Wizard, forget and eval bridge
 

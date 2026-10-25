@@ -5,7 +5,7 @@
 //! wake, so all progress (tick, dirty flag, queued events, the GUI editor in
 //! flight) lives on the mounted dialog, never in the future.
 //!
-//! Signals: while the dialog is up SIGINT/SIGTERM/SIGHUP are recorded by a
+//! Signals: while the dialog is up SIGINT/SIGQUIT/SIGTERM/SIGHUP are recorded by a
 //! [`SessionSignals`] scope instead of killing the process. A recorded signal
 //! resolves `next_event` as [`AppEvent::KeyEsc`], and keeps doing so on every
 //! later call, so the reducer backs out one state at a time (editing →
@@ -14,6 +14,8 @@
 //! ([`TuiHost::signal_received`]) so the process can still exit with the
 //! shell's code for it once the session has finalised. A SIGCONT (the shell's
 //! `fg` after a stop) re-enters raw mode and repaints.
+//! A shared foreground group's SIGINT during a step is consumed once: it
+//! cancels that step and returns to confirmation without ending the session.
 
 use std::collections::VecDeque;
 use std::io::{self, IsTerminal};
@@ -54,13 +56,14 @@ struct Mounted {
     dirty: bool,
     tick: usize,
     gui_editor: Option<GuiEditor>,
-    /// A signal already produced one Esc; later ones are paced.
-    signal_esc_sent: bool,
 }
 
 impl Mounted {
     fn frame(&mut self) -> io::Result<()> {
         self.terminal.set_compose_keys(self.dialog.compose_keys())?;
+        if !matches!(self.dialog.state(), AppState::ExecutingStep { .. }) {
+            self.terminal.set_signal_keys(false)?;
+        }
         self.dialog.set_tick(self.tick);
         let dialog = &self.dialog;
         draw_frame(
@@ -244,7 +247,6 @@ impl DialogHost for TuiHost {
             dirty: true,
             tick: 0,
             gui_editor: None,
-            signal_esc_sent: false,
         });
         Ok(())
     }
@@ -279,20 +281,15 @@ impl DialogHost for TuiHost {
     fn next_event(&mut self) -> HostFuture<'_, Result<AppEvent, String>> {
         Box::pin(async move {
             loop {
+                if let Some(event) = self.pending_signal() {
+                    return Ok(event);
+                }
                 if let Some(event) = self.queued.pop_front() {
                     return Ok(event);
                 }
                 let Some(mounted) = self.mounted.as_mut() else {
                     return Err("The dialog is not open.".to_string());
                 };
-                if let Some(signal) = mounted.signals.signal() {
-                    self.signal = Some(signal);
-                    if mounted.signal_esc_sent {
-                        tokio::time::sleep(TICK).await;
-                    }
-                    mounted.signal_esc_sent = true;
-                    return Ok(AppEvent::KeyEsc);
-                }
                 if !TerminalSession::active() {
                     return Err("The terminal was released after a background failure.".to_string());
                 }
@@ -326,7 +323,47 @@ impl DialogHost for TuiHost {
         })
     }
 
+    fn pending_signal(&mut self) -> Option<AppEvent> {
+        let mounted = self.mounted.as_mut()?;
+        let signal = mounted.signals.signal().or(self.signal)?;
+        if !(signal == libc::SIGINT
+            && matches!(mounted.dialog.state(), AppState::ExecutingStep { .. })
+            && mounted.signals.take_interrupt())
+        {
+            self.signal = Some(signal);
+        }
+        Some(AppEvent::KeyEsc)
+    }
+
     fn edit_in_editor(&mut self, draft: String) -> HostFuture<'_, Option<String>> {
-        Box::pin(async move { run_terminal_editor(&draft, &self.home).await })
+        Box::pin(async move {
+            if self.signal.is_some() {
+                return None;
+            }
+            let signals = match SessionSignals::open() {
+                Ok(signals) => signals,
+                Err(error) => {
+                    crate::chrome::chrome(&format!("Editor error: {error}"), None);
+                    return None;
+                }
+            };
+            let cancel = CancellationToken::new();
+            let edit = run_terminal_editor(&draft, &self.home, cancel.clone());
+            tokio::pin!(edit);
+            loop {
+                tokio::select! {
+                    text = &mut edit => {
+                        self.signal = signals.signal().or(self.signal);
+                        return text;
+                    }
+                    _ = tokio::time::sleep(TICK) => {
+                        if let Some(signal) = signals.signal() {
+                            self.signal = Some(signal);
+                            cancel.cancel();
+                        }
+                    }
+                }
+            }
+        })
     }
 }
