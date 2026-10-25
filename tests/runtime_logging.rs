@@ -41,6 +41,7 @@ fn command_response(content: &str) -> CommandResponse {
         scratchpad: None,
         kind: ResponseType::Command,
         is_final: true,
+        discard_command: None,
         plan: None,
         content: content.into(),
         risk_level: RiskLevel::Low,

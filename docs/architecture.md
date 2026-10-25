@@ -45,6 +45,13 @@ the session: it auto-executes any risk, runs non-final steps of any risk
 inline and skips the no-TTY block, but risk is still reported and logged. Yolo
 means no gates, not no observation.
 
+A follow-up reply stays below the pending command, leaving it available to
+run, edit or discuss further. The latest answer survives edits, editor handoffs
+and cancelled follow-ups; a new answer replaces it and a new command clears it.
+Only an explicit request to abandon the command sets `discard_command: true`
+on the reply and prints it before exiting. Missing or null keeps the proposal.
+Initial answers and completion answers after confirmed steps still print and exit.
+
 The round budget resets to `maxRounds` on every follow-up, confirmed step and
 `-c` continuation; the round counter is monotonic. The runner re-checks the
 cancellation token after every await and a cancelled loop's result is

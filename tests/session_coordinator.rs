@@ -446,6 +446,104 @@ async fn a_follow_up_appends_a_user_turn_and_keeps_even_a_low_risk_result_in_the
 }
 
 #[tokio::test]
+async fn explanatory_followups_keep_the_proposal_actionable_until_confirmation() {
+    let rig = SessionRig::new();
+    let llm = llm_list(vec![
+        json!({"type":"command","content":"echo proposed","risk_level":"medium"}),
+        json!({"type":"reply","content":"It is an API identifier.","risk_level":"low"}),
+        json!({"type":"reply","content":"The service expects that identifier.","risk_level":"low"}),
+    ]);
+    let mut host = FakeHost::tty()
+        .on(
+            confirming("echo proposed"),
+            AppEvent::KeyAction(ActionId::Followup),
+        )
+        .on(
+            is(StateTag::ComposingFollowup),
+            AppEvent::SubmitFollowup {
+                text: "Why that name?".into(),
+            },
+        )
+        .on(
+            confirming("echo proposed"),
+            AppEvent::KeyAction(ActionId::Followup),
+        )
+        .on(
+            is(StateTag::ComposingFollowup),
+            AppEvent::SubmitFollowup {
+                text: "Explain more".into(),
+            },
+        )
+        .on(
+            confirming("echo proposed"),
+            AppEvent::KeyAction(ActionId::Run),
+        );
+    let code = run("start", &llm, rig.options(|_| {}), &mut host).await;
+    assert_eq!(code, Ok(0));
+    assert_eq!(
+        host.remaining_script(),
+        0,
+        "answers must leave the proposal actionable"
+    );
+    assert_eq!(host.log, ["mount:Confirming", "unmount"]);
+    let entry = rig.last_entry();
+    assert_eq!(
+        turn_kinds(&entry),
+        [
+            "user",
+            "assistant",
+            "user",
+            "assistant",
+            "user",
+            "assistant",
+            "final"
+        ]
+    );
+    assert_eq!(
+        final_turn(&entry),
+        Some(("echo proposed", Some(0), "model"))
+    );
+}
+
+#[tokio::test]
+async fn explicitly_abandoning_a_proposal_prints_the_answer_without_running_it() {
+    let rig = SessionRig::new();
+    let llm = llm_list(vec![
+        json!({"type":"command","content":"echo proposed","risk_level":"medium"}),
+        json!({"type":"reply","content":"Just the explanation.","risk_level":"low","discard_command":true}),
+    ]);
+    let mut host = FakeHost::tty()
+        .on(
+            confirming("echo proposed"),
+            AppEvent::KeyAction(ActionId::Followup),
+        )
+        .on(
+            is(StateTag::ComposingFollowup),
+            AppEvent::SubmitFollowup {
+                text: "Forget the command; just explain it.".into(),
+            },
+        )
+        .on(
+            confirming("echo proposed"),
+            AppEvent::KeyAction(ActionId::Cancel),
+        );
+    let code = run("start", &llm, rig.options(|_| {}), &mut host).await;
+    assert_eq!(code, Ok(0));
+    assert_eq!(
+        host.remaining_script(),
+        1,
+        "abandoning must exit without another confirmation"
+    );
+    let entry = rig.last_entry();
+    assert_eq!(entry.outcome, "success");
+    assert_eq!(
+        turn_kinds(&entry),
+        ["user", "assistant", "user", "assistant"]
+    );
+    assert_eq!(final_turn(&entry), None);
+}
+
+#[tokio::test]
 async fn esc_during_a_follow_up_cancels_the_in_flight_loop_without_an_orphan_turn() {
     let rig = SessionRig::new();
     let llm = llm_list(vec![

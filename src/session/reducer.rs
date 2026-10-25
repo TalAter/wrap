@@ -20,23 +20,27 @@ pub fn reduce(state: &AppState, event: &AppEvent, yolo: bool) -> Option<AppState
         AppState::Confirming {
             response,
             output_slot,
-        } => reduce_confirming(response, output_slot, event),
+            answer,
+        } => reduce_confirming(response, output_slot, answer, event),
         AppState::Editing {
             response,
             output_slot,
+            answer,
             ..
-        } => reduce_editing(response, output_slot, event),
+        } => reduce_editing(response, output_slot, answer, event),
         AppState::ComposingFollowup {
             response,
             output_slot,
+            answer,
             ..
-        } => reduce_composing(response, output_slot, event),
+        } => reduce_composing(response, output_slot, answer, event),
         AppState::ProcessingFollowup {
             response,
             draft,
             status,
             output_slot,
-        } => reduce_processing(response, draft, status, output_slot, event),
+            answer,
+        } => reduce_processing(response, draft, status, output_slot, answer, event),
         AppState::ComposingInteractive { .. } => reduce_composing_interactive(event),
         AppState::ProcessingInteractive { draft, .. } => {
             reduce_processing_interactive(draft, event, yolo)
@@ -46,12 +50,14 @@ pub fn reduce(state: &AppState, event: &AppEvent, yolo: bool) -> Option<AppState
             draft,
             response,
             output_slot,
-        } => reduce_editor_handoff(*origin, draft, response, output_slot, event),
+            answer,
+        } => reduce_editor_handoff(*origin, draft, response, output_slot, answer, event),
         AppState::ExecutingStep {
             response,
             source,
             output_slot,
-        } => reduce_executing_step(response, *source, output_slot, event),
+            answer,
+        } => reduce_executing_step(response, *source, output_slot, answer, event),
         AppState::Exiting { .. } => None,
     }
 }
@@ -73,10 +79,15 @@ fn run_model(response: &CommandResponse) -> Option<AppState> {
     })
 }
 
-fn confirming(response: &CommandResponse, output_slot: &Option<String>) -> Option<AppState> {
+fn confirming(
+    response: &CommandResponse,
+    output_slot: &Option<String>,
+    answer: &Option<String>,
+) -> Option<AppState> {
     Some(AppState::Confirming {
         response: response.clone(),
         output_slot: output_slot.clone(),
+        answer: answer.clone(),
     })
 }
 
@@ -94,10 +105,12 @@ fn route_initial_final(result: &LoopReturn, yolo: bool) -> Option<AppState> {
             if auto_exec && response.is_final {
                 run_model(response)
             } else {
-                confirming(response, &None)
+                confirming(response, &None, &None)
             }
         }
-        LoopReturn::Answer(content) => exiting(SessionOutcome::Answer(content.clone())),
+        LoopReturn::Answer(content) | LoopReturn::AnswerOnly(content) => {
+            exiting(SessionOutcome::Answer(content.clone()))
+        }
         LoopReturn::Exhausted => exiting(SessionOutcome::Exhausted),
         LoopReturn::Aborted => None,
     }
@@ -107,8 +120,10 @@ fn route_initial_final(result: &LoopReturn, yolo: bool) -> Option<AppState> {
 /// `confirming`, because the user is mid-refinement and expects to see it.
 fn route_dialog_final(result: &LoopReturn, output_slot: &Option<String>) -> Option<AppState> {
     match result {
-        LoopReturn::Command(response) => confirming(response, output_slot),
-        LoopReturn::Answer(content) => exiting(SessionOutcome::Answer(content.clone())),
+        LoopReturn::Command(response) => confirming(response, output_slot, &None),
+        LoopReturn::Answer(content) | LoopReturn::AnswerOnly(content) => {
+            exiting(SessionOutcome::Answer(content.clone()))
+        }
         LoopReturn::Exhausted => exiting(SessionOutcome::Exhausted),
         LoopReturn::Aborted => None,
     }
@@ -129,6 +144,7 @@ fn reduce_thinking(event: &AppEvent, yolo: bool) -> Option<AppState> {
 fn reduce_confirming(
     response: &CommandResponse,
     output_slot: &Option<String>,
+    answer: &Option<String>,
     event: &AppEvent,
 ) -> Option<AppState> {
     match event {
@@ -138,6 +154,7 @@ fn reduce_confirming(
                     response: response.clone(),
                     source: StepSource::Model,
                     output_slot: output_slot.clone(),
+                    answer: answer.clone(),
                 })
             } else {
                 run_model(response)
@@ -152,11 +169,13 @@ fn reduce_confirming(
             response: response.clone(),
             draft: response.content.clone(),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         AppEvent::KeyAction(ActionId::Followup) => Some(AppState::ComposingFollowup {
             response: response.clone(),
             draft: String::new(),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         AppEvent::KeyAction(ActionId::Copy) => None,
         // A step's output can land after the transition to confirming (a
@@ -164,6 +183,7 @@ fn reduce_confirming(
         AppEvent::Notification(Notification::StepOutput { text }) => Some(AppState::Confirming {
             response: response.clone(),
             output_slot: Some(text.clone()),
+            answer: answer.clone(),
         }),
         _ => None,
     }
@@ -172,10 +192,11 @@ fn reduce_confirming(
 fn reduce_editing(
     response: &CommandResponse,
     output_slot: &Option<String>,
+    answer: &Option<String>,
     event: &AppEvent,
 ) -> Option<AppState> {
     match event {
-        AppEvent::KeyEsc => confirming(response, output_slot),
+        AppEvent::KeyEsc => confirming(response, output_slot, answer),
         AppEvent::SubmitEdit { text } => {
             if is_non_final_confirm(response) {
                 // The response carries the edited bytes so the step captures
@@ -188,6 +209,7 @@ fn reduce_editing(
                     },
                     source: StepSource::UserOverride,
                     output_slot: output_slot.clone(),
+                    answer: answer.clone(),
                 })
             } else {
                 exiting(SessionOutcome::Run {
@@ -201,12 +223,14 @@ fn reduce_editing(
             response: response.clone(),
             draft: text.clone(),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         AppEvent::EnterEditor { draft: handoff } => Some(AppState::EditorHandoff {
             origin: EditorOrigin::Editing,
             draft: handoff.clone(),
             response: Some(response.clone()),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         _ => None,
     }
@@ -215,26 +239,30 @@ fn reduce_editing(
 fn reduce_composing(
     response: &CommandResponse,
     output_slot: &Option<String>,
+    answer: &Option<String>,
     event: &AppEvent,
 ) -> Option<AppState> {
     match event {
-        AppEvent::KeyEsc => confirming(response, output_slot),
+        AppEvent::KeyEsc => confirming(response, output_slot, answer),
         AppEvent::DraftChange { text } => Some(AppState::ComposingFollowup {
             response: response.clone(),
             draft: text.clone(),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         AppEvent::SubmitFollowup { text } => Some(AppState::ProcessingFollowup {
             response: response.clone(),
             draft: text.clone(),
             status: None,
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         AppEvent::EnterEditor { draft: handoff } => Some(AppState::EditorHandoff {
             origin: EditorOrigin::ComposingFollowup,
             draft: handoff.clone(),
             response: Some(response.clone()),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         _ => None,
     }
@@ -245,6 +273,7 @@ fn reduce_processing(
     draft: &str,
     status: &Option<String>,
     output_slot: &Option<String>,
+    answer: &Option<String>,
     event: &AppEvent,
 ) -> Option<AppState> {
     let with = |status: Option<String>, output_slot: Option<String>| {
@@ -253,6 +282,7 @@ fn reduce_processing(
             draft: draft.to_string(),
             status,
             output_slot,
+            answer: answer.clone(),
         })
     };
     match event {
@@ -260,6 +290,7 @@ fn reduce_processing(
             response: response.clone(),
             draft: draft.to_string(),
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         AppEvent::Notification(Notification::Chrome { text, .. }) => {
             with(Some(text.clone()), output_slot.clone())
@@ -267,6 +298,9 @@ fn reduce_processing(
         AppEvent::Notification(Notification::StepOutput { text }) => {
             with(status.clone(), Some(text.clone()))
         }
+        AppEvent::LoopFinal {
+            result: LoopReturn::Answer(content),
+        } => confirming(response, output_slot, &Some(content.clone())),
         AppEvent::LoopFinal { result } => route_dialog_final(result, output_slot),
         AppEvent::LoopError { message } => error(message),
         _ => None,
@@ -288,6 +322,7 @@ fn reduce_composing_interactive(event: &AppEvent) -> Option<AppState> {
             draft: handoff.clone(),
             response: None,
             output_slot: None,
+            answer: None,
         }),
         _ => None,
     }
@@ -319,6 +354,7 @@ fn reduce_editor_handoff(
     draft: &str,
     response: &Option<CommandResponse>,
     output_slot: &Option<String>,
+    answer: &Option<String>,
     event: &AppEvent,
 ) -> Option<AppState> {
     let AppEvent::EditorDone { text } = event else {
@@ -333,11 +369,13 @@ fn reduce_editor_handoff(
             response: response.clone()?,
             draft: new_draft,
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
         EditorOrigin::Editing => Some(AppState::Editing {
             response: response.clone()?,
             draft: new_draft,
             output_slot: output_slot.clone(),
+            answer: answer.clone(),
         }),
     }
 }
@@ -349,15 +387,17 @@ fn reduce_executing_step(
     response: &CommandResponse,
     source: StepSource,
     output_slot: &Option<String>,
+    answer: &Option<String>,
     event: &AppEvent,
 ) -> Option<AppState> {
     match event {
-        AppEvent::KeyEsc => confirming(response, output_slot),
+        AppEvent::KeyEsc => confirming(response, output_slot, answer),
         AppEvent::Notification(Notification::StepOutput { text }) => {
             Some(AppState::ExecutingStep {
                 response: response.clone(),
                 source,
                 output_slot: Some(text.clone()),
+                answer: answer.clone(),
             })
         }
         AppEvent::LoopFinal { result } => route_dialog_final(result, output_slot),

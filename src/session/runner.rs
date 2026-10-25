@@ -234,6 +234,9 @@ pub async fn run_loop(
         }
 
         if response.kind == ResponseType::Reply {
+            if response.discard_command == Some(true) {
+                return Ok(LoopReturn::AnswerOnly(response.content));
+            }
             return Ok(LoopReturn::Answer(response.content));
         }
 

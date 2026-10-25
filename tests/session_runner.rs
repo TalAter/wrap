@@ -146,6 +146,44 @@ async fn a_reply_returns_the_answer() {
 }
 
 #[tokio::test]
+async fn an_explicit_abandon_reply_returns_answer_only() {
+    let mut rig = rig(vec![json!({
+        "type": "reply", "content": "It prints hello.", "risk_level": "low",
+        "discard_command": true
+    })]);
+    let result = rig.run().await.unwrap();
+    assert_eq!(result, LoopReturn::AnswerOnly("It prints hello.".into()));
+    assert_eq!(rig.kinds(), ["user", "assistant"]);
+    assert_eq!(step_event_count(&rig.drain()), 0);
+}
+
+#[tokio::test]
+async fn replies_without_explicit_abandon_keep_the_answer_route() {
+    for discard in [Value::Null, json!(false)] {
+        let mut rig = rig(vec![json!({
+            "type": "reply", "content": "It prints hello.", "risk_level": "low",
+            "discard_command": discard
+        })]);
+        assert_eq!(
+            rig.run().await.unwrap(),
+            LoopReturn::Answer("It prints hello.".into())
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_command_ignores_the_discard_signal() {
+    let mut rig = rig(vec![json!({
+        "type": "command", "content": "echo hello", "risk_level": "medium",
+        "discard_command": true
+    })]);
+    assert!(
+        matches!(rig.run().await.unwrap(), LoopReturn::Command(r) if r.content == "echo hello")
+    );
+    assert_eq!(step_event_count(&rig.drain()), 0);
+}
+
+#[tokio::test]
 async fn a_non_final_low_step_runs_inline_and_is_framed_into_the_conversation() {
     let _lock = bus_lock();
     let mut capture = BusCapture::start();

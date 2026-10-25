@@ -11,7 +11,8 @@ use common::*;
 use crossterm::event::KeyCode;
 use ratatui::style::{Color, Modifier};
 use wrap::response::{CommandResponse, ResponseType, RiskLevel};
-use wrap::session::state::{ActionId, AppEvent, AppState, StepSource};
+use wrap::session::reducer::reduce;
+use wrap::session::state::{ActionId, AppEvent, AppState, LoopReturn, StepSource};
 use wrap::theme::{DARK, LIGHT, Theme};
 use wrap::tui::{
     COPY_FLASH, CommandDisplay, DialogSignal, EditorInfo, INTERACTIVE_PLACEHOLDERS,
@@ -24,6 +25,7 @@ fn response(content: &str, risk: RiskLevel) -> CommandResponse {
         scratchpad: None,
         kind: ResponseType::Command,
         is_final: true,
+        discard_command: None,
         plan: None,
         content: content.into(),
         risk_level: risk,
@@ -38,6 +40,7 @@ fn confirming(content: &str, risk: RiskLevel) -> AppState {
     AppState::Confirming {
         response: response(content, risk),
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -84,6 +87,236 @@ fn dialog_rows(buf: &ratatui::buffer::Buffer) -> Vec<String> {
 
 // ── confirming ───────────────────────────────────────────────────
 
+fn answered_proposal(answer: &str) -> AppState {
+    let mut state = confirming("echo ORIGINAL", RiskLevel::Medium);
+    for event in [
+        AppEvent::KeyAction(ActionId::Followup),
+        AppEvent::SubmitFollowup {
+            text: "explain it".into(),
+        },
+        AppEvent::LoopFinal {
+            result: LoopReturn::Answer(answer.into()),
+        },
+    ] {
+        state = reduce(&state, &event, false).unwrap();
+    }
+    state
+}
+
+#[test]
+fn followup_answer_renders_below_the_pending_proposal_and_survives_edit_and_compose() {
+    let state = answered_proposal("Prints ORIGINAL without changing files.");
+    let mut d = dialog(&state);
+    let s = screen_of(&d, 100, 24);
+    assert!(s.contains("Answer:"), "{s}");
+    assert!(s.contains("Prints ORIGINAL without changing files."), "{s}");
+    assert!(s.find("echo ORIGINAL").unwrap() < s.find("Answer:").unwrap());
+    assert!(s.contains("Run command?"), "{s}");
+    for (action, bar) in [
+        (ActionId::Edit, "to discard changes"),
+        (ActionId::Followup, "to send"),
+    ] {
+        let next = reduce(&state, &AppEvent::KeyAction(action), false).unwrap();
+        d.sync(&next);
+        let s = screen_of(&d, 100, 24);
+        assert!(s.contains("Prints ORIGINAL without changing files."), "{s}");
+        assert!(s.contains(bar), "{s}");
+    }
+}
+
+#[test]
+fn long_followup_answer_scrolls_without_hiding_actions_or_changing_the_draft() {
+    let answer = (0..40)
+        .map(|i| format!("Explanation row {i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let state = answered_proposal(&answer);
+    let mut d = dialog(&state);
+    let s = screen_of(&d, 80, 18);
+    assert!(s.contains("Explanation row 00"), "{s}");
+    assert!(!s.contains("Explanation row 39"), "{s}");
+    assert!(s.contains("PgUp/PgDn"), "{s}");
+    for _ in 0..40 {
+        d.key(key(KeyCode::PageDown));
+        let s = screen_of(&d, 80, 18);
+        assert!(s.contains("Run command?"), "{s}");
+        assert!(s.contains("echo ORIGINAL"), "{s}");
+    }
+    assert!(screen_of(&d, 80, 18).contains("Explanation row 39"));
+    assert!(d.take_events().is_empty());
+    for _ in 0..40 {
+        d.key(key(KeyCode::PageUp));
+        draw(&d, 80, 18);
+    }
+    assert!(screen_of(&d, 80, 18).contains("Explanation row 00"));
+    for (action, bar) in [
+        (ActionId::Edit, "to discard changes"),
+        (ActionId::Followup, "to send"),
+    ] {
+        let next = reduce(&state, &AppEvent::KeyAction(action), false).unwrap();
+        d.sync(&next);
+        for _ in 0..40 {
+            d.key(key(KeyCode::PageDown));
+            let s = screen_of(&d, 80, 18);
+            assert!(s.contains(bar), "{s}");
+        }
+        assert!(screen_of(&d, 80, 18).contains("Explanation row 39"));
+        assert!(
+            d.take_events().is_empty(),
+            "scrolling must not edit the draft"
+        );
+    }
+    let replacement = reduce(&state, &AppEvent::KeyAction(ActionId::Followup), false).unwrap();
+    let processing = reduce(
+        &replacement,
+        &AppEvent::SubmitFollowup {
+            text: "again".into(),
+        },
+        false,
+    )
+    .unwrap();
+    let latest = reduce(
+        &processing,
+        &AppEvent::LoopFinal {
+            result: LoopReturn::Answer("Latest answer".into()),
+        },
+        false,
+    )
+    .unwrap();
+    d.sync(&latest);
+    let s = screen_of(&d, 80, 18);
+    assert!(
+        s.contains("Latest answer") && !s.contains("Explanation row"),
+        "{s}"
+    );
+    let next = reduce(
+        &processing,
+        &AppEvent::LoopFinal {
+            result: LoopReturn::Command(response("echo REPLACEMENT", RiskLevel::Low)),
+        },
+        false,
+    )
+    .unwrap();
+    d.sync(&next);
+    let s = screen_of(&d, 80, 18);
+    assert!(
+        s.contains("echo REPLACEMENT") && !s.contains("Answer:"),
+        "{s}"
+    );
+}
+
+#[test]
+fn wrapped_answer_remains_readable_after_resize_with_proposal_details() {
+    let answer = format!("FIRST {} LAST", "wide 界 explanation ".repeat(40));
+    let mut state = answered_proposal(&answer);
+    if let AppState::Confirming {
+        response,
+        output_slot,
+        ..
+    } = &mut state
+    {
+        response.explanation = Some("A harmless proposal.".into());
+        response.plan = Some("Print the text.".into());
+        *output_slot = Some("Previous output".into());
+    }
+    let mut d = dialog(&state);
+    for (w, h) in [(100, 28), (70, 22), (90, 24)] {
+        for _ in 0..100 {
+            d.key(key(KeyCode::PageUp));
+            draw(&d, w, h);
+        }
+        let s = screen_of(&d, w, h);
+        assert!(s.contains("FIRST"), "{s}");
+        for _ in 0..100 {
+            d.key(key(KeyCode::PageDown));
+            let s = screen_of(&d, w, h);
+            assert!(s.contains("Run command?"), "{s}");
+            assert!(
+                s.contains("A harmless proposal.") && s.contains("Previous output"),
+                "{s}"
+            );
+        }
+        assert!(screen_of(&d, w, h).contains("LAST"));
+    }
+}
+
+#[test]
+fn crowded_answer_keeps_followup_input_and_actions_visible() {
+    check_crowded_answer(true, 18);
+}
+
+#[test]
+fn crowded_answer_keeps_confirmation_actions_visible_on_short_terminal() {
+    check_crowded_answer(false, 12);
+}
+
+fn check_crowded_answer(compose: bool, height: u16) {
+    let answer = (0..20)
+        .map(|i| format!("Answer line {i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut state = answered_proposal(&answer);
+    if let AppState::Confirming {
+        response,
+        output_slot,
+        ..
+    } = &mut state
+    {
+        response.content = "echo FIRST\necho SECOND".into();
+        response.explanation = Some("A harmless proposal.".into());
+        response.plan = Some("Print the text.".into());
+        *output_slot = Some("Output one\nOutput two\nOutput three".into());
+    }
+    if compose {
+        state = reduce(&state, &AppEvent::KeyAction(ActionId::Followup), false).unwrap();
+        state = reduce(
+            &state,
+            &AppEvent::DraftChange {
+                text: "explain again".into(),
+            },
+            false,
+        )
+        .unwrap();
+    }
+    let mut d = dialog(&state);
+    let mut seen = String::new();
+    for _ in 0..40 {
+        let s = screen_of(&d, 80, height);
+        assert!(
+            s.contains(if compose { "to send" } else { "Run command?" }),
+            "{s}"
+        );
+        assert!(s.contains("echo FIRST") && s.contains("echo SECOND"), "{s}");
+        if compose {
+            assert!(s.contains("explain again"), "{s}");
+        }
+        seen.push_str(&s);
+        d.key(key(KeyCode::PageDown));
+    }
+    for text in [
+        "Output one",
+        "Output two",
+        "Output three",
+        "A harmless proposal.",
+        "Print the text.",
+        "Answer:",
+    ] {
+        assert!(seen.contains(text), "missing {text}");
+    }
+    for i in 0..20 {
+        assert!(
+            seen.contains(&format!("Answer line {i:02}")),
+            "missing answer line {i}"
+        );
+    }
+    for _ in 0..40 {
+        d.key(key(KeyCode::PageUp));
+        draw(&d, 80, height);
+    }
+    assert!(screen_of(&d, 80, height).contains("Output one"));
+    assert!(d.take_events().is_empty());
+}
+
 #[test]
 fn confirming_lays_out_pill_command_explanation_and_action_bar() {
     let mut resp = response("ls -la", RiskLevel::Medium);
@@ -91,6 +324,7 @@ fn confirming_lays_out_pill_command_explanation_and_action_bar() {
     let d = dialog(&AppState::Confirming {
         response: resp,
         output_slot: None,
+        answer: None,
     });
     let buf = draw(&d, 100, 20);
     let lines = dialog_rows(&buf);
@@ -283,6 +517,7 @@ fn copy_is_dialog_local_flashes_copied_and_reverts_after_the_window() {
         response: response("ls -la", RiskLevel::Medium),
         draft: "ls -la".into(),
         output_slot: None,
+        answer: None,
     });
     assert!(!d.is_flashing(), "leaving confirming clears the flash");
     assert_eq!(d.selected_index(), 0);
@@ -295,6 +530,7 @@ fn editing(draft: &str) -> AppState {
         response: response("echo rm-fake", RiskLevel::High),
         draft: draft.into(),
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -531,6 +767,7 @@ fn composing(draft: &str) -> AppState {
         response: response("echo rm-fake", RiskLevel::Medium),
         draft: draft.into(),
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -582,6 +819,7 @@ fn processing_followup_freezes_the_draft_and_spins_in_the_bottom_border() {
         draft: "the draft".into(),
         status: Some("Probing the database".into()),
         output_slot: None,
+        answer: None,
     };
     let mut d = dialog(&state);
     assert!(d.animating());
@@ -607,6 +845,7 @@ fn processing_followup_freezes_the_draft_and_spins_in_the_bottom_border() {
         draft: String::new(),
         status: None,
         output_slot: None,
+        answer: None,
     });
     assert!(screen_of(&fallback, 90, 16).contains("Reticulating splines..."));
     let mut quiet = opts(&DARK);
@@ -622,6 +861,7 @@ fn executing_step_shows_output_slot_running_status_and_interrupt_hint() {
         response: response("echo git-stash-fake", RiskLevel::Medium),
         source: StepSource::Model,
         output_slot: Some("Saved working directory.".into()),
+        answer: None,
     });
     let buf = draw(&d, 90, 16);
     let lines = dialog_rows(&buf);
@@ -661,6 +901,7 @@ fn output_slot_sentinel_plan_and_omission() {
     let empty = dialog(&AppState::Confirming {
         response: response("echo done", RiskLevel::Medium),
         output_slot: Some(String::new()),
+        answer: None,
     });
     assert!(screen_of(&empty, 90, 16).contains(OUTPUT_SLOT_EMPTY));
     let none = dialog(&confirming("echo done", RiskLevel::Medium));
@@ -671,6 +912,7 @@ fn output_slot_sentinel_plan_and_omission() {
     let d = dialog(&AppState::Confirming {
         response: planned,
         output_slot: None,
+        answer: None,
     });
     let buf = draw(&d, 90, 16);
     let s = screen(&buf);
@@ -970,6 +1212,7 @@ fn narrow_terminal_clamps_the_dialog_and_drops_the_pill() {
     let d = dialog(&AppState::Confirming {
         response: resp,
         output_slot: None,
+        answer: None,
     });
     let buf = draw(&d, 40, 24);
     let lines = dialog_rows(&buf);
@@ -1023,6 +1266,7 @@ fn short_terminal_folds_the_command_with_a_hidden_lines_pill() {
         response: response(&command, RiskLevel::Medium),
         draft: command.clone(),
         output_slot: None,
+        answer: None,
     };
     assert!(
         !screen_of(&dialog(&editing_state), 90, 14).contains("lines hidden"),

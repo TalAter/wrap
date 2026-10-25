@@ -8,6 +8,7 @@
 //! [`ResponseDialog::take_events`]; dialog-local requests to the coordinator
 //! (opening a GUI editor) are collected with [`ResponseDialog::take_signals`].
 
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -256,6 +257,7 @@ enum Block {
     Para {
         text: Text<'static>,
         indent: u16,
+        viewport: Option<(u16, u16)>,
     },
     Input(InputFrame),
     Blank,
@@ -272,6 +274,7 @@ impl Block {
                     .collect::<Vec<_>>(),
             ),
             indent,
+            viewport: None,
         }
     }
 
@@ -279,12 +282,17 @@ impl Block {
         Block::Para {
             text: Text::from(line),
             indent,
+            viewport: None,
         }
     }
 
     fn height(&self, width: u16) -> u16 {
         match self {
-            Block::Para { text, indent } => Paragraph::new(text.clone())
+            Block::Para {
+                viewport: Some((rows, _)),
+                ..
+            } => *rows,
+            Block::Para { text, indent, .. } => Paragraph::new(text.clone())
                 .wrap(Wrap { trim: false })
                 .line_count(width.saturating_sub(*indent).max(1))
                 .max(1)
@@ -296,11 +304,16 @@ impl Block {
 
     fn render(&self, buf: &mut Buffer, area: Rect, paint: Paint) {
         match self {
-            Block::Para { text, indent } => {
+            Block::Para {
+                text,
+                indent,
+                viewport,
+            } => {
                 let indent = (*indent).min(area.width);
                 let rect = Rect::new(area.x + indent, area.y, area.width - indent, area.height);
                 Paragraph::new(text.clone())
                     .wrap(Wrap { trim: false })
+                    .scroll((viewport.map_or(0, |(_, scroll)| scroll), 0))
                     .render(rect, buf);
             }
             Block::Input(frame) => frame.render(buf, area, paint),
@@ -324,6 +337,8 @@ pub struct ResponseDialog {
     events: Vec<AppEvent>,
     signals: Vec<DialogSignal>,
     rng: u64,
+    answer_scroll: Cell<u16>,
+    answer_page_rows: Cell<u16>,
 }
 
 impl ResponseDialog {
@@ -346,6 +361,8 @@ impl ResponseDialog {
             events: Vec::new(),
             signals: Vec::new(),
             rng: seed,
+            answer_scroll: Cell::new(0),
+            answer_page_rows: Cell::new(1),
         };
         dialog.placeholder = dialog.pick_placeholder(None);
         dialog.draft_was_empty = state.draft().is_none_or(str::is_empty);
@@ -392,6 +409,9 @@ impl ResponseDialog {
     /// keystrokes on every transition so nothing typed earlier lands on the
     /// new state.
     pub fn sync(&mut self, state: &AppState) {
+        if state.answer() != self.state.answer() {
+            self.answer_scroll.set(0);
+        }
         let prev_tag = self.state.tag();
         let tag = state.tag();
         if prev_tag != tag {
@@ -525,6 +545,18 @@ impl ResponseDialog {
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+        if self.state.answer().is_some() {
+            let offset = self.answer_scroll.get();
+            let page = self.answer_page_rows.get().saturating_sub(1).max(1);
+            match key.code {
+                KeyCode::PageUp => self.answer_scroll.set(offset.saturating_sub(page)),
+                KeyCode::PageDown => self.answer_scroll.set(offset.saturating_add(page)),
+                _ => {}
+            }
+            if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) {
+                return;
+            }
+        }
         if ctrl && key.code == KeyCode::Char('g') && self.can_open_editor() {
             if self.gui_editing.is_some() {
                 return;
@@ -760,6 +792,7 @@ impl ResponseDialog {
         let plan = response.and_then(|r| r.plan.as_deref());
         let draft = self.state.draft().unwrap_or("");
         let output_slot = self.state.output_slot();
+        let answer = self.state.answer();
         let show_followup = matches!(
             tag,
             StateTag::ComposingFollowup | StateTag::ProcessingFollowup
@@ -768,6 +801,7 @@ impl ResponseDialog {
         let mut size_to = vec![SizeBasis::Text(command)];
         size_to.extend(explanation.map(SizeBasis::Text));
         size_to.extend(plan.map(SizeBasis::Text));
+        size_to.extend(answer.map(SizeBasis::Text));
         if show_followup {
             size_to.push(SizeBasis::Text(draft));
         }
@@ -787,6 +821,13 @@ impl ResponseDialog {
 
         let badge = self.badge(area.width);
         let mut chrome_rows: u16 = 7 + u16::from(badge.is_some());
+        let answer_rows = answer.map_or(0, |text| {
+            Block::para(text, paint.color(&theme.copy.body), 1).height(inner_width)
+        });
+        let answer_view_rows = answer_rows.min((area.height / 3).max(1));
+        if answer.is_some() {
+            chrome_rows = chrome_rows.saturating_add(2 + answer_view_rows);
+        }
         if let Some(explanation) = explanation {
             chrome_rows = chrome_rows.saturating_add(1 + wrapped_rows(explanation));
         }
@@ -801,7 +842,12 @@ impl ResponseDialog {
         if show_followup {
             chrome_rows = chrome_rows.saturating_add(1 + wrapped_rows(draft));
         }
-        let max_command_rows = usize::from(area.height.saturating_sub(chrome_rows).max(3));
+        let min_command_rows = if answer.is_some() { 1 } else { 3 };
+        let max_command_rows = usize::from(
+            area.height
+                .saturating_sub(chrome_rows)
+                .max(min_command_rows),
+        );
 
         let mut blocks = Vec::new();
         if let Some(badge) = badge {
@@ -875,6 +921,21 @@ impl ResponseDialog {
                 1,
             ));
         }
+        let answer_index = answer.map(|text| {
+            blocks.push(Block::Blank);
+            blocks.push(Block::para(
+                "Answer:",
+                paint.color(&theme.dialog.output_label),
+                1,
+            ));
+            let index = blocks.len();
+            let mut block = Block::para(text, paint.color(&theme.copy.body), 1);
+            if let Block::Para { viewport, .. } = &mut block {
+                *viewport = Some((answer_view_rows, 0));
+            }
+            blocks.push(block);
+            index
+        });
         if show_followup {
             blocks.push(Block::Blank);
             if tag == StateTag::ComposingFollowup {
@@ -937,6 +998,145 @@ impl ResponseDialog {
                 )),
             );
         }
+        if let Some(index) = answer_index {
+            let index = index + usize::from(tag == StateTag::Editing);
+            let other_rows = blocks
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != index)
+                .fold(DIALOG_CHROME_HEIGHT, |rows, (_, block)| {
+                    rows.saturating_add(block.height(inner_width))
+                });
+            if other_rows >= area.height {
+                return (
+                    frame,
+                    self.compact_answer_blocks(blocks, command_index, area, inner_width, paint),
+                );
+            }
+            let visible = answer_view_rows
+                .min(area.height.saturating_sub(other_rows))
+                .max(1);
+            let scroll = self
+                .answer_scroll
+                .get()
+                .min(answer_rows.saturating_sub(visible));
+            self.answer_scroll.set(scroll);
+            self.answer_page_rows.set(visible);
+            if let Block::Para { viewport, .. } = &mut blocks[index] {
+                *viewport = Some((visible, scroll));
+            }
+            if answer_rows > visible {
+                blocks[index - 1] = Block::para(
+                    "Answer: (PgUp/PgDn to scroll)",
+                    paint.color(&theme.dialog.output_label),
+                    1,
+                );
+            }
+        }
         (frame, blocks)
+    }
+
+    /// Keeps the command, active input and actions outside the scrolling
+    /// details when the terminal cannot fit the supporting blocks separately.
+    fn compact_answer_blocks(
+        &self,
+        mut blocks: Vec<Block>,
+        command_index: usize,
+        area: Rect,
+        width: u16,
+        paint: Paint,
+    ) -> Vec<Block> {
+        blocks.remove(command_index);
+        let bar = blocks.pop().expect("response action bar");
+        while matches!(blocks.last(), Some(Block::Blank)) {
+            blocks.pop();
+        }
+        let composing = self.state.tag() == StateTag::ComposingFollowup;
+        if composing {
+            blocks.pop();
+            blocks.pop();
+        } else if self.state.tag() == StateTag::ProcessingFollowup {
+            blocks.pop();
+            blocks.push(Block::para(
+                self.state.draft().unwrap_or(""),
+                paint.color(&self.opts.theme.input.text),
+                1,
+            ));
+        }
+        let hint = Block::para(
+            "Details: (PgUp/PgDn to scroll)",
+            paint.color(&self.opts.theme.copy.note),
+            1,
+        );
+        let command_rows = area
+            .height
+            .saturating_sub(
+                DIALOG_CHROME_HEIGHT
+                    + bar.height(width)
+                    + hint.height(width)
+                    + 2
+                    + u16::from(composing),
+            )
+            .clamp(1, 3);
+        let text_width = width.saturating_sub(2).max(1);
+        let command = if self.state.tag() == StateTag::Editing {
+            Block::Input(self.input.frame(
+                paint,
+                Some(InputLayout {
+                    wrap_width: text_width,
+                    max_rows: Some(command_rows),
+                }),
+            ))
+        } else {
+            let content = self.state.response().map_or("", |r| r.content.as_str());
+            Block::Input(InputFrame::read_only(
+                &truncate_command(content, usize::from(command_rows), usize::from(text_width)),
+                paint,
+            ))
+        };
+        let fixed_rows = DIALOG_CHROME_HEIGHT
+            .saturating_add(command.height(width))
+            .saturating_add(bar.height(width))
+            .saturating_add(hint.height(width))
+            .saturating_add(1);
+        let input = composing.then(|| {
+            Block::Input(self.input.frame(
+                paint,
+                Some(InputLayout {
+                    wrap_width: width.saturating_sub(2).max(1),
+                    max_rows: Some(area.height.saturating_sub(fixed_rows + 1).clamp(1, 3)),
+                }),
+            ))
+        });
+        let visible = area.height.saturating_sub(
+            fixed_rows.saturating_add(input.as_ref().map_or(0, |block| block.height(width))),
+        );
+        let mut lines = Vec::new();
+        for block in blocks {
+            match block {
+                Block::Para { text, .. } => lines.extend(text.lines),
+                Block::Blank => lines.push(Line::default()),
+                Block::Input(_) => unreachable!("response inputs stay outside the details"),
+            }
+        }
+        let mut details = Block::Para {
+            text: Text::from(lines),
+            indent: 1,
+            viewport: None,
+        };
+        let scroll = self
+            .answer_scroll
+            .get()
+            .min(details.height(width).saturating_sub(visible));
+        self.answer_scroll.set(scroll);
+        self.answer_page_rows.set(visible);
+        if let Block::Para { viewport, .. } = &mut details {
+            *viewport = Some((visible, scroll));
+        }
+        let mut result = vec![command, hint, details];
+        result.extend(input);
+        result.push(Block::Blank);
+        result.push(bar);
+        result
     }
 }
