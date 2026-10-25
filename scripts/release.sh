@@ -43,8 +43,8 @@ git fetch origin main --quiet
 
 [ -z "$(git tag -l "$tag")" ] || fail "tag $tag already exists."
 
-echo "Running make check…" >&2
-make check || fail "\`make check\` failed. Fix before tagging."
+echo "Running make check terminal…" >&2
+make check terminal || fail "\`make check terminal\` failed. Fix before tagging."
 
 # ---- version bump -----------------------------------------------------------
 

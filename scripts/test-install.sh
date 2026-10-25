@@ -13,15 +13,29 @@
 # Docker volumes so repeat runs only rebuild what changed.
 #
 # Run from the repo root: `./scripts/test-install.sh`.
-# Requires: docker (orbstack works). Builds linux/arm64 by default (native on
-# Apple Silicon); set WRAP_TEST_PLATFORM=linux/amd64 on an x86_64 host.
+# Requires Docker or Podman. Builds the host architecture by default;
+# WRAP_TEST_PLATFORM can select linux/arm64 or linux/amd64 explicitly.
 
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-STAGE_DIR="${WRAP_TEST_STAGE_DIR:-/tmp/wrap-test-stage}"
-PLATFORM="${WRAP_TEST_PLATFORM:-linux/arm64}"
+STAGE_PARENT="${WRAP_TEST_STAGE_DIR:-${TMPDIR:-/tmp}}"
+mkdir -p "$STAGE_PARENT"
+STAGE_DIR=$(mktemp -d "$STAGE_PARENT/wrap-test.XXXXXX")
+trap 'rm -rf "$STAGE_DIR"' EXIT
+ENGINE=${CONTAINER_ENGINE:-}
+if [ -z "$ENGINE" ]; then
+  if command -v podman >/dev/null 2>&1; then ENGINE=podman; else ENGINE=docker; fi
+fi
+PLATFORM=${WRAP_TEST_PLATFORM:-}
+if [ -z "$PLATFORM" ]; then
+  case $(uname -m) in
+    arm64|aarch64) PLATFORM=linux/arm64 ;;
+    x86_64) PLATFORM=linux/amd64 ;;
+    *) printf 'Unsupported host architecture; set WRAP_TEST_PLATFORM.\n' >&2; exit 1 ;;
+  esac
+fi
 
 note() {
   printf '== %s\n' "$1" >&2
@@ -62,18 +76,15 @@ sha256sum wrap-*.tar.gz > checksums.txt
 '
 
 stage_assets() {
-  rm -rf "$STAGE_DIR"
-  mkdir -p "$STAGE_DIR"
-
   note "Building wrap for $ARCH (glibc + musl) in rust:slim-bookworm ($PLATFORM)..."
-  docker run --rm --platform "$PLATFORM" \
+  "$ENGINE" run --rm --platform "$PLATFORM" \
     -v "$REPO_DIR:/src:ro" \
     -v "$STAGE_DIR:/out" \
     -v wrap-test-cargo-registry:/usr/local/cargo/registry \
     -v "wrap-test-target-$ARCH:/target" \
     -e CARGO_TARGET_DIR=/target \
     -e "ARCH=$ARCH" \
-    rust:slim-bookworm sh -c "$BUILD_SCRIPT" \
+    docker.io/library/rust:slim-bookworm sh -c "$BUILD_SCRIPT" \
     || err "build failed"
 
   cp "$SCRIPT_DIR/install.sh"        "$STAGE_DIR/install.sh"
@@ -115,7 +126,7 @@ run_in_container() {
   image="$1"
   note "Running checklist in $image..."
   expected_version="$(sed -n '/^\[package\]/,/^\[/{s/^version = "\(.*\)"$/\1/p}' "$REPO_DIR/Cargo.toml" | head -1)"
-  docker run --rm --platform "$PLATFORM" \
+  "$ENGINE" run --rm --platform "$PLATFORM" \
     -v "$STAGE_DIR:/srv:ro" \
     -e "EXPECTED_VERSION=$expected_version" \
     "$image" sh -c "$CONTAINER_SCRIPT" \
@@ -123,12 +134,12 @@ run_in_container() {
 }
 
 main() {
-  command -v docker >/dev/null 2>&1 || err "docker not found (orbstack/docker required)"
+  command -v "$ENGINE" >/dev/null 2>&1 || err "Docker or Podman required"
 
   stage_assets
 
-  run_in_container "ubuntu:24.04"
-  run_in_container "alpine:3.20"
+  run_in_container "docker.io/library/ubuntu:24.04"
+  run_in_container "docker.io/library/alpine:3.20"
 
   note "All containers passed."
 }

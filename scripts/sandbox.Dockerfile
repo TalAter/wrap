@@ -8,7 +8,8 @@ RUN cargo build --locked --release
 
 FROM build AS verify
 COPY tests ./tests
-RUN cargo test --locked && cargo build --locked && python3 tests/terminal.py target/debug/wrap && python3 tests/help_terminal.py target/debug/wrap
+COPY eval/fixtures ./eval/fixtures
+RUN cargo test --locked && cargo build --locked && python3 tests/contracts/cli.py && python3 tests/terminal.py target/debug/wrap && python3 tests/editor_terminal.py target/debug/wrap && python3 tests/shell_terminal.py target/debug/wrap && python3 tests/help_terminal.py target/debug/wrap
 
 FROM ubuntu:24.04 AS sandbox
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq zsh && rm -rf /var/lib/apt/lists/*

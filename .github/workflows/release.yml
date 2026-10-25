@@ -47,14 +47,15 @@ jobs:
       - name: Run shellcheck
         run: shellcheck scripts/install.sh scripts/test-install.sh scripts/install-assert.sh scripts/release.sh scripts/bump-tap.sh
 
-  # Quick red-tree guard before spending six build legs. Full lint lives in
-  # check.yml, which runs on every push.
+  # Release assets require the same behavior and terminal checks as branch builds.
   test:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --locked
+        with:
+          components: rustfmt, clippy
+      - run: make check terminal
 
   build:
     needs: [create-release, shellcheck, test]
@@ -233,7 +234,8 @@ jobs:
         run: |
           cd /tmp/r
           python3 -m http.server 8000 >/dev/null 2>&1 &
-          trap "kill $! 2>/dev/null || true" EXIT
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for _ in $(seq 1 40); do
             curl -fsS http://127.0.0.1:8000/install.sh >/dev/null 2>&1 && break
             sleep 0.1
@@ -256,7 +258,8 @@ jobs:
         run: |
           cd /tmp/r
           python3 -m http.server 8000 >/dev/null 2>&1 &
-          trap "kill $! 2>/dev/null || true" EXIT
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for _ in $(seq 1 40); do
             curl -fsS http://127.0.0.1:8000/install.sh >/dev/null 2>&1 && break
             sleep 0.1

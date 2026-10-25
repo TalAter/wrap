@@ -9,7 +9,10 @@ build:
 	cargo build --locked --release
 terminal:
 	cargo build --locked
+	python3 tests/contracts/cli.py
 	python3 tests/terminal.py target/debug/wrap
+	python3 tests/editor_terminal.py target/debug/wrap
+	python3 tests/shell_terminal.py target/debug/wrap
 	python3 tests/help_terminal.py target/debug/wrap
 sandbox:
 	./scripts/sandbox.sh
