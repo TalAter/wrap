@@ -213,7 +213,7 @@ fn assemble_messages(input: &BridgeInput) -> Result<(String, Vec<LlmMessage>), S
                 };
                 messages.extend(framer.frame(&turn));
             }
-            Role::Assistant => messages.push(assistant_message(&message.content, &mut framer)?),
+            Role::Assistant => messages.push(assistant_message(&message.content)?),
         }
     }
     messages.extend(framer.frame(&Turn::User {
@@ -228,24 +228,12 @@ fn assemble_messages(input: &BridgeInput) -> Result<(String, Vec<LlmMessage>), S
     Ok((scaffold.system, messages))
 }
 
-/// An assistant turn arrives as raw command-response JSON and is echoed the
-/// way the runtime echoes it: a schema-valid response through the framer's
-/// projection; anything else keeps only the projected keys it carries.
-fn assistant_message(content: &str, framer: &mut TurnFramer) -> Result<LlmMessage, String> {
+/// Historical assistant JSON keeps only replayable fields, preserving absent
+/// fields so old eval examples retain their original meaning.
+fn assistant_message(content: &str) -> Result<LlmMessage, String> {
     let value: Value = serde_json::from_str(content).map_err(|_| {
         "Eval bridge error: an assistant entry in extraMessages is not valid JSON.".to_string()
     })?;
-    if let Ok(response) = serde_json::from_value::<CommandResponse>(value.clone()) {
-        let turn = Turn::Assistant {
-            response: Some(response),
-            attempts: Vec::new(),
-            llm_ms: None,
-            source: "model".into(),
-        };
-        if let Some(message) = framer.frame(&turn).into_iter().next() {
-            return Ok(message);
-        }
-    }
     let mut projected = Map::new();
     if let Some(object) = value.as_object() {
         for key in ["type", "final", "content", "risk_level", "plan"] {

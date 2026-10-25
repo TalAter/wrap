@@ -70,6 +70,19 @@ const VALID_RESPONSE: &str =
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
+async fn assembly_preserves_typescript_baselines_without_adding_historical_fields() {
+    for raw in [
+        include_str!("../eval/fixtures/assemble-0.json"),
+        include_str!("../eval/fixtures/assemble-1.json"),
+        include_str!("../eval/fixtures/assemble-2.json"),
+        include_str!("../eval/fixtures/assemble-3.json"),
+    ] {
+        let fixture: Value = serde_json::from_str(raw).unwrap();
+        assert_eq!(result(&fixture["input"], &[]).await, fixture["expected"]);
+    }
+}
+
+#[tokio::test]
 async fn assemble_returns_system_and_messages() {
     let result = result(&base_input("assemble"), &[]).await;
     assert_eq!(result["ok"], json!(true));
@@ -191,7 +204,7 @@ async fn assistant_extra_messages_are_projected_for_echo() {
     let echoed: Value = serde_json::from_str(content(assistant)).unwrap();
     assert_eq!(
         echoed,
-        json!({"type":"command","final":true,"content":"which ffmpeg","risk_level":"low"})
+        json!({"type":"command","content":"which ffmpeg","risk_level":"low"})
     );
 }
 
