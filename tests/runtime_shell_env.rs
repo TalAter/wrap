@@ -1,6 +1,5 @@
 //! Lives in its own binary: it sets `SHELL` for the whole process, which the
 //! other shell tests must not observe.
-use std::io::IsTerminal;
 use std::os::unix::fs::PermissionsExt;
 
 use wrap::shell::{ShellMode, execute_shell_command};
@@ -19,13 +18,7 @@ async fn the_shell_comes_from_shell_env_with_the_interactive_no_monitor_argv_and
         .await
         .unwrap();
     assert_eq!(result.shell, fake_shell.to_string_lossy());
-    let expected_command =
-        if std::io::stdin().is_terminal() || std::fs::File::open("/dev/tty").is_ok() {
-            "echo hi"
-        } else {
-            "set +m; echo hi"
-        };
-    assert_eq!(result.stdout, format!("+m\n-ic\n{expected_command}\n"));
+    assert_eq!(result.stdout, "+m\n-ic\nset +m; echo hi\n");
 
     unsafe { std::env::set_var("SHELL", "") };
     let result = execute_shell_command("echo hi", ShellMode::Capture, None)

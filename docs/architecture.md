@@ -64,21 +64,28 @@ lines land in scrollback rather than in the alternate buffer about to vanish.
 Wrap disappears during the final exec: the dialog is unmounted, raw mode
 released, and the child inherits stdio, so `vim`, `top`, `ssh` and `sudo`
 work unmodified. Teeing child output would break TTY detection. Commands run
-as `$SHELL +m -ic <cmd>`: `-i` sources the user's rc files. Interactive bash
-gives the foreground job its own process group and the terminal, so Ctrl-C
-reaches the command; Wrap ignores SIGINT/SIGTERM meanwhile and resets both to
-their defaults in the child, so it survives to record the exit code.
+as `$SHELL +m -ic 'set +m; <cmd>'`: `-i` sources the user's rc files. The
+post-startup `set +m` enforces the requested job-control setting. Bash creates
+its own foreground group during startup; its commands then share that group,
+so Ctrl-C interrupts the command list even in Bash 3.2. Wrap ignores
+SIGINT/SIGTERM meanwhile and resets both to their defaults in the child, so
+it survives to record the exit code.
 When Wrap was piped into but a controlling terminal exists, interactive
 children still read keystrokes from `/dev/tty`.
 
-Captured steps keep the terminal as stdin so `sudo` can prompt. Bash ignores
-`+m` when interactive and hands the terminal to the step's job, so until that
-job exits keystrokes (Esc included) reach the job, not the dialog. The action
-bar offers Ctrl-C to interrupt the step. A shell-owned
-interrupt returns the step's failure to the model; Esc cancels through the
-dialog only while Wrap owns input. During the step Wrap ignores SIGTTIN and
-SIGTTOU: a terminal read from behind the
-job then fails with EIO, which the dialog tolerates, instead of stopping Wrap
+Captured steps keep the terminal as stdin so `sudo` can prompt. Bash
+(including macOS `/bin/sh`) starts with terminal stderr because Bash 3.2
+requires it for job control; startup diagnostics remain visible on stderr.
+Before the command, stderr opens a private FIFO (mode 0600 in the scratch
+directory), so startup background jobs inherit no capture descriptor. The
+FIFO is removed when the step finishes or is cancelled; its parent writer
+closes on shell exit even when startup exits before opening the FIFO.
+Bash owns the foreground until it exits, so keystrokes (Esc included) reach
+the step, not the dialog. The action bar offers Ctrl-C to interrupt the step.
+A shell-owned interrupt returns the step's failure to the model; Esc cancels
+through the dialog only while Wrap owns input. During the step Wrap ignores
+SIGTTIN and SIGTTOU: a terminal read from behind the job then fails with EIO,
+which the dialog tolerates, instead of stopping Wrap
 under the user's shell; the dispositions return once the step ends. zsh
 honours `+m`, so there Esc cancels the step. A cancel kills, and the end of a
 step reclaims the terminal from, only groups the step's child started (on

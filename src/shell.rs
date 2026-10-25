@@ -3,17 +3,21 @@
 //!
 //! The shell runs as `$SHELL +m -ic <command>`. `-i` sources the user's rc
 //! files so aliases, functions and PATH additions behave as at their own
-//! prompt. Headless commands also run `set +m` after interactive startup so
-//! background jobs stay in the child's isolated group after its exit.
-//! `+m` asks for job control off; interactive bash still runs each
-//! foreground job in its own process group and hands it the terminal, which
-//! is what lets Ctrl-C reach the command without reaching Wrap.
+//! prompt. Commands run `set +m` after startup, which can override `+m`.
+//! Bash first creates its own foreground group; its commands then share
+//! that group, so Ctrl-C reaches both shell and command without reaching
+//! Wrap. Headless commands keep their isolated group after shell exit.
+//!
+//! Captured Bash starts with terminal stderr for job-control initialization,
+//! then opens a private FIFO for command stderr. Startup descendants never
+//! inherit the FIFO descriptors.
+//! Startup diagnostics stay on stderr; command output is captured.
 //!
 //! Process groups follow the terminal. A child that may touch the terminal
 //! (stdin is the tty) stays in Wrap's foreground group: a background group
 //! cannot read the tty, and interactive bash stops itself until it is in the
 //! foreground. While such a child runs captured, Wrap ignores SIGTTIN and
-//! SIGTTOU: once bash hands the terminal to the step's job, the dialog's
+//! SIGTTOU: once bash takes the terminal for the step, the dialog's
 //! reads fail with EIO (which it tolerates) instead of stopping Wrap behind
 //! the user's shell. A child with no terminal gets its own group so
 //! cancelling it ends everything it started. A cancelled child is killed
@@ -30,9 +34,12 @@
 
 use std::cell::Cell;
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, IsTerminal};
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
@@ -214,14 +221,23 @@ struct Spawn<'a> {
 
 impl Spawn<'_> {
     /// `$SHELL +m -ic <command>` with the stdio given.
-    fn command(&self, stdin: ChildStdin, stdout: Stdio, stderr: Stdio) -> std::process::Command {
+    fn command(
+        &self,
+        stdin: ChildStdin,
+        stdout: Stdio,
+        stderr: Stdio,
+        capture_stderr: Option<&CapturedStderr>,
+    ) -> std::process::Command {
         let mut builder = std::process::Command::new(self.shell);
-        // Interactive startup can override +m, including in headless Bash 3.2.
-        let command = if self.own_group {
-            format!("set +m; {}", self.command)
-        } else {
-            self.command.to_owned()
-        };
+        // Interactive startup can override +m. Bash owns a foreground group
+        // by then; sharing it with its jobs lets Ctrl-C interrupt both.
+        let mut command = format!("set +m; {}", self.command);
+        let stderr_tty = capture_stderr.and(self.terminal.map(|t| t.tty.as_raw_fd()));
+        if let Some(capture) = capture_stderr {
+            builder.env("_WRAP_CAPTURE_STDERR", &capture.path);
+            command =
+                format!("exec 2>\"$_WRAP_CAPTURE_STDERR\"; unset _WRAP_CAPTURE_STDERR; {command}");
+        }
         builder
             .args(["+m", "-ic", &command])
             .stdin(stdin)
@@ -231,10 +247,18 @@ impl Spawn<'_> {
             builder.process_group(0);
         }
         let defaults = self.child_defaults;
-        // SAFETY: `signal` is async-signal-safe and the callback touches
-        // nothing else.
+        // SAFETY: dup2 and signal are async-signal-safe. The tty descriptor
+        // remains open through spawn.
         unsafe {
             builder.pre_exec(move || {
+                if let Some(tty) = stderr_tty {
+                    // Bash 3.2 initializes job control from stderr. Its
+                    // startup messages go to the tty; command stderr goes
+                    // back to the pipe before any user command executes.
+                    if libc::dup2(tty, libc::STDERR_FILENO) < 0 {
+                        return Err(io::Error::last_os_error());
+                    }
+                }
                 for signal in defaults {
                     libc::signal(*signal, libc::SIG_DFL);
                 }
@@ -291,18 +315,40 @@ async fn run_captured(
         // Subsequent mode changes belong to the child until it returns.
         terminal.enable_interrupts()?;
     }
-    let mut child =
-        tokio::process::Command::from(spawn.command(stdin, Stdio::piped(), Stdio::piped()))
-            .kill_on_drop(true)
-            .spawn()?;
+    let mut capture = spawn
+        .terminal
+        .filter(|_| bash_needs_terminal_stderr(spawn.shell))
+        .map(|_| CapturedStderr::open())
+        .transpose()?;
+    let mut child = tokio::process::Command::from(spawn.command(
+        stdin,
+        Stdio::piped(),
+        if capture.is_some() {
+            Stdio::inherit()
+        } else {
+            Stdio::piped()
+        },
+        capture.as_ref(),
+    ))
+    .kill_on_drop(true)
+    .spawn()?;
     let pid = child.id().expect("child not yet reaped") as libc::pid_t;
     let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
+    let (stderr, keepalive) = match capture.as_mut() {
+        Some(capture) => (capture.reader.take(), capture.keepalive.take()),
+        None => (child.stderr.take(), None),
+    };
     let cancelled_token = cancel.unwrap_or_default();
     let mut watch = tokio::time::interval(FOREGROUND_WATCH);
     let result = {
-        let completion =
-            async { tokio::try_join!(child.wait(), read_pipe(stdout), read_pipe(stderr)) };
+        let completion = async {
+            let wait = async {
+                let result = child.wait().await;
+                drop(keepalive);
+                result
+            };
+            tokio::try_join!(wait, read_pipe(stdout), read_pipe(stderr))
+        };
         tokio::pin!(completion);
         loop {
             tokio::select! {
@@ -333,6 +379,61 @@ async fn run_captured(
     ))
 }
 
+/// Opened by the shell only after startup, so rc-file background jobs do
+/// not inherit a capture descriptor. A parent writer prevents premature EOF
+/// before that open; it closes when the shell exits, even if startup fails.
+struct CapturedStderr {
+    path: std::path::PathBuf,
+    reader: Option<tokio::process::ChildStderr>,
+    keepalive: Option<File>,
+}
+
+impl CapturedStderr {
+    fn open() -> io::Result<Self> {
+        let path = ensure_temp_dir()?.join(format!("wrap-stderr-{}", uuid::Uuid::new_v4()));
+        let name = CString::new(path.as_os_str().as_bytes())?;
+        // SAFETY: name is NUL-terminated and lives through the call.
+        if unsafe { libc::mkfifo(name.as_ptr(), 0o600) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut capture = Self {
+            path,
+            reader: None,
+            keepalive: None,
+        };
+        let reader = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&capture.path)?;
+        capture.keepalive = Some(
+            std::fs::OpenOptions::new()
+                .write(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(&capture.path)?,
+        );
+        capture.reader = Some(tokio::process::ChildStderr::from_std(
+            std::process::ChildStderr::from(OwnedFd::from(reader)),
+        )?);
+        Ok(capture)
+    }
+}
+
+impl Drop for CapturedStderr {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// Bash 3.2 obtains its job-control tty from stderr, including macOS sh.
+/// Other shells keep their normal capture startup and redirection syntax.
+fn bash_needs_terminal_stderr(shell: &str) -> bool {
+    let path = crate::paths::which(shell).unwrap_or_else(|| shell.to_owned());
+    let path = std::fs::canonicalize(&path).unwrap_or_else(|_| path.into());
+    path.file_name().is_some_and(|name| {
+        name == "bash" || (cfg!(target_os = "macos") && path == std::path::Path::new("/bin/sh"))
+    })
+}
+
 /// Read concurrently with the child wait; dropping the future closes the
 /// pipe even if a descendant still holds its writing end.
 async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: Option<R>) -> io::Result<Vec<u8>> {
@@ -354,7 +455,7 @@ async fn run_inherited(
         child_defaults: INTERRUPT_SIGNALS,
         ..*spawn
     };
-    let mut builder = spawn.command(stdin, Stdio::inherit(), Stdio::inherit());
+    let mut builder = spawn.command(stdin, Stdio::inherit(), Stdio::inherit(), None);
     let mut child = builder.spawn()?;
     let pid = child.id() as libc::pid_t;
     let mut wait = tokio::task::spawn_blocking(move || child.wait());

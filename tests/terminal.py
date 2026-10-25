@@ -23,7 +23,8 @@ UNROUTABLE = 'http://127.0.0.1:1/'
 
 MEMORY_SEED = {'/': [{'fact': 'Linux'}]}
 SCRUB = ('WRAP_CONFIG', 'WRAP_TEST_RESPONSE', 'WRAP_TEST_RESPONSES', 'WRAP_HOME', 'WRAP_THEME', 'WRAP_NO_ANIMATION', 'WRAP_VERBOSE', 'WRAP_YOLO',
-         'WRAP_MODEL', 'WRAP_TEMP_DIR', 'WRAP_MODELS_URL', 'WRAP_NERD_FONTS', 'WRAP_CONTINUE', 'NO_COLOR', 'FORCE_COLOR', 'CI', 'VISUAL', 'EDITOR', 'TMPDIR')
+         'WRAP_MODEL', 'WRAP_TEMP_DIR', 'WRAP_MODELS_URL', 'WRAP_NERD_FONTS', 'WRAP_CONTINUE', 'NO_COLOR', 'FORCE_COLOR', 'CI', 'VISUAL', 'EDITOR', 'TMPDIR',
+         'BASH_ENV', 'ENV', 'ZDOTDIR')
 
 def command(content, risk='medium', final=True, explanation=None, plan=None):
     response = {'type': 'command', 'content': content, 'risk_level': risk, 'final': final, '_scratchpad': 'thinking'}
@@ -113,7 +114,7 @@ class Session:
         self.screen = Screen(*size); self.output = b''
         self.resize(*size)
         env = {k: v for k, v in os.environ.items() if k not in SCRUB}
-        env.update(WRAP_HOME=self.home.name, WRAP_THEME='dark', TERM='xterm-256color', COLORTERM='truecolor', TMPDIR=self.tmp.name, SHELL='/bin/sh')
+        env.update(HOME=self.home.name, WRAP_HOME=self.home.name, WRAP_THEME='dark', TERM='xterm-256color', COLORTERM='truecolor', TMPDIR=self.tmp.name, SHELL='/bin/sh')
         if not wizard: env['WRAP_CONFIG'] = json.dumps(config if config is not None else {})
         elif config is not None: env['WRAP_CONFIG'] = json.dumps(config)
         if responses is not None: env['WRAP_TEST_RESPONSES'] = json.dumps(responses)
@@ -470,14 +471,14 @@ def esc_aborts_a_step_under_zsh():
     finally: s.close()
 
 def a_bash_step_that_owns_the_terminal_does_not_end_the_session():
-    # Interactive bash hands the terminal to each foreground job even with +m, so keys
-    # (including Esc) go to the job until it exits; the dialog must survive and resume.
+    # Interactive bash owns the terminal while the step runs, so keys (including
+    # Esc) go to that group until it exits; the dialog must survive and resume.
     responses = [command('sleep 3; echo STEP_DONE', final=False, explanation='A medium step'), command('echo done', risk='low')]
     s = Session(['bash step'], responses=responses, extra_env={'SHELL': '/bin/bash'})
     try:
         s.until('sleep 3; echo STEP_DONE'); s.until('Run command?'); s.send('y')
         s.until('Running step...')
-        # Until bash hands the job the terminal, Esc would still reach the dialog and abort the step.
+        # Until bash takes the terminal, Esc would still reach the dialog and abort the step.
         end = time.monotonic() + 5
         while foreground_of(s.pid()) == s.pid() and time.monotonic() < end: s.pump(.02)
         assert foreground_of(s.pid()) != s.pid(), 'the step never took the terminal'
