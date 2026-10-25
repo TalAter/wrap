@@ -83,7 +83,11 @@ under the user's shell; the dispositions return once the step ends. zsh
 honours `+m`, so there Esc cancels the step. A cancel kills, and the end of a
 step reclaims the terminal from, only groups the step's child started (on
 Linux by descent in `/proc`; on macOS any group other than the parent shell's
-and the session leader's). The user's shell, which holds the terminal after
+and the session leader's). Cancellation also stops the child and its descendants
+before killing descendants individually, preserving unrelated jobs that share
+Wrap's process group. Captured commands restore their saved terminal modes once
+Wrap owns the foreground again, unless dialog teardown superseded that snapshot.
+The user's shell, which holds the terminal after
 suspending Wrap and typing `bg`, is never signalled or displaced: interactive
 bash restores the terminal to Wrap's group when it exits, so Wrap watches the
 foreground during the step, hands the terminal back to a shell that took it
@@ -291,8 +295,10 @@ optimization signal. The protocol lives in `eval/specs/eval.md`;
 Default `~/.wrap`: `config.jsonc`, `config.schema.json`, `memory.json`
 (`{"<scope>": [{"fact": "…"}]}`, sorted scopes), `tool-watchlist.json`,
 `logs/wrap.jsonl`, `logs/traces/<id>.json`, `cache/appearance.json`,
-`cache/models.dev.json`, `cache/compose.md`. Per invocation Wrap creates
-`$TMPDIR/wrap-scratch-XXXXXX` on first shell spawn and exports it as
+`cache/models.dev.json`, `cache/compose.md`. Scratch creation and `--forget`
+use the same base directory: `TMPDIR`, then `TMP`, then `TEMP`, else `/tmp`.
+Per invocation Wrap creates `wrap-scratch-XXXXXX` there on first shell spawn
+and exports it as
 `WRAP_TEMP_DIR`; piped stdin is written there as `input` (mode 0600) and
 commands read it from disk, since bytes are never streamed to children. The
 model sees the directory only by variable name. Store artifacts there, never
