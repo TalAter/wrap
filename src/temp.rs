@@ -11,7 +11,7 @@ pub const TEMP_DIR_ENV: &str = "WRAP_TEMP_DIR";
 
 static CREATE: Mutex<()> = Mutex::new(());
 
-/// Create `$TMPDIR/wrap-scratch-XXXXXX` on first use and export its path as
+/// Create `wrap-scratch-XXXXXX` under [`tmp_base`] on first use and export its path as
 /// `WRAP_TEMP_DIR` for every process Wrap spawns afterwards. Later calls return
 /// the same path. Call it right before the directory is needed (just before a
 /// shell spawns) so invocations that never run a command leave nothing on disk.
@@ -37,8 +37,31 @@ pub fn ensure_temp_dir() -> io::Result<PathBuf> {
     Ok(path)
 }
 
+/// The directory scratch dirs live in: `TMPDIR`, `TMP` or `TEMP` (trailing
+/// slash dropped), else `/tmp`.
+pub fn tmp_base(mut lookup: impl FnMut(&str) -> Option<OsString>) -> PathBuf {
+    let configured = ["TMPDIR", "TMP", "TEMP"]
+        .into_iter()
+        .find_map(|key| lookup(key).filter(|value| !value.is_empty()));
+    match configured {
+        Some(dir) => {
+            let bytes = dir.as_bytes();
+            let end = bytes
+                .iter()
+                .rposition(|byte| *byte != b'/')
+                .map_or(0, |i| i + 1);
+            if end == 0 {
+                PathBuf::from("/")
+            } else {
+                PathBuf::from(std::ffi::OsStr::from_bytes(&bytes[..end]))
+            }
+        }
+        None => PathBuf::from("/tmp"),
+    }
+}
+
 fn make_scratch_dir() -> io::Result<PathBuf> {
-    let template = std::env::temp_dir().join("wrap-scratch-XXXXXX");
+    let template = tmp_base(|key| std::env::var_os(key)).join("wrap-scratch-XXXXXX");
     let mut bytes = template.as_os_str().as_bytes().to_vec();
     bytes.push(0);
     // SAFETY: `bytes` is a NUL-terminated, writable buffer ending in the

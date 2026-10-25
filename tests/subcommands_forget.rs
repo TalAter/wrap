@@ -284,8 +284,11 @@ fn dangling_scratch_symlink_is_unlinked_but_not_counted_as_removed() {
 #[test]
 fn tmp_base_honours_tmpdir_and_falls_back_to_tmp() {
     let env: HashMap<String, String> = [("TMPDIR".to_string(), "/custom/tmp/".to_string())].into();
-    assert_eq!(tmp_base(&env), Path::new("/custom/tmp"));
-    assert_eq!(tmp_base(&HashMap::new()), Path::new("/tmp"));
+    assert_eq!(
+        tmp_base(|key| env.get(key).map(Into::into)),
+        Path::new("/custom/tmp")
+    );
+    assert_eq!(tmp_base(|_| None), Path::new("/tmp"));
 }
 
 // ── run ──────────────────────────────────────────────────────────
@@ -330,6 +333,7 @@ impl Harness {
         let never_which = |_: &str| false;
         let unused_dialog = |_: &Footprints| None;
         let ctx = Context {
+            tmp_base: tmp_base(|key| self.env.get(key).map(Into::into)),
             home: &self.home,
             env: &self.env,
             config: &self.config,

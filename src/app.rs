@@ -115,6 +115,7 @@ pub fn dispatch_subcommand(
         }
     };
     let ctx = Context {
+        tmp_base: crate::temp::tmp_base(|key| std::env::var_os(key)),
         home,
         env,
         config,

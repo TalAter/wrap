@@ -1,10 +1,11 @@
 //! `--forget`: wipe Wrap's persisted user data in four file-level buckets
 //! (memory, logs, cache, scratch dirs). Config is never touched.
 
-use std::collections::HashMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+
+pub use crate::temp::tmp_base;
 
 use crate::chrome::chrome;
 use crate::home::WrapHome;
@@ -273,21 +274,6 @@ pub fn delete_scratch(tmp_base: &Path) -> DeleteResult {
     result
 }
 
-/// The directory scratch dirs live in: `TMPDIR`, `TMP` or `TEMP` (trailing
-/// slash dropped), else `/tmp`.
-pub fn tmp_base(env: &HashMap<String, String>) -> PathBuf {
-    let configured = ["TMPDIR", "TMP", "TEMP"]
-        .iter()
-        .find_map(|key| env.get(*key).filter(|v| !v.is_empty()));
-    match configured {
-        Some(dir) => {
-            let trimmed = dir.trim_end_matches('/');
-            PathBuf::from(if trimmed.is_empty() { "/" } else { trimmed })
-        }
-        None => PathBuf::from("/tmp"),
-    }
-}
-
 // ── Run ──────────────────────────────────────────────────────────
 
 /// `show_dialog` opens the bucket checklist and returns the selection, or
@@ -304,12 +290,12 @@ pub fn run(
         return 1;
     }
 
-    let tmp = tmp_base(ctx.env);
+    let tmp = &ctx.tmp_base;
     let footprints = Footprints {
         memory: memory_footprint(ctx.home),
         logs: logs_footprint(ctx.home),
         cache: cache_footprint(ctx.home),
-        scratch: scratch_footprint(&tmp),
+        scratch: scratch_footprint(tmp),
     };
 
     let selected = if yolo {
@@ -331,7 +317,7 @@ pub fn run(
             Bucket::Memory => delete_memory(ctx.home),
             Bucket::Logs => delete_logs(ctx.home),
             Bucket::Cache => delete_cache(ctx.home),
-            Bucket::Scratch => delete_scratch(&tmp),
+            Bucket::Scratch => delete_scratch(tmp),
         });
     }
 

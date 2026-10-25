@@ -5,6 +5,92 @@ mod cli_binary_common;
 
 use cli_binary_common::{Wrap, command, first_user_text, reply, step};
 
+fn scratch_input_is_forgotten_with_temp_env(key: &str, non_utf8: bool) {
+    use std::io::Write;
+    use std::os::unix::ffi::OsStrExt;
+    use std::process::{Command, Stdio};
+
+    let home = tempfile::tempdir().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().join(std::ffi::OsStr::from_bytes(if non_utf8 {
+        b"scratch-\xff"
+    } else {
+        b"scratch"
+    }));
+    let fallback = tmp.path().join("fallback");
+    std::fs::create_dir(&base).unwrap();
+    std::fs::create_dir(&fallback).unwrap();
+    std::fs::write(
+        home.path().join("memory.json"),
+        cli_binary_common::MEMORY_SEED,
+    )
+    .unwrap();
+    let process = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_wrap"));
+        command
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("SHELL", "/bin/sh")
+            .env("WRAP_HOME", home.path())
+            .env("WRAP_CONFIG", "{}")
+            .env("WRAP_THEME", "dark")
+            .env("WRAP_TEST_RESPONSE", reply("ok").to_string())
+            .env("TMP", &fallback)
+            .env(key, &base)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped());
+        if key == "TEMP" {
+            command.env_remove("TMP");
+        }
+        command
+    };
+    let mut child = process().arg("explain").spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"private input")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let input = [&base, &fallback]
+        .into_iter()
+        .flat_map(|dir| std::fs::read_dir(dir).unwrap())
+        .map(|entry| entry.unwrap().path().join("input"))
+        .find(|path| path.is_file())
+        .expect("attached input created in a configured temp directory");
+    assert_eq!(std::fs::read(&input).unwrap(), b"private input");
+
+    let output = process()
+        .args(["--forget", "--yolo"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let forgotten = !input.exists();
+    if !forgotten {
+        std::fs::remove_dir_all(input.parent().unwrap()).unwrap();
+    }
+    assert!(output.status.success(), "{output:?}");
+    assert!(forgotten, "--forget left piped input behind with {key}");
+    assert!(input.starts_with(&base), "scratch ignored {key}: {input:?}");
+}
+
+#[test]
+fn scratch_input_uses_tmp_and_is_forgotten() {
+    scratch_input_is_forgotten_with_temp_env("TMP", false);
+}
+
+#[test]
+fn scratch_input_uses_temp_and_is_forgotten() {
+    scratch_input_is_forgotten_with_temp_env("TEMP", false);
+}
+
+#[test]
+fn non_utf8_scratch_input_is_forgotten() {
+    scratch_input_is_forgotten_with_temp_env("TMPDIR", true);
+}
+
 #[test]
 fn pipe_with_a_prompt_runs_the_query_not_help() {
     let out = Wrap::seeded()

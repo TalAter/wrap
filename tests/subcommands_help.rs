@@ -88,6 +88,7 @@ fn run_help(
     let home = WrapHome::new("/nonexistent/wrap-home");
     let config = config(env, flags);
     let ctx = Context {
+        tmp_base: home.root().join("tmp"),
         home: &home,
         env,
         config: &config,
@@ -347,6 +348,7 @@ fn animation_skipped_when_help_is_taller_than_the_terminal() {
     let env = env(&[("COLORTERM", "truecolor")]);
     let config = config(&env, &[]);
     let ctx = Context {
+        tmp_base: home.root().join("tmp"),
         home: &home,
         env: &env,
         config: &config,

@@ -54,6 +54,7 @@ fn run_log(home: &WrapHome, args: &[&str], tty: bool) -> (i32, Vec<String>, Stri
     let env = HashMap::new();
     let config = config(&env);
     let ctx = Context {
+        tmp_base: home.root().join("tmp"),
         home,
         env: &env,
         config: &config,

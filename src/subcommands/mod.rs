@@ -29,6 +29,8 @@ pub use registry::{CliFlag, CompletionKind, FlagKind, commands, options};
 pub struct Context<'a> {
     pub home: &'a WrapHome,
     pub env: &'a HashMap<String, String>,
+    /// Scratch root with the original filesystem path bytes preserved.
+    pub tmp_base: std::path::PathBuf,
     pub config: &'a ResolvedConfig,
     pub stdout_is_tty: bool,
     pub stdin_is_tty: bool,

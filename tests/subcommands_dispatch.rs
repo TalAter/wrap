@@ -46,6 +46,7 @@ fn run(flag: &str, args: &[&str]) -> (i32, Vec<String>, String) {
     let env = HashMap::new();
     let config = config(&env);
     let ctx = Context {
+        tmp_base: home.root().join("tmp"),
         home: &home,
         env: &env,
         config: &config,
