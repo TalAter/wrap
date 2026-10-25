@@ -1,3 +1,7 @@
+mod process_observation;
+
+use process_observation::{is_alive, live_members_of_group};
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::os::unix::process::CommandExt;
@@ -10,6 +14,53 @@ use wrap::shell::{
 };
 
 const SH: &str = "/bin/sh";
+
+fn is_reaped(pid: i32) -> bool {
+    // SAFETY: signal zero checks existence without delivering a signal.
+    let result = unsafe { libc::kill(pid, 0) };
+    result == -1 && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+}
+
+#[test]
+fn process_observation_finds_live_group_members_but_not_zombies_or_reaped_children() {
+    struct ReapOnDrop(std::process::Child);
+    impl Drop for ReapOnDrop {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    let mut child = ReapOnDrop(
+        std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .process_group(0)
+            .spawn()
+            .unwrap(),
+    );
+    let pid = child.0.id() as i32;
+    assert!(is_alive(pid), "a running child must be observable");
+    assert!(!is_reaped(pid));
+    assert_eq!(live_members_of_group(pid), [pid]);
+    // SAFETY: getpgrp only queries this process's group.
+    assert!(!live_members_of_group(unsafe { libc::getpgrp() }).contains(&pid));
+
+    child.0.kill().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while is_alive(pid) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // SAFETY: signal zero queries the child without changing it.
+    assert_eq!(unsafe { libc::kill(pid, 0) }, 0, "child is not reaped yet");
+    assert!(!is_alive(pid), "a zombie is not a live process");
+    assert!(!is_reaped(pid), "a zombie still exists until reaped");
+    assert!(live_members_of_group(pid).is_empty());
+
+    child.0.wait().unwrap();
+    assert!(!is_alive(pid), "a reaped child is absent");
+    assert!(is_reaped(pid));
+    assert!(live_members_of_group(pid).is_empty());
+}
 
 #[tokio::test]
 async fn capture_mode_separates_stdout_and_stderr_and_reports_exit_code() {
@@ -109,7 +160,6 @@ async fn cancellation_kills_a_captured_child() {
     assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
 }
 
-#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
     for redirect in [">/dev/null", "2>/dev/null"] {
@@ -129,10 +179,10 @@ async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
                 let pid = std::fs::read_to_string(&pid_file)
                     .ok()
                     .and_then(|text| text.trim().parse::<i32>().ok());
-                if pid.is_some_and(|pid| !std::path::Path::new(&format!("/proc/{pid}")).exists()) {
+                if pid.is_some_and(is_reaped) {
                     break;
                 }
-                assert!(Instant::now() < deadline, "direct shell did not exit");
+                assert!(Instant::now() < deadline, "direct shell was not reaped");
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             let started = Instant::now();
@@ -159,28 +209,6 @@ async fn cancellation_after_shell_exit_ends_descendants_holding_either_pipe() {
         }
         assert!(!is_alive(job), "descendant survived cancellation");
     }
-}
-
-/// Live (non-zombie) pids whose process group is `pgid`, from /proc.
-fn live_members_of_group(pgid: i32) -> Vec<i32> {
-    let mut members = Vec::new();
-    for entry in std::fs::read_dir("/proc").unwrap().flatten() {
-        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
-            continue;
-        };
-        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
-            continue;
-        };
-        // Fields after the parenthesised command: state, ppid, pgrp, ...
-        let Some(rest) = stat.rsplit_once(')').map(|(_, rest)| rest) else {
-            continue;
-        };
-        let fields: Vec<&str> = rest.split_whitespace().collect();
-        if fields.len() > 2 && fields[0] != "Z" && fields[2] == pgid.to_string() {
-            members.push(pid);
-        }
-    }
-    members
 }
 
 #[tokio::test]
@@ -225,17 +253,6 @@ async fn cancellation_ends_the_whole_group_of_a_headless_captured_child() {
         "processes still alive in the child's group: {members:?}"
     );
     assert!(!is_alive(grandchild), "the backgrounded sleep survived");
-}
-
-/// Whether `pid` still exists and is not a zombie.
-fn is_alive(pid: i32) -> bool {
-    std::fs::read_to_string(format!("/proc/{pid}/stat"))
-        .ok()
-        .and_then(|stat| {
-            stat.rsplit_once(')')
-                .map(|(_, rest)| rest.split_whitespace().next() != Some("Z"))
-        })
-        .unwrap_or(false)
 }
 
 #[tokio::test]

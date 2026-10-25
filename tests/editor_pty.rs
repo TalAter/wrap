@@ -88,8 +88,8 @@ fn terminal_editor_reopens_tty_preserves_stdout_and_restores_modes() {
                 &mut master,
                 &mut slave,
                 std::ptr::null_mut(),
-                std::ptr::null(),
-                std::ptr::null(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
             )
         },
         0
@@ -106,7 +106,7 @@ fn terminal_editor_reopens_tty_preserves_stdout_and_restores_modes() {
         .stderr(Stdio::piped());
     unsafe {
         command.pre_exec(move || {
-            if libc::setsid() < 0 || libc::ioctl(fd, libc::TIOCSCTTY, 0) < 0 {
+            if libc::setsid() < 0 || libc::ioctl(fd, libc::TIOCSCTTY as _, 0) < 0 {
                 return Err(std::io::Error::last_os_error());
             }
             Ok(())

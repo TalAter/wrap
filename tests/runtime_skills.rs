@@ -1,3 +1,7 @@
+mod process_observation;
+
+use process_observation::{is_alive, live_members_of_group};
+
 use std::fs::{self, File};
 use std::path::Path;
 use std::process::Command;
@@ -57,27 +61,6 @@ fn set_mtime(path: &Path, secs: u64) {
 
 // --- triggers & emission --------------------------------------------------
 
-/// Live (non-zombie) pids whose process group is `pgid`, from /proc.
-fn live_members_of_group(pgid: i32) -> Vec<i32> {
-    let mut members = Vec::new();
-    for entry in fs::read_dir("/proc").unwrap().flatten() {
-        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
-            continue;
-        };
-        let Ok(stat) = fs::read_to_string(entry.path().join("stat")) else {
-            continue;
-        };
-        let Some(rest) = stat.rsplit_once(')').map(|(_, rest)| rest) else {
-            continue;
-        };
-        let fields: Vec<&str> = rest.split_whitespace().collect();
-        if fields.len() > 2 && fields[0] != "Z" && fields[2] == pgid.to_string() {
-            members.push(pid);
-        }
-    }
-    members
-}
-
 #[tokio::test]
 async fn a_timed_out_shell_task_takes_its_backgrounded_grandchildren_with_it() {
     let (_h, cwd, ctx) = rig();
@@ -117,17 +100,6 @@ async fn a_timed_out_shell_task_takes_its_backgrounded_grandchildren_with_it() {
         "processes still alive in the probe's group: {members:?}"
     );
     assert!(!is_alive(grandchild), "the backgrounded sleep survived");
-}
-
-/// Whether `pid` still exists and is not a zombie.
-fn is_alive(pid: i32) -> bool {
-    fs::read_to_string(format!("/proc/{pid}/stat"))
-        .ok()
-        .and_then(|stat| {
-            stat.rsplit_once(')')
-                .map(|(_, rest)| rest.split_whitespace().next() != Some("Z"))
-        })
-        .unwrap_or(false)
 }
 
 #[tokio::test]

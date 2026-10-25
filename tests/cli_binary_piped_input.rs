@@ -134,12 +134,16 @@ fn the_command_reads_the_full_bytes_from_the_input_file() {
 
 #[test]
 fn the_input_file_is_mode_0600() {
-    let out = Wrap::seeded()
-        .response(command("stat -c '%a' $WRAP_TEMP_DIR/input", "low"))
-        .stdin("hello")
-        .run(&["read mode"]);
+    use std::os::unix::fs::PermissionsExt;
+    let wrap = Wrap::seeded().response(reply("ok")).stdin("hello");
+    let out = wrap.run(&["read mode"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
-    assert_eq!(out.stdout.trim(), "600");
+    let entry = wrap.log_entry();
+    let path = entry["attached_input"]["path"].as_str().unwrap();
+    assert_eq!(
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
 }
 
 #[test]
