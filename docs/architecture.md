@@ -108,12 +108,18 @@ and the session leader's). Cancellation also stops the child and its descendants
 before killing descendants individually, preserving unrelated jobs that share
 Wrap's process group. Captured commands restore their saved terminal modes once
 Wrap owns the foreground again, unless dialog teardown superseded that snapshot.
-The user's shell, which holds the terminal after
-suspending Wrap and typing `bg`, is never signalled or displaced: interactive
-bash restores the terminal to Wrap's group when it exits, so Wrap watches the
-foreground during the step, hands the terminal back to a shell that took it
-and stops itself until `fg`, when a SIGCONT note makes the dialog re-enter
-raw mode and repaint. Children without a terminal, and every skill probe, run
+Wrap does not signal the user's shell after suspension and `bg`. Interactive
+Bash can return the terminal to Wrap on exit, so Wrap watches the foreground,
+returns it to the user's shell and stops until `fg`; a SIGCONT note then makes
+the dialog re-enter raw mode and repaint.
+
+Known limitation: on macOS, suspending Wrap during a captured Bash step and
+resuming with `bg` can cause the parent Bash to exit when the child briefly
+changes terminal ownership. This edge case is deferred; keep captured steps
+in the foreground on macOS. Its macOS PTY regression is explicitly skipped;
+Linux coverage remains enabled.
+
+Children without a terminal, and every skill probe, run
 in their own process group so a timeout or cancel reaps grandchildren.
 
 ## LLM layer

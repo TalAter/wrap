@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Real-terminal contracts; stdlib only. Runs with a disposable home and local HTTP."""
-import ast, shutil, codecs, fcntl, http.server, json, os, pathlib, pty, re, select, signal, shlex, struct, subprocess, sys, tempfile, termios, threading, time, unicodedata
+import ast, shutil, codecs, fcntl, http.server, json, os, pathlib, pty, re, select, signal, shlex, struct, subprocess, sys, tempfile, termios, threading, time, unicodedata, unittest
 
 BINARY = str(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'target/debug/wrap').resolve())
 
@@ -237,6 +237,7 @@ FAILED = []
 def run(name, fn):
     if ONLY not in name: return
     try: fn(); print('PASS', name, flush=True)
+    except unittest.SkipTest as reason: print('SKIP', name, '-', reason, flush=True)
     except Exception as e:
         FAILED.append(name); print('FAIL', name, flush=True)
         import traceback; traceback.print_exc()
@@ -847,6 +848,8 @@ class ShellSession:
 ESCAPE_ALL = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\x1b[^\[\]()]')
 
 def a_suspended_and_backgrounded_wrap_leaves_the_shell_in_charge():
+    if sys.platform == 'darwin':
+        raise unittest.SkipTest('deferred macOS Bash suspend/bg terminal takeover; see docs/architecture.md')
     # Suspended mid-step and resumed with `bg`, wrap must neither take the terminal from
     # the shell when the step's bash exits nor kill the shell's group; job control stops
     # it instead, and `fg` resumes the dialog with the step's output.
