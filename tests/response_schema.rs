@@ -142,6 +142,39 @@ fn ignores_stray_fields_from_old_responses() {
 }
 
 #[test]
+fn discard_command_roundtrips_booleans_and_omits_null_or_missing() {
+    for discard in [
+        Some(json!(true)),
+        Some(json!(false)),
+        Some(Value::Null),
+        None,
+    ] {
+        let mut wire = json!({"type": "reply", "content": "It prints hello.", "risk_level": "low"});
+        if let Some(value) = &discard {
+            wire["discard_command"] = value.clone();
+        }
+        let response = parse(wire).unwrap();
+        let back = serde_json::to_value(&response).unwrap();
+        let expected = discard.filter(|value| !value.is_null());
+        assert_eq!(back.get("discard_command"), expected.as_ref());
+        assert_eq!(parse(back).unwrap(), response);
+    }
+}
+
+#[test]
+fn discard_command_rejects_non_boolean_values() {
+    for invalid in [json!("true"), json!(1), json!([])] {
+        assert!(
+            parse(json!({
+                "type": "reply", "content": "It prints hello.", "risk_level": "low",
+                "discard_command": invalid
+            }))
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn serializes_with_wire_names_and_drops_absent_optionals() {
     let r = parse(json!({
         "_scratchpad": "think", "type": "command", "content": "ls", "risk_level": "low"
@@ -191,7 +224,7 @@ fn json_schema_property_order_matches_schema_txt_with_scratchpad_first() {
     let expected = schema_txt_keys();
     assert_eq!(
         expected.len(),
-        10,
+        11,
         "schema.txt parsing drifted: {expected:?}"
     );
     assert_eq!(props, expected);
@@ -215,6 +248,10 @@ fn json_schema_mirrors_zod_projection() {
         json!(["low", "medium", "high"])
     );
     assert_eq!(schema["properties"]["final"]["default"], true);
+    assert_eq!(
+        schema["properties"]["discard_command"],
+        json!({"anyOf": [{"type": "boolean"}, {"type": "null"}]})
+    );
     assert_eq!(
         schema["properties"]["plan"],
         json!({"anyOf": [{"type": "string"}, {"type": "null"}]})

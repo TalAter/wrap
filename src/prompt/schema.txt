@@ -7,17 +7,24 @@ export const CommandResponseSchema = z.object({
   type: z.enum([
     // command = a shell command to execute. Combined with `final`, this covers both terminal actions and intermediate discovery steps (see the `final` field).
     "command",
-    // reply = a direct text response. Use for general knowledge questions that don't need a shell command.
+    // reply = a direct text response. Use for general knowledge questions or explanations of a pending proposed command.
     "reply",
   ]),
   // false = intermediate step; the command is executed and its captured
   // output is fed back to you next round. Use this when you need to discover
   // something about the user's environment or stage an artifact in
   // $WRAP_TEMP_DIR before deciding the final action. Only valid for `command`
-  // — replies are always terminal.
-  // true (default) = terminal; the command runs with inherited stdio (user
-  // sees output) or the reply prints.
+  // — replies always end the model round, but a follow-up answer may stay in
+  // the dialog alongside the pending proposed command.
+  // true (default) = final response; the command runs with inherited stdio
+  // (user sees output) or the reply is displayed.
   final: z.boolean().default(true),
+  // For replies only: true ONLY when the user explicitly abandons the pending
+  // proposed command (e.g. "Forget the command; just explain it"). The answer
+  // then prints and Wrap exits. Use false/null/omit for ordinary why questions,
+  // clarifications, and general replies; these do not discard a pending command.
+  // Ignored for command responses.
+  discard_command: z.boolean().nullable().optional(),
   // Cross-round intent. Required when `final` is false — a one-sentence
   // description of the whole chain (e.g. "download, inspect, then run from
   // the temp dir"). Shown to the user in the dialog and echoed back to you

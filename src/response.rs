@@ -42,6 +42,8 @@ pub struct CommandResponse {
     #[serde(rename = "final", default = "default_true")]
     pub is_final: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discard_command: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<String>,
     pub content: String,
     pub risk_level: RiskLevel,
@@ -75,6 +77,7 @@ pub fn command_response_json_schema() -> &'static Value {
                 "_scratchpad": nullable(json!({"type": "string"})),
                 "type": {"type": "string", "enum": ["command", "reply"]},
                 "final": {"default": true, "type": "boolean"},
+                "discard_command": nullable(json!({"type": "boolean"})),
                 "plan": nullable(json!({"type": "string"})),
                 "content": {"type": "string"},
                 "risk_level": {"type": "string", "enum": ["low", "medium", "high"]},

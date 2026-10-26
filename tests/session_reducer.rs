@@ -12,6 +12,7 @@ fn confirming(response: CommandResponse) -> AppState {
     AppState::Confirming {
         response,
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -19,6 +20,7 @@ fn confirming_with_slot(response: CommandResponse, slot: &str) -> AppState {
     AppState::Confirming {
         response,
         output_slot: Some(slot.into()),
+        answer: None,
     }
 }
 
@@ -28,6 +30,7 @@ fn editing(response: CommandResponse) -> AppState {
         response,
         draft,
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -36,6 +39,7 @@ fn composing(response: CommandResponse) -> AppState {
         response,
         draft: String::new(),
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -45,6 +49,7 @@ fn processing(response: CommandResponse) -> AppState {
         draft: "be safer".into(),
         status: None,
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -53,6 +58,7 @@ fn executing(response: CommandResponse) -> AppState {
         response,
         source: StepSource::Model,
         output_slot: None,
+        answer: None,
     }
 }
 
@@ -232,6 +238,7 @@ fn confirming_run_on_non_final_medium_enters_executing_step() {
             response: step("echo probe", "medium"),
             source: StepSource::Model,
             output_slot: Some("earlier".into()),
+            answer: None,
         }
     );
 }
@@ -274,6 +281,7 @@ fn confirming_edit_seeds_draft_with_the_command() {
             response: cmd("ls -la", "medium"),
             draft: "ls -la".into(),
             output_slot: Some("out".into()),
+            answer: None,
         }
     );
 }
@@ -360,6 +368,7 @@ fn editing_submit_on_non_final_medium_executes_the_edited_step() {
             response: step("echo b", "medium"),
             source: StepSource::UserOverride,
             output_slot: None,
+            answer: None,
         }
     );
 }
@@ -391,6 +400,7 @@ fn editing_tracks_draft_changes_and_editor_handoff() {
             draft: "ls -a".into(),
             response: Some(cmd("ls", "medium")),
             output_slot: None,
+            answer: None,
         }
     );
 }
@@ -433,6 +443,7 @@ fn composing_enter_editor_hands_off_with_origin_followup() {
             draft: "partial".into(),
             response: Some(cmd("ls", "medium")),
             output_slot: None,
+            answer: None,
         }
     );
 }
@@ -448,6 +459,7 @@ fn processing_esc_returns_to_composing_with_draft_preserved() {
             response: cmd("ls", "medium"),
             draft: "be safer".into(),
             output_slot: None,
+            answer: None,
         }
     );
 }
@@ -480,6 +492,7 @@ fn processing_final_low_opens_confirming_instead_of_auto_exec() {
         draft: "d".into(),
         status: None,
         output_slot: Some("kept".into()),
+        answer: None,
     };
     let next = reduce(&state, &final_command(cmd("ls -a", "low")), false).unwrap();
     assert_eq!(next, confirming_with_slot(cmd("ls -a", "low"), "kept"));
@@ -488,17 +501,127 @@ fn processing_final_low_opens_confirming_instead_of_auto_exec() {
 }
 
 #[test]
-fn processing_answer_exhausted_and_error_exit_but_aborted_is_dropped() {
-    let state = processing(cmd("ls", "medium"));
-    let answer = reduce(
+fn processing_answer_keeps_the_pending_command() {
+    let proposal = cmd("echo proposed", "medium");
+    let state = processing(proposal.clone());
+    let next = reduce(
         &state,
         &AppEvent::LoopFinal {
-            result: LoopReturn::Answer("a".into()),
+            result: LoopReturn::Answer("It is an API identifier.".into()),
         },
         false,
     )
     .unwrap();
-    assert_eq!(outcome(answer), SessionOutcome::Answer("a".into()));
+    assert_eq!(next.tag(), wrap::session::state::StateTag::Confirming);
+    assert_eq!(next.response(), Some(&proposal));
+    assert_eq!(next.answer(), Some("It is an API identifier."));
+    let run = reduce(&next, &AppEvent::KeyAction(ActionId::Run), false).unwrap();
+    assert_eq!(
+        outcome(run),
+        SessionOutcome::Run {
+            command: proposal.content.clone(),
+            response: proposal,
+            source: StepSource::Model,
+        }
+    );
+}
+
+#[test]
+fn followup_answer_survives_editing_editor_handoff_and_cancelled_questions() {
+    let proposal = step("echo proposed", "medium");
+    let mut state = AppState::Confirming {
+        response: proposal.clone(),
+        output_slot: Some("discovery output".into()),
+        answer: Some("It is an API identifier.".into()),
+    };
+    for action in [ActionId::Edit, ActionId::Followup] {
+        for event in [
+            AppEvent::KeyAction(action),
+            AppEvent::DraftChange {
+                text: "draft".into(),
+            },
+            AppEvent::EnterEditor {
+                draft: "draft".into(),
+            },
+            AppEvent::EditorDone {
+                text: Some("edited draft".into()),
+            },
+            AppEvent::KeyEsc,
+        ] {
+            state = reduce(&state, &event, false).unwrap();
+            assert_eq!(state.answer(), Some("It is an API identifier."));
+            assert_eq!(state.output_slot(), Some("discovery output"));
+        }
+    }
+    for event in [
+        AppEvent::KeyAction(ActionId::Followup),
+        AppEvent::SubmitFollowup {
+            text: "Explain more".into(),
+        },
+        chrome("working"),
+        AppEvent::KeyEsc,
+        AppEvent::SubmitFollowup {
+            text: "Explain more".into(),
+        },
+    ] {
+        state = reduce(&state, &event, false).unwrap();
+        assert_eq!(state.answer(), Some("It is an API identifier."));
+    }
+    state = reduce(
+        &state,
+        &AppEvent::LoopFinal {
+            result: LoopReturn::Answer("More detail.".into()),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(state.answer(), Some("More detail."));
+    state = reduce(&state, &step_output("late output"), false).unwrap();
+    assert_eq!(state.answer(), Some("More detail."));
+    state = reduce(&state, &AppEvent::KeyAction(ActionId::Run), false).unwrap();
+    assert_eq!(state.answer(), Some("More detail."));
+    state = reduce(&state, &AppEvent::KeyEsc, false).unwrap();
+    assert_eq!(state.response(), Some(&proposal));
+    assert_eq!(state.answer(), Some("More detail."));
+    state = reduce(&state, &AppEvent::KeyAction(ActionId::Followup), false).unwrap();
+    state = reduce(
+        &state,
+        &AppEvent::SubmitFollowup {
+            text: "Change it".into(),
+        },
+        false,
+    )
+    .unwrap();
+    state = reduce(
+        &state,
+        &final_command(cmd("echo replacement", "low")),
+        false,
+    )
+    .unwrap();
+    assert_eq!(state.answer(), None);
+    assert_eq!(state.response().unwrap().content, "echo replacement");
+    assert_eq!(state.tag(), wrap::session::state::StateTag::Confirming);
+}
+
+#[test]
+fn explicitly_abandoning_the_command_exits_with_the_answer() {
+    let next = reduce(
+        &processing(cmd("echo proposed", "medium")),
+        &AppEvent::LoopFinal {
+            result: LoopReturn::AnswerOnly("Just the explanation.".into()),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        outcome(next),
+        SessionOutcome::Answer("Just the explanation.".into())
+    );
+}
+
+#[test]
+fn processing_exhausted_and_error_exit_but_aborted_is_dropped() {
+    let state = processing(cmd("ls", "medium"));
     let exhausted = reduce(
         &state,
         &AppEvent::LoopFinal {
@@ -537,6 +660,7 @@ fn executing_step_esc_returns_to_confirming_keeping_the_slot() {
         response: step("echo a", "medium"),
         source: StepSource::UserOverride,
         output_slot: Some("prior".into()),
+        answer: None,
     };
     let next = reduce(&state, &AppEvent::KeyEsc, false).unwrap();
     assert_eq!(
@@ -560,6 +684,7 @@ fn executing_step_final_command_lands_in_confirming_with_the_slot() {
         response: step("echo a", "medium"),
         source: StepSource::Model,
         output_slot: Some("out".into()),
+        answer: None,
     };
     let next = reduce(&state, &final_command(cmd("echo done", "low")), false).unwrap();
     assert_eq!(next, confirming_with_slot(cmd("echo done", "low"), "out"));
@@ -673,6 +798,7 @@ fn composing_interactive_transitions() {
             draft: "partial".into(),
             response: None,
             output_slot: None,
+            answer: None,
         }
     );
 }
@@ -762,6 +888,7 @@ fn editor_done_restores_the_origin_with_new_or_preserved_draft() {
         draft: "old".into(),
         response: None,
         output_slot: None,
+        answer: None,
     };
     let replaced = reduce(
         &interactive,
@@ -790,6 +917,7 @@ fn editor_done_restores_the_origin_with_new_or_preserved_draft() {
         draft: "old".into(),
         response: Some(cmd("ls", "medium")),
         output_slot: Some("slot".into()),
+        answer: None,
     };
     let restored = reduce(
         &followup,
@@ -805,6 +933,7 @@ fn editor_done_restores_the_origin_with_new_or_preserved_draft() {
             response: cmd("ls", "medium"),
             draft: "new".into(),
             output_slot: Some("slot".into()),
+            answer: None,
         }
     );
 
@@ -813,6 +942,7 @@ fn editor_done_restores_the_origin_with_new_or_preserved_draft() {
         draft: "ls".into(),
         response: Some(cmd("ls", "medium")),
         output_slot: None,
+        answer: None,
     };
     let restored = reduce(
         &editing_origin,
@@ -828,6 +958,7 @@ fn editor_done_restores_the_origin_with_new_or_preserved_draft() {
             response: cmd("ls", "medium"),
             draft: "ls -la".into(),
             output_slot: None,
+            answer: None,
         }
     );
 }
@@ -839,6 +970,7 @@ fn editor_handoff_ignores_esc_and_a_missing_response_keeps_the_state() {
         draft: "ls".into(),
         response: None,
         output_slot: None,
+        answer: None,
     };
     assert_eq!(reduce(&state, &AppEvent::KeyEsc, false), None);
     assert_eq!(

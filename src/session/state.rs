@@ -76,16 +76,19 @@ pub enum AppState {
     Confirming {
         response: CommandResponse,
         output_slot: Option<String>,
+        answer: Option<String>,
     },
     Editing {
         response: CommandResponse,
         draft: String,
         output_slot: Option<String>,
+        answer: Option<String>,
     },
     ComposingFollowup {
         response: CommandResponse,
         draft: String,
         output_slot: Option<String>,
+        answer: Option<String>,
     },
     ProcessingFollowup {
         response: CommandResponse,
@@ -93,6 +96,7 @@ pub enum AppState {
         /// Latest chrome line, shown in the bottom border.
         status: Option<String>,
         output_slot: Option<String>,
+        answer: Option<String>,
     },
     /// The very first prompt typed into the interactive composer.
     ComposingInteractive {
@@ -110,12 +114,14 @@ pub enum AppState {
         draft: String,
         response: Option<CommandResponse>,
         output_slot: Option<String>,
+        answer: Option<String>,
     },
     /// A confirmed non-final step is running in capture mode.
     ExecutingStep {
         response: CommandResponse,
         source: StepSource,
         output_slot: Option<String>,
+        answer: Option<String>,
     },
     Exiting {
         outcome: SessionOutcome,
@@ -168,6 +174,19 @@ impl AppState {
         }
     }
 
+    /// Latest follow-up answer about the pending proposal.
+    pub fn answer(&self) -> Option<&str> {
+        match self {
+            Self::Confirming { answer, .. }
+            | Self::Editing { answer, .. }
+            | Self::ComposingFollowup { answer, .. }
+            | Self::ProcessingFollowup { answer, .. }
+            | Self::EditorHandoff { answer, .. }
+            | Self::ExecutingStep { answer, .. } => answer.as_deref(),
+            _ => None,
+        }
+    }
+
     pub fn output_slot(&self) -> Option<&str> {
         match self {
             Self::Confirming { output_slot, .. }
@@ -195,6 +214,8 @@ impl AppState {
 pub enum LoopReturn {
     Command(CommandResponse),
     Answer(String),
+    /// The user explicitly abandoned the pending command in favor of an answer.
+    AnswerOnly(String),
     Exhausted,
     /// The loop noticed cancellation and bailed before a final response.
     Aborted,
@@ -285,6 +306,7 @@ mod tests {
             scratchpad: None,
             kind: ResponseType::Command,
             is_final: true,
+            discard_command: None,
             plan: None,
             content: "echo hi".into(),
             risk_level: RiskLevel::Medium,
@@ -301,22 +323,26 @@ mod tests {
             AppState::Confirming {
                 response: response(),
                 output_slot: None,
+                answer: None,
             },
             AppState::Editing {
                 response: response(),
                 draft: String::new(),
                 output_slot: None,
+                answer: None,
             },
             AppState::ComposingFollowup {
                 response: response(),
                 draft: String::new(),
                 output_slot: None,
+                answer: None,
             },
             AppState::ProcessingFollowup {
                 response: response(),
                 draft: String::new(),
                 status: None,
                 output_slot: None,
+                answer: None,
             },
             AppState::ComposingInteractive {
                 draft: String::new(),
@@ -329,6 +355,7 @@ mod tests {
                 response: response(),
                 source: StepSource::Model,
                 output_slot: None,
+                answer: None,
             },
         ];
         for state in visible {
@@ -341,6 +368,7 @@ mod tests {
                 draft: String::new(),
                 response: None,
                 output_slot: None,
+                answer: None,
             },
             AppState::Exiting {
                 outcome: SessionOutcome::Exhausted,

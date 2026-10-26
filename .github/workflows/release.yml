@@ -163,7 +163,7 @@ jobs:
           subject-path: dist/checksums.txt
 
   # Upload scripts/install.sh as a release asset, byte-identical to the repo
-  # file. wrap.talater.com/install.sh redirects to releases/latest/download/...
+  # file, available at releases/latest/download/install.sh.
   install-asset:
     needs: [create-release, shellcheck]
     runs-on: ubuntu-24.04

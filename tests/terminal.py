@@ -360,6 +360,80 @@ def edit_esc_restores_original():
     finally: s.close()
 
 # --- Follow-up -----------------------------------------------------------------
+def followup_answer_crowded_layout():
+    proposal = 'echo FIRST\necho SECOND'
+    s = Session(['propose a command'], responses=[
+        command('echo one; echo two; echo three', final=False, plan='Gather output first.'),
+        command(proposal, explanation='Print two harmless lines.', plan='Print the text.'),
+        reply('An explanation of the proposed command.'),
+    ], redirect_stdout=True, size=(80, 18))
+    try:
+        s.until('Run command?'); s.send('y'); s.until('echo FIRST'); s.until('echo SECOND')
+        s.send('f'); s.until('to send'); s.send('why?'); s.until('why?'); s.send('\r')
+        s.until('Run command?'); s.resize(80, 12)
+        s.until('echo FIRST'); s.until('echo SECOND'); s.until('Run command?')
+        for _ in range(20):
+            s.send('\x1b[6~'); s.pump(.03)
+        s.until('An explanation'); s.until('echo FIRST'); s.until('echo SECOND')
+        s.resize(80, 18); s.send('f'); s.until('to send')
+        s.send('another question'); s.until('another question')
+        s.until('echo FIRST'); s.until('echo SECOND'); s.until('to send')
+        s.send('\x1b'); s.until('Run command?'); s.send('n')
+        entries = s.finish(0)
+        _, final = final_turn(entries)
+        assert final['source'] == 'cancelled' and final['command'] == proposal, final
+        assert s.stdout_file.read_bytes() == b'', 'unconfirmed proposal ran'
+    finally: s.close()
+
+def followup_answer_explicit_abandonment_exits():
+    answer = dict(reply('Only an explanation; the proposal is abandoned.'), discard_command=True)
+    s = Session(['make a proposal'], responses=[command('echo SHOULD_NOT_RUN', 'high'), answer], redirect_stdout=True)
+    try:
+        s.until('Run command?'); s.send('f'); s.until('to send')
+        s.send('forget the command, just explain'); s.until('forget the command, just explain'); s.send('\r')
+        entries = s.finish(0)
+        assert s.stdout_file.read_text() == answer['content'] + '\n'
+        assert len(entries) == 1, entries
+        entry = entries[0]
+        assert entry['outcome'] == 'success', entry
+        assert kinds_of(entry) == ['user', 'assistant', 'user', 'assistant'], kinds_of(entry)
+        assert entry['turns'][-1]['response']['discard_command'] is True
+    finally: s.close()
+
+def followup_answer_keeps_proposal(run_command):
+    explanation = 'Prints ORIGINAL without changing files.'
+    detail = '\n'.join(f'Explanation row {i:02}' for i in range(40))
+    s = Session(['explain the proposal'], responses=[command('echo ORIGINAL', 'high'), reply(explanation), reply(detail)],
+                redirect_stdout=True, size=(80, 18))
+    try:
+        s.until('Run command?'); s.send('f'); s.until('to send')
+        s.send('explain it'); s.until('explain it'); s.send('\r')
+        s.until('Answer:'); s.until(explanation); s.until('echo ORIGINAL'); s.until('high risk'); s.until('Run command?')
+        assert s.process.poll() is None and s.stdout_file.read_bytes() == b''
+        assert b'\x1b[?1049l' not in s.output, 'answer unmounted the dialog'
+        s.send('f'); s.until('to send'); s.until(explanation)
+        s.send('more detail'); s.until('more detail'); s.send('\r')
+        s.until('Explanation row 00'); s.until('PgUp/PgDn'); s.until('Run command?'); s.absent(explanation)
+        for _ in range(12):
+            s.send('\x1b[6~'); s.pump(.05)
+        s.until('Explanation row 39'); s.until('Run command?'); s.until('echo ORIGINAL')
+        s.resize(90, 22); s.until('Explanation row 39'); s.until('Run command?')
+        assert s.stdout_file.read_bytes() == b'', 'pending command ran without confirmation'
+        if run_command:
+            s.send('e'); s.until('to discard changes'); s.until('Answer:')
+            s.send('_EDITED'); s.until('echo ORIGINAL_EDITED'); s.send('\r')
+        else:
+            s.send('f'); s.until('to send'); s.until('Answer:')
+            s.send('\x1b'); s.until('Run command?'); s.until('Answer:'); s.send('n')
+        entries = s.finish(0)
+        entry, final = final_turn(entries)
+        assert final['source'] == ('user_override' if run_command else 'cancelled'), final
+        assert final['command'] == ('echo ORIGINAL_EDITED' if run_command else 'echo ORIGINAL'), final
+        assert s.stdout_file.read_bytes() == (b'ORIGINAL_EDITED\n' if run_command else b'')
+        answers = [t['response']['content'] for t in entry['turns'] if t['kind'] == 'assistant' and t['response']['type'] == 'reply']
+        assert answers == [explanation, detail], answers
+    finally: s.close()
+
 def followup_replaces_command():
     # The second round is a slow inline step so the processing state is observable.
     responses = [command('echo FIRST'), command('sleep 1; echo STEP_DONE', 'low', final=False, explanation='Checking something slow'), command('echo SECOND')]
@@ -1047,6 +1121,10 @@ SCENARIOS = [
     ('wrapped command edit viewport', lambda: command_edit_viewport(wrapped=True)),
     ('command edit viewport reserves explanation and actions', lambda: command_edit_viewport(explanation=True)),
     ('followup replaces command', followup_replaces_command), ('followup esc keeps draft', followup_esc_keeps_draft),
+    ('followup answer edit and run', lambda: followup_answer_keeps_proposal(True)),
+    ('followup answer compose and cancel', lambda: followup_answer_keeps_proposal(False)),
+    ('followup answer explicit abandonment exits', followup_answer_explicit_abandonment_exits),
+    ('followup answer crowded layout', followup_answer_crowded_layout),
     ('interactive compose submits', interactive_compose_submits), ('interactive esc cancels', interactive_esc_cancels),
     ('low step runs before dialog', low_step_runs_before_dialog), ('confirmed medium step shows running', confirmed_medium_step_shows_running),
     ('esc aborts a step under zsh', esc_aborts_a_step_under_zsh),
