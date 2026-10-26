@@ -72,6 +72,44 @@ async fn editor_pty_child() {
 
 #[test]
 fn terminal_editor_reopens_tty_preserves_stdout_and_restores_modes() {
+    let (output, terminal) = run_editor_pty("editor_pty_child");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("EDITOR_CHROME"));
+    assert!(String::from_utf8_lossy(&terminal).contains("EDITOR_CHROME"));
+}
+
+#[tokio::test]
+async fn gui_editor_pty_child() {
+    if std::env::var("WRAP_EDITOR_PTY_CHILD").as_deref() != Ok("1") {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let home = WrapHome::new(dir.path());
+    let mut editor = fake(
+        home.root(),
+        r#"read -r stolen && exit 5
+if (: </dev/tty) 2>/dev/null; then exit 6; fi
+printf 'GUI_STDOUT\n' || exit 7
+printf 'GUI_STDERR\n' >&2 || exit 8
+printf 'gui edit' > "$1""#,
+    );
+    editor.meta.gui = true;
+    assert_eq!(
+        spawn_editor(&editor, "seed", &home, None).await,
+        Ok(Some("gui edit".into()))
+    );
+}
+
+#[test]
+fn detached_gui_editor_routes_both_output_streams_to_inherited_stderr() {
+    let (output, terminal) = run_editor_pty("gui_editor_pty_child");
+    for marker in ["GUI_STDOUT", "GUI_STDERR"] {
+        assert!(String::from_utf8_lossy(&output.stderr).contains(marker));
+        assert!(!String::from_utf8_lossy(&output.stdout).contains(marker));
+        assert!(!String::from_utf8_lossy(&terminal).contains(marker));
+    }
+}
+
+fn run_editor_pty(test: &str) -> (std::process::Output, Vec<u8>) {
     use std::{
         io::Read,
         os::{
@@ -99,7 +137,7 @@ fn terminal_editor_reopens_tty_preserves_stdout_and_restores_modes() {
     let fd = slave.as_raw_fd();
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
-        .args(["--exact", "editor_pty_child", "--nocapture"])
+        .args(["--exact", test, "--nocapture"])
         .env("WRAP_EDITOR_PTY_CHILD", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -141,6 +179,5 @@ fn terminal_editor_reopens_tty_preserves_stdout_and_restores_modes() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(!String::from_utf8_lossy(&output.stdout).contains("EDITOR_CHROME"));
-    assert!(String::from_utf8_lossy(&reader.join().unwrap()).contains("EDITOR_CHROME"));
+    (output, reader.join().unwrap())
 }

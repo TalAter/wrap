@@ -290,8 +290,8 @@ impl Drop for ProcessGroup {
     }
 }
 
-/// Seed `cache/compose.md`, run the editor with chrome on the terminal (or
-/// stderr without a terminal), then read the saved draft back.
+/// Seed `cache/compose.md`, run the editor with chrome off stdout, then read
+/// the saved draft back.
 ///
 /// `Ok(Some(text))`: exit 0 and a non-empty file (one trailing newline
 /// stripped). `Ok(None)`: keep the current draft silently — the file came
@@ -330,15 +330,12 @@ pub async fn spawn_editor(
     } else {
         Stdio::null()
     });
-    let output = || {
-        OpenOptions::new()
-            .write(true)
-            .open("/dev/tty")
-            .map(Stdio::from)
-            .unwrap_or_else(|_| Stdio::from(io::stderr()))
-    };
-    command.stdout(output()).stderr(output());
     if resolved.meta.gui {
+        // Darwin's /dev/tty resolves the controlling terminal on each write;
+        // inherited stderr remains usable after detaching the GUI session.
+        command
+            .stdout(Stdio::from(io::stderr()))
+            .stderr(Stdio::inherit());
         // GUI waits cannot read the live dialog through stdin or /dev/tty.
         unsafe {
             command.pre_exec(|| {
@@ -349,6 +346,14 @@ pub async fn spawn_editor(
             });
         }
     } else {
+        let output = || {
+            OpenOptions::new()
+                .write(true)
+                .open("/dev/tty")
+                .map(Stdio::from)
+                .unwrap_or_else(|_| Stdio::from(io::stderr()))
+        };
+        command.stdout(output()).stderr(output());
         command.process_group(0).kill_on_drop(true);
         if let Some(tty) = &terminal {
             let fd = tty.file.as_raw_fd();
